@@ -141,19 +141,68 @@ dotnet run -- "00:02:00"  # Nudge every 2 minutes
 
 ## Training the ML Model
 
-The backend Python code (in `../NudgeBackEnd`) can be used to train the model:
+### Step 1: Install Python Dependencies
 
 ```bash
-cd ../NudgeBackEnd
-pip install tensorflow pandas numpy
-python -m trainer.model
+pip install -r requirements.txt
 ```
 
-The model reads from `HARVEST.CSV` and learns to predict productivity based on:
-- Foreground application hash
-- Keyboard inactivity
-- Mouse inactivity
-- Attention span
+This installs TensorFlow 2.x, pandas, numpy, and scikit-learn.
+
+### Step 2: Validate Your Data
+
+Before training, check that your CSV is properly formatted:
+
+```bash
+python validate_data.py /tmp/HARVEST.CSV
+```
+
+This will:
+- ✓ Verify column names match model requirements
+- ✓ Check data types are correct
+- ✓ Show class balance (productive vs not productive)
+- ⚠️  Warn about insufficient or imbalanced data
+
+### Step 3: Train the Model
+
+```bash
+python train_model.py /tmp/HARVEST.CSV
+```
+
+The training script will:
+- Load and preprocess your labeled data
+- Split into training/validation/test sets
+- Train a neural network (2 hidden layers with 10 units each)
+- Save the model to `./model/productivity_model.keras`
+- Report test accuracy
+
+**Minimum data requirements:**
+- At least 20 labeled examples
+- Examples of BOTH productive AND unproductive behavior
+- More data = better predictions (aim for 100+ examples)
+
+### Step 4: Make Predictions
+
+Test the trained model:
+
+```bash
+# Interactive mode
+python predict.py
+
+# Command line mode
+python predict.py <app_hash> <kbd_inactive_ms> <mouse_inactive_ms> <attention_span_ms>
+```
+
+Example:
+```bash
+python predict.py 123456789 5000 2000 45000
+```
+
+The model learns to predict productivity based on:
+- **Foreground application hash**: Which app you're using
+- **Keyboard inactivity**: Time since last keystroke
+- **Mouse inactivity**: Time since last mouse movement
+- **Attention span**: Time focused on current app
 
 ## Project Structure
 
@@ -172,6 +221,14 @@ NudgeCrossPlatform/
 │   └── Program.cs
 ├── NudgeNotifier/            # Nudge sender
 │   └── Program.cs
+├── validate_data.py          # Validate CSV format
+├── train_model.py            # Train ML model (TensorFlow 2.x)
+├── predict.py                # Make predictions with trained model
+├── requirements.txt          # Python dependencies
+├── run-harvester.sh          # Convenience script
+├── run-notifier.sh           # Convenience script
+├── QUICKSTART.md             # Quick start guide
+├── README.md                 # This file
 └── NudgeCrossPlatform.sln    # Solution file
 ```
 
