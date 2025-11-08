@@ -141,13 +141,21 @@ dotnet run -- "00:02:00"  # Nudge every 2 minutes
 
 ## Training the ML Model
 
+**📖 For detailed guide, see [LOCAL_TRAINING.md](LOCAL_TRAINING.md)**
+
 ### Step 1: Install Python Dependencies
 
+**CPU-Only (Recommended - works on any machine):**
+```bash
+pip install -r requirements-cpu.txt
+```
+
+**GPU-Accelerated (Optional - only if you have NVIDIA GPU):**
 ```bash
 pip install -r requirements.txt
 ```
 
-This installs TensorFlow 2.x, pandas, numpy, and scikit-learn.
+Both install TensorFlow 2.x, pandas, numpy, and scikit-learn. The CPU version is smaller (~400MB) and easier.
 
 ### Step 2: Validate Your Data
 
@@ -165,16 +173,38 @@ This will:
 
 ### Step 3: Train the Model
 
+**Quick Training (Easiest - recommended first time):**
+```bash
+./train_quick.sh /tmp/HARVEST.CSV
+```
+*Takes 1-2 minutes on most machines*
+
+**Standard Training (Best accuracy):**
 ```bash
 python train_model.py /tmp/HARVEST.CSV
 ```
 
-The training script will:
-- Load and preprocess your labeled data
-- Split into training/validation/test sets
-- Train a neural network (2 hidden layers with 10 units each)
-- Save the model to `./model/productivity_model.keras`
-- Report test accuracy
+**Low-Resource Mode (For older/slower machines):**
+```bash
+python train_model.py /tmp/HARVEST.CSV --quick --lightweight --cpu-only
+```
+
+**See all options:**
+```bash
+python train_model.py --help
+```
+
+The training will:
+- ✅ Load and normalize your data
+- ✅ Train a neural network optimized for local CPU execution
+- ✅ Save model to `./model/productivity_model.keras`
+- ✅ Show test accuracy
+
+**Key Features:**
+- 🖥️  100% local - no cloud/GCP needed
+- ⚡ Fast - 1-3 minutes on CPU
+- 🌍 Cross-platform (Windows/Linux/macOS)
+- 💾 Low memory - works on 2GB RAM
 
 **Minimum data requirements:**
 - At least 20 labeled examples

@@ -1,0 +1,14 @@
+# Minimal Python dependencies for CPU-only local training
+# Use this for lower-end machines or when you don't need GPU acceleration
+# Install with: pip install -r requirements-cpu.txt
+
+# CPU-only TensorFlow (smaller download, no CUDA dependencies)
+tensorflow-cpu>=2.13.0
+
+# Data processing
+pandas>=2.0.0
+numpy>=1.24.0
+scikit-learn>=1.3.0
+
+# Note: This installs ~400MB vs ~2GB for GPU version
+# Perfect for laptops and low-end machines
