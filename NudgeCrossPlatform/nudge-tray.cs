@@ -24,8 +24,6 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
-using DesktopNotifications;
-using DesktopNotifications.Avalonia;
 
 namespace NudgeTray
 {
@@ -34,7 +32,6 @@ namespace NudgeTray
         const int UDP_PORT = 45001;
         const string VERSION = "1.0.1";
         static Process? _nudgeProcess;
-        static INotificationManager? _notificationManager;
 
         [STAThread]
         static void Main(string[] args)
@@ -93,7 +90,7 @@ namespace NudgeTray
                         // Detect snapshot requests (exact match only)
                         if (e.Data.Trim() == "SNAPSHOT")
                         {
-                            Dispatcher.UIThread.Post(() => _ = ShowSnapshotNotificationAsync());
+                            Dispatcher.UIThread.Post(() => ShowSnapshotNotification());
                         }
                     }
                 };
@@ -111,58 +108,24 @@ namespace NudgeTray
             }
         }
 
-        public static async Task ShowSnapshotNotificationAsync()
+        public static void ShowSnapshotNotification()
         {
             Console.WriteLine("📸 Snapshot taken! Respond using the notification buttons.");
 
-            // Try multiple notification methods in order of preference
+            // Try native DBus notifications first
             bool success = false;
-
-            // Method 1: Try DesktopNotifications library
-            if (_notificationManager != null)
+            try
             {
-                try
-                {
-                    var notification = new Notification
-                    {
-                        Title = "Nudge - Productivity Check",
-                        Body = "Were you productive during the last interval?",
-                        Expiration = TimeSpan.FromSeconds(60),
-                        Buttons =
-                        {
-                            ("Yes - Productive", "yes"),
-                            ("No - Not Productive", "no")
-                        }
-                    };
-
-                    notification.OnClicked += OnNotificationClicked;
-
-                    await _notificationManager.ShowNotification(notification);
-                    Console.WriteLine("✓ Desktop notification sent via DesktopNotifications library");
-                    success = true;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"⚠ DesktopNotifications failed: {ex.Message}");
-                }
+                ShowDbusNotification();
+                Console.WriteLine("✓ Desktop notification sent via DBus");
+                success = true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"⚠ DBus notification failed: {ex.Message}");
             }
 
-            // Method 2: Try native DBus notifications (Linux)
-            if (!success)
-            {
-                try
-                {
-                    ShowDbusNotification();
-                    Console.WriteLine("✓ Desktop notification sent via DBus");
-                    success = true;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"⚠ DBus notification failed: {ex.Message}");
-                }
-            }
-
-            // Method 3: Fallback to notify-send (no buttons)
+            // Fallback to notify-send (no buttons)
             if (!success)
             {
                 ShowFallbackNotification();
@@ -346,28 +309,6 @@ namespace NudgeTray
             }
         }
 
-        private static void OnNotificationClicked(object? sender, NotificationClickedEventArgs e)
-        {
-            if (string.IsNullOrEmpty(e.ActionId))
-            {
-                Console.WriteLine("Notification clicked without action ID");
-                return;
-            }
-
-            Console.WriteLine($"Notification clicked: {e.ActionId}");
-
-            if (e.ActionId == "yes")
-            {
-                Console.WriteLine("User responded: YES (productive)");
-                SendResponse(true);
-            }
-            else if (e.ActionId == "no")
-            {
-                Console.WriteLine("User responded: NO (not productive)");
-                SendResponse(false);
-            }
-        }
-
         public static void SendResponse(bool productive)
         {
             try
@@ -421,24 +362,6 @@ namespace NudgeTray
         {
             // Must call base first for Avalonia
             base.Initialize();
-
-            // Initialize notification manager
-            InitializeNotifications();
-        }
-
-        private async void InitializeNotifications()
-        {
-            try
-            {
-                Program._notificationManager = DesktopNotificationManagerBuilder.CreateDefault().Build();
-                await Program._notificationManager.Initialize();
-                Console.WriteLine("✓ Notification system initialized");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"⚠ Failed to initialize notifications: {ex.Message}");
-                Console.WriteLine("  Will fall back to system commands");
-            }
         }
 
         private NativeMenu CreateMenu()

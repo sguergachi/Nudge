@@ -375,7 +375,7 @@ EOF
     dotnet build nudge-notify.csproj -c Release -v quiet --nologo
     success "  ✓ nudge-notify"
 
-    # Create nudge-tray project with Avalonia and DesktopNotifications
+    # Create nudge-tray project with Avalonia
     cat > nudge-tray.csproj << EOF
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
@@ -394,8 +394,6 @@ EOF
     <PackageReference Include="Avalonia" Version="11.2.2" />
     <PackageReference Include="Avalonia.Desktop" Version="11.2.2" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.2" />
-    <PackageReference Include="DesktopNotifications" Version="1.2.5" />
-    <PackageReference Include="DesktopNotifications.Avalonia" Version="1.2.5" />
   </ItemGroup>
 </Project>
 EOF
