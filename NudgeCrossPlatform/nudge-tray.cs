@@ -137,20 +137,21 @@ namespace NudgeTray
             Console.WriteLine("[DEBUG] ShowDbusNotification called");
 
             // Send native Linux notification via gdbus with action buttons
-            // Use sh -c to properly handle the array syntax
+            var cmd = "gdbus call --session --dest org.freedesktop.Notifications " +
+                     "--object-path /org/freedesktop/Notifications " +
+                     "--method org.freedesktop.Notifications.Notify " +
+                     "Nudge 0 dialog-question " +
+                     "\\\"Nudge - Productivity Check\\\" " +
+                     "\\\"Were you productive during the last interval?\\\" " +
+                     "[\\\"yes\\\",\\\"Yes - Productive\\\",\\\"no\\\",\\\"No - Not Productive\\\"] " +
+                     "{} 60000";
+
             var process = new Process
             {
                 StartInfo = new ProcessStartInfo
                 {
-                    FileName = "/bin/sh",
-                    Arguments = "-c \"gdbus call --session --dest org.freedesktop.Notifications " +
-                               "--object-path /org/freedesktop/Notifications " +
-                               "--method org.freedesktop.Notifications.Notify " +
-                               "Nudge 0 dialog-question " +
-                               "'Nudge - Productivity Check' " +
-                               "'Were you productive during the last interval?' " +
-                               @"'[""yes"",""Yes - Productive"",""no"",""No - Not Productive""]' " +
-                               "{} 60000\"",
+                    FileName = "bash",
+                    Arguments = $"-c \"{cmd}\"",
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
