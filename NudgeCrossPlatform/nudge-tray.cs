@@ -138,7 +138,7 @@ namespace NudgeTray
 
             // Create a temp script to avoid shell quoting hell
             var scriptPath = Path.GetTempFileName();
-            var scriptContent = "gdbus call --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications --method org.freedesktop.Notifications.Notify \"Nudge\" 0 \"dialog-question\" \"Nudge - Productivity Check\" \"Were you productive during the last interval?\" '[\"yes\",\"Yes - Productive\",\"no\",\"No - Not Productive\"]' '{\"urgency\": <byte 2>, \"resident\": <true>}' -- -1";
+            var scriptContent = "gdbus call --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications --method org.freedesktop.Notifications.Notify \"Nudge\" 0 \"dialog-question\" \"Nudge - Productivity Check\" \"Were you productive during the last interval?\" '[\"yes\",\"Yes - Productive\",\"no\",\"No - Not Productive\"]' '{\"urgency\": <byte 2>, \"transient\": <false>, \"resident\": <true>}' 120000";
 
             File.WriteAllText(scriptPath, scriptContent);
 
