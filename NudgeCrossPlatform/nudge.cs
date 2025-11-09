@@ -426,38 +426,50 @@ class Nudge
     {
         try
         {
-            // Method 1: Try xdotool for X11/XWayland windows (works on both X11 and Wayland)
+            // Method 1: Try KWin DBus API for Plasma 6 (Wayland & X11)
+            var kwinOutput = RunCommand("qdbus",
+                "org.kde.KWin /KWin org.kde.KWin.queryWindowInfo");
+
+            if (!string.IsNullOrWhiteSpace(kwinOutput))
+            {
+                // Parse the window info - look for resourceClass or caption
+                var lines = kwinOutput.Split('\n');
+                foreach (var line in lines)
+                {
+                    if (line.Contains("resourceClass:") || line.Contains("caption:"))
+                    {
+                        var parts = line.Split(new[] { ':' }, 2);
+                        if (parts.Length > 1)
+                        {
+                            var value = parts[1].Trim();
+                            if (!string.IsNullOrWhiteSpace(value) && value != "null")
+                            {
+                                return value;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Method 2: Try alternative KWin scripting interface
+            var scriptOutput = RunCommand("qdbus",
+                "org.kde.KWin /Scripting org.kde.kwin.Scripting.run " +
+                "'print(workspace.activeClient ? workspace.activeClient.caption : \"unknown\")'");
+
+            if (!string.IsNullOrWhiteSpace(scriptOutput))
+            {
+                var result = scriptOutput.Trim();
+                if (result != "unknown" && result != "null")
+                {
+                    return result;
+                }
+            }
+
+            // Method 3: Try xdotool for X11 sessions or XWayland windows
             var windowName = RunCommand("xdotool", "getactivewindow getwindowname");
             if (!string.IsNullOrWhiteSpace(windowName))
             {
                 return windowName.Trim().Split('\n')[0];
-            }
-
-            // Method 2: Try to get window class with xdotool
-            var windowClass = RunCommand("xdotool", "getactivewindow getwindowclassname");
-            if (!string.IsNullOrWhiteSpace(windowClass))
-            {
-                return windowClass.Trim().Split('\n')[0];
-            }
-
-            // Method 3: Try wmctrl as fallback
-            var wmctrlOutput = RunCommand("wmctrl", "-l -x");
-            if (!string.IsNullOrWhiteSpace(wmctrlOutput))
-            {
-                // Parse wmctrl output to find active window
-                // Format: window_id desktop_num WM_CLASS title
-                var lines = wmctrlOutput.Split('\n');
-                foreach (var line in lines)
-                {
-                    if (!string.IsNullOrWhiteSpace(line))
-                    {
-                        var parts = line.Split(new[] { ' ' }, 4, StringSplitOptions.RemoveEmptyEntries);
-                        if (parts.Length >= 3)
-                        {
-                            return parts[2]; // WM_CLASS
-                        }
-                    }
-                }
             }
 
             return "unknown";
