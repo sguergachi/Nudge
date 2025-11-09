@@ -137,13 +137,14 @@ namespace NudgeTray
             Console.WriteLine("[DEBUG] ShowDbusNotification called");
 
             // Send native Linux notification via gdbus with action buttons
+            // Use single quotes in bash to preserve double quotes for gdbus
             var cmd = "gdbus call --session --dest org.freedesktop.Notifications " +
                      "--object-path /org/freedesktop/Notifications " +
                      "--method org.freedesktop.Notifications.Notify " +
                      "Nudge 0 dialog-question " +
-                     "\\\"Nudge - Productivity Check\\\" " +
-                     "\\\"Were you productive during the last interval?\\\" " +
-                     "[\\\"yes\\\",\\\"Yes - Productive\\\",\\\"no\\\",\\\"No - Not Productive\\\"] " +
+                     "\"Nudge - Productivity Check\" " +
+                     "\"Were you productive during the last interval?\" " +
+                     "[\"yes\",\"Yes - Productive\",\"no\",\"No - Not Productive\"] " +
                      "{} 60000";
 
             var process = new Process
@@ -151,7 +152,7 @@ namespace NudgeTray
                 StartInfo = new ProcessStartInfo
                 {
                     FileName = "bash",
-                    Arguments = $"-c \"{cmd}\"",
+                    Arguments = $"-c '{cmd}'",  // Single quotes so double quotes pass through
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
