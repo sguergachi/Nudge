@@ -32,7 +32,7 @@ namespace NudgeTray
     class Program
     {
         const int UDP_PORT = 45001;
-        const string VERSION = "1.0.0";
+        const string VERSION = "1.0.1";
         static Process? _nudgeProcess;
         static INotificationManager? _notificationManager;
 
