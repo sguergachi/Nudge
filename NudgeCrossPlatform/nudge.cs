@@ -426,37 +426,43 @@ class Nudge
     {
         try
         {
-            // Get list of all windows
-            var windows = RunCommand("qdbus", "org.kde.KWin /KWin org.kde.KWin.getWindowInfo 1");
-
-            if (string.IsNullOrWhiteSpace(windows))
+            // Method 1: Try xdotool for X11/XWayland windows (works on both X11 and Wayland)
+            var windowName = RunCommand("xdotool", "getactivewindow getwindowname");
+            if (!string.IsNullOrWhiteSpace(windowName))
             {
-                // Fallback: try to get active window via different method
-                var activeWindow = RunCommand("xdotool", "getactivewindow getwindowname");
-                if (!string.IsNullOrWhiteSpace(activeWindow))
-                {
-                    return activeWindow.Trim().Split('\n')[0];
-                }
-                return "unknown";
+                return windowName.Trim().Split('\n')[0];
             }
 
-            // Parse window info - look for the active window
-            var lines = windows.Split('\n');
-            foreach (var line in lines)
+            // Method 2: Try to get window class with xdotool
+            var windowClass = RunCommand("xdotool", "getactivewindow getwindowclassname");
+            if (!string.IsNullOrWhiteSpace(windowClass))
             {
-                if (line.Contains("resourceClass") || line.Contains("caption"))
+                return windowClass.Trim().Split('\n')[0];
+            }
+
+            // Method 3: Try wmctrl as fallback
+            var wmctrlOutput = RunCommand("wmctrl", "-l -x");
+            if (!string.IsNullOrWhiteSpace(wmctrlOutput))
+            {
+                // Parse wmctrl output to find active window
+                // Format: window_id desktop_num WM_CLASS title
+                var lines = wmctrlOutput.Split('\n');
+                foreach (var line in lines)
                 {
-                    var parts = line.Split(':');
-                    if (parts.Length > 1)
+                    if (!string.IsNullOrWhiteSpace(line))
                     {
-                        return parts[1].Trim();
+                        var parts = line.Split(new[] { ' ' }, 4, StringSplitOptions.RemoveEmptyEntries);
+                        if (parts.Length >= 3)
+                        {
+                            return parts[2]; // WM_CLASS
+                        }
                     }
                 }
             }
 
             return "unknown";
         }
-        catch (Exception ex)
+        catch
         {
             // Don't log errors in cached function - too spammy
             return "unknown";
