@@ -112,7 +112,14 @@ namespace NudgeTray
         {
             Console.WriteLine("📸 Snapshot taken! Respond using the notification buttons.");
 
-            // Try native DBus notifications first
+            // Try kdialog first on KDE (stays visible until answered)
+            if (ShowKDialogNotification())
+            {
+                Console.WriteLine("✓ Dialog shown via kdialog");
+                return;
+            }
+
+            // Try native DBus notifications
             bool success = false;
             try
             {
@@ -129,6 +136,47 @@ namespace NudgeTray
             if (!success)
             {
                 ShowFallbackNotification();
+            }
+        }
+
+        private static bool ShowKDialogNotification()
+        {
+            try
+            {
+                var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "kdialog",
+                        Arguments = "--title \"Nudge - Productivity Check\" " +
+                                   "--yesno \"Were you productive during the last interval?\" " +
+                                   "--yes-label \"Yes - Productive\" " +
+                                   "--no-label \"No - Not Productive\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+
+                process.Start();
+                process.WaitForExit();
+
+                // kdialog exit codes: 0 = yes, 1 = no, 2 = cancel
+                if (process.ExitCode == 0)
+                {
+                    Console.WriteLine("User responded: YES (productive)");
+                    SendResponse(true);
+                }
+                else if (process.ExitCode == 1)
+                {
+                    Console.WriteLine("User responded: NO (not productive)");
+                    SendResponse(false);
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
             }
         }
 
