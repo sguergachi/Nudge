@@ -136,23 +136,28 @@ namespace NudgeTray
         {
             Console.WriteLine("[DEBUG] ShowDbusNotification called");
 
-            // Send native Linux notification via gdbus with action buttons
-            // Use single quotes in bash to preserve double quotes for gdbus
-            var cmd = "gdbus call --session --dest org.freedesktop.Notifications " +
-                     "--object-path /org/freedesktop/Notifications " +
-                     "--method org.freedesktop.Notifications.Notify " +
-                     "Nudge 0 dialog-question " +
-                     "\"Nudge - Productivity Check\" " +
-                     "\"Were you productive during the last interval?\" " +
-                     "[\"yes\",\"Yes - Productive\",\"no\",\"No - Not Productive\"] " +
-                     "{} 60000";
+            // Create a temp script to avoid shell quoting hell
+            var scriptPath = Path.GetTempFileName();
+            var scriptContent = @"#!/bin/bash
+gdbus call --session \
+  --dest org.freedesktop.Notifications \
+  --object-path /org/freedesktop/Notifications \
+  --method org.freedesktop.Notifications.Notify \
+  Nudge 0 dialog-question \
+  ""Nudge - Productivity Check"" \
+  ""Were you productive during the last interval?"" \
+  '[""yes"",""Yes - Productive"",""no"",""No - Not Productive""]' \
+  '{}' 60000
+";
+
+            File.WriteAllText(scriptPath, scriptContent);
 
             var process = new Process
             {
                 StartInfo = new ProcessStartInfo
                 {
                     FileName = "bash",
-                    Arguments = $"-c '{cmd}'",  // Single quotes so double quotes pass through
+                    Arguments = scriptPath,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
@@ -161,36 +166,45 @@ namespace NudgeTray
             };
 
             Console.WriteLine($"[DEBUG] Running: gdbus call...");
-            process.Start();
-            string output = process.StandardOutput.ReadToEnd();
-            string error = process.StandardError.ReadToEnd();
-            process.WaitForExit();
 
-            Console.WriteLine($"[DEBUG] gdbus exit code: {process.ExitCode}");
-            Console.WriteLine($"[DEBUG] gdbus stdout: {output}");
-            if (!string.IsNullOrEmpty(error))
+            try
             {
-                Console.WriteLine($"[DEBUG] gdbus stderr: {error}");
+                process.Start();
+                string output = process.StandardOutput.ReadToEnd();
+                string error = process.StandardError.ReadToEnd();
+                process.WaitForExit();
+
+                Console.WriteLine($"[DEBUG] gdbus exit code: {process.ExitCode}");
+                Console.WriteLine($"[DEBUG] gdbus stdout: {output}");
+                if (!string.IsNullOrEmpty(error))
+                {
+                    Console.WriteLine($"[DEBUG] gdbus stderr: {error}");
+                }
+
+                if (process.ExitCode != 0)
+                {
+                    throw new Exception($"gdbus failed with exit code {process.ExitCode}: {error}");
+                }
+
+                // Parse notification ID from output like "(uint32 123,)"
+                var notificationId = ParseNotificationId(output);
+                Console.WriteLine($"[DEBUG] Parsed notification ID: {notificationId}");
+
+                if (notificationId > 0)
+                {
+                    // Start listening for action responses in background
+                    Console.WriteLine($"[DEBUG] Starting action listener for notification {notificationId}");
+                    StartActionListener(notificationId);
+                }
+                else
+                {
+                    Console.WriteLine("[DEBUG] WARNING: Failed to parse notification ID, no action listener started");
+                }
             }
-
-            if (process.ExitCode != 0)
+            finally
             {
-                throw new Exception($"gdbus failed with exit code {process.ExitCode}: {error}");
-            }
-
-            // Parse notification ID from output like "(uint32 123,)"
-            var notificationId = ParseNotificationId(output);
-            Console.WriteLine($"[DEBUG] Parsed notification ID: {notificationId}");
-
-            if (notificationId > 0)
-            {
-                // Start listening for action responses in background
-                Console.WriteLine($"[DEBUG] Starting action listener for notification {notificationId}");
-                StartActionListener(notificationId);
-            }
-            else
-            {
-                Console.WriteLine("[DEBUG] WARNING: Failed to parse notification ID, no action listener started");
+                // Cleanup temp script
+                try { File.Delete(scriptPath); } catch { }
             }
         }
 
