@@ -468,24 +468,33 @@ class Nudge
         if (DateTime.Now < _idleCacheExpiry)
             return _cachedIdle;
 
-        int idle = _compositor switch
-        {
-            "sway" => GetDBusIdleTime(),
-            "gnome" => GetDBusIdleTime(),
-            "kde" => GetKDEIdleTime(),
-            _ => 0
-        };
+        // Universal idle detection - tries multiple methods for cross-compositor support
+        int idle = GetUniversalIdleTime();
 
         _cachedIdle = idle;
         _idleCacheExpiry = DateTime.Now.AddMilliseconds(100);
         return idle;
     }
 
-    static int GetKDEIdleTime()
+    static int GetUniversalIdleTime()
+    {
+        // Method 1: Try org.freedesktop.ScreenSaver (universal - works on KDE, Sway, most compositors)
+        // This is the most compatible method for both X11 and Wayland
+        int idle = GetFreedesktopIdleTime();
+        if (idle > 0) return idle;
+
+        // Method 2: Try GNOME-specific Mutter idle monitor
+        idle = GetGnomeIdleTime();
+        if (idle > 0) return idle;
+
+        return 0;
+    }
+
+    static int GetFreedesktopIdleTime()
     {
         try
         {
-            // KDE uses org.freedesktop.ScreenSaver for idle detection
+            // Try with qdbus first (KDE/Qt environments)
             var output = RunCommand("qdbus",
                 "org.freedesktop.ScreenSaver " +
                 "/org/freedesktop/ScreenSaver " +
@@ -496,6 +505,27 @@ class Nudge
             {
                 return seconds * 1000;
             }
+
+            // Try with gdbus as fallback (GNOME/GTK environments)
+            output = RunCommand("gdbus",
+                "call --session " +
+                "--dest org.freedesktop.ScreenSaver " +
+                "--object-path /org/freedesktop/ScreenSaver " +
+                "--method org.freedesktop.ScreenSaver.GetSessionIdleTime");
+
+            // Parse output like "(uint32 123,)"
+            var cleaned = output.Trim()
+                .Replace("(", "")
+                .Replace(")", "")
+                .Replace("uint32", "")
+                .Replace(",", "")
+                .Trim();
+
+            if (int.TryParse(cleaned, out seconds))
+            {
+                return seconds * 1000;
+            }
+
             return 0;
         }
         catch
@@ -504,7 +534,7 @@ class Nudge
         }
     }
 
-    static int GetDBusIdleTime()
+    static int GetGnomeIdleTime()
     {
         try
         {
