@@ -426,13 +426,39 @@ class Nudge
     {
         try
         {
-            var output = RunCommand("qdbus", "org.kde.KWin /KWin org.kde.KWin.activeWindow");
-            // TODO: Proper KDE implementation when available
-            return string.IsNullOrWhiteSpace(output) ? "unknown" : output.Trim();
+            // Get list of all windows
+            var windows = RunCommand("qdbus", "org.kde.KWin /KWin org.kde.KWin.getWindowInfo 1");
+
+            if (string.IsNullOrWhiteSpace(windows))
+            {
+                // Fallback: try to get active window via different method
+                var activeWindow = RunCommand("xdotool", "getactivewindow getwindowname");
+                if (!string.IsNullOrWhiteSpace(activeWindow))
+                {
+                    return activeWindow.Trim().Split('\n')[0];
+                }
+                return "unknown";
+            }
+
+            // Parse window info - look for the active window
+            var lines = windows.Split('\n');
+            foreach (var line in lines)
+            {
+                if (line.Contains("resourceClass") || line.Contains("caption"))
+                {
+                    var parts = line.Split(':');
+                    if (parts.Length > 1)
+                    {
+                        return parts[1].Trim();
+                    }
+                }
+            }
+
+            return "unknown";
         }
         catch (Exception ex)
         {
-            Dim($"  KDE error: {ex.Message}");
+            // Don't log errors in cached function - too spammy
             return "unknown";
         }
     }
@@ -446,12 +472,36 @@ class Nudge
         {
             "sway" => GetDBusIdleTime(),
             "gnome" => GetDBusIdleTime(),
+            "kde" => GetKDEIdleTime(),
             _ => 0
         };
 
         _cachedIdle = idle;
         _idleCacheExpiry = DateTime.Now.AddMilliseconds(100);
         return idle;
+    }
+
+    static int GetKDEIdleTime()
+    {
+        try
+        {
+            // KDE uses org.freedesktop.ScreenSaver for idle detection
+            var output = RunCommand("qdbus",
+                "org.freedesktop.ScreenSaver " +
+                "/org/freedesktop/ScreenSaver " +
+                "org.freedesktop.ScreenSaver.GetSessionIdleTime");
+
+            // Output is in seconds, convert to milliseconds
+            if (int.TryParse(output.Trim(), out int seconds))
+            {
+                return seconds * 1000;
+            }
+            return 0;
+        }
+        catch
+        {
+            return 0;
+        }
     }
 
     static int GetDBusIdleTime()

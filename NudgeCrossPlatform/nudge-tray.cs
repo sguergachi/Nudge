@@ -171,6 +171,8 @@ namespace NudgeTray
 
         private static void ShowDbusNotification()
         {
+            Console.WriteLine("[DEBUG] ShowDbusNotification called");
+
             // Send native Linux notification via gdbus with action buttons
             var process = new Process
             {
@@ -192,21 +194,37 @@ namespace NudgeTray
                 }
             };
 
+            Console.WriteLine($"[DEBUG] Running: gdbus call...");
             process.Start();
             string output = process.StandardOutput.ReadToEnd();
+            string error = process.StandardError.ReadToEnd();
             process.WaitForExit();
+
+            Console.WriteLine($"[DEBUG] gdbus exit code: {process.ExitCode}");
+            Console.WriteLine($"[DEBUG] gdbus stdout: {output}");
+            if (!string.IsNullOrEmpty(error))
+            {
+                Console.WriteLine($"[DEBUG] gdbus stderr: {error}");
+            }
 
             if (process.ExitCode != 0)
             {
-                throw new Exception($"gdbus failed with exit code {process.ExitCode}");
+                throw new Exception($"gdbus failed with exit code {process.ExitCode}: {error}");
             }
 
             // Parse notification ID from output like "(uint32 123,)"
             var notificationId = ParseNotificationId(output);
+            Console.WriteLine($"[DEBUG] Parsed notification ID: {notificationId}");
+
             if (notificationId > 0)
             {
                 // Start listening for action responses in background
+                Console.WriteLine($"[DEBUG] Starting action listener for notification {notificationId}");
                 StartActionListener(notificationId);
+            }
+            else
+            {
+                Console.WriteLine("[DEBUG] WARNING: Failed to parse notification ID, no action listener started");
             }
         }
 
@@ -235,6 +253,8 @@ namespace NudgeTray
             {
                 try
                 {
+                    Console.WriteLine($"[DEBUG] Action listener thread started for notification {notificationId}");
+
                     var process = new Process
                     {
                         StartInfo = new ProcessStartInfo
@@ -251,18 +271,22 @@ namespace NudgeTray
                     {
                         if (!string.IsNullOrEmpty(e.Data))
                         {
+                            Console.WriteLine($"[DEBUG] DBus monitor: {e.Data}");
+
                             // Look for ActionInvoked signal
                             if (e.Data.Contains("ActionInvoked") && e.Data.Contains(notificationId.ToString()))
                             {
+                                Console.WriteLine($"[DEBUG] ActionInvoked detected for notification {notificationId}!");
+
                                 if (e.Data.Contains("\"yes\""))
                                 {
-                                    Console.WriteLine("User responded: YES (productive) via notification");
+                                    Console.WriteLine("✓ User responded: YES (productive) via notification");
                                     SendResponse(true);
                                     process.Kill();
                                 }
                                 else if (e.Data.Contains("\"no\""))
                                 {
-                                    Console.WriteLine("User responded: NO (not productive) via notification");
+                                    Console.WriteLine("✓ User responded: NO (not productive) via notification");
                                     SendResponse(false);
                                     process.Kill();
                                 }
@@ -273,20 +297,29 @@ namespace NudgeTray
                     process.Start();
                     process.BeginOutputReadLine();
 
+                    Console.WriteLine("[DEBUG] Waiting for action invocations (60s timeout)...");
+
                     // Timeout after 60 seconds
                     if (!process.WaitForExit(60000))
                     {
+                        Console.WriteLine("[DEBUG] Action listener timeout reached, killing monitor");
                         process.Kill();
+                    }
+                    else
+                    {
+                        Console.WriteLine("[DEBUG] Action listener exited normally");
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Action listener failed: {ex.Message}");
+                    Console.WriteLine($"[ERROR] Action listener failed: {ex.Message}");
+                    Console.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
                 }
             });
 
             listenerThread.IsBackground = true;
             listenerThread.Start();
+            Console.WriteLine("[DEBUG] Action listener thread spawned");
         }
 
         private static void ShowFallbackNotification()
