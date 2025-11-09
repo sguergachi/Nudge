@@ -401,31 +401,31 @@ EOF
 EOF
 
     dim "  Building nudge-tray (with Avalonia UI)..."
-    dotnet publish nudge-tray.csproj -c Release -v quiet --nologo --no-self-contained 2>&1 | grep -v "NU1701" | grep -v "Determining projects" || true
-    if [ -f "bin/Release/${TARGET_FRAMEWORK}/publish/nudge-tray" ] || [ -f "bin/Release/${TARGET_FRAMEWORK}/publish/nudge-tray.dll" ]; then
-        success "  ✓ nudge-tray"
-    else
-        warning "  ⚠ nudge-tray build may have issues"
+    dotnet publish nudge-tray.csproj -c Release --nologo --no-self-contained
+
+    if [ ! -f "bin/Release/${TARGET_FRAMEWORK}/publish/nudge-tray.dll" ]; then
+        error "✗ nudge-tray.dll not found after build"
+        exit 1
     fi
 
+    success "  ✓ nudge-tray"
+
     # Copy binaries and dependencies to root for easy access
-    cp bin/Release/${TARGET_FRAMEWORK}/nudge ./ 2>/dev/null || true
-    cp bin/Release/${TARGET_FRAMEWORK}/nudge.dll ./ 2>/dev/null || true
-    cp bin/Release/${TARGET_FRAMEWORK}/nudge.runtimeconfig.json ./ 2>/dev/null || true
-    cp bin/Release/${TARGET_FRAMEWORK}/nudge-notify ./ 2>/dev/null || true
-    cp bin/Release/${TARGET_FRAMEWORK}/nudge-notify.dll ./ 2>/dev/null || true
-    cp bin/Release/${TARGET_FRAMEWORK}/nudge-notify.runtimeconfig.json ./ 2>/dev/null || true
+    cp bin/Release/${TARGET_FRAMEWORK}/nudge ./
+    cp bin/Release/${TARGET_FRAMEWORK}/nudge.dll ./
+    cp bin/Release/${TARGET_FRAMEWORK}/nudge.runtimeconfig.json ./
+    cp bin/Release/${TARGET_FRAMEWORK}/nudge-notify ./
+    cp bin/Release/${TARGET_FRAMEWORK}/nudge-notify.dll ./
+    cp bin/Release/${TARGET_FRAMEWORK}/nudge-notify.runtimeconfig.json ./
 
     # Copy nudge-tray with all Avalonia dependencies from publish folder
-    if [ -d "bin/Release/${TARGET_FRAMEWORK}/publish" ]; then
-        cp bin/Release/${TARGET_FRAMEWORK}/publish/nudge-tray ./ 2>/dev/null || true
-        cp bin/Release/${TARGET_FRAMEWORK}/publish/*.dll ./ 2>/dev/null || true
-        cp bin/Release/${TARGET_FRAMEWORK}/publish/*.json ./ 2>/dev/null || true
-        cp bin/Release/${TARGET_FRAMEWORK}/publish/*.so* ./ 2>/dev/null || true
-        # Copy native libraries with proper directory structure
-        if [ -d "bin/Release/${TARGET_FRAMEWORK}/publish/runtimes" ]; then
-            cp -r bin/Release/${TARGET_FRAMEWORK}/publish/runtimes ./ 2>/dev/null || true
-        fi
+    cp bin/Release/${TARGET_FRAMEWORK}/publish/nudge-tray ./
+    cp bin/Release/${TARGET_FRAMEWORK}/publish/*.dll ./
+    cp bin/Release/${TARGET_FRAMEWORK}/publish/*.json ./
+    cp bin/Release/${TARGET_FRAMEWORK}/publish/*.so* ./ 2>/dev/null || true
+    # Copy native libraries with proper directory structure
+    if [ -d "bin/Release/${TARGET_FRAMEWORK}/publish/runtimes" ]; then
+        cp -r bin/Release/${TARGET_FRAMEWORK}/publish/runtimes ./
     fi
 
     rm -f nudge_build.cs nudge-notify_build.cs
