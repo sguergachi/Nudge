@@ -147,7 +147,8 @@ gdbus call --session \
   ""Nudge - Productivity Check"" \
   ""Were you productive during the last interval?"" \
   '[""yes"",""Yes - Productive"",""no"",""No - Not Productive""]' \
-  '{}' 60000
+  '{""urgency"": <byte 2>, ""resident"": <true>}' \
+  -1
 ";
 
             File.WriteAllText(scriptPath, scriptContent);
