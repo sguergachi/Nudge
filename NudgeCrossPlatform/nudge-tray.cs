@@ -112,9 +112,9 @@ namespace NudgeTray
 
         public static async void ShowSnapshotNotification()
         {
-            Console.WriteLine("📸 Snapshot taken! Respond using the tray menu.");
+            Console.WriteLine("📸 Snapshot taken! Respond using the notification buttons.");
 
-            // Send cross-platform desktop notification
+            // Send cross-platform desktop notification with action buttons
             try
             {
                 if (_notificationManager != null)
@@ -122,42 +122,70 @@ namespace NudgeTray
                     var notification = new Notification
                     {
                         Title = "Nudge - Productivity Check",
-                        Body = "Were you productive? Use the tray menu to respond.",
-                        Expiration = TimeSpan.FromSeconds(60)
+                        Body = "Were you productive during the last interval?",
+                        Expiration = TimeSpan.FromSeconds(60),
+                        Buttons =
+                        {
+                            ("Yes - Productive", "yes"),
+                            ("No - Not Productive", "no")
+                        }
                     };
 
+                    notification.OnClicked += OnNotificationClicked;
+
                     await _notificationManager.ShowNotification(notification);
-                    Console.WriteLine("✓ Desktop notification sent");
+                    Console.WriteLine("✓ Desktop notification sent with action buttons");
                 }
                 else
                 {
                     Console.WriteLine("⚠ Notification manager not initialized");
+                    ShowFallbackNotification();
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"⚠ Failed to send notification: {ex.Message}");
+                ShowFallbackNotification();
+            }
+        }
 
-                // Fallback to notify-send on Linux
-                try
+        private static void ShowFallbackNotification()
+        {
+            // Fallback to notify-send on Linux (without buttons)
+            try
+            {
+                var process = new Process
                 {
-                    var process = new Process
+                    StartInfo = new ProcessStartInfo
                     {
-                        StartInfo = new ProcessStartInfo
-                        {
-                            FileName = "notify-send",
-                            Arguments = "-u critical -t 60000 \"Nudge - Productivity Check\" \"Were you productive? Use the tray menu to respond\"",
-                            UseShellExecute = false,
-                            CreateNoWindow = true
-                        }
-                    };
-                    process.Start();
-                    Console.WriteLine("✓ Sent notification via fallback method");
-                }
-                catch
-                {
-                    Console.WriteLine("✗ All notification methods failed");
-                }
+                        FileName = "notify-send",
+                        Arguments = "-u critical -t 60000 \"Nudge - Productivity Check\" \"Were you productive? Use the tray menu to respond\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+                process.Start();
+                Console.WriteLine("✓ Sent notification via fallback method (use tray menu to respond)");
+            }
+            catch
+            {
+                Console.WriteLine("✗ All notification methods failed - use tray menu");
+            }
+        }
+
+        private static void OnNotificationClicked(object? sender, NotificationClickedEventArgs e)
+        {
+            Console.WriteLine($"Notification clicked: {e.ActionId}");
+
+            if (e.ActionId == "yes")
+            {
+                Console.WriteLine("User responded: YES (productive)");
+                SendResponse(true);
+            }
+            else if (e.ActionId == "no")
+            {
+                Console.WriteLine("User responded: NO (not productive)");
+                SendResponse(false);
             }
         }
 
