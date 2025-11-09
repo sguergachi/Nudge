@@ -426,13 +426,39 @@ class Nudge
     {
         try
         {
-            var output = RunCommand("qdbus", "org.kde.KWin /KWin org.kde.KWin.activeWindow");
-            // TODO: Proper KDE implementation when available
-            return string.IsNullOrWhiteSpace(output) ? "unknown" : output.Trim();
+            // Get list of all windows
+            var windows = RunCommand("qdbus", "org.kde.KWin /KWin org.kde.KWin.getWindowInfo 1");
+
+            if (string.IsNullOrWhiteSpace(windows))
+            {
+                // Fallback: try to get active window via different method
+                var activeWindow = RunCommand("xdotool", "getactivewindow getwindowname");
+                if (!string.IsNullOrWhiteSpace(activeWindow))
+                {
+                    return activeWindow.Trim().Split('\n')[0];
+                }
+                return "unknown";
+            }
+
+            // Parse window info - look for the active window
+            var lines = windows.Split('\n');
+            foreach (var line in lines)
+            {
+                if (line.Contains("resourceClass") || line.Contains("caption"))
+                {
+                    var parts = line.Split(':');
+                    if (parts.Length > 1)
+                    {
+                        return parts[1].Trim();
+                    }
+                }
+            }
+
+            return "unknown";
         }
         catch (Exception ex)
         {
-            Dim($"  KDE error: {ex.Message}");
+            // Don't log errors in cached function - too spammy
             return "unknown";
         }
     }
@@ -442,19 +468,73 @@ class Nudge
         if (DateTime.Now < _idleCacheExpiry)
             return _cachedIdle;
 
-        int idle = _compositor switch
-        {
-            "sway" => GetDBusIdleTime(),
-            "gnome" => GetDBusIdleTime(),
-            _ => 0
-        };
+        // Universal idle detection - tries multiple methods for cross-compositor support
+        int idle = GetUniversalIdleTime();
 
         _cachedIdle = idle;
         _idleCacheExpiry = DateTime.Now.AddMilliseconds(100);
         return idle;
     }
 
-    static int GetDBusIdleTime()
+    static int GetUniversalIdleTime()
+    {
+        // Method 1: Try org.freedesktop.ScreenSaver (universal - works on KDE, Sway, most compositors)
+        // This is the most compatible method for both X11 and Wayland
+        int idle = GetFreedesktopIdleTime();
+        if (idle > 0) return idle;
+
+        // Method 2: Try GNOME-specific Mutter idle monitor
+        idle = GetGnomeIdleTime();
+        if (idle > 0) return idle;
+
+        return 0;
+    }
+
+    static int GetFreedesktopIdleTime()
+    {
+        try
+        {
+            // Try with qdbus first (KDE/Qt environments)
+            var output = RunCommand("qdbus",
+                "org.freedesktop.ScreenSaver " +
+                "/org/freedesktop/ScreenSaver " +
+                "org.freedesktop.ScreenSaver.GetSessionIdleTime");
+
+            // Output is in seconds, convert to milliseconds
+            if (int.TryParse(output.Trim(), out int seconds))
+            {
+                return seconds * 1000;
+            }
+
+            // Try with gdbus as fallback (GNOME/GTK environments)
+            output = RunCommand("gdbus",
+                "call --session " +
+                "--dest org.freedesktop.ScreenSaver " +
+                "--object-path /org/freedesktop/ScreenSaver " +
+                "--method org.freedesktop.ScreenSaver.GetSessionIdleTime");
+
+            // Parse output like "(uint32 123,)"
+            var cleaned = output.Trim()
+                .Replace("(", "")
+                .Replace(")", "")
+                .Replace("uint32", "")
+                .Replace(",", "")
+                .Trim();
+
+            if (int.TryParse(cleaned, out seconds))
+            {
+                return seconds * 1000;
+            }
+
+            return 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    static int GetGnomeIdleTime()
     {
         try
         {

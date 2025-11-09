@@ -115,10 +115,13 @@ namespace NudgeTray
         {
             Console.WriteLine("📸 Snapshot taken! Respond using the notification buttons.");
 
-            // Send cross-platform desktop notification with action buttons
-            try
+            // Try multiple notification methods in order of preference
+            bool success = false;
+
+            // Method 1: Try DesktopNotifications library
+            if (_notificationManager != null)
             {
-                if (_notificationManager != null)
+                try
                 {
                     var notification = new Notification
                     {
@@ -135,19 +138,188 @@ namespace NudgeTray
                     notification.OnClicked += OnNotificationClicked;
 
                     await _notificationManager.ShowNotification(notification);
-                    Console.WriteLine("✓ Desktop notification sent with action buttons");
+                    Console.WriteLine("✓ Desktop notification sent via DesktopNotifications library");
+                    success = true;
                 }
-                else
+                catch (Exception ex)
                 {
-                    Console.WriteLine("⚠ Notification manager not initialized");
-                    ShowFallbackNotification();
+                    Console.WriteLine($"⚠ DesktopNotifications failed: {ex.Message}");
                 }
             }
-            catch (Exception ex)
+
+            // Method 2: Try native DBus notifications (Linux)
+            if (!success)
             {
-                Console.WriteLine($"⚠ Failed to send notification: {ex.Message}");
+                try
+                {
+                    ShowDbusNotification();
+                    Console.WriteLine("✓ Desktop notification sent via DBus");
+                    success = true;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"⚠ DBus notification failed: {ex.Message}");
+                }
+            }
+
+            // Method 3: Fallback to notify-send (no buttons)
+            if (!success)
+            {
                 ShowFallbackNotification();
             }
+        }
+
+        private static void ShowDbusNotification()
+        {
+            Console.WriteLine("[DEBUG] ShowDbusNotification called");
+
+            // Send native Linux notification via gdbus with action buttons
+            var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "gdbus",
+                    Arguments = @"call --session --dest org.freedesktop.Notifications " +
+                               @"--object-path /org/freedesktop/Notifications " +
+                               @"--method org.freedesktop.Notifications.Notify " +
+                               @"""Nudge"" 0 ""dialog-question"" " +
+                               @"""Nudge - Productivity Check"" " +
+                               @"""Were you productive during the last interval?"" " +
+                               @"[""yes"",""Yes - Productive"",""no"",""No - Not Productive""] " +
+                               @"{} 60000",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                }
+            };
+
+            Console.WriteLine($"[DEBUG] Running: gdbus call...");
+            process.Start();
+            string output = process.StandardOutput.ReadToEnd();
+            string error = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+
+            Console.WriteLine($"[DEBUG] gdbus exit code: {process.ExitCode}");
+            Console.WriteLine($"[DEBUG] gdbus stdout: {output}");
+            if (!string.IsNullOrEmpty(error))
+            {
+                Console.WriteLine($"[DEBUG] gdbus stderr: {error}");
+            }
+
+            if (process.ExitCode != 0)
+            {
+                throw new Exception($"gdbus failed with exit code {process.ExitCode}: {error}");
+            }
+
+            // Parse notification ID from output like "(uint32 123,)"
+            var notificationId = ParseNotificationId(output);
+            Console.WriteLine($"[DEBUG] Parsed notification ID: {notificationId}");
+
+            if (notificationId > 0)
+            {
+                // Start listening for action responses in background
+                Console.WriteLine($"[DEBUG] Starting action listener for notification {notificationId}");
+                StartActionListener(notificationId);
+            }
+            else
+            {
+                Console.WriteLine("[DEBUG] WARNING: Failed to parse notification ID, no action listener started");
+            }
+        }
+
+        private static int ParseNotificationId(string output)
+        {
+            try
+            {
+                var cleaned = output.Trim()
+                    .Replace("(", "")
+                    .Replace(")", "")
+                    .Replace("uint32", "")
+                    .Replace(",", "")
+                    .Trim();
+                return int.TryParse(cleaned, out int id) ? id : 0;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        private static void StartActionListener(int notificationId)
+        {
+            // Listen for notification action clicks via DBus in background thread
+            var listenerThread = new System.Threading.Thread(() =>
+            {
+                try
+                {
+                    Console.WriteLine($"[DEBUG] Action listener thread started for notification {notificationId}");
+
+                    var process = new Process
+                    {
+                        StartInfo = new ProcessStartInfo
+                        {
+                            FileName = "gdbus",
+                            Arguments = @"monitor --session --dest org.freedesktop.Notifications",
+                            RedirectStandardOutput = true,
+                            UseShellExecute = false,
+                            CreateNoWindow = true
+                        }
+                    };
+
+                    process.OutputDataReceived += (s, e) =>
+                    {
+                        if (!string.IsNullOrEmpty(e.Data))
+                        {
+                            Console.WriteLine($"[DEBUG] DBus monitor: {e.Data}");
+
+                            // Look for ActionInvoked signal
+                            if (e.Data.Contains("ActionInvoked") && e.Data.Contains(notificationId.ToString()))
+                            {
+                                Console.WriteLine($"[DEBUG] ActionInvoked detected for notification {notificationId}!");
+
+                                if (e.Data.Contains("\"yes\""))
+                                {
+                                    Console.WriteLine("✓ User responded: YES (productive) via notification");
+                                    SendResponse(true);
+                                    process.Kill();
+                                }
+                                else if (e.Data.Contains("\"no\""))
+                                {
+                                    Console.WriteLine("✓ User responded: NO (not productive) via notification");
+                                    SendResponse(false);
+                                    process.Kill();
+                                }
+                            }
+                        }
+                    };
+
+                    process.Start();
+                    process.BeginOutputReadLine();
+
+                    Console.WriteLine("[DEBUG] Waiting for action invocations (60s timeout)...");
+
+                    // Timeout after 60 seconds
+                    if (!process.WaitForExit(60000))
+                    {
+                        Console.WriteLine("[DEBUG] Action listener timeout reached, killing monitor");
+                        process.Kill();
+                    }
+                    else
+                    {
+                        Console.WriteLine("[DEBUG] Action listener exited normally");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[ERROR] Action listener failed: {ex.Message}");
+                    Console.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
+                }
+            });
+
+            listenerThread.IsBackground = true;
+            listenerThread.Start();
+            Console.WriteLine("[DEBUG] Action listener thread spawned");
         }
 
         private static void ShowFallbackNotification()
