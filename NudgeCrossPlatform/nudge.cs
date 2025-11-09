@@ -85,6 +85,12 @@ class Nudge
     static bool _waitingForResponse = false;
     static int _totalSnapshots = 0;
 
+    // Snapshot state (captured when snapshot is taken)
+    static string _snapshotApp = "";
+    static int _snapshotIdle = 0;
+    static int _snapshotAttention = 0;
+    static System.Threading.Timer? _responseTimer;
+
     // Performance caching (avoid excessive process spawning)
     static string _cachedApp = "";
     static DateTime _appCacheExpiry = DateTime.MinValue;
@@ -98,8 +104,10 @@ class Nudge
     static void Main(string[] args)
     {
         // Parse arguments
-        foreach (var arg in args)
+        for (int i = 0; i < args.Length; i++)
         {
+            var arg = args[i];
+
             if (arg == "--help" || arg == "-h")
             {
                 ShowHelp();
@@ -112,10 +120,10 @@ class Nudge
             }
             if (arg == "--interval" || arg == "-i")
             {
-                var idx = Array.IndexOf(args, arg);
-                if (idx + 1 < args.Length && int.TryParse(args[idx + 1], out int minutes))
+                if (i + 1 < args.Length && int.TryParse(args[i + 1], out int minutes))
                 {
                     SNAPSHOT_INTERVAL_MS = minutes * 60 * 1000;
+                    i++; // Skip the interval value
                 }
                 continue;
             }
@@ -513,6 +521,11 @@ class Nudge
         int appHash = GetHash(app);
         _totalSnapshots++;
 
+        // Capture snapshot state to avoid race conditions
+        _snapshotApp = app;
+        _snapshotIdle = idle;
+        _snapshotAttention = attention;
+
         Console.WriteLine();
         Console.WriteLine($"{Color.BYELLOW}━━━ SNAPSHOT #{_totalSnapshots} ━━━{Color.RESET}");
         Console.WriteLine($"  {Color.BOLD}App:{Color.RESET}       {Color.CYAN}{app}{Color.RESET}");
@@ -521,7 +534,7 @@ class Nudge
         Console.WriteLine($"  {Color.BOLD}Attention:{Color.RESET} {FormatTime(attention)}");
         Console.WriteLine();
         Console.WriteLine($"  {Color.MAGENTA}❯{Color.RESET} Waiting for response...");
-        Console.WriteLine($"    {Color.DIM}Run: {Color.BCYAN}nudge-notify YES{Color.DIM} or {Color.BCYAN}nudge-notify NO{Color.RESET}");
+        Console.WriteLine($"  {Color.DIM}Run: {Color.BCYAN}nudge-notify YES{Color.DIM} or {Color.BCYAN}nudge-notify NO{Color.RESET}");
         Console.WriteLine();
 
         // Notify tray application that a snapshot was taken
@@ -529,18 +542,18 @@ class Nudge
 
         _waitingForResponse = true;
 
-        // Timeout handler
-        var timeout = new Thread(() =>
+        // Cancel previous timeout timer if still running
+        _responseTimer?.Dispose();
+
+        // Create timeout timer (reusable, no thread leak)
+        _responseTimer = new System.Threading.Timer(_ =>
         {
-            Thread.Sleep(RESPONSE_TIMEOUT_MS);
             if (_waitingForResponse)
             {
                 Warning("⏱  Timeout - no response received");
                 _waitingForResponse = false;
             }
-        });
-        timeout.IsBackground = true;
-        timeout.Start();
+        }, null, RESPONSE_TIMEOUT_MS, Timeout.Infinite);
     }
 
     static void SaveSnapshot(string app, int idle, int attention, bool productive)
@@ -584,9 +597,10 @@ class Nudge
 
     static void RunUDPListener()
     {
+        UdpClient? listener = null;
         try
         {
-            var listener = new UdpClient(UDP_PORT);
+            listener = new UdpClient(UDP_PORT);
 
             while (true)
             {
@@ -600,9 +614,10 @@ class Nudge
                     continue;
                 }
 
-                string app = _cachedApp;
-                int idle = _cachedIdle;
-                int attention = _attentionSpanMs;
+                // Use captured snapshot state (not current state)
+                string app = _snapshotApp;
+                int idle = _snapshotIdle;
+                int attention = _snapshotAttention;
 
                 switch (message)
                 {
@@ -623,10 +638,20 @@ class Nudge
                 }
             }
         }
+        catch (SocketException ex) when (ex.ErrorCode == 10048 || ex.Message.Contains("already in use"))
+        {
+            Error($"UDP port {UDP_PORT} is already in use");
+            Error("Another instance of Nudge may be running");
+            Error("Please close the other instance or choose a different port");
+        }
         catch (Exception ex)
         {
             Error($"UDP listener crashed: {ex.Message}");
             Error("Restart Nudge to resume data collection");
+        }
+        finally
+        {
+            listener?.Dispose();
         }
     }
 
