@@ -16,6 +16,7 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -23,6 +24,8 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using DesktopNotifications;
+using DesktopNotifications.Avalonia;
 
 namespace NudgeTray
 {
@@ -31,6 +34,7 @@ namespace NudgeTray
         const int UDP_PORT = 45001;
         const string VERSION = "1.0.0";
         static Process? _nudgeProcess;
+        static INotificationManager? _notificationManager;
 
         [STAThread]
         static void Main(string[] args)
@@ -106,28 +110,54 @@ namespace NudgeTray
             }
         }
 
-        public static void ShowSnapshotNotification()
+        public static async void ShowSnapshotNotification()
         {
             Console.WriteLine("📸 Snapshot taken! Respond using the tray menu.");
 
-            // Send desktop notification via notify-send (works on KDE/GNOME/most Linux)
+            // Send cross-platform desktop notification
             try
             {
-                var process = new Process
+                if (_notificationManager != null)
                 {
-                    StartInfo = new ProcessStartInfo
+                    var notification = new Notification
                     {
-                        FileName = "notify-send",
-                        Arguments = "-u critical -t 60000 \"Nudge - Productivity Check\" \"Were you productive? Use the tray menu to respond\"",
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    }
-                };
-                process.Start();
+                        Title = "Nudge - Productivity Check",
+                        Body = "Were you productive? Use the tray menu to respond.",
+                        Expiration = TimeSpan.FromSeconds(60)
+                    };
+
+                    await _notificationManager.ShowNotification(notification);
+                    Console.WriteLine("✓ Desktop notification sent");
+                }
+                else
+                {
+                    Console.WriteLine("⚠ Notification manager not initialized");
+                }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to send notification: {ex.Message}");
+                Console.WriteLine($"⚠ Failed to send notification: {ex.Message}");
+
+                // Fallback to notify-send on Linux
+                try
+                {
+                    var process = new Process
+                    {
+                        StartInfo = new ProcessStartInfo
+                        {
+                            FileName = "notify-send",
+                            Arguments = "-u critical -t 60000 \"Nudge - Productivity Check\" \"Were you productive? Use the tray menu to respond\"",
+                            UseShellExecute = false,
+                            CreateNoWindow = true
+                        }
+                    };
+                    process.Start();
+                    Console.WriteLine("✓ Sent notification via fallback method");
+                }
+                catch
+                {
+                    Console.WriteLine("✗ All notification methods failed");
+                }
             }
         }
 
@@ -167,6 +197,24 @@ namespace NudgeTray
         {
             // Must call base first for Avalonia
             base.Initialize();
+
+            // Initialize notification manager
+            InitializeNotifications();
+        }
+
+        private async void InitializeNotifications()
+        {
+            try
+            {
+                Program._notificationManager = DesktopNotificationManagerBuilder.CreateDefault().Build();
+                await Program._notificationManager.Initialize();
+                Console.WriteLine("✓ Notification system initialized");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"⚠ Failed to initialize notifications: {ex.Message}");
+                Console.WriteLine("  Will fall back to system commands");
+            }
         }
 
         private NativeMenu CreateMenu()
