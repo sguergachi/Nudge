@@ -47,6 +47,7 @@ namespace NudgeTray
                 if (args[i] == "--interval" && i + 1 < args.Length)
                 {
                     int.TryParse(args[i + 1], out interval);
+                    i++; // Skip the interval value
                 }
             }
 
@@ -89,10 +90,10 @@ namespace NudgeTray
                     {
                         Console.WriteLine($"[Nudge] {e.Data}");
 
-                        // Detect snapshot requests
-                        if (e.Data.Contains("SNAPSHOT"))
+                        // Detect snapshot requests (exact match only)
+                        if (e.Data.Trim() == "SNAPSHOT")
                         {
-                            Dispatcher.UIThread.Post(() => ShowSnapshotNotification());
+                            Dispatcher.UIThread.Post(() => _ = ShowSnapshotNotificationAsync());
                         }
                     }
                 };
@@ -110,7 +111,7 @@ namespace NudgeTray
             }
         }
 
-        public static async void ShowSnapshotNotification()
+        public static async Task ShowSnapshotNotificationAsync()
         {
             Console.WriteLine("📸 Snapshot taken! Respond using the notification buttons.");
 
@@ -175,6 +176,12 @@ namespace NudgeTray
 
         private static void OnNotificationClicked(object? sender, NotificationClickedEventArgs e)
         {
+            if (string.IsNullOrEmpty(e.ActionId))
+            {
+                Console.WriteLine("Notification clicked without action ID");
+                return;
+            }
+
             Console.WriteLine($"Notification clicked: {e.ActionId}");
 
             if (e.ActionId == "yes")
@@ -210,8 +217,25 @@ namespace NudgeTray
         {
             if (_nudgeProcess != null && !_nudgeProcess.HasExited)
             {
-                _nudgeProcess.Kill();
-                _nudgeProcess.Dispose();
+                try
+                {
+                    // Try graceful shutdown first
+                    _nudgeProcess.CloseMainWindow();
+                    if (!_nudgeProcess.WaitForExit(2000))
+                    {
+                        // Force kill if graceful shutdown fails
+                        _nudgeProcess.Kill();
+                    }
+                }
+                catch
+                {
+                    // Fallback to kill if graceful shutdown fails
+                    try { _nudgeProcess.Kill(); } catch { }
+                }
+                finally
+                {
+                    _nudgeProcess.Dispose();
+                }
             }
             Environment.Exit(0);
         }
