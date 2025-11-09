@@ -14,6 +14,15 @@ public class LinuxActivityMonitor : IActivityMonitor
     private readonly bool _hasXdotool;
     private readonly bool _hasXprintidle;
 
+    // Performance optimization: Cache foreground app to reduce process spawning
+    private string _cachedForegroundApp = string.Empty;
+    private DateTime _cacheExpiry = DateTime.MinValue;
+    private const int CACHE_DURATION_MS = 500; // Cache for 500ms
+
+    // Performance optimization: Use compiled regex
+    private static readonly Regex WindowNamePattern =
+        new Regex(@"[-:]?\s*([^-:]+)$", RegexOptions.Compiled);
+
     public LinuxActivityMonitor()
     {
         // Check if required tools are available
@@ -33,9 +42,15 @@ public class LinuxActivityMonitor : IActivityMonitor
 
     public string GetForegroundApp()
     {
+        // Performance optimization: Return cached value if still valid
+        if (DateTime.Now < _cacheExpiry)
+        {
+            return _cachedForegroundApp;
+        }
+
         if (!_hasXdotool)
         {
-            return "unknown";
+            return CacheAndReturn("unknown");
         }
 
         try
@@ -49,19 +64,26 @@ public class LinuxActivityMonitor : IActivityMonitor
                 if (File.Exists(commPath))
                 {
                     var processName = File.ReadAllText(commPath).Trim();
-                    return processName;
+                    return CacheAndReturn(processName);
                 }
             }
 
             // Fallback: get window name
             var windowName = ExecuteCommand("xdotool", "getactivewindow getwindowname");
-            return ExtractAppFromWindowName(windowName);
+            return CacheAndReturn(ExtractAppFromWindowName(windowName));
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error getting foreground app: {ex.Message}");
-            return "unknown";
+            return CacheAndReturn("unknown");
         }
+    }
+
+    private string CacheAndReturn(string appName)
+    {
+        _cachedForegroundApp = appName;
+        _cacheExpiry = DateTime.Now.AddMilliseconds(CACHE_DURATION_MS);
+        return appName;
     }
 
     public int GetKeyboardInactivityMs()
@@ -185,7 +207,8 @@ public class LinuxActivityMonitor : IActivityMonitor
 
         // Try to extract application name from window title
         // Common patterns: "Document - AppName", "AppName: Document", etc.
-        var match = Regex.Match(windowName, @"[-:]?\s*([^-:]+)$");
+        // Using compiled regex for better performance
+        var match = WindowNamePattern.Match(windowName);
         if (match.Success)
         {
             return match.Groups[1].Value.Trim();

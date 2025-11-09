@@ -32,6 +32,9 @@ public class HarvestData
     /// <summary>
     /// Milliseconds focused on current application (attention span)
     /// Maps to model feature: time_last_request
+    /// NOTE: Column name "time_last_request" is legacy/confusing - it actually measures
+    /// attention span (time in current app), not time of last request. Kept for
+    /// backward compatibility with existing training data and models.
     /// </summary>
     [Name("time_last_request")]
     public int AttentionSpan { get; set; }
