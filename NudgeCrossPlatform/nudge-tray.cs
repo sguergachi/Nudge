@@ -112,14 +112,7 @@ namespace NudgeTray
         {
             Console.WriteLine("📸 Snapshot taken! Respond using the notification buttons.");
 
-            // Try kdialog first on KDE (stays visible until answered)
-            if (ShowKDialogNotification())
-            {
-                Console.WriteLine("✓ Dialog shown via kdialog");
-                return;
-            }
-
-            // Try native DBus notifications
+            // Try native DBus notifications first
             bool success = false;
             try
             {
@@ -132,7 +125,14 @@ namespace NudgeTray
                 Console.WriteLine($"⚠ DBus notification failed: {ex.Message}");
             }
 
-            // Fallback to notify-send (no buttons)
+            // Fallback to kdialog if notifications don't work
+            if (!success && ShowKDialogNotification())
+            {
+                Console.WriteLine("✓ Dialog shown via kdialog (fallback)");
+                return;
+            }
+
+            // Last resort: notify-send (no buttons)
             if (!success)
             {
                 ShowFallbackNotification();
@@ -186,7 +186,7 @@ namespace NudgeTray
 
             // Create a temp script to avoid shell quoting hell
             var scriptPath = Path.GetTempFileName();
-            var scriptContent = "gdbus call --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications --method org.freedesktop.Notifications.Notify \"Nudge\" 0 \"dialog-question\" \"Nudge - Productivity Check\" \"Were you productive during the last interval?\" '[\"yes\",\"Yes - Productive\",\"no\",\"No - Not Productive\"]' '{\"category\": <\"device.removed\">, \"urgency\": <byte 2>, \"transient\": <false>, \"resident\": <true>, \"x-kde-persistentNotification\": <true>}' 0";
+            var scriptContent = "gdbus call --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications --method org.freedesktop.Notifications.Notify \"Nudge\" 0 \"dialog-question\" \"Nudge - Productivity Check\" \"Were you productive during the last interval?\" '[\"yes\",\"Yes - Productive\",\"no\",\"No - Not Productive\"]' '{\"urgency\": <byte 2>}' 2147483647";
 
             File.WriteAllText(scriptPath, scriptContent);
 
