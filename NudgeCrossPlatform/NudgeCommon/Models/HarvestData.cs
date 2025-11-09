@@ -16,18 +16,13 @@ public class HarvestData
     public int ForegroundAppHash { get; set; }
 
     /// <summary>
-    /// Milliseconds since last keyboard activity
-    /// Maps to model feature: keyboard_activity
+    /// Milliseconds since last user input activity (keyboard or mouse)
+    /// Maps to model feature: idle_time
+    /// Note: On Linux, X11 idle time covers both keyboard and mouse,
+    /// so we use a single unified measurement instead of separate fields
     /// </summary>
-    [Name("keyboard_activity")]
-    public int KeyboardActivity { get; set; }
-
-    /// <summary>
-    /// Milliseconds since last mouse activity
-    /// Maps to model feature: mouse_activity
-    /// </summary>
-    [Name("mouse_activity")]
-    public int MouseActivity { get; set; }
+    [Name("idle_time")]
+    public int IdleTime { get; set; }
 
     /// <summary>
     /// Milliseconds focused on current application (attention span)

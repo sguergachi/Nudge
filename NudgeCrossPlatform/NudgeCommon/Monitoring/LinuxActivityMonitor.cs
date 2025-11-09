@@ -19,6 +19,11 @@ public class LinuxActivityMonitor : IActivityMonitor
     private DateTime _cacheExpiry = DateTime.MinValue;
     private const int CACHE_DURATION_MS = 500; // Cache for 500ms
 
+    // Performance optimization: Cache idle time to avoid duplicate xprintidle calls
+    private int _cachedIdleTimeMs = 0;
+    private DateTime _idleCacheExpiry = DateTime.MinValue;
+    private const int IDLE_CACHE_DURATION_MS = 100; // Cache for 100ms
+
     // Performance optimization: Use compiled regex
     private static readonly Regex WindowNamePattern =
         new Regex(@"[-:]?\s*([^-:]+)$", RegexOptions.Compiled);
@@ -127,9 +132,16 @@ public class LinuxActivityMonitor : IActivityMonitor
 
     private int GetIdleTimeMs()
     {
+        // Performance optimization: Return cached value if still valid
+        // This prevents duplicate xprintidle calls for keyboard + mouse
+        if (DateTime.Now < _idleCacheExpiry)
+        {
+            return _cachedIdleTimeMs;
+        }
+
         if (!_hasXprintidle)
         {
-            return 0;
+            return CacheIdleTime(0);
         }
 
         try
@@ -138,7 +150,7 @@ public class LinuxActivityMonitor : IActivityMonitor
             var output = ExecuteCommand("xprintidle", "");
             if (int.TryParse(output.Trim(), out int idleMs))
             {
-                return idleMs;
+                return CacheIdleTime(idleMs);
             }
         }
         catch (Exception ex)
@@ -146,7 +158,14 @@ public class LinuxActivityMonitor : IActivityMonitor
             Console.WriteLine($"Error getting idle time: {ex.Message}");
         }
 
-        return 0;
+        return CacheIdleTime(0);
+    }
+
+    private int CacheIdleTime(int idleMs)
+    {
+        _cachedIdleTimeMs = idleMs;
+        _idleCacheExpiry = DateTime.Now.AddMilliseconds(IDLE_CACHE_DURATION_MS);
+        return idleMs;
     }
 
     private string ExecuteCommand(string command, string arguments)

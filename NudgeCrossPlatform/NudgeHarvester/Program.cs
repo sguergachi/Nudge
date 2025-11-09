@@ -13,8 +13,6 @@ namespace NudgeHarvester;
 class Program
 {
     private const int CYCLE_MS = 1000; // Check every second
-    private const int MAX_ATTENTION_SPAN_MS = 30 * 60 * 1000; // Cap at 30 minutes
-    private const int WARNING_ATTENTION_SPAN_MS = 2 * 60 * 60 * 1000; // Warn if > 2 hours
 
     private static IActivityMonitor? _activityMonitor;
     private static UdpEngine? _udpEngine;
@@ -25,9 +23,6 @@ class Program
 
     // Thread safety for CSV writes
     private static readonly object _csvLock = new object();
-
-    // Track app hashes for collision detection
-    private static readonly Dictionary<int, string> _seenAppHashes = new();
 
     static async Task Main(string[] args)
     {
@@ -113,24 +108,13 @@ class Program
         if (_activityMonitor == null) return;
 
         string appName = _activityMonitor.GetForegroundApp();
-
-        // Use deterministic hash for cross-platform compatibility
-        var (appHash, isCollision) = StableHash.GetHashWithCollisionCheck(appName, _seenAppHashes);
-
         int attentionSpan = _activityMonitor.GetAttentionSpanMs();
-
-        // Warn about extreme values (but still record them)
-        if (attentionSpan > WARNING_ATTENTION_SPAN_MS)
-        {
-            Console.WriteLine($"⚠️  WARNING: Attention span is {attentionSpan/1000/60} minutes - unusually long!");
-        }
 
         _currentHarvest = new HarvestData
         {
             ForegroundApp = appName,
-            ForegroundAppHash = appHash,
-            KeyboardActivity = _activityMonitor.GetKeyboardInactivityMs(),
-            MouseActivity = _activityMonitor.GetMouseInactivityMs(),
+            ForegroundAppHash = StableHash.GetHash(appName),
+            IdleTime = _activityMonitor.GetKeyboardInactivityMs(), // X11 idle time covers both keyboard/mouse
             AttentionSpan = attentionSpan
         };
 
@@ -142,10 +126,8 @@ class Program
 
         Console.WriteLine("\n=== SNAPSHOT ===");
         Console.WriteLine($"Foreground App: {_currentHarvest.ForegroundApp}");
-        Console.WriteLine($"Foreground App Hash: {_currentHarvest.ForegroundAppHash}" +
-                         (isCollision ? " ⚠️ COLLISION!" : ""));
-        Console.WriteLine($"Keyboard Inactive: {_currentHarvest.KeyboardActivity}ms");
-        Console.WriteLine($"Mouse Inactive: {_currentHarvest.MouseActivity}ms");
+        Console.WriteLine($"Foreground App Hash: {_currentHarvest.ForegroundAppHash}");
+        Console.WriteLine($"Idle Time: {_currentHarvest.IdleTime}ms");
         Console.WriteLine($"Attention Span: {_currentHarvest.AttentionSpan}ms");
         Console.WriteLine("Waiting for productivity response (YES/NO)...\n");
     }
@@ -155,15 +137,9 @@ class Program
         bool isValid = true;
 
         // Check for negative values
-        if (data.KeyboardActivity < 0)
+        if (data.IdleTime < 0)
         {
-            Console.WriteLine($"ERROR: Negative keyboard activity: {data.KeyboardActivity}");
-            isValid = false;
-        }
-
-        if (data.MouseActivity < 0)
-        {
-            Console.WriteLine($"ERROR: Negative mouse activity: {data.MouseActivity}");
+            Console.WriteLine($"ERROR: Negative idle time: {data.IdleTime}");
             isValid = false;
         }
 
@@ -176,14 +152,9 @@ class Program
         // Check for unreasonably large values (likely bugs)
         const int maxReasonableValue = 24 * 60 * 60 * 1000; // 24 hours in ms
 
-        if (data.KeyboardActivity > maxReasonableValue)
+        if (data.IdleTime > maxReasonableValue)
         {
-            Console.WriteLine($"WARNING: Keyboard activity > 24 hours: {data.KeyboardActivity}ms");
-        }
-
-        if (data.MouseActivity > maxReasonableValue)
-        {
-            Console.WriteLine($"WARNING: Mouse activity > 24 hours: {data.MouseActivity}ms");
+            Console.WriteLine($"WARNING: Idle time > 24 hours: {data.IdleTime}ms");
         }
 
         if (data.AttentionSpan > maxReasonableValue)

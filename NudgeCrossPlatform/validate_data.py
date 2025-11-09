@@ -18,8 +18,7 @@ def validate_csv(csv_path):
     # Expected columns in exact order
     expected_columns = [
         'foreground_app',
-        'keyboard_activity',
-        'mouse_activity',
+        'idle_time',
         'time_last_request',
         'productive'
     ]
@@ -45,8 +44,7 @@ def validate_csv(csv_path):
                 # Validate each field
                 try:
                     foreground_app = int(row['foreground_app'])
-                    keyboard_activity = int(row['keyboard_activity'])
-                    mouse_activity = int(row['mouse_activity'])
+                    idle_time = int(row['idle_time'])
                     time_last_request = int(row['time_last_request'])
                     productive = int(row['productive'])
 
@@ -56,7 +54,7 @@ def validate_csv(csv_path):
                         return False
 
                     # Check for negative values (except hash)
-                    if keyboard_activity < 0 or mouse_activity < 0 or time_last_request < 0:
+                    if idle_time < 0 or time_last_request < 0:
                         print(f"❌ Row {i}: activity values cannot be negative")
                         return False
 

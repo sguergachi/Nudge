@@ -1,6 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
-
 namespace NudgeCommon.Utilities;
 
 /// <summary>
@@ -10,11 +7,11 @@ namespace NudgeCommon.Utilities;
 public static class StableHash
 {
     /// <summary>
-    /// Compute FNV-1a hash - fast, deterministic, no collisions for reasonable dataset sizes
+    /// Compute FNV-1a hash - fast, deterministic, minimal collisions
     /// </summary>
     /// <param name="text">Text to hash</param>
     /// <returns>32-bit signed integer hash (suitable for ML features)</returns>
-    public static int GetDeterministicHashCode(string text)
+    public static int GetHash(string text)
     {
         if (string.IsNullOrEmpty(text))
         {
@@ -33,50 +30,5 @@ public static class StableHash
 
         // Convert to signed int32 for compatibility with Python/TensorFlow
         return unchecked((int)hash);
-    }
-
-    /// <summary>
-    /// Alternative: Use SHA256 and take first 4 bytes as int32
-    /// More robust but slower - use if FNV-1a has issues
-    /// </summary>
-    public static int GetCryptographicHashCode(string text)
-    {
-        if (string.IsNullOrEmpty(text))
-        {
-            return 0;
-        }
-
-        using var sha256 = SHA256.Create();
-        byte[] hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(text));
-
-        // Take first 4 bytes and convert to int32
-        return BitConverter.ToInt32(hash, 0);
-    }
-
-    /// <summary>
-    /// Get hash with collision tracking for debugging
-    /// </summary>
-    public static (int hash, bool isPotentialCollision) GetHashWithCollisionCheck(
-        string text,
-        Dictionary<int, string> seenHashes)
-    {
-        int hash = GetDeterministicHashCode(text);
-        bool isCollision = false;
-
-        if (seenHashes.TryGetValue(hash, out string? existing))
-        {
-            if (existing != text)
-            {
-                isCollision = true;
-                Console.WriteLine($"WARNING: Hash collision detected!");
-                Console.WriteLine($"  '{existing}' and '{text}' both hash to {hash}");
-            }
-        }
-        else
-        {
-            seenHashes[hash] = text;
-        }
-
-        return (hash, isCollision);
     }
 }
