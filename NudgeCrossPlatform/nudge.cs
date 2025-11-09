@@ -524,6 +524,9 @@ class Nudge
         Console.WriteLine($"    {Color.DIM}Run: {Color.BCYAN}nudge-notify YES{Color.DIM} or {Color.BCYAN}nudge-notify NO{Color.RESET}");
         Console.WriteLine();
 
+        // Notify tray application that a snapshot was taken
+        Console.WriteLine("SNAPSHOT");
+
         _waitingForResponse = true;
 
         // Timeout handler
