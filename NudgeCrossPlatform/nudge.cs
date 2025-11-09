@@ -426,58 +426,20 @@ class Nudge
     {
         try
         {
-            // Method 1: Try KWin DBus API for Plasma 6 (Wayland & X11)
-            var kwinOutput = RunCommand("qdbus",
-                "org.kde.KWin /KWin org.kde.KWin.queryWindowInfo");
-
-            if (!string.IsNullOrWhiteSpace(kwinOutput))
-            {
-                // Parse the window info - look for resourceClass or caption
-                var lines = kwinOutput.Split('\n');
-                foreach (var line in lines)
-                {
-                    if (line.Contains("resourceClass:") || line.Contains("caption:"))
-                    {
-                        var parts = line.Split(new[] { ':' }, 2);
-                        if (parts.Length > 1)
-                        {
-                            var value = parts[1].Trim();
-                            if (!string.IsNullOrWhiteSpace(value) && value != "null")
-                            {
-                                return value;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Method 2: Try alternative KWin scripting interface
-            var scriptOutput = RunCommand("qdbus",
-                "org.kde.KWin /Scripting org.kde.kwin.Scripting.run " +
-                "'print(workspace.activeClient ? workspace.activeClient.caption : \"unknown\")'");
-
-            if (!string.IsNullOrWhiteSpace(scriptOutput))
-            {
-                var result = scriptOutput.Trim();
-                if (result != "unknown" && result != "null")
-                {
-                    return result;
-                }
-            }
-
-            // Method 3: Try xdotool for X11 sessions or XWayland windows
+            // Try xdotool for X11 sessions (works non-intrusively)
             var windowName = RunCommand("xdotool", "getactivewindow getwindowname");
             if (!string.IsNullOrWhiteSpace(windowName))
             {
                 return windowName.Trim().Split('\n')[0];
             }
 
-            return "unknown";
+            // On Wayland, window detection is blocked by design for security
+            // Return a generic identifier instead of trying intrusive methods
+            return "kde-wayland-window";
         }
         catch
         {
-            // Don't log errors in cached function - too spammy
-            return "unknown";
+            return "kde-wayland-window";
         }
     }
 
