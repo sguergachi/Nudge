@@ -128,17 +128,17 @@ namespace NudgeTray
                 return;
             }
 
-            // Linux: Try native DBus notifications first (with resident:true hint)
+            // Linux: Try native DBus notifications first
             bool success = false;
             try
             {
                 ShowDbusNotification();
-                Console.WriteLine("✓ Desktop notification sent via native DBus (with resident:true)");
+                Console.WriteLine("✓ Desktop notification sent via DBus");
                 success = true;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"⚠ Native DBus notification failed: {ex.Message}");
+                Console.WriteLine($"⚠ DBus notification failed: {ex.Message}");
             }
 
             // Fallback to kdialog if notifications don't work
@@ -283,135 +283,164 @@ if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
 
         private static async void ShowDbusNotification()
         {
-            Console.WriteLine("[DEBUG] ShowDbusNotification called (native Tmds.DBus.Protocol with resident:true)");
+            Console.WriteLine("[DEBUG] ShowDbusNotification called (native DBus)");
 
             try
             {
-                // CRITICAL: Use "await using" to keep connection alive during signal listening!
-                await using var connection = new Connection(Address.Session!);
+                using var connection = new Connection(Address.Session!);
                 await connection.ConnectAsync();
 
                 // Create and send Notify method call
-                using var writer = connection.GetMessageWriter();
+                MessageBuffer message;
+                {
+                    using var writer = connection.GetMessageWriter();
 
-                writer.WriteMethodCallHeader(
-                    destination: "org.freedesktop.Notifications",
-                    path: "/org/freedesktop.Notifications",
-                    @interface: "org.freedesktop.Notifications",
-                    signature: "susssasa{sv}i",
-                    member: "Notify");
+                    writer.WriteMethodCallHeader(
+                        destination: "org.freedesktop.Notifications",
+                        path: "/org/freedesktop/Notifications",
+                        @interface: "org.freedesktop.Notifications",
+                        signature: "susssasa{sv}i",
+                        member: "Notify");
 
-                writer.WriteString("Nudge");  // app_name
-                writer.WriteUInt32(0);        // replaces_id
-                writer.WriteString("");       // app_icon
-                writer.WriteString("Nudge - Productivity Check"); // summary
-                writer.WriteString("Were you productive during the last interval?"); // body
+                    writer.WriteString("Nudge");  // app_name
+                    writer.WriteUInt32(0);        // replaces_id
+                    writer.WriteString("");       // app_icon
+                    writer.WriteString("Nudge - Productivity Check"); // summary
+                    writer.WriteString("Were you productive during the last interval?"); // body
 
-                // Write actions array
-                writer.WriteArray(new string[] { "yes", "Yes - Productive", "no", "No - Not Productive" });
+                    // Write actions array
+                    writer.WriteArray(new string[] { "yes", "Yes - Productive", "no", "No - Not Productive" });
 
-                // Write hints dictionary with RESIDENT:TRUE for persistent notifications
-                writer.WriteDictionaryStart();
-                writer.WriteDictionaryEntry("urgency", new VariantValue((byte)2));
-                writer.WriteDictionaryEntry("x-kde-appname", new VariantValue("Nudge"));
-                writer.WriteDictionaryEntry("x-kde-eventId", new VariantValue("productivity-check"));
+                    // Write hints dictionary with RESIDENT:TRUE for persistent notifications
+                    var arrayStart = writer.WriteDictionaryStart();
+                    writer.WriteDictionaryEntryStart();
+                    writer.WriteString("urgency");
+                    writer.WriteVariant(VariantValue.Byte(2));
+                    writer.WriteDictionaryEntryStart();
+                    writer.WriteString("resident");
+                    writer.WriteVariant(VariantValue.Bool(true));
+                    writer.WriteDictionaryEntryStart();
+                    writer.WriteString("x-kde-appname");
+                    writer.WriteVariant(VariantValue.String("Nudge"));
+                    writer.WriteDictionaryEntryStart();
+                    writer.WriteString("x-kde-eventId");
+                    writer.WriteVariant(VariantValue.String("productivity-check"));
+                    writer.WriteDictionaryEnd(arrayStart);
 
-                // RESIDENT: TRUE - Keeps notification visible until clicked!
-                writer.WriteDictionaryEntry("resident", new VariantValue(true));
+                    writer.WriteInt32(0);  // expire_timeout (0 = infinite)
 
-                writer.WriteDictionaryEnd();
-
-                writer.WriteInt32(0);  // expire_timeout (0 = let server decide based on resident hint)
+                    message = writer.CreateMessage();
+                }
+                // MessageWriter is now disposed, safe to await
 
                 var notificationId = await connection.CallMethodAsync(
-                    writer.CreateMessage(),
+                    message,
                     (Message m, object? s) => m.GetBodyReader().ReadUInt32(),
                     null);
 
-                Console.WriteLine($"[DEBUG] Notification ID: {notificationId} (connection kept alive)");
+                Console.WriteLine($"[DEBUG] Notification ID: {notificationId}");
 
-                // Listen for both ActionInvoked and NotificationClosed signals
-                await connection.AddMatchAsync("type='signal',interface='org.freedesktop.Notifications',member='ActionInvoked'");
-                await connection.AddMatchAsync("type='signal',interface='org.freedesktop.Notifications',member='NotificationClosed'");
+                var cancellationSource = new CancellationTokenSource(TimeSpan.FromSeconds(60));
 
-                try
+                // Listen for NotificationClosed to debug why it's closing
+                var closedMatchRule = new MatchRule
                 {
-                    var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                    Type = MessageType.Signal,
+                    Interface = "org.freedesktop.Notifications",
+                    Member = "NotificationClosed"
+                };
 
-                    await foreach (var signal in connection.ReadSignalsAsync(cts.Token))
+                await connection.AddMatchAsync(
+                    closedMatchRule,
+                    (Message m, object? s) =>
                     {
-                        // Handle ActionInvoked
-                        if (signal.Interface == "org.freedesktop.Notifications" &&
-                            signal.Member == "ActionInvoked")
+                        var reader = m.GetBodyReader();
+                        return (reader.ReadUInt32(), reader.ReadUInt32());
+                    },
+                    (Exception? ex, (uint id, uint reason) signal, object? readerState, object? handlerState) =>
+                    {
+                        if (ex != null)
                         {
-                            var reader = signal.GetBodyReader();
-                            var id = reader.ReadUInt32();
-                            var actionKey = reader.ReadString();
-
-                            if (id == notificationId)
-                            {
-                                Console.WriteLine($"[DEBUG] Action invoked: {actionKey}");
-
-                                if (actionKey == "yes")
-                                {
-                                    Console.WriteLine("✓ User responded: YES (productive)");
-                                    SendResponse(true);
-                                }
-                                else if (actionKey == "no")
-                                {
-                                    Console.WriteLine("✓ User responded: NO (not productive)");
-                                    SendResponse(false);
-                                }
-
-                                break; // Exit loop after action
-                            }
+                            Console.WriteLine($"[DEBUG] Closed listener error: {ex.Message}");
+                            return;
                         }
 
-                        // Handle NotificationClosed for debugging
-                        if (signal.Interface == "org.freedesktop.Notifications" &&
-                            signal.Member == "NotificationClosed")
+                        if (signal.id == notificationId)
                         {
-                            var reader = signal.GetBodyReader();
-                            var id = reader.ReadUInt32();
-                            var reason = reader.ReadUInt32();
-
-                            if (id == notificationId)
+                            string reasonText = signal.reason switch
                             {
-                                string reasonText = reason switch
-                                {
-                                    1 => "expired",
-                                    2 => "dismissed by user",
-                                    3 => "closed by app",
-                                    4 => "undefined",
-                                    _ => $"unknown ({reason})"
-                                };
-                                Console.WriteLine($"[DEBUG] Notification {notificationId} closed: {reasonText}");
-
-                                if (reason == 1)
-                                {
-                                    Console.WriteLine("[DEBUG] ERROR: Notification expired even with resident:true - connection may have closed!");
-                                }
-
-                                break; // Exit loop after closure
-                            }
+                                1 => "expired",
+                                2 => "dismissed by user",
+                                3 => "closed by CloseNotification call",
+                                4 => "undefined/reserved",
+                                _ => $"unknown ({signal.reason})"
+                            };
+                            Console.WriteLine($"[DEBUG] Notification closed: reason={reasonText}");
                         }
-                    }
-                }
-                catch (OperationCanceledException)
+                    },
+                    ObserverFlags.None,
+                    null,
+                    null,
+                    true
+                );
+
+                // Listen for ActionInvoked signal
+                var actionMatchRule = new MatchRule
                 {
-                    Console.WriteLine("[DEBUG] Action listener timeout (60s) - notification may have been dismissed");
-                }
+                    Type = MessageType.Signal,
+                    Interface = "org.freedesktop.Notifications",
+                    Member = "ActionInvoked"
+                };
 
-                Console.WriteLine("[DEBUG] Exiting ShowDbusNotification - connection will close now");
+                await connection.AddMatchAsync(
+                    actionMatchRule,
+                    (Message m, object? s) =>
+                    {
+                        var reader = m.GetBodyReader();
+                        return (reader.ReadUInt32(), reader.ReadString());
+                    },
+                    (Exception? ex, (uint id, string actionKey) signal, object? readerState, object? handlerState) =>
+                    {
+                        if (ex != null)
+                        {
+                            Console.WriteLine($"[DEBUG] Action listener error: {ex.Message}");
+                            return;
+                        }
+
+                        if (signal.id == notificationId)
+                        {
+                            Console.WriteLine($"[DEBUG] Action invoked: {signal.actionKey}");
+
+                            if (signal.actionKey == "yes")
+                            {
+                                Console.WriteLine("User responded: YES (productive)");
+                                SendResponse(true);
+                            }
+                            else if (signal.actionKey == "no")
+                            {
+                                Console.WriteLine("User responded: NO (not productive)");
+                                SendResponse(false);
+                            }
+
+                            cancellationSource.Cancel();
+                        }
+                    },
+                    ObserverFlags.None,
+                    null,
+                    null,
+                    true
+                );
+
+                // Keep connection alive until cancelled
+                Console.WriteLine("[DEBUG] Waiting for notification interaction (60s timeout)...");
+                await Task.Delay(-1, cancellationSource.Token).ContinueWith(_ => { });
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[DEBUG] Native DBus notification failed: {ex.Message}");
-                Console.WriteLine($"[DEBUG] Stack trace: {ex.StackTrace}");
                 throw;
             }
         }
-
 
         private static void ShowFallbackNotification()
         {
@@ -587,7 +616,7 @@ if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
 
         public override void OnFrameworkInitializationCompleted()
         {
-            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetimes desktop)
             {
                 // Don't show any windows - we're tray-only
                 desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
