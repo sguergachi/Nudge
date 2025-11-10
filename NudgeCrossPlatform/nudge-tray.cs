@@ -11,14 +11,12 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -27,8 +25,6 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
-using DesktopNotifications;
-using DesktopNotifications.Avalonia;
 
 namespace NudgeTray
 {
@@ -37,7 +33,6 @@ namespace NudgeTray
         const int UDP_PORT = 45001;
         const string VERSION = "1.0.1";
         static Process? _nudgeProcess;
-        static INotificationManager? _notificationManager;
 
         [STAThread]
         static void Main(string[] args)
@@ -63,30 +58,27 @@ namespace NudgeTray
             return AppBuilder.Configure<App>()
                 .UsePlatformDetect()
                 .LogToTrace()
-                .SetupDesktopNotifications()
                 .AfterSetup(_ =>
                 {
-                    InitializeNotifications();
                     StartNudge(interval);
                 });
-        }
-
-        static async void InitializeNotifications()
-        {
-            _notificationManager = await DesktopNotificationManagerBuilder.CreateDefault()
-                .BuildAsync();
         }
 
         static void StartNudge(int interval)
         {
             try
             {
+                // Determine nudge executable name based on platform
+                string nudgeExe = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                    ? "nudge.exe"
+                    : "./nudge";
+
                 // Start the main nudge process
                 _nudgeProcess = new Process
                 {
                     StartInfo = new ProcessStartInfo
                     {
-                        FileName = "./nudge",
+                        FileName = nudgeExe,
                         Arguments = $"--interval {interval}",
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
@@ -122,53 +114,357 @@ namespace NudgeTray
             }
         }
 
-        public static async void ShowSnapshotNotification()
+        public static void ShowSnapshotNotification()
         {
-            Console.WriteLine("📸 Snapshot taken! Respond using native notification.");
+            Console.WriteLine("📸 Snapshot taken! Respond using the notification buttons.");
 
-            if (_notificationManager == null)
+            // Platform-specific notifications
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                Console.WriteLine("⚠ Notification manager not initialized, using tray menu");
+                ShowWindowsNotification();
                 return;
             }
 
+            // Linux: Try native DBus notifications first
+            bool success = false;
             try
             {
-                var notification = new Notification
-                {
-                    Title = "Nudge - Productivity Check",
-                    Body = "Were you productive during the last interval?",
-                    Buttons =
-                    {
-                        ("Yes", "yes"),
-                        ("No", "no")
-                    }
-                };
-
-                notification.OnClick = (result) =>
-                {
-                    if (result == "yes")
-                    {
-                        Console.WriteLine("User responded: YES (productive)");
-                        SendResponse(true);
-                    }
-                    else if (result == "no")
-                    {
-                        Console.WriteLine("User responded: NO (not productive)");
-                        SendResponse(false);
-                    }
-                };
-
-                await _notificationManager.ShowNotification(notification);
-                Console.WriteLine("✓ Native notification sent");
+                ShowDbusNotification();
+                Console.WriteLine("✓ Desktop notification sent via DBus");
+                success = true;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"✗ Native notification failed: {ex.Message}");
+                Console.WriteLine($"⚠ DBus notification failed: {ex.Message}");
+            }
+
+            // Fallback to kdialog if notifications don't work
+            if (!success && ShowKDialogNotification())
+            {
+                Console.WriteLine("✓ Dialog shown via kdialog (fallback)");
+                return;
+            }
+
+            // Last resort: notify-send (no buttons)
+            if (!success)
+            {
+                ShowFallbackNotification();
+            }
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // WINDOWS NOTIFICATIONS
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        private static void ShowWindowsNotification()
+        {
+            try
+            {
+                // Create PowerShell script for Windows toast notification
+                var scriptPath = Path.Combine(Path.GetTempPath(), $"nudge-notification-{Guid.NewGuid()}.ps1");
+                var scriptContent = @"
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+$result = [System.Windows.Forms.MessageBox]::Show(
+    'Were you productive during the last interval?',
+    'Nudge - Productivity Check',
+    [System.Windows.Forms.MessageBoxButtons]::YesNo,
+    [System.Windows.Forms.MessageBoxIcon]::Question,
+    [System.Windows.Forms.MessageBoxDefaultButton]::Button1,
+    [System.Windows.Forms.MessageBoxOptions]::DefaultDesktopOnly
+)
+
+if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+    # Send YES via UDP
+    $udp = New-Object System.Net.Sockets.UdpClient
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes('YES')
+    $udp.Send($bytes, $bytes.Length, 'localhost', " + UDP_PORT + @") | Out-Null
+    $udp.Close()
+    Write-Output 'YES'
+} elseif ($result -eq [System.Windows.Forms.DialogResult]::No) {
+    # Send NO via UDP
+    $udp = New-Object System.Net.Sockets.UdpClient
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes('NO')
+    $udp.Send($bytes, $bytes.Length, 'localhost', " + UDP_PORT + @") | Out-Null
+    $udp.Close()
+    Write-Output 'NO'
+}
+";
+
+                File.WriteAllText(scriptPath, scriptContent);
+
+                // Run PowerShell script in background
+                var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "powershell.exe",
+                        Arguments = $"-ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File \"{scriptPath}\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        RedirectStandardOutput = true
+                    }
+                };
+
+                process.OutputDataReceived += (s, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        Console.WriteLine($"User responded: {e.Data} via Windows notification");
+                    }
+                };
+
+                process.Exited += (s, e) =>
+                {
+                    try { File.Delete(scriptPath); } catch { }
+                };
+
+                process.EnableRaisingEvents = true;
+                process.Start();
+                process.BeginOutputReadLine();
+
+                Console.WriteLine("✓ Windows notification shown");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"✗ Windows notification failed: {ex.Message}");
                 Console.WriteLine("Use the tray menu to respond");
             }
         }
 
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // LINUX NOTIFICATIONS (Working implementation from fix-notifications branch)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        private static bool ShowKDialogNotification()
+        {
+            try
+            {
+                var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "kdialog",
+                        Arguments = "--title \"Nudge - Productivity Check\" " +
+                                   "--yesno \"Were you productive during the last interval?\" " +
+                                   "--yes-label \"Yes - Productive\" " +
+                                   "--no-label \"No - Not Productive\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+
+                process.Start();
+                process.WaitForExit();
+
+                // kdialog exit codes: 0 = yes, 1 = no, 2 = cancel
+                if (process.ExitCode == 0)
+                {
+                    Console.WriteLine("User responded: YES (productive)");
+                    SendResponse(true);
+                }
+                else if (process.ExitCode == 1)
+                {
+                    Console.WriteLine("User responded: NO (not productive)");
+                    SendResponse(false);
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static void ShowDbusNotification()
+        {
+            Console.WriteLine("[DEBUG] ShowDbusNotification called");
+
+            // Create a temp script to avoid shell quoting hell
+            var scriptPath = Path.GetTempFileName();
+            var scriptContent = "gdbus call --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications --method org.freedesktop.Notifications.Notify \"Nudge\" 0 \"\" \"Nudge - Productivity Check\" \"Were you productive during the last interval?\" '[\"yes\",\"Yes - Productive\",\"no\",\"No - Not Productive\"]' '{\"urgency\": <byte 2>, \"x-kde-appname\": <\"Nudge\">, \"x-kde-eventId\": <\"productivity-check\">}' 0";
+
+            File.WriteAllText(scriptPath, scriptContent);
+
+            var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "bash",
+                    Arguments = scriptPath,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                }
+            };
+
+            Console.WriteLine($"[DEBUG] Running: gdbus call...");
+
+            try
+            {
+                process.Start();
+                string output = process.StandardOutput.ReadToEnd();
+                string error = process.StandardError.ReadToEnd();
+                process.WaitForExit();
+
+                Console.WriteLine($"[DEBUG] gdbus exit code: {process.ExitCode}");
+                Console.WriteLine($"[DEBUG] gdbus stdout: {output}");
+                if (!string.IsNullOrEmpty(error))
+                {
+                    Console.WriteLine($"[DEBUG] gdbus stderr: {error}");
+                }
+
+                if (process.ExitCode != 0)
+                {
+                    throw new Exception($"gdbus failed with exit code {process.ExitCode}: {error}");
+                }
+
+                // Parse notification ID from output like "(uint32 123,)"
+                var notificationId = ParseNotificationId(output);
+                Console.WriteLine($"[DEBUG] Parsed notification ID: {notificationId}");
+
+                if (notificationId > 0)
+                {
+                    // Start listening for action responses in background
+                    Console.WriteLine($"[DEBUG] Starting action listener for notification {notificationId}");
+                    StartActionListener(notificationId);
+                }
+                else
+                {
+                    Console.WriteLine("[DEBUG] WARNING: Failed to parse notification ID, no action listener started");
+                }
+            }
+            finally
+            {
+                // Cleanup temp script
+                try { File.Delete(scriptPath); } catch { }
+            }
+        }
+
+        private static int ParseNotificationId(string output)
+        {
+            try
+            {
+                var cleaned = output.Trim()
+                    .Replace("(", "")
+                    .Replace(")", "")
+                    .Replace("uint32", "")
+                    .Replace(",", "")
+                    .Trim();
+                return int.TryParse(cleaned, out int id) ? id : 0;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        private static void StartActionListener(int notificationId)
+        {
+            // Listen for notification action clicks via DBus in background thread
+            var listenerThread = new System.Threading.Thread(() =>
+            {
+                try
+                {
+                    Console.WriteLine($"[DEBUG] Action listener thread started for notification {notificationId}");
+
+                    var process = new Process
+                    {
+                        StartInfo = new ProcessStartInfo
+                        {
+                            FileName = "gdbus",
+                            Arguments = @"monitor --session --dest org.freedesktop.Notifications",
+                            RedirectStandardOutput = true,
+                            UseShellExecute = false,
+                            CreateNoWindow = true
+                        }
+                    };
+
+                    process.OutputDataReceived += (s, e) =>
+                    {
+                        if (!string.IsNullOrEmpty(e.Data))
+                        {
+                            Console.WriteLine($"[DEBUG] DBus monitor: {e.Data}");
+
+                            // Look for ActionInvoked signal
+                            if (e.Data.Contains("ActionInvoked") && e.Data.Contains(notificationId.ToString()))
+                            {
+                                Console.WriteLine($"[DEBUG] ActionInvoked detected for notification {notificationId}!");
+
+                                if (e.Data.Contains("\"yes\""))
+                                {
+                                    Console.WriteLine("✓ User responded: YES (productive) via notification");
+                                    SendResponse(true);
+                                    process.Kill();
+                                }
+                                else if (e.Data.Contains("\"no\""))
+                                {
+                                    Console.WriteLine("✓ User responded: NO (not productive) via notification");
+                                    SendResponse(false);
+                                    process.Kill();
+                                }
+                            }
+                        }
+                    };
+
+                    process.Start();
+                    process.BeginOutputReadLine();
+
+                    Console.WriteLine("[DEBUG] Waiting for action invocations (60s timeout)...");
+
+                    // Timeout after 60 seconds
+                    if (!process.WaitForExit(60000))
+                    {
+                        Console.WriteLine("[DEBUG] Action listener timeout reached, killing monitor");
+                        process.Kill();
+                    }
+                    else
+                    {
+                        Console.WriteLine("[DEBUG] Action listener exited normally");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[ERROR] Action listener failed: {ex.Message}");
+                    Console.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
+                }
+            });
+
+            listenerThread.IsBackground = true;
+            listenerThread.Start();
+            Console.WriteLine("[DEBUG] Action listener thread spawned");
+        }
+
+        private static void ShowFallbackNotification()
+        {
+            // Fallback to notify-send on Linux (without buttons)
+            try
+            {
+                var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "notify-send",
+                        Arguments = "-u critical -t 60000 \"Nudge - Productivity Check\" \"Were you productive? Use the tray menu to respond\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+                process.Start();
+                Console.WriteLine("✓ Sent notification via fallback method (use tray menu to respond)");
+            }
+            catch
+            {
+                Console.WriteLine("✗ All notification methods failed - use tray menu");
+            }
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // COMMON FUNCTIONS
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
         public static void SendResponse(bool productive)
         {

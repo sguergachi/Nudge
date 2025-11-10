@@ -185,8 +185,6 @@ Write-Success "  ✓ nudge-notify"
     <PackageReference Include="Avalonia" Version="11.2.2" />
     <PackageReference Include="Avalonia.Desktop" Version="11.2.2" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.2" />
-    <PackageReference Include="DesktopNotifications" Version="1.2.5" />
-    <PackageReference Include="DesktopNotifications.Avalonia" Version="1.2.5" />
   </ItemGroup>
 </Project>
 "@ | Set-Content nudge-tray.csproj -Encoding UTF8
