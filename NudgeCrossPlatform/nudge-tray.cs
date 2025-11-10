@@ -161,10 +161,14 @@ namespace NudgeTray
 
         private static void ShowWindowsNotification()
         {
+            Console.WriteLine("[DEBUG] ShowWindowsNotification called (native Windows MessageBox)");
+
             try
             {
                 // Create PowerShell script for Windows toast notification
                 var scriptPath = Path.Combine(Path.GetTempPath(), $"nudge-notification-{Guid.NewGuid()}.ps1");
+                Console.WriteLine($"[DEBUG] Creating PowerShell script at: {scriptPath}");
+
                 var scriptContent = @"
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -196,6 +200,7 @@ if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
 ";
 
                 File.WriteAllText(scriptPath, scriptContent);
+                Console.WriteLine("[DEBUG] PowerShell script created successfully");
 
                 // Run PowerShell script in background
                 var process = new Process
@@ -206,7 +211,8 @@ if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
                         Arguments = $"-ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File \"{scriptPath}\"",
                         UseShellExecute = false,
                         CreateNoWindow = true,
-                        RedirectStandardOutput = true
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true
                     }
                 };
 
@@ -214,24 +220,42 @@ if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
                 {
                     if (!string.IsNullOrEmpty(e.Data))
                     {
+                        Console.WriteLine($"[DEBUG] PowerShell output: {e.Data}");
                         Console.WriteLine($"User responded: {e.Data} via Windows notification");
+                    }
+                };
+
+                process.ErrorDataReceived += (s, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        Console.WriteLine($"[DEBUG] PowerShell error: {e.Data}");
                     }
                 };
 
                 process.Exited += (s, e) =>
                 {
+                    Console.WriteLine($"[DEBUG] PowerShell process exited with code: {process.ExitCode}");
                     try { File.Delete(scriptPath); } catch { }
                 };
 
                 process.EnableRaisingEvents = true;
                 process.Start();
                 process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
 
+                Console.WriteLine("[DEBUG] PowerShell process started successfully");
                 Console.WriteLine("✓ Windows notification shown");
+                Console.WriteLine("[DEBUG] Waiting for user interaction (notification will stay until dismissed)...");
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"[DEBUG] Windows notification error details: {ex.GetType().Name}");
                 Console.WriteLine($"✗ Windows notification failed: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine($"[DEBUG] Inner exception: {ex.InnerException.Message}");
+                }
                 Console.WriteLine("Use the tray menu to respond");
             }
         }
