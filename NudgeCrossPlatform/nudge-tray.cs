@@ -32,6 +32,46 @@ using Tmds.DBus.Protocol;
 
 namespace NudgeTray
 {
+    // Windows API for native context menu
+    static class NativeMethods
+    {
+        [DllImport("user32.dll")]
+        public static extern IntPtr CreatePopupMenu();
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        public static extern bool AppendMenu(IntPtr hMenu, uint uFlags, uint uIDNewItem, string lpNewItem);
+
+        [DllImport("user32.dll")]
+        public static extern bool TrackPopupMenuEx(IntPtr hMenu, uint uFlags, int x, int y, IntPtr hwnd, IntPtr lptpm);
+
+        [DllImport("user32.dll")]
+        public static extern bool DestroyMenu(IntPtr hMenu);
+
+        [DllImport("user32.dll")]
+        public static extern bool GetCursorPos(out POINT lpPoint);
+
+        [DllImport("user32.dll")]
+        public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+        public const uint MF_STRING = 0x00000000;
+        public const uint MF_SEPARATOR = 0x00000800;
+        public const uint MF_GRAYED = 0x00000001;
+        public const uint TPM_RETURNCMD = 0x0100;
+        public const uint TPM_LEFTBUTTON = 0x0000;
+
+        public const uint WM_NULL = 0x0000;
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct POINT
+        {
+            public int X;
+            public int Y;
+        }
+    }
+
     class Program
     {
         const int UDP_PORT = 45001;
@@ -657,6 +697,95 @@ try {
             Console.WriteLine("Status window not yet implemented");
         }
 
+        private void ShowWindowsContextMenu()
+        {
+            Console.WriteLine("[DEBUG] ShowWindowsContextMenu called");
+
+            // Create native Windows popup menu
+            IntPtr menu = NativeMethods.CreatePopupMenu();
+            if (menu == IntPtr.Zero)
+            {
+                Console.WriteLine("[ERROR] Failed to create popup menu");
+                return;
+            }
+
+            try
+            {
+                // Menu IDs
+                const uint ID_STATUS = 1;
+                const uint ID_QUIT = 2;
+
+                // Add status item (grayed out)
+                var nextSnapshot = Program.GetNextSnapshotTime();
+                var statusText = nextSnapshot.HasValue
+                    ? $"Next snapshot: {nextSnapshot.Value:HH:mm:ss}"
+                    : "Status: Running...";
+
+                NativeMethods.AppendMenu(menu, NativeMethods.MF_STRING | NativeMethods.MF_GRAYED, ID_STATUS, statusText);
+                Console.WriteLine($"[DEBUG] Added status item: {statusText}");
+
+                // Add separator
+                NativeMethods.AppendMenu(menu, NativeMethods.MF_SEPARATOR, 0, string.Empty);
+
+                // Add Quit option
+                NativeMethods.AppendMenu(menu, NativeMethods.MF_STRING, ID_QUIT, "Quit");
+                Console.WriteLine("[DEBUG] Added Quit item");
+
+                // Get cursor position
+                NativeMethods.GetCursorPos(out var cursorPos);
+                Console.WriteLine($"[DEBUG] Cursor position: {cursorPos.X}, {cursorPos.Y}");
+
+                // We need a window handle for TrackPopupMenuEx
+                // For now, use IntPtr.Zero (desktop window)
+                // Make this window the foreground window (required for menu to work properly)
+                var handle = Process.GetCurrentProcess().MainWindowHandle;
+                if (handle == IntPtr.Zero)
+                {
+                    // If no main window, try to get console window
+                    handle = GetConsoleWindow();
+                }
+
+                Console.WriteLine($"[DEBUG] Window handle: {handle}");
+
+                if (handle != IntPtr.Zero)
+                {
+                    NativeMethods.SetForegroundWindow(handle);
+                }
+
+                // Show menu and get selected item
+                uint selectedId = NativeMethods.TrackPopupMenuEx(
+                    menu,
+                    NativeMethods.TPM_RETURNCMD | NativeMethods.TPM_LEFTBUTTON,
+                    cursorPos.X,
+                    cursorPos.Y,
+                    handle,
+                    IntPtr.Zero);
+
+                Console.WriteLine($"[DEBUG] Selected menu ID: {selectedId}");
+
+                // Handle selection
+                if (selectedId == ID_QUIT)
+                {
+                    Console.WriteLine("[DEBUG] Quit selected from context menu");
+                    Program.Quit();
+                }
+
+                // Post a null message to make the menu disappear (Windows quirk)
+                if (handle != IntPtr.Zero)
+                {
+                    NativeMethods.PostMessage(handle, NativeMethods.WM_NULL, IntPtr.Zero, IntPtr.Zero);
+                }
+            }
+            finally
+            {
+                NativeMethods.DestroyMenu(menu);
+                Console.WriteLine("[DEBUG] Menu destroyed");
+            }
+        }
+
+        [DllImport("kernel32.dll")]
+        private static extern IntPtr GetConsoleWindow();
+
         private WindowIcon? CreateSimpleIcon()
         {
             try
@@ -735,10 +864,15 @@ try {
             Console.WriteLine($"[DEBUG] Menu assigned: {_trayIcon.Menu != null}");
             Console.WriteLine($"[DEBUG] Menu items count: {initialMenu.Items.Count}");
 
-            // Add click handlers for debugging
+            // Add click handlers - show native Windows menu on right-click
             _trayIcon.Clicked += (s, e) =>
             {
                 Console.WriteLine("[DEBUG] Tray icon CLICKED event fired");
+
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    ShowWindowsContextMenu();
+                }
             };
 
             // Add to TrayIcons collection
