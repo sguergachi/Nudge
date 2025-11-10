@@ -187,9 +187,16 @@ if (Test-Path "requirements-cpu.txt") {
     Write-Info "Installing Python ML dependencies..."
     Write-Host ""
 
+    # Temporarily allow errors for pip install (pip writes progress to stderr)
+    $previousErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+
     # Run pip install and capture all output
-    $pipOutput = python -m pip install --user -r requirements-cpu.txt 2>&1 | Out-String
+    $pipOutput = & python -m pip install --user -r requirements-cpu.txt 2>&1 | Out-String
     $pipExitCode = $LASTEXITCODE
+
+    # Restore error action preference
+    $ErrorActionPreference = $previousErrorAction
 
     Write-Host $pipOutput -ForegroundColor Gray
     Write-Host ""
