@@ -269,7 +269,7 @@ $trayProject = @"
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>$targetFramework</TargetFramework>
+    <TargetFramework>$targetFramework-windows</TargetFramework>
     <RootNamespace>NudgeTray</RootNamespace>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
