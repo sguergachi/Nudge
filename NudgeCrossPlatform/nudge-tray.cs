@@ -189,102 +189,96 @@ namespace NudgeTray
 
             try
             {
-                await using var connection = new Connection(Address.Session!);
+                using var connection = new Connection(Address.Session!);
                 await connection.ConnectAsync();
 
-                // Build hints dictionary for KDE integration
-                var hints = new Dictionary<string, Variant>
-                {
-                    { "urgency", new Variant((byte)2) },  // Critical
-                    { "x-kde-appname", new Variant("Nudge") },
-                    { "x-kde-eventId", new Variant("productivity-check") }
-                };
+                // Create and send Notify method call
+                using var writer = connection.GetMessageWriter();
 
-                // Build actions array: [action_id, label, action_id, label, ...]
-                var actions = new string[] { "yes", "Yes - Productive", "no", "No - Not Productive" };
-
-                // Create message to call Notify method
-                var message = new MessageWriter();
-                message.WriteString("Nudge");                    // app_name
-                message.WriteUInt32(0);                           // replaces_id
-                message.WriteString("");                          // app_icon
-                message.WriteString("Nudge - Productivity Check"); // summary
-                message.WriteString("Were you productive during the last interval?"); // body
-                message.WriteArray(actions);                      // actions
-                message.WriteDictionary(hints);                   // hints
-                message.WriteInt32(0);                            // expire_timeout (0 = never)
-
-                var reply = await connection.CallMethodAsync(
-                    message: message.CreateMessage(),
+                writer.WriteMethodCallHeader(
                     destination: "org.freedesktop.Notifications",
                     path: "/org/freedesktop/Notifications",
                     @interface: "org.freedesktop.Notifications",
-                    member: "Notify"
-                );
+                    signature: "susssasa{sv}i",
+                    member: "Notify");
 
-                // Parse notification ID from reply
-                var reader = new MessageReader(reply);
-                var notificationId = reader.ReadUInt32();
+                writer.WriteString("Nudge");  // app_name
+                writer.WriteUInt32(0);        // replaces_id
+                writer.WriteString("");       // app_icon
+                writer.WriteString("Nudge - Productivity Check"); // summary
+                writer.WriteString("Were you productive during the last interval?"); // body
+
+                // Write actions array
+                writer.WriteArray(new string[] { "yes", "Yes - Productive", "no", "No - Not Productive" });
+
+                // Write hints dictionary
+                writer.WriteDictionaryStart();
+                writer.WriteDictionaryEntry("urgency", new VariantValue((byte)2));
+                writer.WriteDictionaryEntry("x-kde-appname", new VariantValue("Nudge"));
+                writer.WriteDictionaryEntry("x-kde-eventId", new VariantValue("productivity-check"));
+                writer.WriteDictionaryEnd();
+
+                writer.WriteInt32(0);  // expire_timeout (0 = infinite)
+
+                var notificationId = await connection.CallMethodAsync(
+                    writer.CreateMessage(),
+                    (Message m, object? s) => m.GetBodyReader().ReadUInt32(),
+                    null);
 
                 Console.WriteLine($"[DEBUG] Notification ID: {notificationId}");
 
                 // Listen for ActionInvoked signal
+                await connection.AddMatchAsync("type='signal',interface='org.freedesktop.Notifications',member='ActionInvoked'");
+
                 _ = Task.Run(async () =>
                 {
-                    await ListenForActions(connection, notificationId);
+                    try
+                    {
+                        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+
+                        await foreach (var signal in connection.ReadSignalsAsync(cts.Token))
+                        {
+                            if (signal.Interface == "org.freedesktop.Notifications" &&
+                                signal.Member == "ActionInvoked")
+                            {
+                                var reader = signal.GetBodyReader();
+                                var id = reader.ReadUInt32();
+                                var actionKey = reader.ReadString();
+
+                                if (id == notificationId)
+                                {
+                                    Console.WriteLine($"[DEBUG] Action invoked: {actionKey}");
+
+                                    if (actionKey == "yes")
+                                    {
+                                        Console.WriteLine("User responded: YES (productive)");
+                                        SendResponse(true);
+                                    }
+                                    else if (actionKey == "no")
+                                    {
+                                        Console.WriteLine("User responded: NO (not productive)");
+                                        SendResponse(false);
+                                    }
+
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        Console.WriteLine("[DEBUG] Action listener timeout (60s)");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[DEBUG] Action listener error: {ex.Message}");
+                    }
                 });
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[DEBUG] Native DBus notification failed: {ex.Message}");
                 throw;
-            }
-        }
-
-        private static async Task ListenForActions(Connection connection, uint notificationId)
-        {
-            try
-            {
-                Console.WriteLine($"[DEBUG] Listening for actions on notification {notificationId}");
-
-                var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-
-                await foreach (var message in connection.ListenForSignalsAsync(cts.Token))
-                {
-                    if (message.Interface == "org.freedesktop.Notifications" &&
-                        message.Member == "ActionInvoked")
-                    {
-                        var reader = new MessageReader(message);
-                        var id = reader.ReadUInt32();
-                        var actionKey = reader.ReadString();
-
-                        if (id == notificationId)
-                        {
-                            Console.WriteLine($"[DEBUG] Action invoked: {actionKey}");
-
-                            if (actionKey == "yes")
-                            {
-                                Console.WriteLine("User responded: YES (productive)");
-                                SendResponse(true);
-                            }
-                            else if (actionKey == "no")
-                            {
-                                Console.WriteLine("User responded: NO (not productive)");
-                                SendResponse(false);
-                            }
-
-                            break;
-                        }
-                    }
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                Console.WriteLine("[DEBUG] Action listener timeout (60s)");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[DEBUG] Action listener error: {ex.Message}");
             }
         }
 
