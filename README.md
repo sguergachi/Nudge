@@ -46,7 +46,7 @@ See [WINDOWS_README.md](WINDOWS_README.md) for detailed Windows instructions.
 ## Requirements
 
 - **.NET SDK 8.0 or later** - Required for building and running
-- **Python 3.x** - Optional, only needed for training custom ML models
+- **Python 3.x** - Required for ML functionality
 
 ### Platform-Specific Requirements
 

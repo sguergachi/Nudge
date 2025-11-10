@@ -54,7 +54,8 @@ class Nudge
 
     // ML-powered adaptive notifications
     const double ML_CONFIDENCE_THRESHOLD = 0.98;  // 98% confidence required
-    const string ML_SOCKET_PATH = "/tmp/nudge_ml.sock";
+    const string ML_HOST = "127.0.0.1";
+    const int ML_PORT = 45002;
     static bool _mlEnabled = false;
     static bool _mlAvailable = false;
     static int _mlCheckCooldown = 0;  // Cooldown before checking ML again
@@ -922,20 +923,14 @@ class Nudge
     {
         try
         {
-            // Check if socket exists
-            if (!File.Exists(ML_SOCKET_PATH))
-            {
-                return null;
-            }
+            // Create TCP socket client
+            using var client = new TcpClient();
+            client.SendTimeout = 1000;  // 1 second
+            client.ReceiveTimeout = 1000;
 
-            // Create Unix domain socket client
-            using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-            var endpoint = new UnixDomainSocketEndPoint(ML_SOCKET_PATH);
-
-            // Connect with timeout
-            socket.Connect(endpoint);
-            socket.SendTimeout = 1000;  // 1 second
-            socket.ReceiveTimeout = 1000;
+            // Connect to ML service
+            client.Connect(ML_HOST, ML_PORT);
+            using var stream = client.GetStream();
 
             // Prepare request
             int appHash = GetHash(app);
@@ -950,11 +945,11 @@ class Nudge
             byte[] requestBytes = Encoding.UTF8.GetBytes(requestJson);
 
             // Send request
-            socket.Send(requestBytes);
+            stream.Write(requestBytes, 0, requestBytes.Length);
 
             // Receive response
             byte[] buffer = new byte[4096];
-            int bytesRead = socket.Receive(buffer);
+            int bytesRead = stream.Read(buffer, 0, buffer.Length);
             string responseJson = Encoding.UTF8.GetString(buffer, 0, bytesRead).Trim();
 
             // Parse response
@@ -974,28 +969,16 @@ class Nudge
 
     static bool CheckMLAvailability()
     {
-        // Check if inference server is running
-        if (!File.Exists(ML_SOCKET_PATH))
-        {
-            if (_mlAvailable)
-            {
-                Warning("ML inference server stopped - falling back to interval-based");
-                _mlAvailable = false;
-            }
-            return false;
-        }
-
-        // Try a quick connection test
+        // Try a quick TCP connection test to inference server
         try
         {
-            using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-            var endpoint = new UnixDomainSocketEndPoint(ML_SOCKET_PATH);
-            socket.Connect(endpoint);
-            socket.Close();
+            using var client = new TcpClient();
+            client.Connect(ML_HOST, ML_PORT);
+            client.Close();
 
             if (!_mlAvailable)
             {
-                Success("✓ ML inference server connected");
+                Success($"✓ ML inference server connected (TCP {ML_HOST}:{ML_PORT})");
                 _mlAvailable = true;
             }
             return true;
