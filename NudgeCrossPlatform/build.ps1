@@ -269,7 +269,7 @@ $trayProject = @"
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>${targetFramework}-windows</TargetFramework>
+    <TargetFramework>${targetFramework}-windows10.0.17763.0</TargetFramework>
     <RootNamespace>NudgeTray</RootNamespace>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
@@ -283,6 +283,7 @@ $trayProject = @"
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.0" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.241114003" />
   </ItemGroup>
 </Project>
 "@
@@ -315,7 +316,7 @@ Write-Success "  [OK] nudge-notify"
 Write-Host "  Building nudge-tray (with WinForms UI)..." -ForegroundColor Gray
 Write-Host "Restore complete (0.7s)" -ForegroundColor Gray
 
-$trayTargetFramework = "${targetFramework}-windows"
+$trayTargetFramework = "${targetFramework}-windows10.0.17763.0"
 $result = dotnet publish nudge-tray.csproj -c Release --nologo --no-self-contained 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Err "[FAILED] nudge-tray build failed"

@@ -21,6 +21,8 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Tmds.DBus.Protocol;
+using Microsoft.Windows.AppNotifications;
+using Microsoft.Windows.AppNotifications.Builder;
 
 namespace NudgeTray
 {
@@ -34,6 +36,7 @@ namespace NudgeTray
         static NotifyIcon? _trayIcon;
         static System.Threading.Timer? _menuRefreshTimer;
         static Form? _messageLoopForm;
+        static AppNotificationManager? _notificationManager;
 
         [DllImport("kernel32.dll")]
         static extern bool AttachConsole(int dwProcessId);
@@ -63,6 +66,9 @@ namespace NudgeTray
                     i++; // Skip the interval value
                 }
             }
+
+            // Initialize Windows App SDK notifications
+            InitializeNotifications();
 
             StartNudge(interval);
             CreateTrayIcon();
@@ -95,6 +101,77 @@ namespace NudgeTray
             };
 
             Console.WriteLine("[DEBUG] Tray icon created with WinForms NotifyIcon");
+        }
+
+        static void InitializeNotifications()
+        {
+            try
+            {
+                // Get the notification manager instance
+                _notificationManager = AppNotificationManager.Default;
+
+                // CRITICAL: Register for NotificationInvoked BEFORE calling Register()
+                // Otherwise a new process will be launched to handle notifications
+                _notificationManager.NotificationInvoked += OnNotificationInvoked;
+
+                // Register the app to show notifications
+                _notificationManager.Register();
+
+                Console.WriteLine("[DEBUG] Windows App SDK notifications initialized");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] Failed to initialize notifications: {ex.Message}");
+            }
+        }
+
+        static void OnNotificationInvoked(AppNotificationManager sender, AppNotificationActivatedEventArgs args)
+        {
+            try
+            {
+                Console.WriteLine("[DEBUG] Notification button clicked");
+
+                // Parse the action argument
+                if (args.Arguments.TryGetValue("action", out var action))
+                {
+                    Console.WriteLine($"[DEBUG] Action: {action}");
+
+                    if (action == "yes")
+                    {
+                        Console.WriteLine("[DEBUG] User clicked YES from notification");
+                        _waitingForResponse = false;
+                        SendResponse(true);
+
+                        // Refresh tray menu on UI thread
+                        _messageLoopForm?.Invoke((Action)(() =>
+                        {
+                            if (_trayIcon != null)
+                            {
+                                _trayIcon.ContextMenuStrip = CreateContextMenu();
+                            }
+                        }));
+                    }
+                    else if (action == "no")
+                    {
+                        Console.WriteLine("[DEBUG] User clicked NO from notification");
+                        _waitingForResponse = false;
+                        SendResponse(false);
+
+                        // Refresh tray menu on UI thread
+                        _messageLoopForm?.Invoke((Action)(() =>
+                        {
+                            if (_trayIcon != null)
+                            {
+                                _trayIcon.ContextMenuStrip = CreateContextMenu();
+                            }
+                        }));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] Failed to handle notification action: {ex.Message}");
+            }
         }
 
         static ContextMenuStrip CreateContextMenu()
@@ -258,155 +335,46 @@ namespace NudgeTray
         }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // WINDOWS NOTIFICATIONS
+        // WINDOWS NOTIFICATIONS (Native Windows App SDK)
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
         private static bool _waitingForResponse = false;
-        private static NotificationWindow? _notificationWindow;
 
         private static void ShowWindowsNotification()
         {
-            Console.WriteLine("[DEBUG] ShowWindowsNotification called (custom notification with buttons)");
-
-            // Close existing notification if any and create new one on UI thread
-            _messageLoopForm?.Invoke((Action)(() =>
+            try
             {
-                if (_notificationWindow != null && !_notificationWindow.IsDisposed)
+                Console.WriteLine("[DEBUG] ShowWindowsNotification called (native Windows App SDK)");
+
+                _waitingForResponse = true;
+
+                // Build native Windows notification with action buttons
+                var notification = new AppNotificationBuilder()
+                    .AddText("Nudge - Productivity Check")
+                    .AddText("Were you productive during the last interval?")
+                    .AddButton(new AppNotificationButton("Yes - Productive")
+                        .AddArgument("action", "yes"))
+                    .AddButton(new AppNotificationButton("No - Not Productive")
+                        .AddArgument("action", "no"))
+                    .BuildNotification();
+
+                // Show the notification
+                _notificationManager?.Show(notification);
+
+                Console.WriteLine("✓ Native Windows notification shown with Yes/No buttons");
+
+                // Refresh tray menu to show Yes/No options
+                _messageLoopForm?.Invoke((Action)(() =>
                 {
-                    _notificationWindow.Close();
-                    _notificationWindow.Dispose();
-                }
-
-                _notificationWindow = new NotificationWindow();
-                _notificationWindow.Show();
-                Console.WriteLine("✓ Notification window shown with Yes/No buttons");
-            }));
-        }
-
-        // Custom notification window that looks like a native toast
-        class NotificationWindow : Form
-        {
-            public NotificationWindow()
+                    if (_trayIcon != null)
+                    {
+                        _trayIcon.ContextMenuStrip = CreateContextMenu();
+                    }
+                }));
+            }
+            catch (Exception ex)
             {
-                // Window properties
-                FormBorderStyle = FormBorderStyle.None;
-                StartPosition = FormStartPosition.Manual;
-                ShowInTaskbar = false;
-                TopMost = true;
-                BackColor = Color.FromArgb(240, 240, 240);
-                Width = 360;
-                Height = 140;
-
-                // Position in bottom-right corner
-                var workingArea = Screen.PrimaryScreen?.WorkingArea ?? Screen.AllScreens[0].WorkingArea;
-                Location = new Point(
-                    workingArea.Right - Width - 20,
-                    workingArea.Bottom - Height - 20
-                );
-
-                // Title label
-                var titleLabel = new Label
-                {
-                    Text = "Nudge - Productivity Check",
-                    Font = new Font("Segoe UI", 10F, FontStyle.Bold),
-                    ForeColor = Color.FromArgb(50, 50, 50),
-                    AutoSize = false,
-                    Width = Width - 20,
-                    Height = 25,
-                    Location = new Point(10, 10),
-                    TextAlign = ContentAlignment.MiddleLeft
-                };
-                Controls.Add(titleLabel);
-
-                // Message label
-                var messageLabel = new Label
-                {
-                    Text = "Were you productive during the last interval?",
-                    Font = new Font("Segoe UI", 9F),
-                    ForeColor = Color.FromArgb(80, 80, 80),
-                    AutoSize = false,
-                    Width = Width - 20,
-                    Height = 40,
-                    Location = new Point(10, 40),
-                    TextAlign = ContentAlignment.TopLeft
-                };
-                Controls.Add(messageLabel);
-
-                // Yes button
-                var yesButton = new Button
-                {
-                    Text = "Yes - Productive",
-                    Font = new Font("Segoe UI", 9F),
-                    FlatStyle = FlatStyle.Flat,
-                    BackColor = Color.FromArgb(0, 120, 215),
-                    ForeColor = Color.White,
-                    Width = 160,
-                    Height = 32,
-                    Location = new Point(10, 90),
-                    Cursor = Cursors.Hand
-                };
-                yesButton.FlatAppearance.BorderSize = 0;
-                yesButton.Click += (s, e) =>
-                {
-                    Console.WriteLine("[DEBUG] User clicked YES button");
-                    SendResponse(true);
-                    Close();
-                };
-                Controls.Add(yesButton);
-
-                // No button
-                var noButton = new Button
-                {
-                    Text = "No - Not Productive",
-                    Font = new Font("Segoe UI", 9F),
-                    FlatStyle = FlatStyle.Flat,
-                    BackColor = Color.FromArgb(180, 180, 180),
-                    ForeColor = Color.White,
-                    Width = 160,
-                    Height = 32,
-                    Location = new Point(180, 90),
-                    Cursor = Cursors.Hand
-                };
-                noButton.FlatAppearance.BorderSize = 0;
-                noButton.Click += (s, e) =>
-                {
-                    Console.WriteLine("[DEBUG] User clicked NO button");
-                    SendResponse(false);
-                    Close();
-                };
-                Controls.Add(noButton);
-
-                // Add border
-                Paint += (s, e) =>
-                {
-                    ControlPaint.DrawBorder(e.Graphics, ClientRectangle,
-                        Color.FromArgb(200, 200, 200), ButtonBorderStyle.Solid);
-                };
-
-                // Auto-close after 60 seconds
-                var timer = new System.Windows.Forms.Timer { Interval = 60000 };
-                timer.Tick += (s, e) =>
-                {
-                    Console.WriteLine("[DEBUG] Notification window timeout");
-                    Close();
-                };
-                timer.Start();
-
-                // Fade in animation
-                Opacity = 0;
-                var fadeTimer = new System.Windows.Forms.Timer { Interval = 20 };
-                fadeTimer.Tick += (s, e) =>
-                {
-                    if (Opacity < 1)
-                    {
-                        Opacity += 0.05;
-                    }
-                    else
-                    {
-                        fadeTimer.Stop();
-                    }
-                };
-                fadeTimer.Start();
+                Console.WriteLine($"[ERROR] Failed to show Windows notification: {ex.Message}");
             }
         }
 
