@@ -193,41 +193,47 @@ namespace NudgeTray
                 await connection.ConnectAsync();
 
                 // Create and send Notify method call
-                using var writer = connection.GetMessageWriter();
+                MessageBuffer message;
+                {
+                    using var writer = connection.GetMessageWriter();
 
-                writer.WriteMethodCallHeader(
-                    destination: "org.freedesktop.Notifications",
-                    path: "/org/freedesktop/Notifications",
-                    @interface: "org.freedesktop.Notifications",
-                    signature: "susssasa{sv}i",
-                    member: "Notify");
+                    writer.WriteMethodCallHeader(
+                        destination: "org.freedesktop.Notifications",
+                        path: "/org/freedesktop/Notifications",
+                        @interface: "org.freedesktop.Notifications",
+                        signature: "susssasa{sv}i",
+                        member: "Notify");
 
-                writer.WriteString("Nudge");  // app_name
-                writer.WriteUInt32(0);        // replaces_id
-                writer.WriteString("");       // app_icon
-                writer.WriteString("Nudge - Productivity Check"); // summary
-                writer.WriteString("Were you productive during the last interval?"); // body
+                    writer.WriteString("Nudge");  // app_name
+                    writer.WriteUInt32(0);        // replaces_id
+                    writer.WriteString("");       // app_icon
+                    writer.WriteString("Nudge - Productivity Check"); // summary
+                    writer.WriteString("Were you productive during the last interval?"); // body
 
-                // Write actions array
-                writer.WriteArray(new string[] { "yes", "Yes - Productive", "no", "No - Not Productive" });
+                    // Write actions array
+                    writer.WriteArray(new string[] { "yes", "Yes - Productive", "no", "No - Not Productive" });
 
-                // Write hints dictionary
-                var arrayStart = writer.WriteDictionaryStart();
-                writer.WriteDictionaryEntryStart();
-                writer.WriteString("urgency");
-                writer.WriteVariant(VariantValue.Byte(2));
-                writer.WriteDictionaryEntryStart();
-                writer.WriteString("x-kde-appname");
-                writer.WriteVariant(VariantValue.String("Nudge"));
-                writer.WriteDictionaryEntryStart();
-                writer.WriteString("x-kde-eventId");
-                writer.WriteVariant(VariantValue.String("productivity-check"));
-                writer.WriteDictionaryEnd(arrayStart);
+                    // Write hints dictionary
+                    var arrayStart = writer.WriteDictionaryStart();
+                    writer.WriteDictionaryEntryStart();
+                    writer.WriteString("urgency");
+                    writer.WriteVariant(VariantValue.Byte(2));
+                    writer.WriteDictionaryEntryStart();
+                    writer.WriteString("x-kde-appname");
+                    writer.WriteVariant(VariantValue.String("Nudge"));
+                    writer.WriteDictionaryEntryStart();
+                    writer.WriteString("x-kde-eventId");
+                    writer.WriteVariant(VariantValue.String("productivity-check"));
+                    writer.WriteDictionaryEnd(arrayStart);
 
-                writer.WriteInt32(0);  // expire_timeout (0 = infinite)
+                    writer.WriteInt32(0);  // expire_timeout (0 = infinite)
+
+                    message = writer.CreateMessage();
+                }
+                // MessageWriter is now disposed, safe to await
 
                 var notificationId = await connection.CallMethodAsync(
-                    writer.CreateMessage(),
+                    message,
                     (Message m, object? s) => m.GetBodyReader().ReadUInt32(),
                     null);
 
