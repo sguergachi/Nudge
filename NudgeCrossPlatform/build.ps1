@@ -311,10 +311,11 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Success "  [OK] nudge-notify"
 
-# Build nudge-tray with Avalonia
-Write-Host "  Building nudge-tray (with Avalonia UI)..." -ForegroundColor Gray
+# Build nudge-tray with WinForms
+Write-Host "  Building nudge-tray (with WinForms UI)..." -ForegroundColor Gray
 Write-Host "Restore complete (0.7s)" -ForegroundColor Gray
 
+$trayTargetFramework = "${targetFramework}-windows"
 $result = dotnet publish nudge-tray.csproj -c Release --nologo --no-self-contained 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Err "[FAILED] nudge-tray build failed"
@@ -322,7 +323,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-if (!(Test-Path "bin/Release/$targetFramework/publish/nudge-tray.dll")) {
+if (!(Test-Path "bin/Release/$trayTargetFramework/publish/nudge-tray.dll")) {
     Write-Err "[FAILED] nudge-tray.dll not found after build"
     exit 1
 }
@@ -359,12 +360,12 @@ Copy-Item "bin/Release/$targetFramework/nudge-notify.exe" -Destination "." -Forc
 Copy-Item "bin/Release/$targetFramework/nudge-notify.dll" -Destination "." -Force
 Copy-Item "bin/Release/$targetFramework/nudge-notify.runtimeconfig.json" -Destination "." -Force
 
-# Copy nudge-tray with all Avalonia dependencies from publish folder
-Copy-Item "bin/Release/$targetFramework/publish/nudge-tray.exe" -Destination "." -Force
-Copy-Item "bin/Release/$targetFramework/publish/*.dll" -Destination "." -Force
-Copy-Item "bin/Release/$targetFramework/publish/*.json" -Destination "." -Force
-if (Test-Path "bin/Release/$targetFramework/publish/runtimes") {
-    Copy-Item "bin/Release/$targetFramework/publish/runtimes" -Destination "." -Recurse -Force
+# Copy nudge-tray with all WinForms dependencies from publish folder
+Copy-Item "bin/Release/$trayTargetFramework/publish/nudge-tray.exe" -Destination "." -Force
+Copy-Item "bin/Release/$trayTargetFramework/publish/*.dll" -Destination "." -Force
+Copy-Item "bin/Release/$trayTargetFramework/publish/*.json" -Destination "." -Force
+if (Test-Path "bin/Release/$trayTargetFramework/publish/runtimes") {
+    Copy-Item "bin/Release/$trayTargetFramework/publish/runtimes" -Destination "." -Recurse -Force
 }
 
 Remove-Item "nudge_build.cs", "nudge-notify_build.cs" -Force -ErrorAction SilentlyContinue
