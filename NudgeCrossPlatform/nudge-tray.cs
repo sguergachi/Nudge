@@ -606,9 +606,14 @@ Start-Sleep -Seconds 60
 
             // Quit option
             var quitItem = new NativeMenuItem("Quit");
-            quitItem.Click += (s, e) => Program.Quit();
+            quitItem.Click += (s, e) =>
+            {
+                Console.WriteLine("[DEBUG] Quit menu item clicked");
+                Program.Quit();
+            };
             menu.Add(quitItem);
 
+            Console.WriteLine($"[DEBUG] Menu created with status: {statusText}");
             return menu;
         }
 
@@ -619,6 +624,7 @@ Start-Sleep -Seconds 60
                 Dispatcher.UIThread.Post(() =>
                 {
                     _trayIcon.Menu = CreateMenu();
+                    Console.WriteLine("[DEBUG] Tray menu refreshed");
                 });
             }
         }
@@ -694,12 +700,12 @@ Start-Sleep -Seconds 60
             _trayIcon = new TrayIcon
             {
                 ToolTipText = "Nudge Productivity Tracker",
-                Menu = CreateMenu(),
                 Icon = CreateSimpleIcon(),
                 IsVisible = true
             };
 
-            _trayIcon.Clicked += (s, e) => ShowStatus();
+            // Set initial menu
+            _trayIcon.Menu = CreateMenu();
 
             // Add to TrayIcons collection
             if (TrayIcon.GetIcons(this) == null)
@@ -712,6 +718,8 @@ Start-Sleep -Seconds 60
             _menuRefreshTimer.Elapsed += (s, e) => RefreshMenu();
             _menuRefreshTimer.AutoReset = true;
             _menuRefreshTimer.Start();
+
+            Console.WriteLine("[DEBUG] Tray icon initialized with menu");
 
             base.OnFrameworkInitializationCompleted();
         }
