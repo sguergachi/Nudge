@@ -59,6 +59,17 @@ namespace NudgeTray
                 }
             }
 
+            // Print banner
+            Console.WriteLine("╔═══════════════════════════════════════════════════════╗");
+            Console.WriteLine("║        Nudge Tray - Productivity Tracker          ║");
+            Console.WriteLine($"║        Version {VERSION}                                   ║");
+            if (_mlEnabled)
+            {
+                Console.WriteLine("║        🧠 ML MODE ENABLED                         ║");
+            }
+            Console.WriteLine("╚═══════════════════════════════════════════════════════╝");
+            Console.WriteLine();
+
             // Start ML services if enabled
             if (_mlEnabled)
             {
@@ -108,6 +119,14 @@ namespace NudgeTray
                     }
                 };
 
+                _mlInferenceProcess.OutputDataReceived += (s, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        Console.WriteLine($"[ML Inference] {e.Data}");
+                    }
+                };
+
                 _mlInferenceProcess.ErrorDataReceived += (s, e) =>
                 {
                     if (!string.IsNullOrEmpty(e.Data))
@@ -117,12 +136,21 @@ namespace NudgeTray
                 };
 
                 _mlInferenceProcess.Start();
+                _mlInferenceProcess.BeginOutputReadLine();
                 _mlInferenceProcess.BeginErrorReadLine();
 
                 // Wait a moment for socket to be created
-                Thread.Sleep(1000);
+                Thread.Sleep(2000);
 
-                Console.WriteLine("  ✓ ML inference service started");
+                // Verify socket was created
+                if (File.Exists("/tmp/nudge_ml.sock"))
+                {
+                    Console.WriteLine("  ✓ ML inference service started (socket: /tmp/nudge_ml.sock)");
+                }
+                else
+                {
+                    Console.WriteLine("  ⚠ ML inference socket not found - service may not be ready");
+                }
 
                 // Start background trainer
                 Console.WriteLine("  Starting background trainer...");
@@ -139,6 +167,14 @@ namespace NudgeTray
                     }
                 };
 
+                _mlTrainerProcess.OutputDataReceived += (s, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        Console.WriteLine($"[ML Trainer] {e.Data}");
+                    }
+                };
+
                 _mlTrainerProcess.ErrorDataReceived += (s, e) =>
                 {
                     if (!string.IsNullOrEmpty(e.Data))
@@ -148,6 +184,7 @@ namespace NudgeTray
                 };
 
                 _mlTrainerProcess.Start();
+                _mlTrainerProcess.BeginOutputReadLine();
                 _mlTrainerProcess.BeginErrorReadLine();
 
                 Console.WriteLine("  ✓ Background trainer started");
@@ -205,11 +242,23 @@ namespace NudgeTray
                     }
                 };
 
+                _nudgeProcess.ErrorDataReceived += (s, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        Console.WriteLine($"[Nudge] {e.Data}");
+                    }
+                };
+
                 _nudgeProcess.Start();
                 _nudgeProcess.BeginOutputReadLine();
                 _nudgeProcess.BeginErrorReadLine();
 
                 Console.WriteLine("✓ Nudge process started");
+                if (_mlEnabled)
+                {
+                    Console.WriteLine("  ML mode enabled - waiting for inference server connection...");
+                }
             }
             catch (Exception ex)
             {
