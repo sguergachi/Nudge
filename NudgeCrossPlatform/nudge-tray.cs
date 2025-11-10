@@ -265,21 +265,12 @@ namespace NudgeTray
                 // Write actions array
                 writer.WriteArray(new string[] { "yes", "Yes - Productive", "no", "No - Not Productive" });
 
-                // Write hints dictionary (using proper 0.21.0 API)
-                var hintsStart = writer.WriteDictionaryStart();
-                writer.WriteDictionaryEntryStart();
-                writer.WriteString("urgency");
-                writer.WriteSignature("y");
-                writer.WriteByte(2);
-                writer.WriteDictionaryEntryStart();
-                writer.WriteString("x-kde-appname");
-                writer.WriteSignature("s");
-                writer.WriteString("Nudge");
-                writer.WriteDictionaryEntryStart();
-                writer.WriteString("x-kde-eventId");
-                writer.WriteSignature("s");
-                writer.WriteString("productivity-check");
-                writer.WriteDictionaryEnd(hintsStart);
+                // Write hints dictionary
+                writer.WriteDictionaryStart();
+                writer.WriteDictionaryEntry("urgency", new VariantValue((byte)2));
+                writer.WriteDictionaryEntry("x-kde-appname", new VariantValue("Nudge"));
+                writer.WriteDictionaryEntry("x-kde-eventId", new VariantValue("productivity-check"));
+                writer.WriteDictionaryEnd();
 
                 writer.WriteInt32(0);  // expire_timeout (0 = infinite)
 
@@ -290,14 +281,8 @@ namespace NudgeTray
 
                 Console.WriteLine($"[DEBUG] Notification ID: {notificationId}");
 
-                // Subscribe to ActionInvoked signal
-                await connection.AddMatchAsync(MatchRule.Create<(uint, string)>(
-                    MessageType.Signal,
-                    "org.freedesktop.Notifications",
-                    "/org/freedesktop/Notifications",
-                    "org.freedesktop.Notifications",
-                    "ActionInvoked"
-                ));
+                // Listen for ActionInvoked signal
+                await connection.AddMatchAsync("type='signal',interface='org.freedesktop.Notifications',member='ActionInvoked'");
 
                 _ = Task.Run(async () =>
                 {
@@ -305,15 +290,12 @@ namespace NudgeTray
                     {
                         var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
 
-                        while (!cts.Token.IsCancellationRequested)
+                        await foreach (var signal in connection.ReadSignalsAsync(cts.Token))
                         {
-                            var message = await connection.ReceiveMessageAsync(cts.Token);
-
-                            if (message.MessageType == MessageType.Signal &&
-                                message.InterfaceAsString == "org.freedesktop.Notifications" &&
-                                message.MemberAsString == "ActionInvoked")
+                            if (signal.Interface == "org.freedesktop.Notifications" &&
+                                signal.Member == "ActionInvoked")
                             {
-                                var reader = message.GetBodyReader();
+                                var reader = signal.GetBodyReader();
                                 var id = reader.ReadUInt32();
                                 var actionKey = reader.ReadString();
 
