@@ -36,6 +36,8 @@ namespace NudgeTray
         const int UDP_PORT = 45001;
         const string VERSION = "1.0.1";
         static Process? _nudgeProcess;
+        static DateTime? _nextSnapshotTime;
+        static int _intervalMinutes;
 
         [STAThread]
         static void Main(string[] args)
@@ -69,6 +71,9 @@ namespace NudgeTray
 
         static void StartNudge(int interval)
         {
+            _intervalMinutes = interval;
+            _nextSnapshotTime = DateTime.Now.AddMinutes(interval);
+
             try
             {
                 // Determine nudge executable name based on platform
@@ -119,6 +124,7 @@ namespace NudgeTray
 
         public static void ShowSnapshotNotification()
         {
+            _nextSnapshotTime = DateTime.Now.AddMinutes(_intervalMinutes);
             Console.WriteLine("📸 Snapshot taken! Respond using the notification buttons.");
 
             // Platform-specific notifications
@@ -161,46 +167,70 @@ namespace NudgeTray
 
         private static void ShowWindowsNotification()
         {
-            Console.WriteLine("[DEBUG] ShowWindowsNotification called (native Windows MessageBox)");
+            Console.WriteLine("[DEBUG] ShowWindowsNotification called (native Windows Toast Notification)");
 
             try
             {
-                // Create PowerShell script for Windows toast notification
+                // Create PowerShell script for Windows Toast notification with action buttons
                 var scriptPath = Path.Combine(Path.GetTempPath(), $"nudge-notification-{Guid.NewGuid()}.ps1");
                 Console.WriteLine($"[DEBUG] Creating PowerShell script at: {scriptPath}");
 
                 var scriptContent = @"
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
+# Windows Toast Notification with action buttons
+[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+[Windows.UI.Notifications.ToastNotification, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
 
-$result = [System.Windows.Forms.MessageBox]::Show(
-    'Were you productive during the last interval?',
-    'Nudge - Productivity Check',
-    [System.Windows.Forms.MessageBoxButtons]::YesNo,
-    [System.Windows.Forms.MessageBoxIcon]::Question,
-    [System.Windows.Forms.MessageBoxDefaultButton]::Button1,
-    [System.Windows.Forms.MessageBoxOptions]::DefaultDesktopOnly
-)
+$APP_ID = 'Nudge.ProductivityTracker'
 
-if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
-    # Send YES via UDP
+$template = @""
+<toast scenario='reminder' launch='action=viewEvent&amp;eventId=1' activationType='foreground'>
+    <visual>
+        <binding template='ToastGeneric'>
+            <text>Nudge - Productivity Check</text>
+            <text>Were you productive during the last interval?</text>
+        </binding>
+    </visual>
+    <actions>
+        <action content='Yes - Productive' arguments='YES' activationType='foreground'/>
+        <action content='No - Not Productive' arguments='NO' activationType='foreground'/>
+    </actions>
+    <audio src='ms-winsoundevent:Notification.Default'/>
+</toast>
+""@
+
+$xml = New-Object Windows.Data.Xml.Dom.XmlDocument
+$xml.LoadXml($template)
+
+$toast = New-Object Windows.UI.Notifications.ToastNotification $xml
+$notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($APP_ID)
+
+# Listen for activation
+$toast.add_Activated({
+    param($sender, $eventArgs)
+    $args = $eventArgs.Arguments
+
     $udp = New-Object System.Net.Sockets.UdpClient
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes('YES')
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($args)
     $udp.Send($bytes, $bytes.Length, 'localhost', " + UDP_PORT + @") | Out-Null
     $udp.Close()
-    Write-Output 'YES'
-} elseif ($result -eq [System.Windows.Forms.DialogResult]::No) {
-    # Send NO via UDP
-    $udp = New-Object System.Net.Sockets.UdpClient
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes('NO')
-    $udp.Send($bytes, $bytes.Length, 'localhost', " + UDP_PORT + @") | Out-Null
-    $udp.Close()
-    Write-Output 'NO'
-}
+    Write-Output $args
+})
+
+$toast.add_Dismissed({
+    param($sender, $eventArgs)
+    Write-Output 'DISMISSED'
+})
+
+$notifier.Show($toast)
+Write-Output 'SHOWN'
+
+# Keep script running to receive events
+Start-Sleep -Seconds 60
 ";
 
                 File.WriteAllText(scriptPath, scriptContent);
-                Console.WriteLine("[DEBUG] PowerShell script created successfully");
+                Console.WriteLine("[DEBUG] PowerShell toast notification script created successfully");
 
                 // Run PowerShell script in background
                 var process = new Process
@@ -221,7 +251,10 @@ if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
                     if (!string.IsNullOrEmpty(e.Data))
                     {
                         Console.WriteLine($"[DEBUG] PowerShell output: {e.Data}");
-                        Console.WriteLine($"User responded: {e.Data} via Windows notification");
+                        if (e.Data == "YES" || e.Data == "NO")
+                        {
+                            Console.WriteLine($"User responded: {e.Data} via Windows toast notification");
+                        }
                     }
                 };
 
@@ -245,18 +278,18 @@ if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
                 process.BeginErrorReadLine();
 
                 Console.WriteLine("[DEBUG] PowerShell process started successfully");
-                Console.WriteLine("✓ Windows notification shown");
-                Console.WriteLine("[DEBUG] Waiting for user interaction (notification will stay until dismissed)...");
+                Console.WriteLine("✓ Native Windows Toast notification shown");
+                Console.WriteLine("[DEBUG] Waiting for user interaction (60s timeout)...");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[DEBUG] Windows notification error details: {ex.GetType().Name}");
-                Console.WriteLine($"✗ Windows notification failed: {ex.Message}");
+                Console.WriteLine($"[DEBUG] Windows toast notification error details: {ex.GetType().Name}");
+                Console.WriteLine($"✗ Windows toast notification failed: {ex.Message}");
                 if (ex.InnerException != null)
                 {
                     Console.WriteLine($"[DEBUG] Inner exception: {ex.InnerException.Message}");
                 }
-                Console.WriteLine("Use the tray menu to respond");
+                Console.WriteLine("Falling back to tray menu for response");
             }
         }
 
@@ -537,6 +570,11 @@ if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
             }
             Environment.Exit(0);
         }
+
+        public static DateTime? GetNextSnapshotTime()
+        {
+            return _nextSnapshotTime;
+        }
     }
 
     public class App : Application
@@ -553,25 +591,18 @@ if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
         {
             var menu = new NativeMenu();
 
-            // Status item
-            var statusItem = new NativeMenuItem("Status: Running...");
+            // Status item showing next snapshot time
+            var nextSnapshot = Program.GetNextSnapshotTime();
+            var statusText = nextSnapshot.HasValue
+                ? $"Next snapshot: {nextSnapshot.Value:HH:mm:ss}"
+                : "Status: Running...";
+            var statusItem = new NativeMenuItem(statusText);
             statusItem.IsEnabled = false;
             menu.Add(statusItem);
 
             menu.Add(new NativeMenuItemSeparator());
 
-            // Response buttons
-            var yesItem = new NativeMenuItem("✓ YES (Productive)");
-            yesItem.Click += (s, e) => Program.SendResponse(true);
-            menu.Add(yesItem);
-
-            var noItem = new NativeMenuItem("✗ NO (Not Productive)");
-            noItem.Click += (s, e) => Program.SendResponse(false);
-            menu.Add(noItem);
-
-            menu.Add(new NativeMenuItemSeparator());
-
-            // Quit
+            // Quit option
             var quitItem = new NativeMenuItem("Quit");
             quitItem.Click += (s, e) => Program.Quit();
             menu.Add(quitItem);
