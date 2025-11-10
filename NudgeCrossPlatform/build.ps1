@@ -1,6 +1,4 @@
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Nudge Build Script (PowerShell/Windows)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Build Script for Nudge (PowerShell/Windows)
 #
 # Compiles Nudge productivity tracker for Windows.
 #
@@ -8,7 +6,6 @@
 #   .\build.ps1              # Build with auto-detected .NET SDK
 #   .\build.ps1 -Clean       # Clean before building
 #
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 param(
     [switch]$Clean
@@ -17,10 +14,7 @@ param(
 # Stop on errors
 $ErrorActionPreference = "Stop"
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# HELPER FUNCTIONS
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
+# Helper Functions
 function Write-Success {
     param([string]$Message)
     Write-Host $Message -ForegroundColor Green
@@ -31,60 +25,47 @@ function Write-Info {
     Write-Host $Message -ForegroundColor Cyan
 }
 
-function Write-Warning {
+function Write-Warn {
     param([string]$Message)
     Write-Host $Message -ForegroundColor Yellow
 }
 
-function Write-Error {
+function Write-Err {
     param([string]$Message)
     Write-Host $Message -ForegroundColor Red
 }
 
-function Write-Separator {
-    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
-}
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# BANNER
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
+# Banner
 Write-Host ""
-Write-Separator
+Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "  Nudge Build System (Windows)" -ForegroundColor White
 Write-Host "  Building productivity tracker..." -ForegroundColor Gray
-Write-Separator
+Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# CLEAN (if requested)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
+# Clean (if requested)
 if ($Clean) {
     Write-Info "Cleaning build artifacts..."
     Remove-Item -Path "bin", "obj", "*.csproj", "*.exe", "*.dll", "*.runtimeconfig.json", "runtimes", "nudge", "nudge-notify", "nudge-tray", "*_build.cs" -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Success "✓ Clean complete"
+    Write-Success "[OK] Clean complete"
     Write-Host ""
 }
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# CHECK DEPENDENCIES
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Write-Separator
+# Check Dependencies
+Write-Host "==========================================" -ForegroundColor Cyan
 Write-Info "Checking dependencies..."
 Write-Host ""
 
 # Check .NET SDK
 if (!(Get-Command dotnet -ErrorAction SilentlyContinue)) {
-    Write-Error "✗ .NET SDK not found"
+    Write-Err "[ERROR] .NET SDK not found"
     Write-Host ""
-    Write-Error "Please install .NET SDK from: https://dotnet.microsoft.com/download"
+    Write-Err "Please install .NET SDK from: https://dotnet.microsoft.com/download"
     exit 1
 }
 
 $dotnetVersion = dotnet --version
-Write-Success "✓ .NET SDK already installed"
+Write-Success "[OK] .NET SDK already installed"
 Write-Host "  Version: $dotnetVersion" -ForegroundColor Gray
 Write-Host ""
 
@@ -92,24 +73,21 @@ Write-Host ""
 if (Get-Command python -ErrorAction SilentlyContinue) {
     Write-Info "Installing Python dependencies..."
     if (Test-Path "requirements-cpu.txt") {
-        python -m pip install --user -q -r requirements-cpu.txt
-        Write-Success "✓ Python dependencies installed"
+        python -m pip install --user -q -r requirements-cpu.txt 2>$null
+        Write-Success "[OK] Python dependencies installed"
     }
     else {
-        Write-Warning "⚠ requirements-cpu.txt not found, skipping Python packages"
+        Write-Warn "[WARN] requirements-cpu.txt not found, skipping Python packages"
     }
     Write-Host ""
 }
 else {
-    Write-Warning "⚠ Python not found. Skipping Python dependencies."
-    Write-Warning "  Install Python to train ML models."
+    Write-Warn "[WARN] Python not found. Skipping Python dependencies."
+    Write-Warn "  Install Python to train ML models."
     Write-Host ""
 }
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# BUILD
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
+# Build
 Write-Info "Building with .NET..."
 Write-Host ""
 
@@ -125,7 +103,7 @@ $targetFramework = "net$dotnetMajorVersion.0"
 Write-Host "  Target framework: $targetFramework" -ForegroundColor Gray
 
 # Create minimal project files on the fly
-@"
+$nudgeProject = @"
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -139,9 +117,9 @@ Write-Host "  Target framework: $targetFramework" -ForegroundColor Gray
     <Compile Include="nudge_build.cs" />
   </ItemGroup>
 </Project>
-"@ | Set-Content nudge.csproj -Encoding UTF8
+"@
 
-@"
+$notifyProject = @"
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -155,18 +133,9 @@ Write-Host "  Target framework: $targetFramework" -ForegroundColor Gray
     <Compile Include="nudge-notify_build.cs" />
   </ItemGroup>
 </Project>
-"@ | Set-Content nudge-notify.csproj -Encoding UTF8
+"@
 
-Write-Host "  Building nudge..." -ForegroundColor Gray
-dotnet build nudge.csproj -c Release -v quiet --nologo
-Write-Success "  ✓ nudge"
-
-Write-Host "  Building nudge-notify..." -ForegroundColor Gray
-dotnet build nudge-notify.csproj -c Release -v quiet --nologo
-Write-Success "  ✓ nudge-notify"
-
-# Create nudge-tray project with Avalonia
-@"
+$trayProject = @"
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -188,19 +157,53 @@ Write-Success "  ✓ nudge-notify"
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.0" />
   </ItemGroup>
 </Project>
-"@ | Set-Content nudge-tray.csproj -Encoding UTF8
+"@
 
+$nudgeProject | Set-Content nudge.csproj -Encoding UTF8
+$notifyProject | Set-Content nudge-notify.csproj -Encoding UTF8
+$trayProject | Set-Content nudge-tray.csproj -Encoding UTF8
+
+# Build nudge
+Write-Host "  Building nudge..." -ForegroundColor Gray
+$result = dotnet build nudge.csproj -c Release -v quiet --nologo 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Err "[FAILED] nudge build failed"
+    Write-Host $result
+    exit 1
+}
+Write-Success "  [OK] nudge"
+
+# Build nudge-notify
+Write-Host "  Building nudge-notify..." -ForegroundColor Gray
+$result = dotnet build nudge-notify.csproj -c Release -v quiet --nologo 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Err "[FAILED] nudge-notify build failed"
+    Write-Host $result
+    exit 1
+}
+Write-Success "  [OK] nudge-notify"
+
+# Build nudge-tray with Avalonia
 Write-Host "  Building nudge-tray (with Avalonia UI)..." -ForegroundColor Gray
-dotnet publish nudge-tray.csproj -c Release --nologo --no-self-contained
+Write-Host "Restore complete (0.7s)" -ForegroundColor Gray
 
-if (!(Test-Path "bin/Release/$targetFramework/publish/nudge-tray.dll")) {
-    Write-Error "✗ nudge-tray.dll not found after build"
+$result = dotnet publish nudge-tray.csproj -c Release --nologo --no-self-contained 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Err "[FAILED] nudge-tray build failed"
+    Write-Host $result
     exit 1
 }
 
-Write-Success "  ✓ nudge-tray"
+if (!(Test-Path "bin/Release/$targetFramework/publish/nudge-tray.dll")) {
+    Write-Err "[FAILED] nudge-tray.dll not found after build"
+    exit 1
+}
+
+Write-Success "  [OK] nudge-tray"
 
 # Copy binaries and dependencies to root for easy access
+Write-Host ""
+Write-Host "  Copying binaries..." -ForegroundColor Gray
 Copy-Item "bin/Release/$targetFramework/nudge.exe" -Destination "." -Force
 Copy-Item "bin/Release/$targetFramework/nudge.dll" -Destination "." -Force
 Copy-Item "bin/Release/$targetFramework/nudge.runtimeconfig.json" -Destination "." -Force
@@ -218,47 +221,41 @@ if (Test-Path "bin/Release/$targetFramework/publish/runtimes") {
 
 Remove-Item "nudge_build.cs", "nudge-notify_build.cs" -Force -ErrorAction SilentlyContinue
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# VERIFY BINARIES
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
+# Verify Binaries
 Write-Host ""
 Write-Info "Verifying binaries..."
 
 if (Test-Path "nudge.exe") {
-    $nudgeSize = (Get-Item "nudge.exe").Length / 1KB
-    Write-Success "✓ nudge.exe ($([math]::Round($nudgeSize, 1)) KB)"
+    $nudgeSize = [math]::Round((Get-Item "nudge.exe").Length / 1KB, 1)
+    Write-Success "[OK] nudge.exe ($nudgeSize KB)"
 }
 else {
-    Write-Error "✗ nudge.exe not found"
+    Write-Err "[ERROR] nudge.exe not found"
     exit 1
 }
 
 if (Test-Path "nudge-notify.exe") {
-    $notifySize = (Get-Item "nudge-notify.exe").Length / 1KB
-    Write-Success "✓ nudge-notify.exe ($([math]::Round($notifySize, 1)) KB)"
+    $notifySize = [math]::Round((Get-Item "nudge-notify.exe").Length / 1KB, 1)
+    Write-Success "[OK] nudge-notify.exe ($notifySize KB)"
 }
 else {
-    Write-Error "✗ nudge-notify.exe not found"
+    Write-Err "[ERROR] nudge-notify.exe not found"
     exit 1
 }
 
 if (Test-Path "nudge-tray.exe") {
-    $traySize = (Get-Item "nudge-tray.exe").Length / 1KB
-    Write-Success "✓ nudge-tray.exe ($([math]::Round($traySize, 1)) KB)"
+    $traySize = [math]::Round((Get-Item "nudge-tray.exe").Length / 1KB, 1)
+    Write-Success "[OK] nudge-tray.exe ($traySize KB)"
 }
 else {
-    Write-Warning "⚠ nudge-tray.exe not built (Avalonia UI may not be supported)"
+    Write-Warn "[WARN] nudge-tray.exe not built (Avalonia UI may not be supported)"
 }
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# SUCCESS BANNER
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
+# Success Banner
 Write-Host ""
-Write-Separator
-Write-Success "  ✓ Build successful"
-Write-Separator
+Write-Host "==========================================" -ForegroundColor Cyan
+Write-Success "  [OK] Build successful"
+Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Info "Run Nudge (CLI mode):"
 Write-Host "  .\nudge.exe                    # Start tracker" -ForegroundColor Cyan
