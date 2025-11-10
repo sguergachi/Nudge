@@ -265,7 +265,7 @@ namespace NudgeTray
                 // Write actions array
                 writer.WriteArray(new string[] { "yes", "Yes - Productive", "no", "No - Not Productive" });
 
-                // Write hints dictionary (API changed in 0.21.0)
+                // Write hints dictionary (using proper 0.21.0 API)
                 var hintsStart = writer.WriteDictionaryStart();
                 writer.WriteDictionaryEntryStart();
                 writer.WriteString("urgency");
@@ -290,14 +290,14 @@ namespace NudgeTray
 
                 Console.WriteLine($"[DEBUG] Notification ID: {notificationId}");
 
-                // Listen for ActionInvoked signal (API changed in 0.21.0)
-                var matchRule = new MatchRule
-                {
-                    Type = MessageType.Signal,
-                    Interface = "org.freedesktop.Notifications",
-                    Member = "ActionInvoked"
-                };
-                await connection.AddMatchAsync(matchRule);
+                // Subscribe to ActionInvoked signal
+                await connection.AddMatchAsync(MatchRule.Create<(uint, string)>(
+                    MessageType.Signal,
+                    "org.freedesktop.Notifications",
+                    "/org/freedesktop/Notifications",
+                    "org.freedesktop.Notifications",
+                    "ActionInvoked"
+                ));
 
                 _ = Task.Run(async () =>
                 {
@@ -305,8 +305,10 @@ namespace NudgeTray
                     {
                         var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
 
-                        await foreach (var message in connection.ReadMessagesAsync(cts.Token))
+                        while (!cts.Token.IsCancellationRequested)
                         {
+                            var message = await connection.ReceiveMessageAsync(cts.Token);
+
                             if (message.MessageType == MessageType.Signal &&
                                 message.InterfaceAsString == "org.freedesktop.Notifications" &&
                                 message.MemberAsString == "ActionInvoked")
