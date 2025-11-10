@@ -125,13 +125,26 @@ Write-Host ""
 
 # Check Python (optional)
 if (Get-Command python -ErrorAction SilentlyContinue) {
-    Write-Info "Installing Python dependencies..."
     if (Test-Path "requirements-cpu.txt") {
-        python -m pip install --user -q -r requirements-cpu.txt 2>$null
-        Write-Success "[OK] Python dependencies installed"
+        Write-Info "Installing Python dependencies..."
+        try {
+            $pipOutput = python -m pip install --user -q -r requirements-cpu.txt 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Success "[OK] Python dependencies installed"
+            }
+            else {
+                Write-Warn "[WARN] Some Python packages failed to install"
+                Write-Host "  This is optional - ML training may not work" -ForegroundColor Gray
+            }
+        }
+        catch {
+            Write-Warn "[WARN] Python dependency installation failed"
+            Write-Host "  This is optional - ML training may not work" -ForegroundColor Gray
+        }
     }
     else {
-        Write-Warn "[WARN] requirements-cpu.txt not found, skipping Python packages"
+        Write-Info "Python found, but requirements-cpu.txt not present"
+        Write-Host "  Python packages not needed for building" -ForegroundColor Gray
     }
     Write-Host ""
 }
