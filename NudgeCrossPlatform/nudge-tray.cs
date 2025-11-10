@@ -219,11 +219,17 @@ namespace NudgeTray
                     writer.WriteString("urgency");
                     writer.WriteVariant(VariantValue.Byte(2));
                     writer.WriteDictionaryEntryStart();
+                    writer.WriteString("resident");
+                    writer.WriteVariant(VariantValue.Bool(true));
+                    writer.WriteDictionaryEntryStart();
                     writer.WriteString("x-kde-appname");
                     writer.WriteVariant(VariantValue.String("Nudge"));
                     writer.WriteDictionaryEntryStart();
                     writer.WriteString("x-kde-eventId");
                     writer.WriteVariant(VariantValue.String("productivity-check"));
+                    writer.WriteDictionaryEntryStart();
+                    writer.WriteString("x-kde-urls");
+                    writer.WriteVariant(VariantValue.String(""));
                     writer.WriteDictionaryEnd(arrayStart);
 
                     writer.WriteInt32(0);  // expire_timeout (0 = infinite)
