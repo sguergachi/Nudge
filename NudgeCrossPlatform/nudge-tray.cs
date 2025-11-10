@@ -728,12 +728,32 @@ try {
             };
 
             // Set initial menu
-            _trayIcon.Menu = CreateMenu();
+            var initialMenu = CreateMenu();
+            _trayIcon.Menu = initialMenu;
+
+            Console.WriteLine($"[DEBUG] TrayIcon created: {_trayIcon != null}");
+            Console.WriteLine($"[DEBUG] Menu assigned: {_trayIcon.Menu != null}");
+            Console.WriteLine($"[DEBUG] Menu items count: {initialMenu.Items.Count}");
+
+            // Add click handlers for debugging
+            _trayIcon.Clicked += (s, e) =>
+            {
+                Console.WriteLine("[DEBUG] Tray icon CLICKED event fired");
+            };
 
             // Add to TrayIcons collection
             if (TrayIcon.GetIcons(this) == null)
             {
                 TrayIcon.SetIcons(this, new TrayIcons { _trayIcon });
+            }
+            else
+            {
+                Console.WriteLine("[DEBUG] TrayIcons already exists, adding to collection");
+                var icons = TrayIcon.GetIcons(this);
+                if (icons != null && !icons.Contains(_trayIcon))
+                {
+                    icons.Add(_trayIcon);
+                }
             }
 
             // Refresh menu every 10 seconds to update countdown timer
@@ -743,6 +763,7 @@ try {
             _menuRefreshTimer.Start();
 
             Console.WriteLine("[DEBUG] Tray icon initialized with menu");
+            Console.WriteLine("[DEBUG] TrayIcon.IsVisible: " + _trayIcon.IsVisible);
 
             base.OnFrameworkInitializationCompleted();
         }
