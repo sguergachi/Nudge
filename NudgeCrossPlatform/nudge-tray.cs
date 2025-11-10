@@ -11,11 +11,13 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -24,6 +26,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using Tmds.DBus.Protocol;
 
 namespace NudgeTray
 {
@@ -180,165 +183,111 @@ namespace NudgeTray
             }
         }
 
-        private static void ShowDbusNotification()
+        private static async void ShowDbusNotification()
         {
-            Console.WriteLine("[DEBUG] ShowDbusNotification called");
-
-            // Create a temp script to avoid shell quoting hell
-            var scriptPath = Path.GetTempFileName();
-            var scriptContent = "gdbus call --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications --method org.freedesktop.Notifications.Notify \"Nudge\" 0 \"\" \"Nudge - Productivity Check\" \"Were you productive during the last interval?\" '[\"yes\",\"Yes - Productive\",\"no\",\"No - Not Productive\"]' '{\"urgency\": <byte 2>, \"x-kde-appname\": <\"Nudge\">, \"x-kde-eventId\": <\"productivity-check\">}' 0";
-
-            File.WriteAllText(scriptPath, scriptContent);
-
-            var process = new Process
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = "bash",
-                    Arguments = scriptPath,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                }
-            };
-
-            Console.WriteLine($"[DEBUG] Running: gdbus call...");
+            Console.WriteLine("[DEBUG] ShowDbusNotification called (native DBus)");
 
             try
             {
-                process.Start();
-                string output = process.StandardOutput.ReadToEnd();
-                string error = process.StandardError.ReadToEnd();
-                process.WaitForExit();
+                await using var connection = new Connection(Address.Session!);
+                await connection.ConnectAsync();
 
-                Console.WriteLine($"[DEBUG] gdbus exit code: {process.ExitCode}");
-                Console.WriteLine($"[DEBUG] gdbus stdout: {output}");
-                if (!string.IsNullOrEmpty(error))
+                // Build hints dictionary for KDE integration
+                var hints = new Dictionary<string, Variant>
                 {
-                    Console.WriteLine($"[DEBUG] gdbus stderr: {error}");
-                }
+                    { "urgency", new Variant((byte)2) },  // Critical
+                    { "x-kde-appname", new Variant("Nudge") },
+                    { "x-kde-eventId", new Variant("productivity-check") }
+                };
 
-                if (process.ExitCode != 0)
-                {
-                    throw new Exception($"gdbus failed with exit code {process.ExitCode}: {error}");
-                }
+                // Build actions array: [action_id, label, action_id, label, ...]
+                var actions = new string[] { "yes", "Yes - Productive", "no", "No - Not Productive" };
 
-                // Parse notification ID from output like "(uint32 123,)"
-                var notificationId = ParseNotificationId(output);
-                Console.WriteLine($"[DEBUG] Parsed notification ID: {notificationId}");
+                // Create message to call Notify method
+                var message = new MessageWriter();
+                message.WriteString("Nudge");                    // app_name
+                message.WriteUInt32(0);                           // replaces_id
+                message.WriteString("");                          // app_icon
+                message.WriteString("Nudge - Productivity Check"); // summary
+                message.WriteString("Were you productive during the last interval?"); // body
+                message.WriteArray(actions);                      // actions
+                message.WriteDictionary(hints);                   // hints
+                message.WriteInt32(0);                            // expire_timeout (0 = never)
 
-                if (notificationId > 0)
+                var reply = await connection.CallMethodAsync(
+                    message: message.CreateMessage(),
+                    destination: "org.freedesktop.Notifications",
+                    path: "/org/freedesktop/Notifications",
+                    @interface: "org.freedesktop.Notifications",
+                    member: "Notify"
+                );
+
+                // Parse notification ID from reply
+                var reader = new MessageReader(reply);
+                var notificationId = reader.ReadUInt32();
+
+                Console.WriteLine($"[DEBUG] Notification ID: {notificationId}");
+
+                // Listen for ActionInvoked signal
+                _ = Task.Run(async () =>
                 {
-                    // Start listening for action responses in background
-                    Console.WriteLine($"[DEBUG] Starting action listener for notification {notificationId}");
-                    StartActionListener(notificationId);
-                }
-                else
-                {
-                    Console.WriteLine("[DEBUG] WARNING: Failed to parse notification ID, no action listener started");
-                }
+                    await ListenForActions(connection, notificationId);
+                });
             }
-            finally
+            catch (Exception ex)
             {
-                // Cleanup temp script
-                try { File.Delete(scriptPath); } catch { }
+                Console.WriteLine($"[DEBUG] Native DBus notification failed: {ex.Message}");
+                throw;
             }
         }
 
-        private static int ParseNotificationId(string output)
+        private static async Task ListenForActions(Connection connection, uint notificationId)
         {
             try
             {
-                var cleaned = output.Trim()
-                    .Replace("(", "")
-                    .Replace(")", "")
-                    .Replace("uint32", "")
-                    .Replace(",", "")
-                    .Trim();
-                return int.TryParse(cleaned, out int id) ? id : 0;
-            }
-            catch
-            {
-                return 0;
-            }
-        }
+                Console.WriteLine($"[DEBUG] Listening for actions on notification {notificationId}");
 
-        private static void StartActionListener(int notificationId)
-        {
-            // Listen for notification action clicks via DBus in background thread
-            var listenerThread = new System.Threading.Thread(() =>
-            {
-                try
+                var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+
+                await foreach (var message in connection.ListenForSignalsAsync(cts.Token))
                 {
-                    Console.WriteLine($"[DEBUG] Action listener thread started for notification {notificationId}");
-
-                    var process = new Process
+                    if (message.Interface == "org.freedesktop.Notifications" &&
+                        message.Member == "ActionInvoked")
                     {
-                        StartInfo = new ProcessStartInfo
-                        {
-                            FileName = "gdbus",
-                            Arguments = @"monitor --session --dest org.freedesktop.Notifications",
-                            RedirectStandardOutput = true,
-                            UseShellExecute = false,
-                            CreateNoWindow = true
-                        }
-                    };
+                        var reader = new MessageReader(message);
+                        var id = reader.ReadUInt32();
+                        var actionKey = reader.ReadString();
 
-                    process.OutputDataReceived += (s, e) =>
-                    {
-                        if (!string.IsNullOrEmpty(e.Data))
+                        if (id == notificationId)
                         {
-                            Console.WriteLine($"[DEBUG] DBus monitor: {e.Data}");
+                            Console.WriteLine($"[DEBUG] Action invoked: {actionKey}");
 
-                            // Look for ActionInvoked signal
-                            if (e.Data.Contains("ActionInvoked") && e.Data.Contains(notificationId.ToString()))
+                            if (actionKey == "yes")
                             {
-                                Console.WriteLine($"[DEBUG] ActionInvoked detected for notification {notificationId}!");
-
-                                if (e.Data.Contains("\"yes\""))
-                                {
-                                    Console.WriteLine("✓ User responded: YES (productive) via notification");
-                                    SendResponse(true);
-                                    process.Kill();
-                                }
-                                else if (e.Data.Contains("\"no\""))
-                                {
-                                    Console.WriteLine("✓ User responded: NO (not productive) via notification");
-                                    SendResponse(false);
-                                    process.Kill();
-                                }
+                                Console.WriteLine("User responded: YES (productive)");
+                                SendResponse(true);
                             }
+                            else if (actionKey == "no")
+                            {
+                                Console.WriteLine("User responded: NO (not productive)");
+                                SendResponse(false);
+                            }
+
+                            break;
                         }
-                    };
-
-                    process.Start();
-                    process.BeginOutputReadLine();
-
-                    Console.WriteLine("[DEBUG] Waiting for action invocations (60s timeout)...");
-
-                    // Timeout after 60 seconds
-                    if (!process.WaitForExit(60000))
-                    {
-                        Console.WriteLine("[DEBUG] Action listener timeout reached, killing monitor");
-                        process.Kill();
-                    }
-                    else
-                    {
-                        Console.WriteLine("[DEBUG] Action listener exited normally");
                     }
                 }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[ERROR] Action listener failed: {ex.Message}");
-                    Console.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
-                }
-            });
-
-            listenerThread.IsBackground = true;
-            listenerThread.Start();
-            Console.WriteLine("[DEBUG] Action listener thread spawned");
+            }
+            catch (OperationCanceledException)
+            {
+                Console.WriteLine("[DEBUG] Action listener timeout (60s)");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[DEBUG] Action listener error: {ex.Message}");
+            }
         }
+
 
         private static void ShowFallbackNotification()
         {
