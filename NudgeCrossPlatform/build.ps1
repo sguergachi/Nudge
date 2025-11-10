@@ -268,7 +268,7 @@ $notifyProject = @"
 $trayProject = @"
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <OutputType>WinExe</OutputType>
     <TargetFramework>$targetFramework</TargetFramework>
     <RootNamespace>NudgeTray</RootNamespace>
     <Nullable>enable</Nullable>
@@ -276,14 +276,12 @@ $trayProject = @"
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <DefineConstants>WINDOWS</DefineConstants>
+    <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="nudge-tray.cs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="11.2.2" />
-    <PackageReference Include="Avalonia.Desktop" Version="11.2.2" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.2" />
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.0" />
   </ItemGroup>
 </Project>
