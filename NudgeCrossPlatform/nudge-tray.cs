@@ -21,8 +21,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Tmds.DBus.Protocol;
-using Microsoft.Windows.AppNotifications;
-using Microsoft.Windows.AppNotifications.Builder;
+using Microsoft.Toolkit.Uwp.Notifications;
 
 namespace NudgeTray
 {
@@ -36,7 +35,6 @@ namespace NudgeTray
         static NotifyIcon? _trayIcon;
         static System.Threading.Timer? _menuRefreshTimer;
         static Form? _messageLoopForm;
-        static AppNotificationManager? _notificationManager;
 
         [DllImport("kernel32.dll")]
         static extern bool AttachConsole(int dwProcessId);
@@ -107,17 +105,11 @@ namespace NudgeTray
         {
             try
             {
-                // Get the notification manager instance
-                _notificationManager = AppNotificationManager.Default;
+                // Register event handler for notification activation
+                // ToastNotificationManagerCompat handles COM registration automatically
+                ToastNotificationManagerCompat.OnActivated += OnNotificationActivated;
 
-                // CRITICAL: Register for NotificationInvoked BEFORE calling Register()
-                // Otherwise a new process will be launched to handle notifications
-                _notificationManager.NotificationInvoked += OnNotificationInvoked;
-
-                // Register the app to show notifications
-                _notificationManager.Register();
-
-                Console.WriteLine("[DEBUG] Windows App SDK notifications initialized");
+                Console.WriteLine("[DEBUG] Toast notification handler registered");
             }
             catch (Exception ex)
             {
@@ -125,15 +117,18 @@ namespace NudgeTray
             }
         }
 
-        static void OnNotificationInvoked(AppNotificationManager sender, AppNotificationActivatedEventArgs args)
+        static void OnNotificationActivated(ToastNotificationActivatedEventArgsCompat e)
         {
             try
             {
                 Console.WriteLine("[DEBUG] Notification button clicked");
 
-                // Parse the action argument
-                if (args.Arguments.TryGetValue("action", out var action))
+                // Parse the action argument from toast arguments
+                var args = ToastArguments.Parse(e.Argument);
+
+                if (args.Contains("action"))
                 {
+                    var action = args["action"];
                     Console.WriteLine($"[DEBUG] Action: {action}");
 
                     if (action == "yes")
@@ -335,7 +330,7 @@ namespace NudgeTray
         }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // WINDOWS NOTIFICATIONS (Native Windows App SDK)
+        // WINDOWS NOTIFICATIONS (Native Toast with Toolkit)
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
         private static bool _waitingForResponse = false;
@@ -344,24 +339,25 @@ namespace NudgeTray
         {
             try
             {
-                Console.WriteLine("[DEBUG] ShowWindowsNotification called (native Windows App SDK)");
+                Console.WriteLine("[DEBUG] ShowWindowsNotification called (native toast with Toolkit)");
 
                 _waitingForResponse = true;
 
-                // Build native Windows notification with action buttons
-                var notification = new AppNotificationBuilder()
+                // Build native Windows toast notification with action buttons
+                new ToastContentBuilder()
                     .AddText("Nudge - Productivity Check")
                     .AddText("Were you productive during the last interval?")
-                    .AddButton(new AppNotificationButton("Yes - Productive")
-                        .AddArgument("action", "yes"))
-                    .AddButton(new AppNotificationButton("No - Not Productive")
-                        .AddArgument("action", "no"))
-                    .BuildNotification();
+                    .AddButton(new ToastButton()
+                        .SetContent("Yes - Productive")
+                        .AddArgument("action", "yes")
+                        .SetBackgroundActivation())
+                    .AddButton(new ToastButton()
+                        .SetContent("No - Not Productive")
+                        .AddArgument("action", "no")
+                        .SetBackgroundActivation())
+                    .Show();
 
-                // Show the notification
-                _notificationManager?.Show(notification);
-
-                Console.WriteLine("✓ Native Windows notification shown with Yes/No buttons");
+                Console.WriteLine("✓ Native Windows toast notification shown with Yes/No buttons");
 
                 // Refresh tray menu to show Yes/No options
                 _messageLoopForm?.Invoke((Action)(() =>

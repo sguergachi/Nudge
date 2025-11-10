@@ -277,18 +277,13 @@ $trayProject = @"
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <DefineConstants>WINDOWS</DefineConstants>
     <UseWindowsForms>true</UseWindowsForms>
-    <WindowsPackageType>None</WindowsPackageType>
-    <EnableMsixTooling>false</EnableMsixTooling>
-    <AppxPackage>false</AppxPackage>
-    <GenerateAppInstallerFile>false</GenerateAppInstallerFile>
-    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="nudge-tray.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.0" />
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.241114003" />
+    <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
   </ItemGroup>
 </Project>
 "@
