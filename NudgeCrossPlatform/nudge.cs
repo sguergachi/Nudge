@@ -662,6 +662,16 @@ class Nudge
                     if (string.IsNullOrWhiteSpace(cmdline))
                         continue;
 
+                    // Filter out Nudge's own processes (ML trainer, inference, etc.)
+                    if (cmdline.Contains("background_trainer") ||
+                        cmdline.Contains("model_inference") ||
+                        cmdline.Contains("generate_sample_data") ||
+                        cmdline.Contains("start_nudge_ml") ||
+                        cmdline.Contains("nudge-tray") ||
+                        cmdline.Contains("/Nudge/") ||
+                        cmdline.Contains("NudgeCrossPlatform"))
+                        continue;
+
                     var processName = cmdline.Split(' ')[0];
                     processName = Path.GetFileName(processName);
 
