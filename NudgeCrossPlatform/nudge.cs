@@ -737,7 +737,116 @@ if (win) {{
             }
         }
 
-        // Last resort: return generic identifier
+        // Last resort: Try to identify GUI application by process
+        // On KDE Wayland, window info is restricted, but we can at least
+        // return the application name (e.g., "firefox") instead of generic identifier
+        Dim($"  Falling back to process-based detection");
+
+        try
+        {
+            // Use wmctrl or similar if available
+            if (CommandExists("wmctrl"))
+            {
+                var wmctrlOutput = RunCommand("wmctrl", "-lx");
+                if (!string.IsNullOrWhiteSpace(wmctrlOutput))
+                {
+                    // Parse wmctrl output for active window
+                    // This might work on some KDE configs
+                    var lines = wmctrlOutput.Split('\n');
+                    foreach (var line in lines)
+                    {
+                        if (line.Contains("*"))  // Active window marker in some wmctrl versions
+                        {
+                            var parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                            if (parts.Length > 2)
+                            {
+                                return parts[2];  // Window class
+                            }
+                        }
+                    }
+                }
+            }
+
+            // If wmctrl didn't work, check recently active GUI processes
+            var candidates = new List<(string name, long cpuTime)>();
+            var procDirs = Directory.GetDirectories("/proc");
+
+            foreach (var procDir in procDirs)
+            {
+                var pidStr = Path.GetFileName(procDir);
+                if (!int.TryParse(pidStr, out int pid))
+                    continue;
+
+                try
+                {
+                    var cmdlinePath = Path.Combine(procDir, "cmdline");
+                    var statPath = Path.Combine(procDir, "stat");
+                    var environPath = Path.Combine(procDir, "environ");
+
+                    if (!File.Exists(cmdlinePath) || !File.Exists(environPath))
+                        continue;
+
+                    // Check if this is a GUI process
+                    var environ = File.ReadAllText(environPath);
+                    if (!environ.Contains("WAYLAND_DISPLAY") && !environ.Contains("DISPLAY="))
+                        continue;
+
+                    var cmdline = File.ReadAllText(cmdlinePath).Replace("\0", " ").Trim();
+                    if (string.IsNullOrWhiteSpace(cmdline))
+                        continue;
+
+                    var processName = cmdline.Split(' ')[0];
+                    processName = Path.GetFileName(processName);
+
+                    // Filter out system processes
+                    var systemProcesses = new[] {
+                        "kwin_wayland", "kwin_x11", "plasmashell", "kded5", "kded6",
+                        "kglobalaccel", "ksmserver", "systemd", "dbus-daemon",
+                        "kwalletd5", "kwalletd6", "baloo_file", "agent", "polkit",
+                        "xdg-desktop-portal", "xdg-document-portal", "xdg-permission-store"
+                    };
+
+                    if (systemProcesses.Any(sp => processName.Contains(sp)))
+                        continue;
+
+                    // Get CPU time to find recently active process
+                    long cpuTime = 0;
+                    if (File.Exists(statPath))
+                    {
+                        var stat = File.ReadAllText(statPath);
+                        var statParts = stat.Split(' ');
+                        if (statParts.Length > 14)
+                        {
+                            // utime (14) + stime (15) = total CPU time
+                            long.TryParse(statParts[13], out long utime);
+                            long.TryParse(statParts[14], out long stime);
+                            cpuTime = utime + stime;
+                        }
+                    }
+
+                    candidates.Add((processName, cpuTime));
+                }
+                catch
+                {
+                    // Skip processes we can't read
+                    continue;
+                }
+            }
+
+            // Return the process with most CPU time (likely the active one)
+            if (candidates.Count > 0)
+            {
+                var mostActive = candidates.OrderByDescending(c => c.cpuTime).First();
+                Dim($"  Found active GUI process: {mostActive.name}");
+                return mostActive.name;
+            }
+        }
+        catch (Exception ex)
+        {
+            Dim($"  Process detection error: {ex.Message}");
+        }
+
+        // Absolute last resort
         return "kde-wayland-window";
     }
 
