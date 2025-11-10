@@ -686,22 +686,63 @@ class Nudge
                     if (systemProcesses.Any(sp => processName.Contains(sp)))
                         continue;
 
-                    // Get CPU time to find recently active process
-                    long cpuTime = 0;
+                    // Get process stats to determine if it's likely the active window
+                    // We look for: recent I/O activity, not backgrounded, interactive
+                    long activityScore = 0;
                     if (File.Exists(statPath))
                     {
                         var stat = File.ReadAllText(statPath);
                         var statParts = stat.Split(' ');
-                        if (statParts.Length > 14)
+                        if (statParts.Length > 20)
                         {
-                            // utime (14) + stime (15) = total CPU time
-                            long.TryParse(statParts[13], out long utime);
-                            long.TryParse(statParts[14], out long stime);
-                            cpuTime = utime + stime;
+                            // Check if process is in foreground (tpgid == pgrp means foreground)
+                            if (int.TryParse(statParts[4], out int pgrp) &&
+                                int.TryParse(statParts[7], out int tpgid) &&
+                                tpgid > 0 && tpgid == pgrp)
+                            {
+                                activityScore += 1000; // Foreground bonus
+                            }
+
+                            // Get number of threads (more threads = more likely to be active GUI app)
+                            if (long.TryParse(statParts[19], out long numThreads))
+                            {
+                                activityScore += numThreads * 10;
+                            }
+
+                            // Get minor faults (page faults) - active apps cause more faults
+                            if (long.TryParse(statParts[9], out long minFaults))
+                            {
+                                activityScore += minFaults / 1000;
+                            }
                         }
                     }
 
-                    candidates.Add((processName, cpuTime));
+                    // Check I/O stats - active apps have more recent I/O
+                    var ioPath = Path.Combine(procDir, "io");
+                    if (File.Exists(ioPath))
+                    {
+                        try
+                        {
+                            var ioStats = File.ReadAllText(ioPath);
+                            // Look for read_bytes and write_bytes
+                            var lines = ioStats.Split('\n');
+                            foreach (var line in lines)
+                            {
+                                if (line.StartsWith("rchar:") || line.StartsWith("wchar:"))
+                                {
+                                    var parts = line.Split(':');
+                                    if (parts.Length > 1 && long.TryParse(parts[1].Trim(), out long ioBytes))
+                                    {
+                                        // More I/O = more likely to be active
+                                        activityScore += ioBytes / 1000000;
+                                    }
+                                }
+                            }
+                        }
+                        catch { /* IO stats might not be readable */ }
+                    }
+
+                    candidates.Add((processName, activityScore));
                 }
                 catch
                 {
@@ -710,11 +751,11 @@ class Nudge
                 }
             }
 
-            // Return the process with most CPU time (likely the active one)
+            // Return the process with highest activity score (most likely active)
             if (candidates.Count > 0)
             {
-                var mostActive = candidates.OrderByDescending(c => c.cpuTime).First();
-                return mostActive.name;
+                var mostActive = candidates.OrderByDescending(c => c.Item2).First();
+                return mostActive.Item1;
             }
         }
         catch
