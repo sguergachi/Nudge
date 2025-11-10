@@ -1,0 +1,243 @@
+================================================================================
+NUDGE CODEBASE - PLATFORM ANALYSIS SUMMARY
+================================================================================
+
+PROJECT OVERVIEW:
+- Language: C# (.NET 9.0 cross-platform)
+- Purpose: ML-powered productivity tracker with UI
+- Main Components: nudge (core tracker), nudge-notify (CLI), nudge-tray (UI)
+- Framework: Avalonia 11.2.2 (cross-platform UI) + Tmds.DBus.Protocol (D-Bus)
+
+================================================================================
+CURRENT PLATFORM STATUS
+================================================================================
+
+Operating Systems Supported:
+- Linux (PRIMARY) - Fully functional
+- macOS (SECONDARY) - Partial (has OSX runtime binaries)
+- Windows - NOT SUPPORTED
+
+Supported Linux Desktop Environments:
+1. Sway (Wayland)
+2. GNOME (Wayland/X11)
+3. KDE Plasma (Wayland/X11)
+
+================================================================================
+LINUX/UNIX-SPECIFIC CODE AREAS
+================================================================================
+
+CRITICAL PLATFORM DEPENDENCIES:
+
+1. WINDOW DETECTION (nudge.cs lines 314-444)
+   - Sway: Uses "swaymsg" command + JSON parsing
+   - GNOME: Uses "gdbus" D-Bus command
+   - KDE: Uses "xdotool" X11 command
+   Windows Equivalent: Windows API (GetForegroundWindow)
+
+2. IDLE TIME DETECTION (nudge.cs lines 446-541)
+   - Tries org.freedesktop.ScreenSaver via "qdbus"
+   - Falls back to "gdbus" for GNOME
+   - Uses org.gnome.Mutter.IdleMonitor interface
+   Windows Equivalent: Windows API (GetLastInputInfo)
+
+3. FILE PATHS (nudge.cs line 79)
+   - Hardcoded: /tmp/HARVEST.CSV
+   - Unix temp directory only
+   Windows Equivalent: Path.GetTempPath() or %APPDATA%
+
+4. BUILD SYSTEM (build.sh - entire file)
+   - Bash script (Unix-only)
+   - OS detection via /etc files
+   - Linux package managers (apt, pacman, dnf, brew)
+   - No Windows build capability
+   Windows Need: PowerShell script or .NET-only build
+
+5. ENVIRONMENT VARIABLES (nudge.cs lines 170, 305)
+   - XDG_SESSION_TYPE (Wayland detection)
+   - XDG_CURRENT_DESKTOP (Desktop environment detection)
+   Windows Equivalent: Skip checks, detect via Windows API
+
+6. EXTERNAL COMMANDS (nudge.cs)
+   - which (find executables) → Windows: where
+   - swaymsg (Sway IPC)
+   - gdbus (D-Bus)
+   - qdbus (Qt D-Bus)
+   - xdotool (X11)
+   - notify-send (Linux notifications)
+
+7. NOTIFICATIONS (nudge-tray.cs lines 114-308)
+   - D-Bus org.freedesktop.Notifications
+   - kdialog (KDE)
+   - notify-send (fallback)
+   Windows Equivalent: Toast Notifications or MessageBox
+
+8. SHELL SHEBANGS
+   - nudge.cs line 1: #!/usr/bin/env dotnet run
+   - nudge-notify.cs line 1: #!/usr/bin/env dotnet run
+   - Ignored on Windows but makes scripts Unix-specific
+
+================================================================================
+DEPENDENCIES ANALYSIS
+================================================================================
+
+NuGet Packages:
+✓ Avalonia 11.2.2 - WINDOWS READY (includes Avalonia.Win32)
+✓ Avalonia.Desktop - WINDOWS READY
+✓ Avalonia.Themes.Fluent - WINDOWS READY
+✗ Tmds.DBus.Protocol 0.21.0 - LINUX ONLY (used for D-Bus notifications)
+  → Issue: Will cause build problems on Windows
+  → Solution: Make dependency conditional or platform-specific
+
+Project Files:
+✓ nudge.csproj - Platform-independent
+✓ nudge-notify.csproj - Platform-independent
+✓ nudge-tray.csproj - Depends on Tmds.DBus.Protocol (needs conditional)
+
+Configuration Files:
+✓ Runtime config (.json files) - Platform-independent
+✓ Dependencies file - Contains Windows native assets (win-x64, win-x86, win-arm64)
+✗ No Windows runtime packages in runtimes/ directory
+
+================================================================================
+CRITICAL ISSUES FOR WINDOWS COMPATIBILITY
+================================================================================
+
+ISSUE SEVERITY BREAKDOWN:
+
+CRITICAL (Will not run on Windows):
+1. Window Detection System - Cannot detect active window
+2. Idle Time Detection - Cannot detect user idle time
+3. Environment Validation - Cannot validate Wayland/XDG vars
+
+HIGH PRIORITY (Core functionality broken):
+1. File Paths - /tmp doesn't exist
+2. Command Detection - 'which' doesn't exist
+3. Notification System - D-Bus, kdialog, notify-send unavailable
+4. Build System - Cannot build without Windows script
+
+MEDIUM PRIORITY (Functional limitations):
+1. D-Bus Dependency - Will block Windows build
+2. Python Scripts - May have hardcoded paths
+3. Platform Detection - No Windows-specific logic
+
+LOW PRIORITY (Minor compatibility):
+1. Runtime Packages - Can be auto-generated
+2. ANSI Colors - Windows 10+ supports natively
+
+================================================================================
+ESTIMATED EFFORT FOR WINDOWS SUPPORT
+================================================================================
+
+Phase 1 - Core Functionality (HIGH EFFORT):
+  - Window detection via Windows API (P/Invoke)
+  - Idle time detection via Windows API (P/Invoke)
+  - Platform detection logic
+  Effort: 1-2 weeks
+
+Phase 2 - Build System (HIGH EFFORT):
+  - Create build.ps1 (PowerShell)
+  - Conditional D-Bus dependency
+  - Windows dependency handling
+  Effort: 1 week
+
+Phase 3 - User Interface (MEDIUM EFFORT):
+  - Windows Toast Notifications (or MessageBox fallback)
+  - Platform-specific UI code
+  Effort: 3-5 days
+
+Phase 4 - Testing & Refinement (MEDIUM EFFORT):
+  - Cross-platform testing
+  - Python scripts verification
+  - File path validation
+  Effort: 1 week
+
+TOTAL ESTIMATED TIME: 2-4 weeks development + 1 week testing
+
+DIFFICULTY LEVEL: Medium
+- Requires P/Invoke knowledge for Windows API
+- Avalonia framework simplifies UI work
+- Architecture allows platform abstraction
+
+================================================================================
+FILES REQUIRING CHANGES
+================================================================================
+
+MUST MODIFY:
+✓ nudge.cs (lines 163-541) - Environment validation, window detection, idle time
+✓ nudge-tray.cs (lines 114-308) - Notification system
+✓ nudge.cs (line 79) - File paths
+✓ build.sh (entire file) - Create Windows equivalent
+
+CONDITIONAL CHANGES:
+~ nudge-tray.csproj - Make Tmds.DBus.Protocol conditional
+~ train_model.py - Test/verify on Windows
+~ validate_data.py - Test/verify on Windows
+
+LIKELY NO CHANGES NEEDED:
+✗ nudge-notify.cs - Pure UDP, should work on Windows
+✗ *csproj files (except above)
+✗ .json config files
+
+================================================================================
+RECOMMENDED APPROACH
+================================================================================
+
+OPTION 1: Platform Abstraction Interface (Recommended)
+- Create IPlatformService interface
+- Implement WindowsPlatformService and LinuxPlatformService
+- Inject platform service into main classes
+- Benefits: Clean separation, minimal changes to existing code
+
+OPTION 2: Conditional Compilation with #if
+- Use NETSTANDARD, preprocessor directives
+- Less elegant but minimal refactoring
+
+OPTION 3: Runtime Platform Detection
+- Keep single codebase
+- Use RuntimeInformation.IsOSPlatform()
+- Check OS in methods and branch accordingly
+- Benefits: No build changes needed
+
+================================================================================
+KEY FINDINGS
+================================================================================
+
+1. The project is FUNDAMENTALLY LINUX/WAYLAND-CENTRIC
+   - Every major component assumes Unix/Linux environment
+   - No Windows compatibility code exists
+   - No Windows testing infrastructure
+
+2. The UI Framework (Avalonia) IS WINDOWS-READY
+   - Avalonia.Win32 exists and is versioned
+   - Windows-specific native libraries available
+   - Main limitation is application logic, not framework
+
+3. Build System is BASH-ONLY
+   - No .NET-only build approach
+   - Must create PowerShell or batch equivalent
+   - Build script installs dependencies (Linux package managers)
+
+4. D-Bus Dependency Creates a BUILD PROBLEM
+   - Tmds.DBus.Protocol works only on Linux
+   - Will prevent Windows build unless handled
+   - Only used for notification system (replaceable)
+
+5. Core Functionality Requires WINDOWS API
+   - Window detection cannot be done without Windows API
+   - Idle time detection cannot be done without Windows API
+   - No cross-platform alternative exists
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+1. Read WINDOWS_COMPATIBILITY_ANALYSIS.md for detailed technical breakdown
+2. Decide on platform abstraction approach (see above)
+3. Create Windows API wrapper classes
+4. Implement Windows versions of critical functions
+5. Create build.ps1 for Windows builds
+6. Add platform detection to environment validation
+7. Test on Windows 10+ (ANSI color support required)
+8. Verify Python scripts work on Windows
+
+================================================================================
