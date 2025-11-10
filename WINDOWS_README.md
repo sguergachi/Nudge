@@ -75,19 +75,58 @@ Alternatively, in tray mode, a dialog will pop up asking for your response.
 
 ## How It Works on Windows
 
-Nudge uses Windows-specific APIs to:
+Nudge uses Windows-specific APIs to integrate with the operating system:
 
-1. **Window Detection**: Uses `GetForegroundWindow()` and `GetWindowText()` to track the active window
-2. **Idle Time Detection**: Uses `GetLastInputInfo()` to measure user inactivity
-3. **Notifications**: Uses Windows MessageBox dialogs (in tray mode)
-4. **Data Storage**: Saves activity data to `%TEMP%\HARVEST.CSV`
+### Window Detection
+Uses native Windows API via P/Invoke:
+- `GetForegroundWindow()` - Gets the currently active window handle
+- `GetWindowText()` - Retrieves the window title text
+- Implemented in `nudge.cs` with conditional compilation (`#if WINDOWS`)
+
+### Idle Time Detection
+Uses native Windows API:
+- `GetLastInputInfo()` - Returns time since last user input (keyboard/mouse)
+- `GetTickCount()` - System uptime for calculating idle duration
+- Returns idle time in milliseconds
+
+### Notifications
+**In Tray Mode (`nudge-tray.exe`):**
+- Uses PowerShell scripts to display MessageBox dialogs with Yes/No buttons
+- Runs PowerShell in background to avoid blocking the main UI
+- Sends responses back to main process via UDP (port 45001)
+- Fallback: System tray menu for manual responses
+
+**Implementation Details:**
+- Creates temporary PowerShell script with embedded MessageBox code
+- Uses `System.Windows.Forms.MessageBox` for native Windows dialogs
+- Automatically handles button clicks and sends YES/NO responses
+
+### Data Storage
+- Saves activity data to `%TEMP%\HARVEST.CSV`
+- Uses `Path.GetTempPath()` for cross-platform compatibility
+- Same CSV format as Linux version
+
+### Build System
+- `build.ps1` - Native PowerShell build script
+- Compiles with .NET SDK (auto-detects installed version)
+- Includes Avalonia UI framework and Tmds.DBus.Protocol (for Linux compatibility)
+- Creates standalone executables with all dependencies
 
 ## Differences from Linux Version
 
-- **No Wayland/X11 requirement**: Uses native Windows APIs instead
-- **No DBus dependency**: Windows notifications use native dialogs
-- **File paths**: Uses Windows temp directory instead of `/tmp/`
-- **MessageBox dialogs**: Instead of desktop notifications (simpler but functional)
+| Feature | Linux (Wayland) | Windows 10/11 |
+|---------|----------------|---------------|
+| **Window Detection** | `swaymsg`, `gdbus`, `qdbus` | `GetForegroundWindow()` API |
+| **Idle Time** | D-Bus services | `GetLastInputInfo()` API |
+| **Notifications** | Native DBus with action buttons | PowerShell MessageBox dialogs |
+| **File Paths** | `/tmp/HARVEST.CSV` | `%TEMP%\HARVEST.CSV` |
+| **Build Script** | `build.sh` (Bash) | `build.ps1` (PowerShell) |
+| **Platform Detection** | XDG environment variables | `RuntimeInformation.IsOSPlatform()` |
+
+### Implementation Approach
+- Uses conditional compilation (`#if WINDOWS`) for platform-specific code
+- No abstractions - direct API calls following Jon Blow's philosophy
+- Platform detection at runtime using `RuntimeInformation.IsOSPlatform(OSPlatform.Windows)`
 
 ## Troubleshooting
 
@@ -130,14 +169,115 @@ python -m pip install -r requirements-cpu.txt
 python train_model.py
 ```
 
+## Technical Implementation Details
+
+### Platform Detection
+```csharp
+using System.Runtime.InteropServices;
+
+if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+{
+    // Windows-specific code
+}
+else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+{
+    // Linux-specific code
+}
+```
+
+### Windows API P/Invoke Declarations
+
+**Window Detection (nudge.cs):**
+```csharp
+[DllImport("user32.dll", SetLastError = true)]
+static extern IntPtr GetForegroundWindow();
+
+[DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder text, int count);
+```
+
+**Idle Time Detection (nudge.cs):**
+```csharp
+[StructLayout(LayoutKind.Sequential)]
+struct LASTINPUTINFO
+{
+    public uint cbSize;
+    public uint dwTime;
+}
+
+[DllImport("user32.dll")]
+static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
+
+[DllImport("kernel32.dll")]
+static extern uint GetTickCount();
+```
+
+### Conditional Compilation
+Windows-specific code is wrapped with `#if WINDOWS` preprocessor directives:
+```csharp
+#if WINDOWS
+    // Windows API calls
+    static string GetWindowsFocusedApp() { ... }
+    static int GetWindowsIdleTime() { ... }
+#endif
+```
+
+The `WINDOWS` symbol is defined in build.ps1 when creating the project file:
+```xml
+<DefineConstants>WINDOWS</DefineConstants>
+```
+
+### Linux Notification Implementation
+
+Native DBus notifications using Tmds.DBus.Protocol 0.21.0:
+
+**Key Implementation Details (nudge-tray.cs):**
+```csharp
+private static async void ShowDbusNotification()
+{
+    using var connection = new Connection(Address.Session!);
+    await connection.ConnectAsync();
+
+    // Write notification with hints dictionary
+    var arrayStart = writer.WriteDictionaryStart();
+    writer.WriteDictionaryEntryStart();
+    writer.WriteString("urgency");
+    writer.WriteVariant(VariantValue.Byte(2));
+    writer.WriteDictionaryEntryStart();
+    writer.WriteString("resident");
+    writer.WriteVariant(VariantValue.Bool(true));  // Keep notification visible
+    writer.WriteDictionaryEnd(arrayStart);
+
+    // Listen for ActionInvoked signals
+    await connection.AddMatchAsync(
+        actionMatchRule,
+        (Message m, object? s) => { /* read action */ },
+        (Exception? ex, (uint id, string actionKey) signal, ...) => {
+            // Handle button clicks
+        },
+        ObserverFlags.None, null, null, true
+    );
+
+    // Keep connection alive (critical for resident:true to work!)
+    await Task.Delay(-1, cancellationSource.Token);
+}
+```
+
+**Why Connection Keep-Alive Matters:**
+- Without keeping the connection alive, notifications expire after ~1 second
+- `Task.Delay(-1, cancellationToken)` keeps the DBus connection open
+- The `resident:true` hint only works while the connection is active
+- Timeout set to 60 seconds to prevent resource leaks
+
 ## Future Improvements
 
 Potential enhancements for Windows support:
 
-- **Windows Toast Notifications**: Modern notification API with action buttons
-- **Process name detection**: Get executable name instead of window title
-- **Better tray integration**: Enhanced system tray experience
+- **Windows Toast Notifications**: Modern notification API with action buttons (WinRT APIs)
+- **Process name detection**: Get executable name instead of just window title
+- **Better tray integration**: Enhanced system tray experience with custom icons
 - **Installation package**: MSI installer for easier setup
+- **Auto-start**: Add to Windows startup folder automatically
 
 ## Contributing
 
