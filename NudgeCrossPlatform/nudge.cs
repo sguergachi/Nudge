@@ -22,7 +22,7 @@
 //   nudge --ml               # Enable ML-based predictions
 //
 // Requirements:
-//   - Wayland compositor (Sway, GNOME, or KDE Plasma)
+//   - Windows 10+, or Linux with Wayland compositor (Sway, GNOME, KDE)
 //   - .NET 8.0 or later
 //
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -32,6 +32,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -81,11 +82,34 @@ class Nudge
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // WINDOWS API - P/Invoke declarations for Windows-specific functionality
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct LASTINPUTINFO
+    {
+        public uint cbSize;
+        public uint dwTime;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder text, int count);
+
+    [DllImport("user32.dll")]
+    static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
+
+    [DllImport("kernel32.dll")]
+    static extern uint GetTickCount();
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // STATE - Application state
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     static string _compositor = "";
-    static string _csvPath = "/tmp/HARVEST.CSV";
+    static string _csvPath = Path.Combine(Path.GetTempPath(), "HARVEST.CSV");
     static StreamWriter? _csvFile;
 
     // Activity tracking
@@ -183,45 +207,60 @@ class Nudge
     {
         bool valid = true;
 
-        // Check Wayland session
         Info("Checking environment...");
 
-        var sessionType = Environment.GetEnvironmentVariable("XDG_SESSION_TYPE");
-        if (sessionType != "wayland")
+        // Check if running on Windows
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            Warning($"Not running on Wayland (detected: {sessionType ?? "none"})");
-            Warning("Nudge requires Wayland. Some features may not work.");
-            valid = false;
+            _compositor = "windows";
+            Success($"✓ Platform: Windows");
         }
-
-        // Detect compositor
-        _compositor = DetectCompositor();
-        if (_compositor == "unknown")
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
-            Error("Could not detect compositor");
-            Error("Supported: Sway, GNOME, KDE Plasma");
-            return false;
+            // Check Wayland session
+            var sessionType = Environment.GetEnvironmentVariable("XDG_SESSION_TYPE");
+            if (sessionType != "wayland")
+            {
+                Warning($"Not running on Wayland (detected: {sessionType ?? "none"})");
+                Warning("Nudge works best on Wayland. Some features may not work.");
+                valid = false;
+            }
+
+            // Detect compositor
+            _compositor = DetectCompositor();
+            if (_compositor == "unknown")
+            {
+                Error("Could not detect compositor");
+                Error("Supported: Sway, GNOME, KDE Plasma");
+                return false;
+            }
+
+            Success($"✓ Compositor: {_compositor}");
+
+            // Check required commands
+            var (cmd, desc) = _compositor switch
+            {
+                "sway" => ("swaymsg", "Sway IPC"),
+                "gnome" => ("gdbus", "D-Bus communication"),
+                "kde" => ("qdbus", "Qt D-Bus"),
+                _ => ("", "")
+            };
+
+            if (!string.IsNullOrEmpty(cmd) && !CommandExists(cmd))
+            {
+                Error($"Required command not found: {cmd}");
+                Error($"Install: {GetInstallCommand(cmd)}");
+                return false;
+            }
+
+            Success($"✓ {desc} available");
         }
-
-        Success($"✓ Compositor: {_compositor}");
-
-        // Check required commands
-        var (cmd, desc) = _compositor switch
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
-            "sway" => ("swaymsg", "Sway IPC"),
-            "gnome" => ("gdbus", "D-Bus communication"),
-            "kde" => ("qdbus", "Qt D-Bus"),
-            _ => ("", "")
-        };
-
-        if (!string.IsNullOrEmpty(cmd) && !CommandExists(cmd))
-        {
-            Error($"Required command not found: {cmd}");
-            Error($"Install: {GetInstallCommand(cmd)}");
-            return false;
+            _compositor = "macos";
+            Success($"✓ Platform: macOS");
+            Warning("macOS support is experimental");
         }
-
-        Success($"✓ {desc} available");
 
         // Test window detection
         Info("Testing window detection...");
@@ -229,7 +268,10 @@ class Nudge
         if (testApp == "unknown" || string.IsNullOrEmpty(testApp))
         {
             Warning("Could not detect foreground window");
-            Warning("Please ensure compositor is running correctly");
+            if (_compositor != "windows")
+            {
+                Warning("Please ensure compositor is running correctly");
+            }
         }
         else
         {
@@ -362,6 +404,7 @@ class Nudge
 
         string app = _compositor switch
         {
+            "windows" => GetWindowsFocusedApp(),
             "sway" => GetSwayFocusedApp(),
             "gnome" => GetGnomeFocusedApp(),
             "kde" => GetKDEFocusedApp(),
@@ -371,6 +414,31 @@ class Nudge
         _cachedApp = app;
         _appCacheExpiry = DateTime.Now.AddMilliseconds(500);
         return app;
+    }
+
+    static string GetWindowsFocusedApp()
+    {
+        try
+        {
+            IntPtr hwnd = GetForegroundWindow();
+            if (hwnd == IntPtr.Zero)
+                return "unknown";
+
+            const int nChars = 256;
+            var buff = new System.Text.StringBuilder(nChars);
+
+            if (GetWindowText(hwnd, buff, nChars) > 0)
+            {
+                return buff.ToString();
+            }
+
+            return "unknown";
+        }
+        catch (Exception ex)
+        {
+            Dim($"  Windows error: {ex.Message}");
+            return "unknown";
+        }
     }
 
     static string GetSwayFocusedApp()
@@ -502,6 +570,12 @@ class Nudge
 
     static int GetUniversalIdleTime()
     {
+        // Method 0: Windows native API
+        if (_compositor == "windows")
+        {
+            return GetWindowsIdleTime();
+        }
+
         // Method 1: Try org.freedesktop.ScreenSaver (universal - works on KDE, Sway, most compositors)
         // This is the most compatible method for both X11 and Wayland
         int idle = GetFreedesktopIdleTime();
@@ -512,6 +586,27 @@ class Nudge
         if (idle > 0) return idle;
 
         return 0;
+    }
+
+    static int GetWindowsIdleTime()
+    {
+        try
+        {
+            LASTINPUTINFO lastInputInfo = new LASTINPUTINFO();
+            lastInputInfo.cbSize = (uint)Marshal.SizeOf(lastInputInfo);
+
+            if (GetLastInputInfo(ref lastInputInfo))
+            {
+                uint idleTime = GetTickCount() - lastInputInfo.dwTime;
+                return (int)idleTime;
+            }
+
+            return 0;
+        }
+        catch
+        {
+            return 0;
+        }
     }
 
     static int GetFreedesktopIdleTime()
@@ -949,7 +1044,9 @@ class Nudge
     {
         try
         {
-            var output = RunCommand("which", cmd);
+            // Use 'where' on Windows, 'which' on Unix
+            var whichCmd = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "where" : "which";
+            var output = RunCommand(whichCmd, cmd);
             return !string.IsNullOrWhiteSpace(output);
         }
         catch
@@ -1055,7 +1152,7 @@ class Nudge
         Console.WriteLine($"    {Color.YELLOW}nudge-notify NO{Color.RESET}    # I was not productive");
         Console.WriteLine();
         Console.WriteLine($"{Color.BOLD}REQUIREMENTS:{Color.RESET}");
-        Console.WriteLine($"  - Wayland compositor (Sway, GNOME, or KDE Plasma)");
+        Console.WriteLine($"  - Windows 10+, or Linux with Wayland compositor (Sway, GNOME, KDE)");
         Console.WriteLine($"  - .NET 8.0 or later");
         Console.WriteLine();
     }

@@ -16,6 +16,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -70,12 +71,17 @@ namespace NudgeTray
         {
             try
             {
+                // Determine nudge executable name based on platform
+                string nudgeExe = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                    ? "nudge.exe"
+                    : "./nudge";
+
                 // Start the main nudge process
                 _nudgeProcess = new Process
                 {
                     StartInfo = new ProcessStartInfo
                     {
-                        FileName = "./nudge",
+                        FileName = nudgeExe,
                         Arguments = $"--interval {interval}",
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
@@ -115,7 +121,14 @@ namespace NudgeTray
         {
             Console.WriteLine("📸 Snapshot taken! Respond using the notification buttons.");
 
-            // Try native DBus notifications first
+            // Platform-specific notifications
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                ShowWindowsNotification();
+                return;
+            }
+
+            // Linux: Try native DBus notifications first
             bool success = false;
             try
             {
@@ -141,6 +154,91 @@ namespace NudgeTray
                 ShowFallbackNotification();
             }
         }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // WINDOWS NOTIFICATIONS
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        private static void ShowWindowsNotification()
+        {
+            try
+            {
+                // Create PowerShell script for Windows toast notification
+                var scriptPath = Path.Combine(Path.GetTempPath(), $"nudge-notification-{Guid.NewGuid()}.ps1");
+                var scriptContent = @"
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+$result = [System.Windows.Forms.MessageBox]::Show(
+    'Were you productive during the last interval?',
+    'Nudge - Productivity Check',
+    [System.Windows.Forms.MessageBoxButtons]::YesNo,
+    [System.Windows.Forms.MessageBoxIcon]::Question,
+    [System.Windows.Forms.MessageBoxDefaultButton]::Button1,
+    [System.Windows.Forms.MessageBoxOptions]::DefaultDesktopOnly
+)
+
+if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+    # Send YES via UDP
+    $udp = New-Object System.Net.Sockets.UdpClient
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes('YES')
+    $udp.Send($bytes, $bytes.Length, 'localhost', " + UDP_PORT + @") | Out-Null
+    $udp.Close()
+    Write-Output 'YES'
+} elseif ($result -eq [System.Windows.Forms.DialogResult]::No) {
+    # Send NO via UDP
+    $udp = New-Object System.Net.Sockets.UdpClient
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes('NO')
+    $udp.Send($bytes, $bytes.Length, 'localhost', " + UDP_PORT + @") | Out-Null
+    $udp.Close()
+    Write-Output 'NO'
+}
+";
+
+                File.WriteAllText(scriptPath, scriptContent);
+
+                // Run PowerShell script in background
+                var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "powershell.exe",
+                        Arguments = $"-ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File \"{scriptPath}\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        RedirectStandardOutput = true
+                    }
+                };
+
+                process.OutputDataReceived += (s, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        Console.WriteLine($"User responded: {e.Data} via Windows notification");
+                    }
+                };
+
+                process.Exited += (s, e) =>
+                {
+                    try { File.Delete(scriptPath); } catch { }
+                };
+
+                process.EnableRaisingEvents = true;
+                process.Start();
+                process.BeginOutputReadLine();
+
+                Console.WriteLine("✓ Windows notification shown");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"✗ Windows notification failed: {ex.Message}");
+                Console.WriteLine("Use the tray menu to respond");
+            }
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // LINUX NOTIFICATIONS (Native Tmds.DBus.Protocol with resident:true hint)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
         private static bool ShowKDialogNotification()
         {
@@ -213,7 +311,7 @@ namespace NudgeTray
                     // Write actions array
                     writer.WriteArray(new string[] { "yes", "Yes - Productive", "no", "No - Not Productive" });
 
-                    // Write hints dictionary
+                    // Write hints dictionary with RESIDENT:TRUE for persistent notifications
                     var arrayStart = writer.WriteDictionaryStart();
                     writer.WriteDictionaryEntryStart();
                     writer.WriteString("urgency");
@@ -344,7 +442,6 @@ namespace NudgeTray
             }
         }
 
-
         private static void ShowFallbackNotification()
         {
             // Fallback to notify-send on Linux (without buttons)
@@ -368,6 +465,10 @@ namespace NudgeTray
                 Console.WriteLine("✗ All notification methods failed - use tray menu");
             }
         }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // COMMON FUNCTIONS
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
         public static void SendResponse(bool productive)
         {
