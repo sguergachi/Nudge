@@ -82,6 +82,38 @@ namespace NudgeTray
         {
             var menu = new ContextMenuStrip();
 
+            // If waiting for response, show Yes/No options prominently
+            if (_waitingForResponse)
+            {
+                var headerItem = new ToolStripMenuItem("Were you productive?") { Enabled = false, Font = new Font(SystemFonts.MenuFont, FontStyle.Bold) };
+                menu.Items.Add(headerItem);
+                menu.Items.Add(new ToolStripSeparator());
+
+                // Yes option
+                var yesItem = new ToolStripMenuItem("✓ Yes - Productive");
+                yesItem.Click += (s, e) =>
+                {
+                    Console.WriteLine("[DEBUG] User clicked YES from tray menu");
+                    _waitingForResponse = false;
+                    SendResponse(true);
+                    _trayIcon!.ContextMenuStrip = CreateContextMenu(); // Refresh menu
+                };
+                menu.Items.Add(yesItem);
+
+                // No option
+                var noItem = new ToolStripMenuItem("✗ No - Not Productive");
+                noItem.Click += (s, e) =>
+                {
+                    Console.WriteLine("[DEBUG] User clicked NO from tray menu");
+                    _waitingForResponse = false;
+                    SendResponse(false);
+                    _trayIcon!.ContextMenuStrip = CreateContextMenu(); // Refresh menu
+                };
+                menu.Items.Add(noItem);
+
+                menu.Items.Add(new ToolStripSeparator());
+            }
+
             // Status item showing next snapshot time
             var nextSnapshot = GetNextSnapshotTime();
             var statusText = nextSnapshot.HasValue
@@ -210,155 +242,29 @@ namespace NudgeTray
         // WINDOWS NOTIFICATIONS
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+        private static bool _waitingForResponse = false;
+
         private static void ShowWindowsNotification()
         {
-            Console.WriteLine("[DEBUG] ShowWindowsNotification called (native Windows Toast Notification)");
+            Console.WriteLine("[DEBUG] ShowWindowsNotification called (using BalloonTip + interactive menu)");
 
-            try
-            {
-                // Create PowerShell script for Windows Toast notification with action buttons
-                var scriptPath = Path.Combine(Path.GetTempPath(), $"nudge-notification-{Guid.NewGuid()}.ps1");
-                Console.WriteLine($"[DEBUG] Creating PowerShell script at: {scriptPath}");
+            if (_trayIcon == null) return;
 
-                var scriptContent = @"
-# Windows Toast Notification with action buttons
-try {
-    [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
-    [Windows.UI.Notifications.ToastNotification, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
-    [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
+            // Set flag that we're waiting for response
+            _waitingForResponse = true;
 
-    $APP_ID = 'Nudge.ProductivityTracker'
+            // Update menu to show Yes/No options
+            _trayIcon.ContextMenuStrip = CreateContextMenu();
 
-    # Toast template with persistent notification and action buttons
-    $template = @""
-<toast scenario='reminder' duration='long'>
-    <visual>
-        <binding template='ToastGeneric'>
-            <text>Nudge - Productivity Check</text>
-            <text>Were you productive during the last interval?</text>
-        </binding>
-    </visual>
-    <actions>
-        <action content='Yes - Productive' arguments='YES' activationType='background'/>
-        <action content='No - Not Productive' arguments='NO' activationType='background'/>
-    </actions>
-    <audio src='ms-winsoundevent:Notification.Default'/>
-</toast>
-""@
+            // Show balloon notification
+            _trayIcon.ShowBalloonTip(
+                60000, // 60 seconds
+                "Nudge - Productivity Check",
+                "Were you productive during the last interval?\nRight-click tray icon to respond.",
+                ToolTipIcon.Info
+            );
 
-    Write-Output 'Creating XML document...'
-    $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
-    $xml.LoadXml($template)
-
-    Write-Output 'Creating toast notification...'
-    $toast = New-Object Windows.UI.Notifications.ToastNotification $xml
-    $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($APP_ID)
-
-    Write-Output 'Setting up event handlers...'
-    # Listen for activation
-    $toast.add_Activated({
-        param($sender, $eventArgs)
-        $args = $eventArgs.Arguments
-        Write-Output ""Button clicked: $args""
-
-        try {
-            $udp = New-Object System.Net.Sockets.UdpClient
-            $bytes = [System.Text.Encoding]::UTF8.GetBytes($args)
-            $sent = $udp.Send($bytes, $bytes.Length, 'localhost', " + UDP_PORT + @")
-            $udp.Close()
-            Write-Output ""Sent $sent bytes via UDP""
-        } catch {
-            Write-Error ""UDP send failed: $_""
-        }
-    })
-
-    $toast.add_Dismissed({
-        param($sender, $eventArgs)
-        Write-Output ""DISMISSED: $($eventArgs.Reason)""
-    })
-
-    $toast.add_Failed({
-        param($sender, $eventArgs)
-        Write-Error ""TOAST FAILED: $($eventArgs.ErrorCode)""
-    })
-
-    Write-Output 'Showing toast notification...'
-    $notifier.Show($toast)
-    Write-Output 'TOAST_SHOWN'
-
-    # Keep script running to receive events
-    Write-Output 'Waiting for user interaction (60 seconds)...'
-    Start-Sleep -Seconds 60
-    Write-Output 'Timeout reached'
-} catch {
-    Write-Error ""Exception: $($_.Exception.Message)""
-    Write-Error ""Stack: $($_.Exception.StackTrace)""
-}
-";
-
-                File.WriteAllText(scriptPath, scriptContent);
-                Console.WriteLine("[DEBUG] PowerShell toast notification script created successfully");
-
-                // Run PowerShell script in background
-                var process = new Process
-                {
-                    StartInfo = new ProcessStartInfo
-                    {
-                        FileName = "powershell.exe",
-                        Arguments = $"-ExecutionPolicy Bypass -NoProfile -File \"{scriptPath}\"",
-                        UseShellExecute = false,
-                        CreateNoWindow = false,  // Show window for debugging
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true
-                    }
-                };
-
-                process.OutputDataReceived += (s, e) =>
-                {
-                    if (!string.IsNullOrEmpty(e.Data))
-                    {
-                        Console.WriteLine($"[PS-OUT] {e.Data}");
-                        if (e.Data == "YES" || e.Data == "NO")
-                        {
-                            Console.WriteLine($"✓ User responded: {e.Data} via Windows toast notification");
-                            SendResponse(e.Data == "YES");
-                        }
-                    }
-                };
-
-                process.ErrorDataReceived += (s, e) =>
-                {
-                    if (!string.IsNullOrEmpty(e.Data))
-                    {
-                        Console.WriteLine($"[PS-ERR] {e.Data}");
-                    }
-                };
-
-                process.Exited += (s, e) =>
-                {
-                    Console.WriteLine($"[DEBUG] PowerShell process exited with code: {process.ExitCode}");
-                    try { File.Delete(scriptPath); } catch { }
-                };
-
-                process.EnableRaisingEvents = true;
-                process.Start();
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
-
-                Console.WriteLine("[DEBUG] PowerShell process started successfully");
-                Console.WriteLine("✓ Native Windows Toast notification script running");
-                Console.WriteLine("[DEBUG] Waiting for user interaction (60s timeout)...");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[DEBUG] Windows toast notification error details: {ex.GetType().Name}");
-                Console.WriteLine($"✗ Windows toast notification failed: {ex.Message}");
-                if (ex.InnerException != null)
-                {
-                    Console.WriteLine($"[DEBUG] Inner exception: {ex.InnerException.Message}");
-                }
-                Console.WriteLine("Falling back to tray menu for response");
-            }
+            Console.WriteLine("✓ Balloon notification shown - right-click tray icon to respond");
         }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
