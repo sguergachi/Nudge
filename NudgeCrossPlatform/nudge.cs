@@ -542,8 +542,10 @@ if (win && win.caption) {
                     if (output.Contains("<<<NUDGE_TITLE:"))
                     {
                         var lines = output.Split('\n');
-                        foreach (var line in lines.Reverse())
+                        // Iterate backwards to get the most recent output
+                        for (int i = lines.Length - 1; i >= 0; i--)
                         {
+                            var line = lines[i];
                             if (line.Contains("<<<NUDGE_TITLE:"))
                             {
                                 var start = line.IndexOf("<<<NUDGE_TITLE:") + 15;
