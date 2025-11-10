@@ -185,20 +185,21 @@ Write-Host ""
 # Install Python dependencies (required)
 if (Test-Path "requirements-cpu.txt") {
     Write-Info "Installing Python ML dependencies..."
-    try {
-        $pipOutput = python -m pip install --user -r requirements-cpu.txt 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            Write-Success "[OK] Python ML dependencies installed"
-        }
-        else {
-            Write-Err "[ERROR] Failed to install Python dependencies"
-            Write-Host "Output: $pipOutput" -ForegroundColor Red
-            exit 1
-        }
+    Write-Host ""
+
+    # Run pip install and capture all output
+    $pipOutput = python -m pip install --user -r requirements-cpu.txt 2>&1 | Out-String
+    $pipExitCode = $LASTEXITCODE
+
+    Write-Host $pipOutput -ForegroundColor Gray
+    Write-Host ""
+
+    if ($pipExitCode -eq 0) {
+        Write-Success "[OK] Python ML dependencies installed"
     }
-    catch {
-        Write-Err "[ERROR] Python dependency installation failed"
-        Write-Host "Error: $_" -ForegroundColor Red
+    else {
+        Write-Err "[ERROR] Failed to install Python dependencies (exit code: $pipExitCode)"
+        Write-Err "Please check the pip output above for details"
         exit 1
     }
 }
