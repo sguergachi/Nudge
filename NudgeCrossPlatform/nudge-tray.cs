@@ -243,28 +243,150 @@ namespace NudgeTray
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
         private static bool _waitingForResponse = false;
+        private static NotificationWindow? _notificationWindow;
 
         private static void ShowWindowsNotification()
         {
-            Console.WriteLine("[DEBUG] ShowWindowsNotification called (using BalloonTip + interactive menu)");
+            Console.WriteLine("[DEBUG] ShowWindowsNotification called (custom notification with buttons)");
 
-            if (_trayIcon == null) return;
+            // Close existing notification if any
+            if (_notificationWindow != null && !_notificationWindow.IsDisposed)
+            {
+                _notificationWindow.Close();
+            }
 
-            // Set flag that we're waiting for response
-            _waitingForResponse = true;
+            // Create and show custom notification window
+            _notificationWindow = new NotificationWindow();
+            _notificationWindow.Show();
 
-            // Update menu to show Yes/No options
-            _trayIcon.ContextMenuStrip = CreateContextMenu();
+            Console.WriteLine("✓ Notification window shown with Yes/No buttons");
+        }
 
-            // Show balloon notification
-            _trayIcon.ShowBalloonTip(
-                60000, // 60 seconds
-                "Nudge - Productivity Check",
-                "Were you productive during the last interval?\nRight-click tray icon to respond.",
-                ToolTipIcon.Info
-            );
+        // Custom notification window that looks like a native toast
+        class NotificationWindow : Form
+        {
+            public NotificationWindow()
+            {
+                // Window properties
+                FormBorderStyle = FormBorderStyle.None;
+                StartPosition = FormStartPosition.Manual;
+                ShowInTaskbar = false;
+                TopMost = true;
+                BackColor = Color.FromArgb(240, 240, 240);
+                Width = 360;
+                Height = 140;
 
-            Console.WriteLine("✓ Balloon notification shown - right-click tray icon to respond");
+                // Position in bottom-right corner
+                var workingArea = Screen.PrimaryScreen.WorkingArea;
+                Location = new Point(
+                    workingArea.Right - Width - 20,
+                    workingArea.Bottom - Height - 20
+                );
+
+                // Title label
+                var titleLabel = new Label
+                {
+                    Text = "Nudge - Productivity Check",
+                    Font = new Font("Segoe UI", 10F, FontStyle.Bold),
+                    ForeColor = Color.FromArgb(50, 50, 50),
+                    AutoSize = false,
+                    Width = Width - 20,
+                    Height = 25,
+                    Location = new Point(10, 10),
+                    TextAlign = ContentAlignment.MiddleLeft
+                };
+                Controls.Add(titleLabel);
+
+                // Message label
+                var messageLabel = new Label
+                {
+                    Text = "Were you productive during the last interval?",
+                    Font = new Font("Segoe UI", 9F),
+                    ForeColor = Color.FromArgb(80, 80, 80),
+                    AutoSize = false,
+                    Width = Width - 20,
+                    Height = 40,
+                    Location = new Point(10, 40),
+                    TextAlign = ContentAlignment.TopLeft
+                };
+                Controls.Add(messageLabel);
+
+                // Yes button
+                var yesButton = new Button
+                {
+                    Text = "Yes - Productive",
+                    Font = new Font("Segoe UI", 9F),
+                    FlatStyle = FlatStyle.Flat,
+                    BackColor = Color.FromArgb(0, 120, 215),
+                    ForeColor = Color.White,
+                    Width = 160,
+                    Height = 32,
+                    Location = new Point(10, 90),
+                    Cursor = Cursors.Hand
+                };
+                yesButton.FlatAppearance.BorderSize = 0;
+                yesButton.Click += (s, e) =>
+                {
+                    Console.WriteLine("[DEBUG] User clicked YES button");
+                    SendResponse(true);
+                    Close();
+                };
+                Controls.Add(yesButton);
+
+                // No button
+                var noButton = new Button
+                {
+                    Text = "No - Not Productive",
+                    Font = new Font("Segoe UI", 9F),
+                    FlatStyle = FlatStyle.Flat,
+                    BackColor = Color.FromArgb(180, 180, 180),
+                    ForeColor = Color.White,
+                    Width = 160,
+                    Height = 32,
+                    Location = new Point(180, 90),
+                    Cursor = Cursors.Hand
+                };
+                noButton.FlatAppearance.BorderSize = 0;
+                noButton.Click += (s, e) =>
+                {
+                    Console.WriteLine("[DEBUG] User clicked NO button");
+                    SendResponse(false);
+                    Close();
+                };
+                Controls.Add(noButton);
+
+                // Add border
+                Paint += (s, e) =>
+                {
+                    ControlPaint.DrawBorder(e.Graphics, ClientRectangle,
+                        Color.FromArgb(200, 200, 200), ButtonBorderStyle.Solid);
+                };
+
+                // Auto-close after 60 seconds
+                var timer = new System.Windows.Forms.Timer { Interval = 60000 };
+                timer.Tick += (s, e) =>
+                {
+                    Console.WriteLine("[DEBUG] Notification window timeout");
+                    Close();
+                };
+                timer.Start();
+
+                // Fade in animation
+                Opacity = 0;
+                var fadeTimer = new System.Windows.Forms.Timer { Interval = 20 };
+                fadeTimer.Tick += (s, e) =>
+                {
+                    if (Opacity < 1)
+                    {
+                        Opacity += 0.05;
+                    }
+                    else
+                    {
+                        fadeTimer.Stop();
+                    }
+                };
+                fadeTimer.Start();
+            }
         }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
