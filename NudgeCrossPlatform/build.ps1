@@ -64,9 +64,25 @@ Write-Host ""
 # Check winget availability
 $hasWinget = Get-Command winget -ErrorAction SilentlyContinue
 
-# Check .NET SDK
-if (!(Get-Command dotnet -ErrorAction SilentlyContinue)) {
-    Write-Warn "[WARN] .NET SDK not found"
+# Check .NET SDK (test if it actually works, not just if command exists)
+$dotnetWorks = $false
+$dotnetVersion = ""
+
+if (Get-Command dotnet -ErrorAction SilentlyContinue) {
+    try {
+        $dotnetVersion = dotnet --version 2>&1 | Out-String
+        $dotnetVersion = $dotnetVersion.Trim()
+        if ($dotnetVersion -and $LASTEXITCODE -eq 0) {
+            $dotnetWorks = $true
+        }
+    }
+    catch {
+        $dotnetWorks = $false
+    }
+}
+
+if (-not $dotnetWorks) {
+    Write-Warn "[WARN] .NET SDK not found or not working"
     Write-Host ""
 
     if ($hasWinget) {
@@ -76,10 +92,20 @@ if (!(Get-Command dotnet -ErrorAction SilentlyContinue)) {
         # Refresh PATH
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 
-        if (Get-Command dotnet -ErrorAction SilentlyContinue) {
-            Write-Success "[OK] .NET SDK installed successfully"
+        # Test if dotnet works now
+        try {
+            $dotnetVersion = dotnet --version 2>&1 | Out-String
+            $dotnetVersion = $dotnetVersion.Trim()
+            if ($dotnetVersion -and $LASTEXITCODE -eq 0) {
+                Write-Success "[OK] .NET SDK installed successfully"
+            }
+            else {
+                Write-Err "[ERROR] .NET SDK installation failed - dotnet command not working"
+                Write-Err "Please install manually from: https://dotnet.microsoft.com/download"
+                exit 1
+            }
         }
-        else {
+        catch {
             Write-Err "[ERROR] .NET SDK installation failed"
             Write-Err "Please install manually from: https://dotnet.microsoft.com/download"
             exit 1
@@ -93,7 +119,6 @@ if (!(Get-Command dotnet -ErrorAction SilentlyContinue)) {
     }
 }
 
-$dotnetVersion = dotnet --version
 Write-Success "[OK] .NET SDK ready"
 Write-Host "  Version: $dotnetVersion" -ForegroundColor Gray
 Write-Host ""
