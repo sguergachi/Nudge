@@ -588,100 +588,178 @@ class Nudge
     static string GetKDEFocusedApp()
     {
         // Try KWin D-Bus scripting API first (works on both Wayland and X11)
-        try
+        // This requires either qdbus, qdbus-qt5, qdbus-qt6, or dbus-send
+        if (CommandExists("dbus-send") || CommandExists("qdbus") ||
+            CommandExists("qdbus-qt5") || CommandExists("qdbus-qt6"))
         {
-            // Create a simple KWin script to get active window caption
-            // Using JavaScript that KWin understands
-            string scriptContent = @"
+            try
+            {
+                // Determine which D-Bus command to use
+                string dbusCmd = "";
+                if (CommandExists("qdbus-qt6")) dbusCmd = "qdbus-qt6";
+                else if (CommandExists("qdbus-qt5")) dbusCmd = "qdbus-qt5";
+                else if (CommandExists("qdbus")) dbusCmd = "qdbus";
+                else if (CommandExists("dbus-send")) dbusCmd = "dbus-send";
+
+                if (!string.IsNullOrEmpty(dbusCmd))
+                {
+                    // Create a simple KWin script to get active window caption
+                    string scriptContent = @"
 const win = workspace.activeWindow;
 if (win && win.caption) {
     console.log('<<<NUDGE_TITLE:' + win.caption + '>>>');
 }";
 
-            // Write script to a temporary file
-            var tempScript = Path.Combine(Path.GetTempPath(), $"nudge-kwin-{Guid.NewGuid()}.js");
-            File.WriteAllText(tempScript, scriptContent);
+                    // Write script to a temporary file
+                    var tempScript = Path.Combine(Path.GetTempPath(), $"nudge-kwin-{Guid.NewGuid()}.js");
+                    File.WriteAllText(tempScript, scriptContent);
 
-            try
-            {
-                // Load the script via D-Bus
-                var loadResult = RunCommand("qdbus",
-                    $"org.kde.KWin /Scripting org.kde.kwin.Scripting.loadScript \"{tempScript}\"");
-
-                if (!string.IsNullOrWhiteSpace(loadResult))
-                {
-                    var scriptNum = loadResult.Trim();
-
-                    // Run the script
-                    RunCommand("qdbus",
-                        $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.run");
-
-                    // Give it a moment to execute and log
-                    Thread.Sleep(100);
-
-                    // Try to get output from journalctl (KDE Plasma 5.23+)
-                    var journalCmd = "journalctl --user -n 100 -o cat --since \"5 seconds ago\" 2>/dev/null";
-                    var output = RunCommand("sh", $"-c \"{journalCmd}\"");
-
-                    // Stop and unload the script
                     try
                     {
-                        RunCommand("qdbus",
-                            $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.stop");
-                        RunCommand("qdbus",
-                            $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.unload");
-                    }
-                    catch { /* Cleanup errors are non-critical */ }
+                        string loadResult = "";
+                        string scriptNum = "";
 
-                    // Parse output for our marker
-                    if (output.Contains("<<<NUDGE_TITLE:"))
-                    {
-                        var lines = output.Split('\n');
-                        // Iterate backwards to get the most recent output
-                        for (int i = lines.Length - 1; i >= 0; i--)
+                        // Load the script via D-Bus using the appropriate command
+                        if (dbusCmd.Contains("qdbus"))
                         {
-                            var line = lines[i];
-                            if (line.Contains("<<<NUDGE_TITLE:"))
+                            loadResult = RunCommand(dbusCmd,
+                                $"org.kde.KWin /Scripting org.kde.kwin.Scripting.loadScript \"{tempScript}\"");
+                            scriptNum = loadResult.Trim();
+                        }
+                        else if (dbusCmd == "dbus-send")
+                        {
+                            // Use dbus-send with full signature
+                            loadResult = RunCommand("dbus-send",
+                                $"--session --print-reply --dest=org.kde.KWin /Scripting " +
+                                $"org.kde.kwin.Scripting.loadScript string:\"{tempScript}\"");
+
+                            // Parse script number from dbus-send output (format: "int32 N")
+                            var match = System.Text.RegularExpressions.Regex.Match(loadResult, @"int32\s+(\d+)");
+                            if (match.Success)
                             {
-                                var start = line.IndexOf("<<<NUDGE_TITLE:") + 15;
-                                var end = line.IndexOf(">>>", start);
-                                if (end > start)
+                                scriptNum = match.Groups[1].Value;
+                            }
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(scriptNum))
+                        {
+                            // Run the script
+                            if (dbusCmd.Contains("qdbus"))
+                            {
+                                RunCommand(dbusCmd,
+                                    $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.run");
+                            }
+                            else if (dbusCmd == "dbus-send")
+                            {
+                                RunCommand("dbus-send",
+                                    $"--session --dest=org.kde.KWin /Scripting/Script{scriptNum} " +
+                                    $"org.kde.kwin.Script.run");
+                            }
+
+                            // Give it a moment to execute and log
+                            Thread.Sleep(150);
+
+                            // Try to get output from journalctl (KDE Plasma 5.23+)
+                            if (CommandExists("journalctl"))
+                            {
+                                var journalCmd = "journalctl --user -n 100 -o cat --since \"5 seconds ago\" 2>/dev/null";
+                                var output = RunCommand("sh", $"-c \"{journalCmd}\"");
+
+                                // Parse output for our marker
+                                if (output.Contains("<<<NUDGE_TITLE:"))
                                 {
-                                    var title = line.Substring(start, end - start).Trim();
-                                    if (!string.IsNullOrWhiteSpace(title))
+                                    var lines = output.Split('\n');
+                                    // Iterate backwards to get the most recent output
+                                    for (int i = lines.Length - 1; i >= 0; i--)
                                     {
-                                        return title;
+                                        var line = lines[i];
+                                        if (line.Contains("<<<NUDGE_TITLE:"))
+                                        {
+                                            var start = line.IndexOf("<<<NUDGE_TITLE:") + 15;
+                                            var end = line.IndexOf(">>>", start);
+                                            if (end > start)
+                                            {
+                                                var title = line.Substring(start, end - start).Trim();
+                                                if (!string.IsNullOrWhiteSpace(title))
+                                                {
+                                                    // Clean up before returning
+                                                    try
+                                                    {
+                                                        if (dbusCmd.Contains("qdbus"))
+                                                        {
+                                                            RunCommand(dbusCmd,
+                                                                $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.stop");
+                                                            RunCommand(dbusCmd,
+                                                                $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.unload");
+                                                        }
+                                                        else if (dbusCmd == "dbus-send")
+                                                        {
+                                                            RunCommand("dbus-send",
+                                                                $"--session --dest=org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.stop");
+                                                            RunCommand("dbus-send",
+                                                                $"--session --dest=org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.unload");
+                                                        }
+                                                    }
+                                                    catch { /* Cleanup errors are non-critical */ }
+
+                                                    return title;
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
+
+                            // Cleanup script
+                            try
+                            {
+                                if (dbusCmd.Contains("qdbus"))
+                                {
+                                    RunCommand(dbusCmd,
+                                        $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.stop");
+                                    RunCommand(dbusCmd,
+                                        $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.unload");
+                                }
+                                else if (dbusCmd == "dbus-send")
+                                {
+                                    RunCommand("dbus-send",
+                                        $"--session --dest=org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.stop");
+                                    RunCommand("dbus-send",
+                                        $"--session --dest=org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.unload");
+                                }
+                            }
+                            catch { /* Cleanup errors are non-critical */ }
                         }
+                    }
+                    finally
+                    {
+                        // Clean up temp file
+                        try { File.Delete(tempScript); } catch { }
                     }
                 }
             }
-            finally
+            catch (Exception ex)
             {
-                // Clean up temp file
-                try { File.Delete(tempScript); } catch { }
+                // KWin scripting failed, continue to fallbacks
+                Dim($"  KWin D-Bus error: {ex.Message}");
             }
-        }
-        catch (Exception ex)
-        {
-            // KWin scripting failed, continue to fallbacks
-            Dim($"  KWin D-Bus error: {ex.Message}");
         }
 
         // Fallback: Try xdotool for X11 sessions
-        try
+        if (CommandExists("xdotool"))
         {
-            var windowName = RunCommand("xdotool", "getactivewindow getwindowname");
-            if (!string.IsNullOrWhiteSpace(windowName))
+            try
             {
-                return windowName.Trim().Split('\n')[0];
+                var windowName = RunCommand("xdotool", "getactivewindow getwindowname");
+                if (!string.IsNullOrWhiteSpace(windowName))
+                {
+                    return windowName.Trim().Split('\n')[0];
+                }
             }
-        }
-        catch
-        {
-            // xdotool not available or failed
+            catch
+            {
+                // xdotool failed
+            }
         }
 
         // Last resort: return generic identifier
