@@ -616,7 +616,7 @@ if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
 
         public override void OnFrameworkInitializationCompleted()
         {
-            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetimes desktop)
+            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             {
                 // Don't show any windows - we're tray-only
                 desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
