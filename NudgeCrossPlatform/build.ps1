@@ -329,19 +329,24 @@ if (!(Test-Path "bin/Release/$targetFramework/publish/nudge-tray.dll")) {
 
 Write-Success "  [OK] nudge-tray"
 
-# Check if any Nudge processes are running before copying
+# Check if any Nudge processes are running and kill them
 $runningProcesses = Get-Process -Name "nudge", "nudge-notify", "nudge-tray" -ErrorAction SilentlyContinue
 if ($runningProcesses) {
     Write-Host ""
-    Write-Err "[ERROR] Nudge is currently running"
+    Write-Warn "[WARN] Nudge processes are running - killing them..."
     Write-Host ""
-    Write-Host "The following processes must be closed before building:" -ForegroundColor Yellow
     foreach ($proc in $runningProcesses) {
-        Write-Host "  - $($proc.ProcessName).exe (PID: $($proc.Id))" -ForegroundColor Yellow
+        Write-Host "  Killing $($proc.ProcessName).exe (PID: $($proc.Id))..." -ForegroundColor Yellow
+        try {
+            Stop-Process -Id $proc.Id -Force -ErrorAction Stop
+            Write-Host "  [OK] Killed $($proc.ProcessName).exe" -ForegroundColor Green
+        }
+        catch {
+            Write-Err "  [ERROR] Failed to kill $($proc.ProcessName).exe: $_"
+        }
     }
     Write-Host ""
-    Write-Host "Please close Nudge and run the build again." -ForegroundColor Cyan
-    exit 1
+    Start-Sleep -Milliseconds 500  # Give processes time to fully terminate
 }
 
 # Copy binaries and dependencies to root for easy access
