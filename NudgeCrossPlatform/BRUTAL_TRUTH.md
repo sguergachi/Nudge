@@ -554,7 +554,7 @@ var pid = GetWindowPID(focusWindow.focus);  // Direct X11 call
 - [ ] Document measurements
 
 ### Hour 4-8: OPTIMIZE TOP 3
-- [ ] Replace xdotool with XCB library
+- [x] Replace xdotool with KWin D-Bus scripting API for accurate KDE Wayland window titles
 - [ ] Remove threading/locking
 - [ ] Simplify data storage
 

@@ -119,12 +119,15 @@ var output = RunCommand("gdbus", "call --session --dest org.gnome.Shell " +
 
 ---
 
-### Lines 430: xdotool command (KDE)
+### Lines 493-593: GetKDEFocusedApp() (KDE)
 ```csharp
+// Uses KWin D-Bus scripting API for Wayland + X11
+// Falls back to xdotool for X11 compatibility
 var windowName = RunCommand("xdotool", "getactivewindow getwindowname");
 ```
-**Issue**: xdotool is X11 specific
-**Fix**: Will be skipped via compositor detection
+**Status**: Now supports KDE Wayland via KWin D-Bus scripting API
+**Fallback**: xdotool for X11, generic identifier if both fail
+**Fix**: Cross-platform via compositor detection
 
 ---
 

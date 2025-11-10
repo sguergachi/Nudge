@@ -103,14 +103,20 @@ Three separate implementations for different Linux desktop environments:
 3. **KDE/Plasma (Qt on Wayland/X11)**
    ```csharp
    static string GetKDEFocusedApp() {
-       // Tries xdotool first
-       var windowName = RunCommand("xdotool", 
+       // Primary: Uses KWin D-Bus scripting API (Wayland + X11)
+       // Loads a KWin script via qdbus to get window caption
+       // Output retrieved from journalctl
+
+       // Fallback 1: xdotool for X11 sessions
+       var windowName = RunCommand("xdotool",
            "getactivewindow getwindowname");
-       // Falls back to generic "kde-wayland-window"
+
+       // Fallback 2: Generic identifier if all methods fail
        return "kde-wayland-window";
    }
    ```
-   - Uses xdotool (X11 specific)
+   - Primary: Uses KWin D-Bus scripting API for accurate window titles on Wayland
+   - Fallback: xdotool (X11 specific)
    - **Windows Equivalent Needed**: Windows API
 
 ---

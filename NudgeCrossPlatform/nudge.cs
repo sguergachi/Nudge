@@ -492,23 +492,104 @@ class Nudge
 
     static string GetKDEFocusedApp()
     {
+        // Try KWin D-Bus scripting API first (works on both Wayland and X11)
         try
         {
-            // Try xdotool for X11 sessions (works non-intrusively)
+            // Create a simple KWin script to get active window caption
+            // Using JavaScript that KWin understands
+            string scriptContent = @"
+const win = workspace.activeWindow;
+if (win && win.caption) {
+    console.log('<<<NUDGE_TITLE:' + win.caption + '>>>');
+}";
+
+            // Write script to a temporary file
+            var tempScript = Path.Combine(Path.GetTempPath(), $"nudge-kwin-{Guid.NewGuid()}.js");
+            File.WriteAllText(tempScript, scriptContent);
+
+            try
+            {
+                // Load the script via D-Bus
+                var loadResult = RunCommand("qdbus",
+                    $"org.kde.KWin /Scripting org.kde.kwin.Scripting.loadScript \"{tempScript}\"");
+
+                if (!string.IsNullOrWhiteSpace(loadResult))
+                {
+                    var scriptNum = loadResult.Trim();
+
+                    // Run the script
+                    RunCommand("qdbus",
+                        $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.run");
+
+                    // Give it a moment to execute and log
+                    Thread.Sleep(100);
+
+                    // Try to get output from journalctl (KDE Plasma 5.23+)
+                    var journalCmd = "journalctl --user -n 100 -o cat --since \"5 seconds ago\" 2>/dev/null";
+                    var output = RunCommand("sh", $"-c \"{journalCmd}\"");
+
+                    // Stop and unload the script
+                    try
+                    {
+                        RunCommand("qdbus",
+                            $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.stop");
+                        RunCommand("qdbus",
+                            $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.unload");
+                    }
+                    catch { /* Cleanup errors are non-critical */ }
+
+                    // Parse output for our marker
+                    if (output.Contains("<<<NUDGE_TITLE:"))
+                    {
+                        var lines = output.Split('\n');
+                        foreach (var line in lines.Reverse())
+                        {
+                            if (line.Contains("<<<NUDGE_TITLE:"))
+                            {
+                                var start = line.IndexOf("<<<NUDGE_TITLE:") + 15;
+                                var end = line.IndexOf(">>>", start);
+                                if (end > start)
+                                {
+                                    var title = line.Substring(start, end - start).Trim();
+                                    if (!string.IsNullOrWhiteSpace(title))
+                                    {
+                                        return title;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                // Clean up temp file
+                try { File.Delete(tempScript); } catch { }
+            }
+        }
+        catch (Exception ex)
+        {
+            // KWin scripting failed, continue to fallbacks
+            Dim($"  KWin D-Bus error: {ex.Message}");
+        }
+
+        // Fallback: Try xdotool for X11 sessions
+        try
+        {
             var windowName = RunCommand("xdotool", "getactivewindow getwindowname");
             if (!string.IsNullOrWhiteSpace(windowName))
             {
                 return windowName.Trim().Split('\n')[0];
             }
-
-            // On Wayland, window detection is blocked by design for security
-            // Return a generic identifier instead of trying intrusive methods
-            return "kde-wayland-window";
         }
         catch
         {
-            return "kde-wayland-window";
+            // xdotool not available or failed
         }
+
+        // Last resort: return generic identifier
+        // This happens when on Wayland without KWin scripting access
+        return "kde-wayland-window";
     }
 
     static int GetIdleTime()
