@@ -603,6 +603,8 @@ class Nudge
 
                 if (!string.IsNullOrEmpty(dbusCmd))
                 {
+                    Dim($"  Using D-Bus command: {dbusCmd}");
+
                     // Create a simple KWin script to get active window caption
                     string scriptContent = @"
 const win = workspace.activeWindow;
@@ -641,8 +643,14 @@ if (win && win.caption) {
                             }
                         }
 
-                        if (!string.IsNullOrWhiteSpace(scriptNum))
+                        if (string.IsNullOrWhiteSpace(scriptNum))
                         {
+                            Dim($"  Failed to load KWin script (no script number returned)");
+                        }
+                        else if (!string.IsNullOrWhiteSpace(scriptNum))
+                        {
+                            Dim($"  Loaded KWin script #{scriptNum}");
+
                             // Run the script
                             if (dbusCmd.Contains("qdbus"))
                             {
@@ -656,6 +664,8 @@ if (win && win.caption) {
                                     $"org.kde.kwin.Script.run");
                             }
 
+                            Dim($"  Executed KWin script, waiting for output...");
+
                             // Give it a moment to execute and log
                             Thread.Sleep(150);
 
@@ -664,6 +674,8 @@ if (win && win.caption) {
                             {
                                 var journalCmd = "journalctl --user -n 100 -o cat --since \"5 seconds ago\" 2>/dev/null";
                                 var output = RunCommand("sh", $"-c \"{journalCmd}\"");
+
+                                Dim($"  Journal output length: {output.Length} chars");
 
                                 // Parse output for our marker
                                 if (output.Contains("<<<NUDGE_TITLE:"))
@@ -708,6 +720,14 @@ if (win && win.caption) {
                                         }
                                     }
                                 }
+                                else
+                                {
+                                    Dim($"  No window title found in journal output");
+                                }
+                            }
+                            else
+                            {
+                                Dim($"  journalctl not available");
                             }
 
                             // Cleanup script
