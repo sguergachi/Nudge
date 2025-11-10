@@ -212,13 +212,17 @@ namespace NudgeTray
                 writer.WriteArray(new string[] { "yes", "Yes - Productive", "no", "No - Not Productive" });
 
                 // Write hints dictionary
-                var hints = new Dictionary<string, VariantValue>
-                {
-                    { "urgency", VariantValue.Byte(2) },
-                    { "x-kde-appname", VariantValue.String("Nudge") },
-                    { "x-kde-eventId", VariantValue.String("productivity-check") }
-                };
-                writer.WriteDictionary(hints);
+                var arrayStart = writer.WriteDictionaryStart();
+                writer.WriteDictionaryEntryStart();
+                writer.WriteString("urgency");
+                writer.WriteVariant(VariantValue.Byte(2));
+                writer.WriteDictionaryEntryStart();
+                writer.WriteString("x-kde-appname");
+                writer.WriteVariant(VariantValue.String("Nudge"));
+                writer.WriteDictionaryEntryStart();
+                writer.WriteString("x-kde-eventId");
+                writer.WriteVariant(VariantValue.String("productivity-check"));
+                writer.WriteDictionaryEnd(arrayStart);
 
                 writer.WriteInt32(0);  // expire_timeout (0 = infinite)
 
