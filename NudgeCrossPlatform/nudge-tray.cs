@@ -33,10 +33,25 @@ namespace NudgeTray
         static int _intervalMinutes;
         static NotifyIcon? _trayIcon;
         static System.Threading.Timer? _menuRefreshTimer;
+        static Form? _messageLoopForm;
+
+        [DllImport("kernel32.dll")]
+        static extern bool AttachConsole(int dwProcessId);
+
+        [DllImport("kernel32.dll")]
+        static extern bool AllocConsole();
+
+        const int ATTACH_PARENT_PROCESS = -1;
 
         [STAThread]
         static void Main(string[] args)
         {
+            // Attach to parent console for logging (when run from terminal)
+            if (!AttachConsole(ATTACH_PARENT_PROCESS))
+            {
+                AllocConsole();
+            }
+
             int interval = 5; // default 5 minutes
 
             // Parse arguments
@@ -61,8 +76,12 @@ namespace NudgeTray
                 }
             }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
 
+            // Create hidden form for message loop and cross-thread invokes
+            _messageLoopForm = new Form { WindowState = FormWindowState.Minimized, ShowInTaskbar = false, Opacity = 0 };
+            _messageLoopForm.Load += (s, e) => _messageLoopForm.Hide();
+
             // Run Windows message loop
-            Application.Run();
+            Application.Run(_messageLoopForm);
         }
 
         static void CreateTrayIcon()
@@ -249,17 +268,27 @@ namespace NudgeTray
         {
             Console.WriteLine("[DEBUG] ShowWindowsNotification called (custom notification with buttons)");
 
-            // Close existing notification if any
-            if (_notificationWindow != null && !_notificationWindow.IsDisposed)
+            // Must run on UI thread
+            if (_trayIcon != null)
             {
-                _notificationWindow.Close();
+                _trayIcon.BalloonTipTitle = "Nudge - Productivity Check";
+                _trayIcon.BalloonTipText = "Were you productive during the last interval?";
+                _trayIcon.ShowBalloonTip(5000);
             }
 
-            // Create and show custom notification window
-            _notificationWindow = new NotificationWindow();
-            _notificationWindow.Show();
+            // Close existing notification if any and create new one on UI thread
+            _messageLoopForm?.Invoke((Action)(() =>
+            {
+                if (_notificationWindow != null && !_notificationWindow.IsDisposed)
+                {
+                    _notificationWindow.Close();
+                    _notificationWindow.Dispose();
+                }
 
-            Console.WriteLine("✓ Notification window shown with Yes/No buttons");
+                _notificationWindow = new NotificationWindow();
+                _notificationWindow.Show();
+                Console.WriteLine("✓ Notification window shown with Yes/No buttons");
+            }));
         }
 
         // Custom notification window that looks like a native toast
