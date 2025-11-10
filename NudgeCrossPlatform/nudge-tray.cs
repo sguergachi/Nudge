@@ -212,11 +212,13 @@ namespace NudgeTray
                 writer.WriteArray(new string[] { "yes", "Yes - Productive", "no", "No - Not Productive" });
 
                 // Write hints dictionary
-                writer.WriteDictionaryStart();
-                writer.WriteDictionaryEntry("urgency", new VariantValue((byte)2));
-                writer.WriteDictionaryEntry("x-kde-appname", new VariantValue("Nudge"));
-                writer.WriteDictionaryEntry("x-kde-eventId", new VariantValue("productivity-check"));
-                writer.WriteDictionaryEnd();
+                var hints = new Dictionary<string, VariantValue>
+                {
+                    { "urgency", VariantValue.Byte(2) },
+                    { "x-kde-appname", VariantValue.String("Nudge") },
+                    { "x-kde-eventId", VariantValue.String("productivity-check") }
+                };
+                writer.WriteDictionary(hints);
 
                 writer.WriteInt32(0);  // expire_timeout (0 = infinite)
 
@@ -228,52 +230,53 @@ namespace NudgeTray
                 Console.WriteLine($"[DEBUG] Notification ID: {notificationId}");
 
                 // Listen for ActionInvoked signal
-                await connection.AddMatchAsync("type='signal',interface='org.freedesktop.Notifications',member='ActionInvoked'");
-
-                _ = Task.Run(async () =>
+                var matchRule = new MatchRule
                 {
-                    try
-                    {
-                        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                    Type = MessageType.Signal,
+                    Interface = "org.freedesktop.Notifications",
+                    Member = "ActionInvoked"
+                };
 
-                        await foreach (var signal in connection.ReadSignalsAsync(cts.Token))
+                var cancellationSource = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+
+                await connection.AddMatchAsync(
+                    matchRule,
+                    (Message m, object? s) =>
+                    {
+                        var reader = m.GetBodyReader();
+                        return (reader.ReadUInt32(), reader.ReadString());
+                    },
+                    (Exception? ex, (uint id, string actionKey) signal, object? readerState, object? handlerState) =>
+                    {
+                        if (ex != null)
                         {
-                            if (signal.Interface == "org.freedesktop.Notifications" &&
-                                signal.Member == "ActionInvoked")
-                            {
-                                var reader = signal.GetBodyReader();
-                                var id = reader.ReadUInt32();
-                                var actionKey = reader.ReadString();
-
-                                if (id == notificationId)
-                                {
-                                    Console.WriteLine($"[DEBUG] Action invoked: {actionKey}");
-
-                                    if (actionKey == "yes")
-                                    {
-                                        Console.WriteLine("User responded: YES (productive)");
-                                        SendResponse(true);
-                                    }
-                                    else if (actionKey == "no")
-                                    {
-                                        Console.WriteLine("User responded: NO (not productive)");
-                                        SendResponse(false);
-                                    }
-
-                                    break;
-                                }
-                            }
+                            Console.WriteLine($"[DEBUG] Action listener error: {ex.Message}");
+                            return;
                         }
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        Console.WriteLine("[DEBUG] Action listener timeout (60s)");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[DEBUG] Action listener error: {ex.Message}");
-                    }
-                });
+
+                        if (signal.id == notificationId)
+                        {
+                            Console.WriteLine($"[DEBUG] Action invoked: {signal.actionKey}");
+
+                            if (signal.actionKey == "yes")
+                            {
+                                Console.WriteLine("User responded: YES (productive)");
+                                SendResponse(true);
+                            }
+                            else if (signal.actionKey == "no")
+                            {
+                                Console.WriteLine("User responded: NO (not productive)");
+                                SendResponse(false);
+                            }
+
+                            cancellationSource.Cancel();
+                        }
+                    },
+                    ObserverFlags.None,
+                    null,
+                    null,
+                    true
+                );
             }
             catch (Exception ex)
             {
