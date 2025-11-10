@@ -600,147 +600,14 @@ class Nudge
             }
             catch
             {
-                // xdotool failed, continue to other methods
+                // xdotool failed, likely on Wayland
             }
         }
 
-        // Approach 2: Use KWin script to write window UUID to file, then query via getWindowInfo()
-        // This works because: script can write to file, then we use qdbus getWindowInfo(uuid)
-        if (CommandExists("qdbus") || CommandExists("qdbus-qt6") || CommandExists("qdbus-qt5"))
-        {
-            try
-            {
-                string dbusCmd = "";
-                if (CommandExists("qdbus-qt6")) dbusCmd = "qdbus-qt6";
-                else if (CommandExists("qdbus-qt5")) dbusCmd = "qdbus-qt5";
-                else if (CommandExists("qdbus")) dbusCmd = "qdbus";
-
-                if (!string.IsNullOrEmpty(dbusCmd))
-                {
-                    Dim($"  Trying KWin script approach with {dbusCmd}");
-
-                    // Create temp file for script output
-                    var tempOutput = Path.Combine(Path.GetTempPath(), $"nudge-kwin-{Guid.NewGuid()}.txt");
-                    Dim($"  Temp output file: {tempOutput}");
-
-                    // Create KWin script that writes active window info using Qt file I/O
-                    // KWin scripts use QML/Qt, not Node.js, so we use Qt.File
-                    string scriptContent = $@"
-const win = workspace.activeWindow;
-if (win) {{
-    // Try to write window info to temp file using simple string write
-    const file = new TextStream(new File('{tempOutput}'), 'w');
-    try {{
-        const caption = win.caption || 'no-caption';
-        const uuid = win.internalId ? win.internalId.toString() : 'no-uuid';
-        file.write(uuid + '|' + caption);
-        file.close();
-    }} catch (e) {{
-        console.error('Script error:', e);
-    }}
-}}";
-
-                    var tempScript = Path.Combine(Path.GetTempPath(), $"nudge-kwin-{Guid.NewGuid()}.js");
-                    File.WriteAllText(tempScript, scriptContent);
-                    Dim($"  Created script: {tempScript}");
-
-                    try
-                    {
-                        // Load and run the script
-                        var loadResult = RunCommand(dbusCmd,
-                            $"org.kde.KWin /Scripting org.kde.kwin.Scripting.loadScript \"{tempScript}\"");
-
-                        Dim($"  Load result: {loadResult}");
-
-                        if (!string.IsNullOrWhiteSpace(loadResult))
-                        {
-                            var scriptNum = loadResult.Trim();
-                            Dim($"  Script number: {scriptNum}");
-
-                            // Run the script
-                            var runResult = RunCommand(dbusCmd,
-                                $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.run");
-                            Dim($"  Run result: {runResult}");
-
-                            // Give script time to write file
-                            Thread.Sleep(200);
-
-                            // Read the output from file
-                            Dim($"  Checking if file exists: {File.Exists(tempOutput)}");
-                            if (File.Exists(tempOutput))
-                            {
-                                var content = File.ReadAllText(tempOutput).Trim();
-                                Dim($"  File content: {content}");
-
-                                if (!string.IsNullOrWhiteSpace(content))
-                                {
-                                    var parts = content.Split('|');
-                                    if (parts.Length == 2)
-                                    {
-                                        var uuid = parts[0];
-                                        var caption = parts[1];
-
-                                        Dim($"  Parsed - UUID: {uuid}, Caption: {caption}");
-
-                                        if (caption != "no-caption" && !string.IsNullOrWhiteSpace(caption))
-                                        {
-                                            // Clean up
-                                            try
-                                            {
-                                                RunCommand(dbusCmd,
-                                                    $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.stop");
-                                                RunCommand(dbusCmd,
-                                                    $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.unload");
-                                                File.Delete(tempOutput);
-                                            }
-                                            catch { }
-
-                                            return caption;
-                                        }
-                                    }
-                                }
-
-                                // Clean up temp file
-                                try { File.Delete(tempOutput); } catch { }
-                            }
-                            else
-                            {
-                                Dim($"  File was not created by script");
-                            }
-
-                            // Clean up script
-                            try
-                            {
-                                RunCommand(dbusCmd,
-                                    $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.stop");
-                                RunCommand(dbusCmd,
-                                    $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.unload");
-                            }
-                            catch { }
-                        }
-                        else
-                        {
-                            Dim($"  Failed to load script - no script number returned");
-                        }
-                    }
-                    finally
-                    {
-                        // Clean up script file
-                        try { File.Delete(tempScript); } catch { }
-                        try { File.Delete(tempOutput); } catch { }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Dim($"  KWin getWindowInfo error: {ex.Message}");
-            }
-        }
-
-        // Last resort: Try to identify GUI application by process
-        // On KDE Wayland, window info is restricted, but we can at least
-        // return the application name (e.g., "firefox") instead of generic identifier
-        Dim($"  Falling back to process-based detection");
+        // Approach 2: On Wayland, KDE restricts window info for security
+        // KWin scripting approaches don't work (no console.log output, no file write access)
+        // So we skip straight to process-based detection
+        // Try to identify GUI application by process instead
 
         try
         {
@@ -837,13 +704,12 @@ if (win) {{
             if (candidates.Count > 0)
             {
                 var mostActive = candidates.OrderByDescending(c => c.cpuTime).First();
-                Dim($"  Found active GUI process: {mostActive.name}");
                 return mostActive.name;
             }
         }
-        catch (Exception ex)
+        catch
         {
-            Dim($"  Process detection error: {ex.Message}");
+            // Process detection failed, fall through to generic identifier
         }
 
         // Absolute last resort
