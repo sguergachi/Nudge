@@ -130,6 +130,13 @@ class Nudge
     static int _cachedIdle = 0;
     static DateTime _idleCacheExpiry = DateTime.MinValue;
 
+    // ML statistics tracking
+    static int _mlPredictions = 0;
+    static int _mlTriggeredSnapshots = 0;
+    static int _mlSkippedAlerts = 0;
+    static int _intervalTriggeredSnapshots = 0;
+    static List<double> _mlConfidenceScores = new List<double>();
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // MAIN - Entry point with professional argument parsing
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -310,6 +317,7 @@ class Nudge
     {
         int elapsed = 0;
         int lastMinute = -1;
+        int lastStatsSnapshot = 0;
 
         while (true)
         {
@@ -356,12 +364,27 @@ class Nudge
                 {
                     if (mlTriggered && !intervalReached)
                     {
-                        Info($"  {Color.BGREEN}ML-triggered snapshot{Color.RESET} (before interval)");
+                        Info($"  {Color.BGREEN}✓ ML-TRIGGERED SNAPSHOT{Color.RESET} (detected unproductive)");
+                    }
+                    else if (intervalReached)
+                    {
+                        _intervalTriggeredSnapshots++;
+                        if (_mlEnabled)
+                        {
+                            Info($"  {Color.BYELLOW}⏰ INTERVAL SNAPSHOT{Color.RESET} (ML low confidence or productive)");
+                        }
                     }
 
                     TakeSnapshot(app, idle, _attentionSpanMs);
                     elapsed = 0;
                     lastMinute = -1; // Reset progress indicator
+
+                    // Show ML stats every 10 snapshots
+                    if (_mlEnabled && (_totalSnapshots - lastStatsSnapshot) >= 10)
+                    {
+                        ShowMLStats();
+                        lastStatsSnapshot = _totalSnapshots;
+                    }
                 }
             }
 
@@ -377,6 +400,32 @@ class Nudge
 
             Thread.Sleep(CYCLE_MS);
         }
+    }
+
+    static void ShowMLStats()
+    {
+        Console.WriteLine();
+        Console.WriteLine($"{Color.BCYAN}━━━ ML PERFORMANCE SUMMARY ━━━{Color.RESET}");
+
+        double avgConfidence = _mlConfidenceScores.Count > 0 ? _mlConfidenceScores.Average() : 0;
+        int totalMLDecisions = _mlTriggeredSnapshots + _mlSkippedAlerts;
+
+        Console.WriteLine($"  {Color.BOLD}Predictions Made:{Color.RESET}        {_mlPredictions}");
+        Console.WriteLine($"  {Color.BOLD}Average Confidence:{Color.RESET}     {avgConfidence*100:F1}%");
+        Console.WriteLine();
+        Console.WriteLine($"  {Color.BOLD}ML Triggered Alerts:{Color.RESET}    {_mlTriggeredSnapshots} {Color.DIM}(detected unproductive){Color.RESET}");
+        Console.WriteLine($"  {Color.BOLD}ML Skipped Alerts:{Color.RESET}      {_mlSkippedAlerts} {Color.DIM}(detected productive){Color.RESET}");
+        Console.WriteLine($"  {Color.BOLD}Interval Fallbacks:{Color.RESET}     {_intervalTriggeredSnapshots} {Color.DIM}(low confidence){Color.RESET}");
+        Console.WriteLine();
+
+        if (totalMLDecisions > 0)
+        {
+            double mlEfficiency = (_mlSkippedAlerts / (double)totalMLDecisions) * 100;
+            Console.WriteLine($"  {Color.BOLD}Alerts Prevented:{Color.RESET}       {Color.BGREEN}{mlEfficiency:F1}%{Color.RESET} {Color.DIM}(interruptions avoided){Color.RESET}");
+        }
+
+        Console.WriteLine($"{Color.BCYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{Color.RESET}");
+        Console.WriteLine();
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -994,23 +1043,40 @@ class Nudge
             return true;
         }
 
+        // Track statistics
+        _mlPredictions++;
+        _mlConfidenceScores.Add(prediction.Confidence);
+
+        // Keep last 100 confidence scores for running average
+        if (_mlConfidenceScores.Count > 100)
+        {
+            _mlConfidenceScores.RemoveAt(0);
+        }
+
+        // Calculate average confidence
+        double avgConfidence = _mlConfidenceScores.Average();
+
         // Check confidence threshold
         if (prediction.Prediction == 0 && prediction.Confidence >= ML_CONFIDENCE_THRESHOLD)
         {
             // High confidence user is NOT productive - trigger snapshot!
-            Info($"  ML: NOT productive (confidence: {prediction.Confidence*100:F1}%) - triggering alert");
+            _mlTriggeredSnapshots++;
+            Info($"  {Color.BRED}ML TRIGGER{Color.RESET}: NOT productive (confidence: {Color.BYELLOW}{prediction.Confidence*100:F1}%{Color.RESET}, avg: {avgConfidence*100:F1}%)");
+            Info($"  {Color.DIM}Stats: {_mlPredictions} predictions, {_mlTriggeredSnapshots} triggered, {_mlSkippedAlerts} skipped{Color.RESET}");
             return true;
         }
         else if (prediction.Confidence < ML_CONFIDENCE_THRESHOLD)
         {
             // Low confidence - suppress this check, wait for interval
-            Dim($"  ML: Low confidence ({prediction.Confidence*100:F1}%) - waiting for interval");
+            Dim($"  ML: Low confidence ({prediction.Confidence*100:F1}%, avg: {avgConfidence*100:F1}%) - waiting for interval");
             return false;
         }
         else
         {
             // High confidence user IS productive - skip snapshot
-            Dim($"  ML: Productive (confidence: {prediction.Confidence*100:F1}%) - skipping alert");
+            _mlSkippedAlerts++;
+            Info($"  {Color.BGREEN}ML SKIP{Color.RESET}: Productive (confidence: {Color.BYELLOW}{prediction.Confidence*100:F1}%{Color.RESET}, avg: {avgConfidence*100:F1}%)");
+            Dim($"  {Color.DIM}Stats: {_mlPredictions} predictions, {_mlTriggeredSnapshots} triggered, {_mlSkippedAlerts} skipped{Color.RESET}");
             return false;
         }
     }
