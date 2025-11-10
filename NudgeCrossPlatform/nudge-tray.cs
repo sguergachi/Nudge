@@ -27,9 +27,6 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
-#if !WINDOWS
-using Tmds.DBus.Protocol;
-#endif
 
 namespace NudgeTray
 {
@@ -125,33 +122,15 @@ namespace NudgeTray
                 return;
             }
 
-            // Try native DBus notifications first on Linux
-            bool success = false;
-            #if !WINDOWS
-            try
+            // On Linux, try kdialog first (works on KDE and provides buttons)
+            if (ShowKDialogNotification())
             {
-                ShowDbusNotification();
-                Console.WriteLine("✓ Desktop notification sent via DBus");
-                success = true;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"⚠ DBus notification failed: {ex.Message}");
-            }
-            #endif
-
-            // Fallback to kdialog if notifications don't work
-            if (!success && ShowKDialogNotification())
-            {
-                Console.WriteLine("✓ Dialog shown via kdialog (fallback)");
+                Console.WriteLine("✓ Dialog shown via kdialog");
                 return;
             }
 
-            // Last resort: notify-send (no buttons)
-            if (!success)
-            {
-                ShowFallbackNotification();
-            }
+            // Fallback: notify-send (no buttons, user must use tray menu)
+            ShowFallbackNotification();
         }
 
         #if WINDOWS
@@ -235,107 +214,6 @@ namespace NudgeTray
                 return false;
             }
         }
-
-        #if !WINDOWS
-        private static async void ShowDbusNotification()
-        {
-            Console.WriteLine("[DEBUG] ShowDbusNotification called (native DBus)");
-
-            try
-            {
-                using var connection = new Connection(Address.Session!);
-                await connection.ConnectAsync();
-
-                // Create and send Notify method call
-                using var writer = connection.GetMessageWriter();
-
-                writer.WriteMethodCallHeader(
-                    destination: "org.freedesktop.Notifications",
-                    path: "/org/freedesktop/Notifications",
-                    @interface: "org.freedesktop.Notifications",
-                    signature: "susssasa{sv}i",
-                    member: "Notify");
-
-                writer.WriteString("Nudge");  // app_name
-                writer.WriteUInt32(0);        // replaces_id
-                writer.WriteString("");       // app_icon
-                writer.WriteString("Nudge - Productivity Check"); // summary
-                writer.WriteString("Were you productive during the last interval?"); // body
-
-                // Write actions array
-                writer.WriteArray(new string[] { "yes", "Yes - Productive", "no", "No - Not Productive" });
-
-                // Write hints dictionary
-                writer.WriteDictionaryStart();
-                writer.WriteDictionaryEntry("urgency", new VariantValue((byte)2));
-                writer.WriteDictionaryEntry("x-kde-appname", new VariantValue("Nudge"));
-                writer.WriteDictionaryEntry("x-kde-eventId", new VariantValue("productivity-check"));
-                writer.WriteDictionaryEnd();
-
-                writer.WriteInt32(0);  // expire_timeout (0 = infinite)
-
-                var notificationId = await connection.CallMethodAsync(
-                    writer.CreateMessage(),
-                    (Message m, object? s) => m.GetBodyReader().ReadUInt32(),
-                    null);
-
-                Console.WriteLine($"[DEBUG] Notification ID: {notificationId}");
-
-                // Listen for ActionInvoked signal
-                await connection.AddMatchAsync("type='signal',interface='org.freedesktop.Notifications',member='ActionInvoked'");
-
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-
-                        await foreach (var signal in connection.ReadSignalsAsync(cts.Token))
-                        {
-                            if (signal.Interface == "org.freedesktop.Notifications" &&
-                                signal.Member == "ActionInvoked")
-                            {
-                                var reader = signal.GetBodyReader();
-                                var id = reader.ReadUInt32();
-                                var actionKey = reader.ReadString();
-
-                                if (id == notificationId)
-                                {
-                                    Console.WriteLine($"[DEBUG] Action invoked: {actionKey}");
-
-                                    if (actionKey == "yes")
-                                    {
-                                        Console.WriteLine("User responded: YES (productive)");
-                                        SendResponse(true);
-                                    }
-                                    else if (actionKey == "no")
-                                    {
-                                        Console.WriteLine("User responded: NO (not productive)");
-                                        SendResponse(false);
-                                    }
-
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        Console.WriteLine("[DEBUG] Action listener timeout (60s)");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[DEBUG] Action listener error: {ex.Message}");
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[DEBUG] Native DBus notification failed: {ex.Message}");
-                throw;
-            }
-        }
-        #endif
 
 
         private static void ShowFallbackNotification()

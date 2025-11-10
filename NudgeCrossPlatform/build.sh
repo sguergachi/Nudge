@@ -394,7 +394,6 @@ EOF
     <PackageReference Include="Avalonia" Version="11.2.2" />
     <PackageReference Include="Avalonia.Desktop" Version="11.2.2" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.2" />
-    <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.0" />
   </ItemGroup>
 </Project>
 EOF
