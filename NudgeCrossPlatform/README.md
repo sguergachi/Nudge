@@ -13,21 +13,36 @@ ML-powered productivity tracker that learns from your behavior.
 
 ## Requirements
 
+### Linux
 - **Wayland** compositor (Sway, GNOME, or KDE)
-- **C# compiler** (dotnet or mono)
-- **Python 3** with TensorFlow (for training)
+- **.NET SDK 8.0+** (dotnet)
+- **Python 3** with TensorFlow (for training - optional)
+
+### Windows
+- **.NET SDK 8.0+**
+- **Windows 10 or later**
+- **Python 3** (for training - optional)
 
 ## Build
 
+### Linux/macOS
 ```bash
 ./build.sh
 ```
 
-This creates two executables:
-- `nudge` - Main tracker (runs continuously)
-- `nudge-notify` - Send YES/NO responses
+### Windows
+```powershell
+.\build.ps1
+```
+
+This creates three executables:
+- `nudge` / `nudge.exe` - Main tracker (runs continuously)
+- `nudge-notify` / `nudge-notify.exe` - Send YES/NO responses
+- `nudge-tray` / `nudge-tray.exe` - System tray GUI
 
 ## Run
+
+### Linux/macOS
 
 Terminal 1 (tracker):
 ```bash
@@ -40,6 +55,31 @@ Terminal 2 (when prompted):
 ./nudge-notify NO     # I was not productive
 ```
 
+Or use system tray mode:
+```bash
+./nudge-tray
+```
+
+### Windows
+
+PowerShell 1 (tracker):
+```powershell
+.\nudge.exe
+```
+
+PowerShell 2 (when prompted):
+```powershell
+.\nudge-notify.exe YES    # I was productive
+.\nudge-notify.exe NO     # I was not productive
+```
+
+Or use system tray mode:
+```powershell
+.\nudge-tray.exe
+```
+
+See [WINDOWS_README.md](../WINDOWS_README.md) for detailed Windows instructions.
+
 ## Train Model
 
 After collecting data (20+ examples):
@@ -51,21 +91,35 @@ python3 train_model.py
 
 ## Files
 
-- `nudge.cs` (350 lines) - Main tracker, no abstractions
-- `nudge-notify.cs` (50 lines) - Notifier
+- `nudge.cs` (~900 lines) - Main tracker with Windows/Linux support
+- `nudge-notify.cs` (~200 lines) - CLI notifier
+- `nudge-tray.cs` (~650 lines) - System tray GUI with native notifications
 - `train_model.py` (300 lines) - ML training
 - `validate_data.py` (100 lines) - Data validation
+- `build.sh` - Linux/macOS build script
+- `build.ps1` - Windows PowerShell build script
 
-Total: ~800 lines of actual code
+Total: ~2,150 lines of actual code
 
 ## Data Format
 
+### Linux
 CSV at `/tmp/HARVEST.CSV`:
 ```
 foreground_app,idle_time,time_last_request,productive
 -123456789,1500,30000,1
 987654321,500,120000,0
 ```
+
+### Windows
+CSV at `%TEMP%\HARVEST.CSV`:
+```
+foreground_app,idle_time,time_last_request,productive
+-123456789,1500,30000,1
+987654321,500,120000,0
+```
+
+Same format, different location using `Path.GetTempPath()`
 
 ## Architecture
 
@@ -85,8 +139,19 @@ This is Jon Blow-style programming:
 - **Inline over abstract** - Read the actual code, not architectural diagrams
 - **Working over perfect** - Does the job, doesn't pretend to be elegant
 
-If you need X11 support, copy `nudge.cs` and change the Wayland calls.
-If you need macOS support, copy `nudge.cs` and change the Wayland calls.
+### Platform Support Approach
+
+Windows and Linux support use **conditional compilation** (`#if WINDOWS`) rather than abstractions:
+- No interfaces (just direct platform checks)
+- No factory patterns (just `if (IsWindows) { ... } else { ... }`)
+- No separate platform projects (everything's inline)
+- Platform detection at runtime using `RuntimeInformation.IsOSPlatform()`
+
+**Linux**: Direct D-Bus calls via Tmds.DBus.Protocol for notifications
+**Windows**: Direct Windows API P/Invoke for window detection and idle time
+
+If you need X11 support, add another conditional block.
+If you need macOS support, add another conditional block.
 
 Don't build abstractions for problems you don't have.
 
