@@ -268,7 +268,7 @@ $notifyProject = @"
 $trayProject = @"
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
+    <OutputType>Exe</OutputType>
     <TargetFramework>$targetFramework</TargetFramework>
     <RootNamespace>NudgeTray</RootNamespace>
     <Nullable>enable</Nullable>
