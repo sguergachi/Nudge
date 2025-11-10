@@ -278,7 +278,6 @@ $trayProject = @"
     <DefineConstants>WINDOWS</DefineConstants>
     <UseWindowsForms>true</UseWindowsForms>
     <WindowsPackageType>None</WindowsPackageType>
-    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <EnableMsixTooling>false</EnableMsixTooling>
   </PropertyGroup>
   <ItemGroup>
