@@ -20,6 +20,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Timers;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -580,6 +581,7 @@ Start-Sleep -Seconds 60
     public class App : Application
     {
         private TrayIcon? _trayIcon;
+        private System.Timers.Timer? _menuRefreshTimer;
 
         public override void Initialize()
         {
@@ -608,6 +610,17 @@ Start-Sleep -Seconds 60
             menu.Add(quitItem);
 
             return menu;
+        }
+
+        private void RefreshMenu()
+        {
+            if (_trayIcon != null)
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    _trayIcon.Menu = CreateMenu();
+                });
+            }
         }
 
         private void ShowStatus()
@@ -693,6 +706,12 @@ Start-Sleep -Seconds 60
             {
                 TrayIcon.SetIcons(this, new TrayIcons { _trayIcon });
             }
+
+            // Refresh menu every 10 seconds to update countdown timer
+            _menuRefreshTimer = new System.Timers.Timer(10000); // 10 seconds
+            _menuRefreshTimer.Elapsed += (s, e) => RefreshMenu();
+            _menuRefreshTimer.AutoReset = true;
+            _menuRefreshTimer.Start();
 
             base.OnFrameworkInitializationCompleted();
         }
