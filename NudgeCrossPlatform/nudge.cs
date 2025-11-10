@@ -605,12 +605,20 @@ class Nudge
                 {
                     Dim($"  Using D-Bus command: {dbusCmd}");
 
-                    // Create a simple KWin script to get active window caption
-                    string scriptContent = @"
+                    // Create a unique marker to identify our output
+                    var marker = Guid.NewGuid().ToString("N").Substring(0, 8);
+
+                    // Create a KWin script that uses multiple output methods
+                    // Some KDE configs route output to different places
+                    string scriptContent = $@"
 const win = workspace.activeWindow;
-if (win && win.caption) {
-    console.log('<<<NUDGE_TITLE:' + win.caption + '>>>');
-}";
+if (win && win.caption) {{
+    const title = win.caption;
+    // Try multiple output methods as different KDE versions route differently
+    print('<<<NUDGE_{marker}:' + title + '>>>');
+    console.log('<<<NUDGE_{marker}:' + title + '>>>');
+    console.error('<<<NUDGE_{marker}:' + title + '>>>');
+}}";
 
                     // Write script to a temporary file
                     var tempScript = Path.Combine(Path.GetTempPath(), $"nudge-kwin-{Guid.NewGuid()}.js");
@@ -666,68 +674,109 @@ if (win && win.caption) {
 
                             Dim($"  Executed KWin script, waiting for output...");
 
-                            // Give it a moment to execute and log
-                            Thread.Sleep(150);
+                            // Give KWin more time to execute and log
+                            Thread.Sleep(250);
 
-                            // Try to get output from journalctl (KDE Plasma 5.23+)
-                            if (CommandExists("journalctl"))
+                            string foundTitle = "";
+                            var searchMarker = $"<<<NUDGE_{marker}:";
+
+                            // Try multiple log sources
+                            // 1. Try journalctl (KDE Plasma 5.23+)
+                            if (CommandExists("journalctl") && string.IsNullOrEmpty(foundTitle))
                             {
-                                var journalCmd = "journalctl --user -n 100 -o cat --since \"5 seconds ago\" 2>/dev/null";
-                                var output = RunCommand("sh", $"-c \"{journalCmd}\"");
-
-                                Dim($"  Journal output length: {output.Length} chars");
-
-                                // Parse output for our marker
-                                if (output.Contains("<<<NUDGE_TITLE:"))
+                                try
                                 {
-                                    var lines = output.Split('\n');
-                                    // Iterate backwards to get the most recent output
-                                    for (int i = lines.Length - 1; i >= 0; i--)
-                                    {
-                                        var line = lines[i];
-                                        if (line.Contains("<<<NUDGE_TITLE:"))
-                                        {
-                                            var start = line.IndexOf("<<<NUDGE_TITLE:") + 15;
-                                            var end = line.IndexOf(">>>", start);
-                                            if (end > start)
-                                            {
-                                                var title = line.Substring(start, end - start).Trim();
-                                                if (!string.IsNullOrWhiteSpace(title))
-                                                {
-                                                    // Clean up before returning
-                                                    try
-                                                    {
-                                                        if (dbusCmd.Contains("qdbus"))
-                                                        {
-                                                            RunCommand(dbusCmd,
-                                                                $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.stop");
-                                                            RunCommand(dbusCmd,
-                                                                $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.unload");
-                                                        }
-                                                        else if (dbusCmd == "dbus-send")
-                                                        {
-                                                            RunCommand("dbus-send",
-                                                                $"--session --dest=org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.stop");
-                                                            RunCommand("dbus-send",
-                                                                $"--session --dest=org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.unload");
-                                                        }
-                                                    }
-                                                    catch { /* Cleanup errors are non-critical */ }
+                                    // Check both user and system journals, and look back further
+                                    var journalCmd = "journalctl --user --system -n 200 -o cat --since \"10 seconds ago\" 2>/dev/null";
+                                    var output = RunCommand("sh", $"-c \"{journalCmd}\"");
 
-                                                    return title;
-                                                }
+                                    Dim($"  Journal output length: {output.Length} chars");
+                                    foundTitle = ExtractTitleFromOutput(output, searchMarker);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Dim($"  Journal check error: {ex.Message}");
+                                }
+                            }
+
+                            // 2. Try .xsession-errors (older KDE versions)
+                            if (string.IsNullOrEmpty(foundTitle))
+                            {
+                                try
+                                {
+                                    var xsessionFile = Path.Combine(Environment.GetEnvironmentVariable("HOME") ?? "/tmp", ".xsession-errors");
+                                    if (File.Exists(xsessionFile))
+                                    {
+                                        var lines = File.ReadAllLines(xsessionFile).Reverse().Take(100);
+                                        var output = string.Join("\n", lines);
+                                        foundTitle = ExtractTitleFromOutput(output, searchMarker);
+                                        if (!string.IsNullOrEmpty(foundTitle))
+                                        {
+                                            Dim($"  Found title in .xsession-errors");
+                                        }
+                                    }
+                                }
+                                catch { /* File read error, skip */ }
+                            }
+
+                            // 3. Try kwin logs in .local/share
+                            if (string.IsNullOrEmpty(foundTitle))
+                            {
+                                try
+                                {
+                                    var homeDir = Environment.GetEnvironmentVariable("HOME") ?? "/tmp";
+                                    var logPaths = new[]
+                                    {
+                                        Path.Combine(homeDir, ".local/share/sddm/xorg-session.log"),
+                                        Path.Combine(homeDir, ".local/share/kwin/kwin.log"),
+                                        "/tmp/kwin.log"
+                                    };
+
+                                    foreach (var logPath in logPaths)
+                                    {
+                                        if (File.Exists(logPath))
+                                        {
+                                            var lines = File.ReadAllLines(logPath).Reverse().Take(100);
+                                            var output = string.Join("\n", lines);
+                                            foundTitle = ExtractTitleFromOutput(output, searchMarker);
+                                            if (!string.IsNullOrEmpty(foundTitle))
+                                            {
+                                                Dim($"  Found title in {logPath}");
+                                                break;
                                             }
                                         }
                                     }
                                 }
-                                else
+                                catch { /* File read error, skip */ }
+                            }
+
+                            if (!string.IsNullOrEmpty(foundTitle))
+                            {
+                                // Clean up before returning
+                                try
                                 {
-                                    Dim($"  No window title found in journal output");
+                                    if (dbusCmd.Contains("qdbus"))
+                                    {
+                                        RunCommand(dbusCmd,
+                                            $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.stop");
+                                        RunCommand(dbusCmd,
+                                            $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.unload");
+                                    }
+                                    else if (dbusCmd == "dbus-send")
+                                    {
+                                        RunCommand("dbus-send",
+                                            $"--session --dest=org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.stop");
+                                        RunCommand("dbus-send",
+                                            $"--session --dest=org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.unload");
+                                    }
                                 }
+                                catch { /* Cleanup errors are non-critical */ }
+
+                                return foundTitle;
                             }
                             else
                             {
-                                Dim($"  journalctl not available");
+                                Dim($"  No window title found in any log source");
                             }
 
                             // Cleanup script
@@ -1331,6 +1380,33 @@ if (win && win.caption) {
         int end = input.IndexOf("\"", start);
 
         return end > start ? input.Substring(start, end - start) : "unknown";
+    }
+
+    static string ExtractTitleFromOutput(string output, string marker)
+    {
+        if (string.IsNullOrEmpty(output) || !output.Contains(marker))
+            return "";
+
+        var lines = output.Split('\n');
+        // Iterate backwards to get the most recent output
+        for (int i = lines.Length - 1; i >= 0; i--)
+        {
+            var line = lines[i];
+            if (line.Contains(marker))
+            {
+                var start = line.IndexOf(marker) + marker.Length;
+                var end = line.IndexOf(">>>", start);
+                if (end > start)
+                {
+                    var title = line.Substring(start, end - start).Trim();
+                    if (!string.IsNullOrWhiteSpace(title))
+                    {
+                        return title;
+                    }
+                }
+            }
+        }
+        return "";
     }
 
     static string FormatTime(int ms)
