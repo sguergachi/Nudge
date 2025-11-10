@@ -154,6 +154,7 @@ namespace NudgeTray
             }
         }
 
+        #if WINDOWS
         private static void ShowWindowsNotification()
         {
             // On Windows, we'll use a MessageBox as a simple notification
@@ -185,6 +186,14 @@ namespace NudgeTray
                 Console.WriteLine("Use the tray menu to respond");
             }
         }
+        #else
+        private static void ShowWindowsNotification()
+        {
+            // Fallback for non-Windows platforms (shouldn't be called)
+            Console.WriteLine("⚠ Windows notifications not available on this platform");
+            Console.WriteLine("Use the tray menu to respond");
+        }
+        #endif
 
         private static bool ShowKDialogNotification()
         {
@@ -256,12 +265,21 @@ namespace NudgeTray
                 // Write actions array
                 writer.WriteArray(new string[] { "yes", "Yes - Productive", "no", "No - Not Productive" });
 
-                // Write hints dictionary
-                writer.WriteDictionaryStart();
-                writer.WriteDictionaryEntry("urgency", new VariantValue((byte)2));
-                writer.WriteDictionaryEntry("x-kde-appname", new VariantValue("Nudge"));
-                writer.WriteDictionaryEntry("x-kde-eventId", new VariantValue("productivity-check"));
-                writer.WriteDictionaryEnd();
+                // Write hints dictionary (API changed in 0.21.0)
+                var hintsStart = writer.WriteDictionaryStart();
+                writer.WriteDictionaryEntryStart();
+                writer.WriteString("urgency");
+                writer.WriteSignature("y");
+                writer.WriteByte(2);
+                writer.WriteDictionaryEntryStart();
+                writer.WriteString("x-kde-appname");
+                writer.WriteSignature("s");
+                writer.WriteString("Nudge");
+                writer.WriteDictionaryEntryStart();
+                writer.WriteString("x-kde-eventId");
+                writer.WriteSignature("s");
+                writer.WriteString("productivity-check");
+                writer.WriteDictionaryEnd(hintsStart);
 
                 writer.WriteInt32(0);  // expire_timeout (0 = infinite)
 
@@ -272,8 +290,14 @@ namespace NudgeTray
 
                 Console.WriteLine($"[DEBUG] Notification ID: {notificationId}");
 
-                // Listen for ActionInvoked signal
-                await connection.AddMatchAsync("type='signal',interface='org.freedesktop.Notifications',member='ActionInvoked'");
+                // Listen for ActionInvoked signal (API changed in 0.21.0)
+                var matchRule = new MatchRule
+                {
+                    Type = MessageType.Signal,
+                    Interface = "org.freedesktop.Notifications",
+                    Member = "ActionInvoked"
+                };
+                await connection.AddMatchAsync(matchRule);
 
                 _ = Task.Run(async () =>
                 {
@@ -281,12 +305,13 @@ namespace NudgeTray
                     {
                         var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
 
-                        await foreach (var signal in connection.ReadSignalsAsync(cts.Token))
+                        await foreach (var message in connection.ReadMessagesAsync(cts.Token))
                         {
-                            if (signal.Interface == "org.freedesktop.Notifications" &&
-                                signal.Member == "ActionInvoked")
+                            if (message.MessageType == MessageType.Signal &&
+                                message.InterfaceAsString == "org.freedesktop.Notifications" &&
+                                message.MemberAsString == "ActionInvoked")
                             {
-                                var reader = signal.GetBodyReader();
+                                var reader = message.GetBodyReader();
                                 var id = reader.ReadUInt32();
                                 var actionKey = reader.ReadString();
 
