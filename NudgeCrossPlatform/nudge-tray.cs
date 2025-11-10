@@ -245,18 +245,60 @@ namespace NudgeTray
 
                 Console.WriteLine($"[DEBUG] Notification ID: {notificationId}");
 
+                var cancellationSource = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+
+                // Listen for NotificationClosed to debug why it's closing
+                var closedMatchRule = new MatchRule
+                {
+                    Type = MessageType.Signal,
+                    Interface = "org.freedesktop.Notifications",
+                    Member = "NotificationClosed"
+                };
+
+                await connection.AddMatchAsync(
+                    closedMatchRule,
+                    (Message m, object? s) =>
+                    {
+                        var reader = m.GetBodyReader();
+                        return (reader.ReadUInt32(), reader.ReadUInt32());
+                    },
+                    (Exception? ex, (uint id, uint reason) signal, object? readerState, object? handlerState) =>
+                    {
+                        if (ex != null)
+                        {
+                            Console.WriteLine($"[DEBUG] Closed listener error: {ex.Message}");
+                            return;
+                        }
+
+                        if (signal.id == notificationId)
+                        {
+                            string reasonText = signal.reason switch
+                            {
+                                1 => "expired",
+                                2 => "dismissed by user",
+                                3 => "closed by CloseNotification call",
+                                4 => "undefined/reserved",
+                                _ => $"unknown ({signal.reason})"
+                            };
+                            Console.WriteLine($"[DEBUG] Notification closed: reason={reasonText}");
+                        }
+                    },
+                    ObserverFlags.None,
+                    null,
+                    null,
+                    true
+                );
+
                 // Listen for ActionInvoked signal
-                var matchRule = new MatchRule
+                var actionMatchRule = new MatchRule
                 {
                     Type = MessageType.Signal,
                     Interface = "org.freedesktop.Notifications",
                     Member = "ActionInvoked"
                 };
 
-                var cancellationSource = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-
                 await connection.AddMatchAsync(
-                    matchRule,
+                    actionMatchRule,
                     (Message m, object? s) =>
                     {
                         var reader = m.GetBodyReader();
@@ -293,6 +335,10 @@ namespace NudgeTray
                     null,
                     true
                 );
+
+                // Keep connection alive until cancelled
+                Console.WriteLine("[DEBUG] Waiting for notification interaction (60s timeout)...");
+                await Task.Delay(-1, cancellationSource.Token).ContinueWith(_ => { });
             }
             catch (Exception ex)
             {
