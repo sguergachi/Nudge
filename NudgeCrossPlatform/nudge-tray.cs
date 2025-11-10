@@ -85,7 +85,7 @@ namespace NudgeTray
             // If waiting for response, show Yes/No options prominently
             if (_waitingForResponse)
             {
-                var headerItem = new ToolStripMenuItem("Were you productive?") { Enabled = false, Font = new Font(SystemFonts.MenuFont, FontStyle.Bold) };
+                var headerItem = new ToolStripMenuItem("Were you productive?") { Enabled = false, Font = new Font(SystemFonts.MenuFont ?? SystemFonts.DefaultFont, FontStyle.Bold) };
                 menu.Items.Add(headerItem);
                 menu.Items.Add(new ToolStripSeparator());
 
@@ -277,7 +277,7 @@ namespace NudgeTray
                 Height = 140;
 
                 // Position in bottom-right corner
-                var workingArea = Screen.PrimaryScreen.WorkingArea;
+                var workingArea = Screen.PrimaryScreen?.WorkingArea ?? Screen.AllScreens[0].WorkingArea;
                 Location = new Point(
                     workingArea.Right - Width - 20,
                     workingArea.Bottom - Height - 20
@@ -446,7 +446,7 @@ namespace NudgeTray
 
                 var notificationId = await connection.CallMethodAsync(
                     message,
-                    (Message m, object? s) => m.GetBodyReader().ReadUInt32(),
+                    (Tmds.DBus.Protocol.Message m, object? s) => m.GetBodyReader().ReadUInt32(),
                     null);
 
                 Console.WriteLine($"[DEBUG] Notification ID: {notificationId}");
@@ -463,7 +463,7 @@ namespace NudgeTray
 
                 await connection.AddMatchAsync(
                     actionMatchRule,
-                    (Message m, object? s) =>
+                    (Tmds.DBus.Protocol.Message m, object? s) =>
                     {
                         var reader = m.GetBodyReader();
                         return (reader.ReadUInt32(), reader.ReadString());
