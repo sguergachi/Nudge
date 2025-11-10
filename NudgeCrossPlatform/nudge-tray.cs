@@ -38,7 +38,7 @@ namespace NudgeTray
         static Process? _nudgeProcess;
         static Process? _mlInferenceProcess;
         static Process? _mlTrainerProcess;
-        static bool _mlEnabled = false;
+        internal static bool _mlEnabled = false;
 
         [STAThread]
         static void Main(string[] args)
