@@ -1,10 +1,15 @@
 # Build Script for Nudge (PowerShell/Windows)
 #
 # Compiles Nudge productivity tracker for Windows.
+# Automatically installs .NET SDK via winget if not found.
 #
 # Usage:
 #   .\build.ps1              # Build with auto-detected .NET SDK
 #   .\build.ps1 -Clean       # Clean before building
+#
+# Requirements:
+#   - Windows 10/11 with winget (Windows Package Manager)
+#   - Or .NET SDK 8.0+ installed manually
 #
 
 param(
@@ -56,16 +61,40 @@ Write-Host "==========================================" -ForegroundColor Cyan
 Write-Info "Checking dependencies..."
 Write-Host ""
 
+# Check winget availability
+$hasWinget = Get-Command winget -ErrorAction SilentlyContinue
+
 # Check .NET SDK
 if (!(Get-Command dotnet -ErrorAction SilentlyContinue)) {
-    Write-Err "[ERROR] .NET SDK not found"
+    Write-Warn "[WARN] .NET SDK not found"
     Write-Host ""
-    Write-Err "Please install .NET SDK from: https://dotnet.microsoft.com/download"
-    exit 1
+
+    if ($hasWinget) {
+        Write-Info "Installing .NET SDK via winget..."
+        winget install Microsoft.DotNet.SDK.9 --silent --accept-package-agreements --accept-source-agreements
+
+        # Refresh PATH
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+
+        if (Get-Command dotnet -ErrorAction SilentlyContinue) {
+            Write-Success "[OK] .NET SDK installed successfully"
+        }
+        else {
+            Write-Err "[ERROR] .NET SDK installation failed"
+            Write-Err "Please install manually from: https://dotnet.microsoft.com/download"
+            exit 1
+        }
+    }
+    else {
+        Write-Err "[ERROR] winget not available"
+        Write-Err "Please install .NET SDK manually from: https://dotnet.microsoft.com/download"
+        Write-Err "Or install winget: https://aka.ms/getwinget"
+        exit 1
+    }
 }
 
 $dotnetVersion = dotnet --version
-Write-Success "[OK] .NET SDK already installed"
+Write-Success "[OK] .NET SDK ready"
 Write-Host "  Version: $dotnetVersion" -ForegroundColor Gray
 Write-Host ""
 
@@ -82,8 +111,16 @@ if (Get-Command python -ErrorAction SilentlyContinue) {
     Write-Host ""
 }
 else {
-    Write-Warn "[WARN] Python not found. Skipping Python dependencies."
-    Write-Warn "  Install Python to train ML models."
+    Write-Warn "[WARN] Python not found"
+
+    if ($hasWinget) {
+        Write-Info "Python is optional (only needed for ML training)"
+        Write-Info "To install Python, run: winget install Python.Python.3.12"
+    }
+    else {
+        Write-Info "Python is optional (only needed for ML training)"
+        Write-Info "To install, visit: https://www.python.org/downloads/"
+    }
     Write-Host ""
 }
 

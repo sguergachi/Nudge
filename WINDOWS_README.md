@@ -4,16 +4,32 @@ Nudge now supports Windows! This guide explains how to build and run Nudge on Wi
 
 ## Prerequisites
 
-1. **.NET SDK 8.0 or later**
-   - Download from: https://dotnet.microsoft.com/download
-   - Required for building and running Nudge
+### Automatic Installation (Recommended)
 
-2. **PowerShell** (pre-installed on Windows)
+The build script automatically installs dependencies using **winget** (Windows Package Manager):
+
+1. **winget** - Pre-installed on Windows 10 (version 1809+) and Windows 11
+   - If not available, install from: https://aka.ms/getwinget
+
+2. **PowerShell** - Pre-installed on Windows
    - Used for running the build script
 
-3. **Python 3.x** (optional)
-   - Only needed if you want to train custom ML models
+When you run `.\build.ps1`, it will automatically:
+- Install .NET SDK 9 if not found
+- Suggest Python installation command if needed for ML training
+
+### Manual Installation (Alternative)
+
+If you prefer manual installation or don't have winget:
+
+1. **.NET SDK 8.0 or later**
+   - Download from: https://dotnet.microsoft.com/download
+   - Or install via winget: `winget install Microsoft.DotNet.SDK.9`
+
+2. **Python 3.x** (optional)
+   - Only needed for training custom ML models
    - Download from: https://www.python.org/downloads/
+   - Or install via winget: `winget install Python.Python.3.12`
 
 ## Building on Windows
 
@@ -107,10 +123,12 @@ Uses native Windows API:
 - Same CSV format as Linux version
 
 ### Build System
-- `build.ps1` - Native PowerShell build script
-- Compiles with .NET SDK (auto-detects installed version)
+- `build.ps1` - Native PowerShell build script with automatic dependency installation
+- Uses **winget** to install .NET SDK if not found
+- Auto-detects installed .NET version and uses appropriate target framework
 - Includes Avalonia UI framework and Tmds.DBus.Protocol (for Linux compatibility)
 - Creates standalone executables with all dependencies
+- Refreshes PATH after installations to immediately use new tools
 
 ## Differences from Linux Version
 
