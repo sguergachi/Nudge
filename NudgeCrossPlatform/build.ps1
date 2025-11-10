@@ -1,15 +1,15 @@
 # Build Script for Nudge (PowerShell/Windows)
 #
 # Compiles Nudge productivity tracker for Windows.
-# Automatically installs .NET SDK via winget if not found.
+# Automatically installs dependencies via winget if not found.
 #
 # Usage:
-#   .\build.ps1              # Build with auto-detected .NET SDK
+#   .\build.ps1              # Build with auto-installation of dependencies
 #   .\build.ps1 -Clean       # Clean before building
 #
 # Requirements:
 #   - Windows 10/11 with winget (Windows Package Manager)
-#   - Or .NET SDK 8.0+ installed manually
+#   - Or .NET SDK 8.0+ and Python 3.x installed manually
 #
 
 param(
@@ -123,44 +123,91 @@ Write-Success "[OK] .NET SDK ready"
 Write-Host "  Version: $dotnetVersion" -ForegroundColor Gray
 Write-Host ""
 
-# Check Python (optional)
+# Check Python (required for ML)
+$pythonWorks = $false
+$pythonVersion = ""
+
 if (Get-Command python -ErrorAction SilentlyContinue) {
-    if (Test-Path "requirements-cpu.txt") {
-        Write-Info "Installing Python dependencies..."
+    try {
+        $pythonVersion = python --version 2>&1 | Out-String
+        $pythonVersion = $pythonVersion.Trim()
+        if ($pythonVersion -and $LASTEXITCODE -eq 0) {
+            $pythonWorks = $true
+        }
+    }
+    catch {
+        $pythonWorks = $false
+    }
+}
+
+if (-not $pythonWorks) {
+    Write-Warn "[WARN] Python not found or not working"
+    Write-Host ""
+
+    if ($hasWinget) {
+        Write-Info "Installing Python via winget..."
+        winget install Python.Python.3.12 --silent --accept-package-agreements --accept-source-agreements
+
+        # Refresh PATH
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+
+        # Test if python works now
         try {
-            $pipOutput = python -m pip install --user -q -r requirements-cpu.txt 2>&1
-            if ($LASTEXITCODE -eq 0) {
-                Write-Success "[OK] Python dependencies installed"
+            $pythonVersion = python --version 2>&1 | Out-String
+            $pythonVersion = $pythonVersion.Trim()
+            if ($pythonVersion -and $LASTEXITCODE -eq 0) {
+                Write-Success "[OK] Python installed successfully"
             }
             else {
-                Write-Warn "[WARN] Some Python packages failed to install"
-                Write-Host "  This is optional - ML training may not work" -ForegroundColor Gray
+                Write-Err "[ERROR] Python installation failed - python command not working"
+                Write-Err "Please install manually from: https://www.python.org/downloads/"
+                exit 1
             }
         }
         catch {
-            Write-Warn "[WARN] Python dependency installation failed"
-            Write-Host "  This is optional - ML training may not work" -ForegroundColor Gray
+            Write-Err "[ERROR] Python installation failed"
+            Write-Err "Please install manually from: https://www.python.org/downloads/"
+            exit 1
         }
     }
     else {
-        Write-Info "Python found, but requirements-cpu.txt not present"
-        Write-Host "  Python packages not needed for building" -ForegroundColor Gray
+        Write-Err "[ERROR] winget not available"
+        Write-Err "Please install Python manually from: https://www.python.org/downloads/"
+        Write-Err "Or install winget: https://aka.ms/getwinget"
+        exit 1
     }
-    Write-Host ""
+}
+
+Write-Success "[OK] Python ready"
+Write-Host "  Version: $pythonVersion" -ForegroundColor Gray
+Write-Host ""
+
+# Install Python dependencies (required)
+if (Test-Path "requirements-cpu.txt") {
+    Write-Info "Installing Python ML dependencies..."
+    try {
+        $pipOutput = python -m pip install --user -r requirements-cpu.txt 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Success "[OK] Python ML dependencies installed"
+        }
+        else {
+            Write-Err "[ERROR] Failed to install Python dependencies"
+            Write-Host "Output: $pipOutput" -ForegroundColor Red
+            exit 1
+        }
+    }
+    catch {
+        Write-Err "[ERROR] Python dependency installation failed"
+        Write-Host "Error: $_" -ForegroundColor Red
+        exit 1
+    }
 }
 else {
-    Write-Warn "[WARN] Python not found"
-
-    if ($hasWinget) {
-        Write-Info "Python is optional (only needed for ML training)"
-        Write-Info "To install Python, run: winget install Python.Python.3.12"
-    }
-    else {
-        Write-Info "Python is optional (only needed for ML training)"
-        Write-Info "To install, visit: https://www.python.org/downloads/"
-    }
-    Write-Host ""
+    Write-Err "[ERROR] requirements-cpu.txt not found"
+    Write-Err "ML dependencies are required for Nudge to function"
+    exit 1
 }
+Write-Host ""
 
 # Build
 Write-Info "Building with .NET..."

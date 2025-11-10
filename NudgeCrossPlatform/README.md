@@ -16,12 +16,12 @@ ML-powered productivity tracker that learns from your behavior.
 ### Linux
 - **Wayland** compositor (Sway, GNOME, or KDE)
 - **.NET SDK 8.0+** (dotnet)
-- **Python 3** with TensorFlow (for training - optional)
+- **Python 3** with TensorFlow (required for ML)
 
 ### Windows
 - **.NET SDK 8.0+**
 - **Windows 10 or later**
-- **Python 3** (for training - optional)
+- **Python 3** (required for ML)
 
 ## Build
 

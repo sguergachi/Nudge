@@ -16,20 +16,22 @@ The build script automatically installs dependencies using **winget** (Windows P
 
 When you run `.\build.ps1`, it will automatically:
 - Install .NET SDK 9 if not found
-- Suggest Python installation command if needed for ML training
+- Install Python 3.12 if not found (required for ML functionality)
+- Install all required Python ML dependencies
 
 ### Manual Installation (Alternative)
 
 If you prefer manual installation or don't have winget:
 
-1. **.NET SDK 8.0 or later**
+1. **.NET SDK 8.0 or later** (required)
    - Download from: https://dotnet.microsoft.com/download
    - Or install via winget: `winget install Microsoft.DotNet.SDK.9`
 
-2. **Python 3.x** (optional)
-   - Only needed for training custom ML models
+2. **Python 3.x** (required)
+   - Required for ML functionality
    - Download from: https://www.python.org/downloads/
    - Or install via winget: `winget install Python.Python.3.12`
+   - After installing, run: `python -m pip install -r requirements-cpu.txt`
 
 ## Building on Windows
 
