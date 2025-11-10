@@ -617,24 +617,32 @@ class Nudge
 
                 if (!string.IsNullOrEmpty(dbusCmd))
                 {
+                    Dim($"  Trying KWin script approach with {dbusCmd}");
+
                     // Create temp file for script output
                     var tempOutput = Path.Combine(Path.GetTempPath(), $"nudge-kwin-{Guid.NewGuid()}.txt");
+                    Dim($"  Temp output file: {tempOutput}");
 
-                    // Create KWin script that writes active window UUID to file
+                    // Create KWin script that writes active window info using Qt file I/O
+                    // KWin scripts use QML/Qt, not Node.js, so we use Qt.File
                     string scriptContent = $@"
 const win = workspace.activeWindow;
 if (win) {{
-    const fs = require('fs');
-    const uuid = win.internalId.toString();
-    fs.writeFile('{tempOutput}', uuid, (err) => {{
-        if (err) {{
-            console.error('Error writing file:', err);
-        }}
-    }});
+    // Try to write window info to temp file using simple string write
+    const file = new TextStream(new File('{tempOutput}'), 'w');
+    try {{
+        const caption = win.caption || 'no-caption';
+        const uuid = win.internalId ? win.internalId.toString() : 'no-uuid';
+        file.write(uuid + '|' + caption);
+        file.close();
+    }} catch (e) {{
+        console.error('Script error:', e);
+    }}
 }}";
 
                     var tempScript = Path.Combine(Path.GetTempPath(), $"nudge-kwin-{Guid.NewGuid()}.js");
                     File.WriteAllText(tempScript, scriptContent);
+                    Dim($"  Created script: {tempScript}");
 
                     try
                     {
@@ -642,65 +650,62 @@ if (win) {{
                         var loadResult = RunCommand(dbusCmd,
                             $"org.kde.KWin /Scripting org.kde.kwin.Scripting.loadScript \"{tempScript}\"");
 
+                        Dim($"  Load result: {loadResult}");
+
                         if (!string.IsNullOrWhiteSpace(loadResult))
                         {
                             var scriptNum = loadResult.Trim();
+                            Dim($"  Script number: {scriptNum}");
 
                             // Run the script
-                            RunCommand(dbusCmd,
+                            var runResult = RunCommand(dbusCmd,
                                 $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.run");
+                            Dim($"  Run result: {runResult}");
 
                             // Give script time to write file
-                            Thread.Sleep(100);
+                            Thread.Sleep(200);
 
-                            // Read the UUID from file
+                            // Read the output from file
+                            Dim($"  Checking if file exists: {File.Exists(tempOutput)}");
                             if (File.Exists(tempOutput))
                             {
-                                var uuid = File.ReadAllText(tempOutput).Trim();
+                                var content = File.ReadAllText(tempOutput).Trim();
+                                Dim($"  File content: {content}");
 
-                                if (!string.IsNullOrWhiteSpace(uuid))
+                                if (!string.IsNullOrWhiteSpace(content))
                                 {
-                                    // Use getWindowInfo to get window details
-                                    var windowInfo = RunCommand(dbusCmd,
-                                        $"org.kde.KWin /KWin getWindowInfo \"{uuid}\"");
-
-                                    if (!string.IsNullOrWhiteSpace(windowInfo))
+                                    var parts = content.Split('|');
+                                    if (parts.Length == 2)
                                     {
-                                        // Parse caption from the output (it's a QVariantMap)
-                                        // Look for caption field
-                                        var lines = windowInfo.Split('\n');
-                                        foreach (var line in lines)
-                                        {
-                                            if (line.Contains("caption") || line.Contains("Caption"))
-                                            {
-                                                // Try to extract the value
-                                                var parts = line.Split(':');
-                                                if (parts.Length > 1)
-                                                {
-                                                    var caption = parts[1].Trim().Trim('"', '\'');
-                                                    if (!string.IsNullOrWhiteSpace(caption))
-                                                    {
-                                                        // Clean up
-                                                        try
-                                                        {
-                                                            RunCommand(dbusCmd,
-                                                                $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.stop");
-                                                            RunCommand(dbusCmd,
-                                                                $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.unload");
-                                                            File.Delete(tempOutput);
-                                                        }
-                                                        catch { }
+                                        var uuid = parts[0];
+                                        var caption = parts[1];
 
-                                                        return caption;
-                                                    }
-                                                }
+                                        Dim($"  Parsed - UUID: {uuid}, Caption: {caption}");
+
+                                        if (caption != "no-caption" && !string.IsNullOrWhiteSpace(caption))
+                                        {
+                                            // Clean up
+                                            try
+                                            {
+                                                RunCommand(dbusCmd,
+                                                    $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.stop");
+                                                RunCommand(dbusCmd,
+                                                    $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.unload");
+                                                File.Delete(tempOutput);
                                             }
+                                            catch { }
+
+                                            return caption;
                                         }
                                     }
                                 }
 
                                 // Clean up temp file
                                 try { File.Delete(tempOutput); } catch { }
+                            }
+                            else
+                            {
+                                Dim($"  File was not created by script");
                             }
 
                             // Clean up script
@@ -712,6 +717,10 @@ if (win) {{
                                     $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.unload");
                             }
                             catch { }
+                        }
+                        else
+                        {
+                            Dim($"  Failed to load script - no script number returned");
                         }
                     }
                     finally
