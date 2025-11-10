@@ -191,8 +191,8 @@ if (Test-Path "requirements-cpu.txt") {
     $previousErrorAction = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
 
-    # Run pip install and capture all output
-    $pipOutput = & python -m pip install --user -r requirements-cpu.txt 2>&1 | Out-String
+    # Run pip install and capture all output (--disable-pip-version-check suppresses upgrade notices)
+    $pipOutput = & python -m pip install --user --disable-pip-version-check -r requirements-cpu.txt 2>&1 | Out-String
     $pipExitCode = $LASTEXITCODE
 
     # Restore error action preference
