@@ -146,10 +146,11 @@ class ProductivityPredictor:
 
 
 class InferenceServer:
-    """Unix domain socket server for ML predictions"""
+    """TCP socket server for ML predictions (cross-platform)"""
 
-    def __init__(self, socket_path='/tmp/nudge_ml.sock', model_dir='./model'):
-        self.socket_path = socket_path
+    def __init__(self, host='127.0.0.1', port=45002, model_dir='./model'):
+        self.host = host
+        self.port = port
         self.predictor = ProductivityPredictor(model_dir)
         self.running = False
         self.sock = None
@@ -158,29 +159,17 @@ class InferenceServer:
         self.request_count = 0
         self.prediction_times = []
 
-    def cleanup_socket(self):
-        """Remove existing socket file"""
-        try:
-            if os.path.exists(self.socket_path):
-                os.unlink(self.socket_path)
-        except Exception as e:
-            print(f"⚠️  Error cleaning up socket: {e}", file=sys.stderr)
-
     def start(self):
         """Start the inference server"""
-        self.cleanup_socket()
-
-        # Create Unix domain socket
-        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.sock.bind(self.socket_path)
+        # Create TCP socket (cross-platform compatible)
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock.bind((self.host, self.port))
         self.sock.listen(5)
         self.sock.settimeout(1.0)  # Allow periodic cleanup checks
 
-        # Set permissions (readable/writable by owner only)
-        os.chmod(self.socket_path, 0o600)
-
         self.running = True
-        print(f"🚀 Inference server listening on {self.socket_path}", file=sys.stderr)
+        print(f"🚀 Inference server listening on {self.host}:{self.port}", file=sys.stderr)
 
         if self.predictor.model_loaded:
             print(f"✅ Model ready for predictions", file=sys.stderr)
@@ -285,7 +274,6 @@ class InferenceServer:
         self.running = False
         if self.sock:
             self.sock.close()
-        self.cleanup_socket()
         sys.exit(0)
 
 
@@ -303,8 +291,8 @@ Examples:
   # Use custom model directory
   python model_inference.py --model-dir /path/to/model
 
-  # Use custom socket path
-  python model_inference.py --socket /tmp/custom.sock
+  # Use custom host/port
+  python model_inference.py --host 0.0.0.0 --port 8080
 
   # Test prediction (client mode)
   python model_inference.py --test
@@ -315,8 +303,10 @@ The server runs in the foreground and logs predictions to stderr.
 
     parser.add_argument('--model-dir', default='./model',
                         help='Directory containing trained model')
-    parser.add_argument('--socket', default='/tmp/nudge_ml.sock',
-                        help='Unix domain socket path')
+    parser.add_argument('--host', default='127.0.0.1',
+                        help='Host to bind to (default: 127.0.0.1)')
+    parser.add_argument('--port', type=int, default=45002,
+                        help='Port to bind to (default: 45002)')
     parser.add_argument('--test', action='store_true',
                         help='Test mode: send a sample prediction request')
 
@@ -324,26 +314,22 @@ The server runs in the foreground and logs predictions to stderr.
 
     if args.test:
         # Test client mode
-        test_client(args.socket)
+        test_client(args.host, args.port)
     else:
         # Start server
-        server = InferenceServer(args.socket, args.model_dir)
+        server = InferenceServer(args.host, args.port, args.model_dir)
         server.start()
 
 
-def test_client(socket_path='/tmp/nudge_ml.sock'):
+def test_client(host='127.0.0.1', port=45002):
     """Test client to verify inference server"""
     print("🧪 Testing inference server...")
 
-    if not os.path.exists(socket_path):
-        print(f"❌ Socket not found: {socket_path}")
-        print(f"   Start the inference server first!")
-        sys.exit(1)
-
     try:
-        # Connect to server
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.connect(socket_path)
+        # Connect to server via TCP
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect((host, port))
+        print(f"✅ Connected to {host}:{port}")
 
         # Send test request
         request = {
@@ -378,6 +364,10 @@ def test_client(socket_path='/tmp/nudge_ml.sock'):
 
         sock.close()
 
+    except ConnectionRefusedError:
+        print(f"❌ Connection refused to {host}:{port}")
+        print(f"   Make sure the inference server is running!")
+        sys.exit(1)
     except Exception as e:
         print(f"❌ Test failed: {e}")
         sys.exit(1)

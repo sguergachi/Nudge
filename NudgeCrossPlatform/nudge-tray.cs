@@ -282,14 +282,19 @@ namespace NudgeTray
                     python = "python";
                 }
 
-                // Start ML inference service
+                // Get platform-specific CSV path
+                string csvPath = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                    ? Path.Combine(Path.GetTempPath(), "HARVEST.CSV")
+                    : "/tmp/HARVEST.CSV";
+
+                // Start ML inference service (TCP on port 45002)
                 Console.WriteLine("  Starting ML inference service...");
                 _mlInferenceProcess = new Process
                 {
                     StartInfo = new ProcessStartInfo
                     {
                         FileName = python,
-                        Arguments = "model_inference.py --model-dir ./model",
+                        Arguments = "model_inference.py --host 127.0.0.1 --port 45002 --model-dir ./model",
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
                         UseShellExecute = false,
@@ -317,17 +322,21 @@ namespace NudgeTray
                 _mlInferenceProcess.BeginOutputReadLine();
                 _mlInferenceProcess.BeginErrorReadLine();
 
-                // Wait a moment for socket to be created
+                // Wait for service to start
                 Thread.Sleep(2000);
 
-                // Verify socket was created
-                if (File.Exists("/tmp/nudge_ml.sock"))
+                // Try to verify TCP connection
+                try
                 {
-                    Console.WriteLine("  ✓ ML inference service started (socket: /tmp/nudge_ml.sock)");
+                    using (var client = new System.Net.Sockets.TcpClient())
+                    {
+                        client.Connect("127.0.0.1", 45002);
+                        Console.WriteLine("  ✓ ML inference service started (TCP port 45002)");
+                    }
                 }
-                else
+                catch
                 {
-                    Console.WriteLine("  ⚠ ML inference socket not found - service may not be ready");
+                    Console.WriteLine("  ⚠ ML inference service may not be ready yet");
                 }
 
                 // Start background trainer
@@ -337,7 +346,7 @@ namespace NudgeTray
                     StartInfo = new ProcessStartInfo
                     {
                         FileName = python,
-                        Arguments = "background_trainer.py --csv /tmp/HARVEST.CSV --model-dir ./model --check-interval 300",
+                        Arguments = $"background_trainer.py --csv \"{csvPath}\" --model-dir ./model --check-interval 300",
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
                         UseShellExecute = false,
@@ -366,7 +375,7 @@ namespace NudgeTray
                 _mlTrainerProcess.BeginErrorReadLine();
 
                 Console.WriteLine("  ✓ Background trainer started");
-                Console.WriteLine("✓ ML services ready");
+                Console.WriteLine($"✓ ML services ready (CSV: {csvPath})");
             }
             catch (Exception ex)
             {

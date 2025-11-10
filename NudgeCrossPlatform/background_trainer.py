@@ -20,6 +20,8 @@ import time
 import signal
 import json
 import shutil
+import platform
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -27,11 +29,19 @@ from pathlib import Path
 from train_model import train_modern, load_and_prepare_data
 
 
+def get_default_csv_path():
+    """Get platform-specific default CSV path"""
+    if platform.system() == 'Windows':
+        return os.path.join(tempfile.gettempdir(), 'HARVEST.CSV')
+    else:
+        return '/tmp/HARVEST.CSV'
+
+
 class BackgroundTrainer:
     """Continuously monitor and retrain productivity model"""
 
     def __init__(self,
-                 csv_file='/tmp/HARVEST.CSV',
+                 csv_file=None,
                  model_dir='./model',
                  min_new_samples=50,
                  min_total_samples=100,
@@ -39,14 +49,14 @@ class BackgroundTrainer:
                  architecture='standard'):
         """
         Args:
-            csv_file: Path to productivity log
+            csv_file: Path to productivity log (default: platform-specific temp dir)
             model_dir: Model output directory
             min_new_samples: Min new samples before retraining
             min_total_samples: Min total samples needed for first training
             check_interval: Seconds between checks for new data
             architecture: Model architecture (lightweight/standard/deep)
         """
-        self.csv_file = csv_file
+        self.csv_file = csv_file if csv_file is not None else get_default_csv_path()
         self.model_dir = model_dir
         self.min_new_samples = min_new_samples
         self.min_total_samples = min_total_samples
@@ -329,8 +339,8 @@ Recommended: Run in a tmux/screen session or as a systemd service.
         """
     )
 
-    parser.add_argument('--csv', default='/tmp/HARVEST.CSV',
-                        help='Path to productivity log CSV')
+    parser.add_argument('--csv', default=None,
+                        help=f'Path to productivity log CSV (default: {get_default_csv_path()})')
     parser.add_argument('--model-dir', default='./model',
                         help='Model output directory')
     parser.add_argument('--min-new-samples', type=int, default=50,
