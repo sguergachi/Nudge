@@ -610,28 +610,42 @@ try {
 
         public static void Quit()
         {
+            Console.WriteLine("[DEBUG] Quit() called - shutting down Nudge...");
+
             if (_nudgeProcess != null && !_nudgeProcess.HasExited)
             {
+                Console.WriteLine($"[DEBUG] Nudge process PID: {_nudgeProcess.Id}");
+                Console.WriteLine("[DEBUG] Attempting to kill nudge process...");
+
                 try
                 {
-                    // Try graceful shutdown first
-                    _nudgeProcess.CloseMainWindow();
-                    if (!_nudgeProcess.WaitForExit(2000))
+                    _nudgeProcess.Kill(entireProcessTree: true); // Kill process and all children
+                    _nudgeProcess.WaitForExit(5000); // Wait up to 5 seconds
+
+                    if (_nudgeProcess.HasExited)
                     {
-                        // Force kill if graceful shutdown fails
-                        _nudgeProcess.Kill();
+                        Console.WriteLine($"[DEBUG] Nudge process terminated (exit code: {_nudgeProcess.ExitCode})");
+                    }
+                    else
+                    {
+                        Console.WriteLine("[WARN] Nudge process did not exit within timeout");
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Fallback to kill if graceful shutdown fails
-                    try { _nudgeProcess.Kill(); } catch { }
+                    Console.WriteLine($"[ERROR] Failed to kill nudge process: {ex.Message}");
                 }
                 finally
                 {
                     _nudgeProcess.Dispose();
                 }
             }
+            else
+            {
+                Console.WriteLine("[DEBUG] Nudge process already exited or null");
+            }
+
+            Console.WriteLine("[DEBUG] Exiting nudge-tray...");
             Environment.Exit(0);
         }
 
