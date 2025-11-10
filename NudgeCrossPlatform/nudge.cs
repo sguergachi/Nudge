@@ -13,11 +13,13 @@
 //   --help, -h        Show this help
 //   --version, -v     Show version info
 //   --interval N      Snapshot interval in minutes (default: 5)
+//   --ml              Enable ML-powered adaptive notifications
 //
 // Example:
 //   nudge                    # Use defaults
 //   nudge /data/harvest.csv  # Custom CSV path
 //   nudge --interval 2       # Snapshot every 2 minutes
+//   nudge --ml               # Enable ML-based predictions
 //
 // Requirements:
 //   - Windows 10+, or Linux with Wayland compositor (Sway, GNOME, KDE)
@@ -26,8 +28,10 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
@@ -41,12 +45,19 @@ class Nudge
     // VERSION & CONSTANTS
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    const string VERSION = "1.0.1";
+    const string VERSION = "1.1.0";
     const int CYCLE_MS = 1000;           // 1 second monitoring cycle
     const int UDP_PORT = 45001;          // UDP listener port
     const int RESPONSE_TIMEOUT_MS = 60000; // 60 seconds to respond
 
     static int SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;  // 5 minutes (configurable)
+
+    // ML-powered adaptive notifications
+    const double ML_CONFIDENCE_THRESHOLD = 0.98;  // 98% confidence required
+    const string ML_SOCKET_PATH = "/tmp/nudge_ml.sock";
+    static bool _mlEnabled = false;
+    static bool _mlAvailable = false;
+    static int _mlCheckCooldown = 0;  // Cooldown before checking ML again
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // ANSI COLORS - Professional terminal output
@@ -121,6 +132,13 @@ class Nudge
     static int _cachedIdle = 0;
     static DateTime _idleCacheExpiry = DateTime.MinValue;
 
+    // ML statistics tracking
+    static int _mlPredictions = 0;
+    static int _mlTriggeredSnapshots = 0;
+    static int _mlSkippedAlerts = 0;
+    static int _intervalTriggeredSnapshots = 0;
+    static List<double> _mlConfidenceScores = new List<double>();
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // MAIN - Entry point with professional argument parsing
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -151,6 +169,11 @@ class Nudge
                 }
                 continue;
             }
+            if (arg == "--ml")
+            {
+                _mlEnabled = true;
+                continue;
+            }
             if (!arg.StartsWith("--") && !arg.StartsWith("-"))
             {
                 _csvPath = arg;
@@ -174,6 +197,11 @@ class Nudge
         // Main event loop
         Success("✓ Nudge is running");
         Info($"  Taking snapshots every {SNAPSHOT_INTERVAL_MS/1000/60} minutes");
+        if (_mlEnabled)
+        {
+            Info($"  {Color.BGREEN}ML-powered adaptive notifications enabled{Color.RESET}");
+            Info($"  Confidence threshold: {ML_CONFIDENCE_THRESHOLD*100:F0}%");
+        }
         Info($"  Respond with: {Color.BCYAN}nudge-notify YES{Color.RESET} or {Color.BCYAN}nudge-notify NO{Color.RESET}");
         Console.WriteLine();
 
@@ -291,6 +319,7 @@ class Nudge
     {
         int elapsed = 0;
         int lastMinute = -1;
+        int lastStatsSnapshot = 0;
 
         while (true)
         {
@@ -313,13 +342,52 @@ class Nudge
                 _attentionSpanMs += CYCLE_MS;
             }
 
-            // Time for snapshot?
+            // Check for snapshot triggers
             elapsed += CYCLE_MS;
-            if (elapsed >= SNAPSHOT_INTERVAL_MS && !_waitingForResponse)
+            bool intervalReached = elapsed >= SNAPSHOT_INTERVAL_MS;
+            bool mlTriggered = false;
+
+            if (!_waitingForResponse)
             {
-                TakeSnapshot(app, idle, _attentionSpanMs);
-                elapsed = 0;
-                lastMinute = -1; // Reset progress indicator
+                // ML-powered adaptive checking (if enabled)
+                if (_mlEnabled && _mlAvailable && !intervalReached)
+                {
+                    // Check ML predictions every cycle when ML is enabled
+                    if (ShouldTriggerSnapshot(app, idle, _attentionSpanMs))
+                    {
+                        mlTriggered = true;
+                    }
+                }
+
+                // Trigger snapshot if:
+                // 1. Interval reached (always trigger regardless of ML)
+                // 2. ML triggered with high confidence (only if before interval)
+                if (intervalReached || mlTriggered)
+                {
+                    if (mlTriggered && !intervalReached)
+                    {
+                        Info($"  {Color.BGREEN}✓ ML-TRIGGERED SNAPSHOT{Color.RESET} (detected unproductive)");
+                    }
+                    else if (intervalReached)
+                    {
+                        _intervalTriggeredSnapshots++;
+                        if (_mlEnabled)
+                        {
+                            Info($"  {Color.BYELLOW}⏰ INTERVAL SNAPSHOT{Color.RESET} (ML low confidence or productive)");
+                        }
+                    }
+
+                    TakeSnapshot(app, idle, _attentionSpanMs);
+                    elapsed = 0;
+                    lastMinute = -1; // Reset progress indicator
+
+                    // Show ML stats every 10 snapshots
+                    if (_mlEnabled && (_totalSnapshots - lastStatsSnapshot) >= 10)
+                    {
+                        ShowMLStats();
+                        lastStatsSnapshot = _totalSnapshots;
+                    }
+                }
             }
 
             // Show progress every minute
@@ -328,11 +396,38 @@ class Nudge
             {
                 lastMinute = currentMinute;
                 int remaining = (SNAPSHOT_INTERVAL_MS - elapsed) / 60000;
-                Dim($"  {remaining} min until next snapshot  ({Color.CYAN}{app}{Color.RESET}, idle: {idle}ms)");
+                string mlStatus = _mlEnabled ? (_mlAvailable ? " [ML: active]" : " [ML: fallback]") : "";
+                Dim($"  {remaining} min until next snapshot{mlStatus}  ({Color.CYAN}{app}{Color.RESET}, idle: {idle}ms)");
             }
 
             Thread.Sleep(CYCLE_MS);
         }
+    }
+
+    static void ShowMLStats()
+    {
+        Console.WriteLine();
+        Console.WriteLine($"{Color.BCYAN}━━━ ML PERFORMANCE SUMMARY ━━━{Color.RESET}");
+
+        double avgConfidence = _mlConfidenceScores.Count > 0 ? _mlConfidenceScores.Average() : 0;
+        int totalMLDecisions = _mlTriggeredSnapshots + _mlSkippedAlerts;
+
+        Console.WriteLine($"  {Color.BOLD}Predictions Made:{Color.RESET}        {_mlPredictions}");
+        Console.WriteLine($"  {Color.BOLD}Average Confidence:{Color.RESET}     {avgConfidence*100:F1}%");
+        Console.WriteLine();
+        Console.WriteLine($"  {Color.BOLD}ML Triggered Alerts:{Color.RESET}    {_mlTriggeredSnapshots} {Color.DIM}(detected unproductive){Color.RESET}");
+        Console.WriteLine($"  {Color.BOLD}ML Skipped Alerts:{Color.RESET}      {_mlSkippedAlerts} {Color.DIM}(detected productive){Color.RESET}");
+        Console.WriteLine($"  {Color.BOLD}Interval Fallbacks:{Color.RESET}     {_intervalTriggeredSnapshots} {Color.DIM}(low confidence){Color.RESET}");
+        Console.WriteLine();
+
+        if (totalMLDecisions > 0)
+        {
+            double mlEfficiency = (_mlSkippedAlerts / (double)totalMLDecisions) * 100;
+            Console.WriteLine($"  {Color.BOLD}Alerts Prevented:{Color.RESET}       {Color.BGREEN}{mlEfficiency:F1}%{Color.RESET} {Color.DIM}(interruptions avoided){Color.RESET}");
+        }
+
+        Console.WriteLine($"{Color.BCYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{Color.RESET}");
+        Console.WriteLine();
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -890,6 +985,184 @@ if (win && win.caption) {
         finally
         {
             listener?.Dispose();
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // ML INFERENCE - Communicate with ML prediction service
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    class MLPrediction
+    {
+        public int? Prediction { get; set; }
+        public double Confidence { get; set; }
+        public double? Probability { get; set; }
+        public bool ModelAvailable { get; set; }
+        public string? Reason { get; set; }
+    }
+
+    static MLPrediction? QueryMLModel(string app, int idle, int attention)
+    {
+        try
+        {
+            // Check if socket exists
+            if (!File.Exists(ML_SOCKET_PATH))
+            {
+                return null;
+            }
+
+            // Create Unix domain socket client
+            using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            var endpoint = new UnixDomainSocketEndPoint(ML_SOCKET_PATH);
+
+            // Connect with timeout
+            socket.Connect(endpoint);
+            socket.SendTimeout = 1000;  // 1 second
+            socket.ReceiveTimeout = 1000;
+
+            // Prepare request
+            int appHash = GetHash(app);
+            var request = new
+            {
+                foreground_app = appHash,
+                idle_time = idle,
+                time_last_request = attention
+            };
+
+            string requestJson = JsonSerializer.Serialize(request) + "\n";
+            byte[] requestBytes = Encoding.UTF8.GetBytes(requestJson);
+
+            // Send request
+            socket.Send(requestBytes);
+
+            // Receive response
+            byte[] buffer = new byte[4096];
+            int bytesRead = socket.Receive(buffer);
+            string responseJson = Encoding.UTF8.GetString(buffer, 0, bytesRead).Trim();
+
+            // Parse response
+            var response = JsonSerializer.Deserialize<MLPrediction>(responseJson);
+            return response;
+        }
+        catch (Exception ex)
+        {
+            // Silent failure - ML is optional
+            if (_mlEnabled)
+            {
+                Dim($"  ML query failed: {ex.Message}");
+            }
+            return null;
+        }
+    }
+
+    static bool CheckMLAvailability()
+    {
+        // Check if inference server is running
+        if (!File.Exists(ML_SOCKET_PATH))
+        {
+            if (_mlAvailable)
+            {
+                Warning("ML inference server stopped - falling back to interval-based");
+                _mlAvailable = false;
+            }
+            return false;
+        }
+
+        // Try a quick connection test
+        try
+        {
+            using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            var endpoint = new UnixDomainSocketEndPoint(ML_SOCKET_PATH);
+            socket.Connect(endpoint);
+            socket.Close();
+
+            if (!_mlAvailable)
+            {
+                Success("✓ ML inference server connected");
+                _mlAvailable = true;
+            }
+            return true;
+        }
+        catch
+        {
+            if (_mlAvailable)
+            {
+                Warning("ML inference server unreachable - falling back to interval-based");
+                _mlAvailable = false;
+            }
+            return false;
+        }
+    }
+
+    static bool ShouldTriggerSnapshot(string app, int idle, int attention)
+    {
+        // If ML not enabled, always use interval-based
+        if (!_mlEnabled)
+        {
+            return true;  // Will be gated by elapsed time in main loop
+        }
+
+        // Check ML availability periodically
+        if (_mlCheckCooldown <= 0)
+        {
+            CheckMLAvailability();
+            _mlCheckCooldown = 10;  // Check every 10 seconds
+        }
+        else
+        {
+            _mlCheckCooldown--;
+        }
+
+        // If ML not available, fall back to interval-based
+        if (!_mlAvailable)
+        {
+            return true;
+        }
+
+        // Query ML model
+        var prediction = QueryMLModel(app, idle, attention);
+
+        if (prediction == null || !prediction.ModelAvailable)
+        {
+            // ML failed, use interval-based
+            return true;
+        }
+
+        // Track statistics
+        _mlPredictions++;
+        _mlConfidenceScores.Add(prediction.Confidence);
+
+        // Keep last 100 confidence scores for running average
+        if (_mlConfidenceScores.Count > 100)
+        {
+            _mlConfidenceScores.RemoveAt(0);
+        }
+
+        // Calculate average confidence
+        double avgConfidence = _mlConfidenceScores.Average();
+
+        // Check confidence threshold
+        if (prediction.Prediction == 0 && prediction.Confidence >= ML_CONFIDENCE_THRESHOLD)
+        {
+            // High confidence user is NOT productive - trigger snapshot!
+            _mlTriggeredSnapshots++;
+            Info($"  {Color.BRED}ML TRIGGER{Color.RESET}: NOT productive (confidence: {Color.BYELLOW}{prediction.Confidence*100:F1}%{Color.RESET}, avg: {avgConfidence*100:F1}%)");
+            Info($"  {Color.DIM}Stats: {_mlPredictions} predictions, {_mlTriggeredSnapshots} triggered, {_mlSkippedAlerts} skipped{Color.RESET}");
+            return true;
+        }
+        else if (prediction.Confidence < ML_CONFIDENCE_THRESHOLD)
+        {
+            // Low confidence - suppress this check, wait for interval
+            Dim($"  ML: Low confidence ({prediction.Confidence*100:F1}%, avg: {avgConfidence*100:F1}%) - waiting for interval");
+            return false;
+        }
+        else
+        {
+            // High confidence user IS productive - skip snapshot
+            _mlSkippedAlerts++;
+            Info($"  {Color.BGREEN}ML SKIP{Color.RESET}: Productive (confidence: {Color.BYELLOW}{prediction.Confidence*100:F1}%{Color.RESET}, avg: {avgConfidence*100:F1}%)");
+            Dim($"  {Color.DIM}Stats: {_mlPredictions} predictions, {_mlTriggeredSnapshots} triggered, {_mlSkippedAlerts} skipped{Color.RESET}");
+            return false;
         }
     }
 
