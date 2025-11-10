@@ -16,6 +16,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,7 +27,9 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+#if !WINDOWS
 using Tmds.DBus.Protocol;
+#endif
 
 namespace NudgeTray
 {
@@ -115,8 +118,16 @@ namespace NudgeTray
         {
             Console.WriteLine("📸 Snapshot taken! Respond using the notification buttons.");
 
-            // Try native DBus notifications first
+            // Platform-specific notifications
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                ShowWindowsNotification();
+                return;
+            }
+
+            // Try native DBus notifications first on Linux
             bool success = false;
+            #if !WINDOWS
             try
             {
                 ShowDbusNotification();
@@ -127,6 +138,7 @@ namespace NudgeTray
             {
                 Console.WriteLine($"⚠ DBus notification failed: {ex.Message}");
             }
+            #endif
 
             // Fallback to kdialog if notifications don't work
             if (!success && ShowKDialogNotification())
@@ -139,6 +151,38 @@ namespace NudgeTray
             if (!success)
             {
                 ShowFallbackNotification();
+            }
+        }
+
+        private static void ShowWindowsNotification()
+        {
+            // On Windows, we'll use a MessageBox as a simple notification
+            // In a production app, you'd use Windows Toast Notifications
+            try
+            {
+                var result = System.Windows.Forms.MessageBox.Show(
+                    "Were you productive during the last interval?",
+                    "Nudge - Productivity Check",
+                    System.Windows.Forms.MessageBoxButtons.YesNo,
+                    System.Windows.Forms.MessageBoxIcon.Question,
+                    System.Windows.Forms.MessageBoxDefaultButton.Button1,
+                    System.Windows.Forms.MessageBoxOptions.DefaultDesktopOnly);
+
+                if (result == System.Windows.Forms.DialogResult.Yes)
+                {
+                    Console.WriteLine("User responded: YES (productive)");
+                    SendResponse(true);
+                }
+                else if (result == System.Windows.Forms.DialogResult.No)
+                {
+                    Console.WriteLine("User responded: NO (not productive)");
+                    SendResponse(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"✗ Windows notification failed: {ex.Message}");
+                Console.WriteLine("Use the tray menu to respond");
             }
         }
 
@@ -183,6 +227,7 @@ namespace NudgeTray
             }
         }
 
+        #if !WINDOWS
         private static async void ShowDbusNotification()
         {
             Console.WriteLine("[DEBUG] ShowDbusNotification called (native DBus)");
@@ -281,6 +326,7 @@ namespace NudgeTray
                 throw;
             }
         }
+        #endif
 
 
         private static void ShowFallbackNotification()
