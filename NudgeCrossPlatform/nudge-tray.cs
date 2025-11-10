@@ -27,6 +27,8 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using DesktopNotifications;
+using DesktopNotifications.Avalonia;
 
 namespace NudgeTray
 {
@@ -35,6 +37,7 @@ namespace NudgeTray
         const int UDP_PORT = 45001;
         const string VERSION = "1.0.1";
         static Process? _nudgeProcess;
+        static INotificationManager? _notificationManager;
 
         [STAThread]
         static void Main(string[] args)
@@ -60,10 +63,18 @@ namespace NudgeTray
             return AppBuilder.Configure<App>()
                 .UsePlatformDetect()
                 .LogToTrace()
+                .SetupDesktopNotifications()
                 .AfterSetup(_ =>
                 {
+                    InitializeNotifications();
                     StartNudge(interval);
                 });
+        }
+
+        static async void InitializeNotifications()
+        {
+            _notificationManager = await DesktopNotificationManagerBuilder.CreateDefault()
+                .BuildAsync();
         }
 
         static void StartNudge(int interval)
@@ -111,134 +122,53 @@ namespace NudgeTray
             }
         }
 
-        public static void ShowSnapshotNotification()
+        public static async void ShowSnapshotNotification()
         {
-            Console.WriteLine("📸 Snapshot taken! Respond using the notification buttons.");
+            Console.WriteLine("📸 Snapshot taken! Respond using native notification.");
 
-            // Platform-specific notifications
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            if (_notificationManager == null)
             {
-                ShowWindowsNotification();
+                Console.WriteLine("⚠ Notification manager not initialized, using tray menu");
                 return;
             }
 
-            // On Linux, try kdialog first (works on KDE and provides buttons)
-            if (ShowKDialogNotification())
-            {
-                Console.WriteLine("✓ Dialog shown via kdialog");
-                return;
-            }
-
-            // Fallback: notify-send (no buttons, user must use tray menu)
-            ShowFallbackNotification();
-        }
-
-        #if WINDOWS
-        private static void ShowWindowsNotification()
-        {
-            // On Windows, we'll use a MessageBox as a simple notification
-            // In a production app, you'd use Windows Toast Notifications
             try
             {
-                var result = System.Windows.Forms.MessageBox.Show(
-                    "Were you productive during the last interval?",
-                    "Nudge - Productivity Check",
-                    System.Windows.Forms.MessageBoxButtons.YesNo,
-                    System.Windows.Forms.MessageBoxIcon.Question,
-                    System.Windows.Forms.MessageBoxDefaultButton.Button1,
-                    System.Windows.Forms.MessageBoxOptions.DefaultDesktopOnly);
+                var notification = new Notification
+                {
+                    Title = "Nudge - Productivity Check",
+                    Body = "Were you productive during the last interval?",
+                    Buttons =
+                    {
+                        ("Yes", "yes"),
+                        ("No", "no")
+                    }
+                };
 
-                if (result == System.Windows.Forms.DialogResult.Yes)
+                notification.OnClick = (result) =>
                 {
-                    Console.WriteLine("User responded: YES (productive)");
-                    SendResponse(true);
-                }
-                else if (result == System.Windows.Forms.DialogResult.No)
-                {
-                    Console.WriteLine("User responded: NO (not productive)");
-                    SendResponse(false);
-                }
+                    if (result == "yes")
+                    {
+                        Console.WriteLine("User responded: YES (productive)");
+                        SendResponse(true);
+                    }
+                    else if (result == "no")
+                    {
+                        Console.WriteLine("User responded: NO (not productive)");
+                        SendResponse(false);
+                    }
+                };
+
+                await _notificationManager.ShowNotification(notification);
+                Console.WriteLine("✓ Native notification sent");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"✗ Windows notification failed: {ex.Message}");
+                Console.WriteLine($"✗ Native notification failed: {ex.Message}");
                 Console.WriteLine("Use the tray menu to respond");
             }
         }
-        #else
-        private static void ShowWindowsNotification()
-        {
-            // Fallback for non-Windows platforms (shouldn't be called)
-            Console.WriteLine("⚠ Windows notifications not available on this platform");
-            Console.WriteLine("Use the tray menu to respond");
-        }
-        #endif
 
-        private static bool ShowKDialogNotification()
-        {
-            try
-            {
-                var process = new Process
-                {
-                    StartInfo = new ProcessStartInfo
-                    {
-                        FileName = "kdialog",
-                        Arguments = "--title \"Nudge - Productivity Check\" " +
-                                   "--yesno \"Were you productive during the last interval?\" " +
-                                   "--yes-label \"Yes - Productive\" " +
-                                   "--no-label \"No - Not Productive\"",
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    }
-                };
-
-                process.Start();
-                process.WaitForExit();
-
-                // kdialog exit codes: 0 = yes, 1 = no, 2 = cancel
-                if (process.ExitCode == 0)
-                {
-                    Console.WriteLine("User responded: YES (productive)");
-                    SendResponse(true);
-                }
-                else if (process.ExitCode == 1)
-                {
-                    Console.WriteLine("User responded: NO (not productive)");
-                    SendResponse(false);
-                }
-
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-
-        private static void ShowFallbackNotification()
-        {
-            // Fallback to notify-send on Linux (without buttons)
-            try
-            {
-                var process = new Process
-                {
-                    StartInfo = new ProcessStartInfo
-                    {
-                        FileName = "notify-send",
-                        Arguments = "-u critical -t 60000 \"Nudge - Productivity Check\" \"Were you productive? Use the tray menu to respond\"",
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    }
-                };
-                process.Start();
-                Console.WriteLine("✓ Sent notification via fallback method (use tray menu to respond)");
-            }
-            catch
-            {
-                Console.WriteLine("✗ All notification methods failed - use tray menu");
-            }
-        }
 
         public static void SendResponse(bool productive)
         {
