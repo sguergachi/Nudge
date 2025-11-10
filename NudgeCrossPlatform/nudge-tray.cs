@@ -193,87 +193,149 @@ namespace NudgeTray
                 await connection.ConnectAsync();
 
                 // Create and send Notify method call
-                using var writer = connection.GetMessageWriter();
+                MessageBuffer message;
+                {
+                    using var writer = connection.GetMessageWriter();
 
-                writer.WriteMethodCallHeader(
-                    destination: "org.freedesktop.Notifications",
-                    path: "/org/freedesktop/Notifications",
-                    @interface: "org.freedesktop.Notifications",
-                    signature: "susssasa{sv}i",
-                    member: "Notify");
+                    writer.WriteMethodCallHeader(
+                        destination: "org.freedesktop.Notifications",
+                        path: "/org/freedesktop/Notifications",
+                        @interface: "org.freedesktop.Notifications",
+                        signature: "susssasa{sv}i",
+                        member: "Notify");
 
-                writer.WriteString("Nudge");  // app_name
-                writer.WriteUInt32(0);        // replaces_id
-                writer.WriteString("");       // app_icon
-                writer.WriteString("Nudge - Productivity Check"); // summary
-                writer.WriteString("Were you productive during the last interval?"); // body
+                    writer.WriteString("Nudge");  // app_name
+                    writer.WriteUInt32(0);        // replaces_id
+                    writer.WriteString("");       // app_icon
+                    writer.WriteString("Nudge - Productivity Check"); // summary
+                    writer.WriteString("Were you productive during the last interval?"); // body
 
-                // Write actions array
-                writer.WriteArray(new string[] { "yes", "Yes - Productive", "no", "No - Not Productive" });
+                    // Write actions array
+                    writer.WriteArray(new string[] { "yes", "Yes - Productive", "no", "No - Not Productive" });
 
-                // Write hints dictionary
-                writer.WriteDictionaryStart();
-                writer.WriteDictionaryEntry("urgency", new VariantValue((byte)2));
-                writer.WriteDictionaryEntry("x-kde-appname", new VariantValue("Nudge"));
-                writer.WriteDictionaryEntry("x-kde-eventId", new VariantValue("productivity-check"));
-                writer.WriteDictionaryEnd();
+                    // Write hints dictionary
+                    var arrayStart = writer.WriteDictionaryStart();
+                    writer.WriteDictionaryEntryStart();
+                    writer.WriteString("urgency");
+                    writer.WriteVariant(VariantValue.Byte(2));
+                    writer.WriteDictionaryEntryStart();
+                    writer.WriteString("resident");
+                    writer.WriteVariant(VariantValue.Bool(true));
+                    writer.WriteDictionaryEntryStart();
+                    writer.WriteString("x-kde-appname");
+                    writer.WriteVariant(VariantValue.String("Nudge"));
+                    writer.WriteDictionaryEntryStart();
+                    writer.WriteString("x-kde-eventId");
+                    writer.WriteVariant(VariantValue.String("productivity-check"));
+                    writer.WriteDictionaryEnd(arrayStart);
 
-                writer.WriteInt32(0);  // expire_timeout (0 = infinite)
+                    writer.WriteInt32(0);  // expire_timeout (0 = infinite)
+
+                    message = writer.CreateMessage();
+                }
+                // MessageWriter is now disposed, safe to await
 
                 var notificationId = await connection.CallMethodAsync(
-                    writer.CreateMessage(),
+                    message,
                     (Message m, object? s) => m.GetBodyReader().ReadUInt32(),
                     null);
 
                 Console.WriteLine($"[DEBUG] Notification ID: {notificationId}");
 
-                // Listen for ActionInvoked signal
-                await connection.AddMatchAsync("type='signal',interface='org.freedesktop.Notifications',member='ActionInvoked'");
+                var cancellationSource = new CancellationTokenSource(TimeSpan.FromSeconds(60));
 
-                _ = Task.Run(async () =>
+                // Listen for NotificationClosed to debug why it's closing
+                var closedMatchRule = new MatchRule
                 {
-                    try
-                    {
-                        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                    Type = MessageType.Signal,
+                    Interface = "org.freedesktop.Notifications",
+                    Member = "NotificationClosed"
+                };
 
-                        await foreach (var signal in connection.ReadSignalsAsync(cts.Token))
+                await connection.AddMatchAsync(
+                    closedMatchRule,
+                    (Message m, object? s) =>
+                    {
+                        var reader = m.GetBodyReader();
+                        return (reader.ReadUInt32(), reader.ReadUInt32());
+                    },
+                    (Exception? ex, (uint id, uint reason) signal, object? readerState, object? handlerState) =>
+                    {
+                        if (ex != null)
                         {
-                            if (signal.Interface == "org.freedesktop.Notifications" &&
-                                signal.Member == "ActionInvoked")
-                            {
-                                var reader = signal.GetBodyReader();
-                                var id = reader.ReadUInt32();
-                                var actionKey = reader.ReadString();
-
-                                if (id == notificationId)
-                                {
-                                    Console.WriteLine($"[DEBUG] Action invoked: {actionKey}");
-
-                                    if (actionKey == "yes")
-                                    {
-                                        Console.WriteLine("User responded: YES (productive)");
-                                        SendResponse(true);
-                                    }
-                                    else if (actionKey == "no")
-                                    {
-                                        Console.WriteLine("User responded: NO (not productive)");
-                                        SendResponse(false);
-                                    }
-
-                                    break;
-                                }
-                            }
+                            Console.WriteLine($"[DEBUG] Closed listener error: {ex.Message}");
+                            return;
                         }
-                    }
-                    catch (OperationCanceledException)
+
+                        if (signal.id == notificationId)
+                        {
+                            string reasonText = signal.reason switch
+                            {
+                                1 => "expired",
+                                2 => "dismissed by user",
+                                3 => "closed by CloseNotification call",
+                                4 => "undefined/reserved",
+                                _ => $"unknown ({signal.reason})"
+                            };
+                            Console.WriteLine($"[DEBUG] Notification closed: reason={reasonText}");
+                        }
+                    },
+                    ObserverFlags.None,
+                    null,
+                    null,
+                    true
+                );
+
+                // Listen for ActionInvoked signal
+                var actionMatchRule = new MatchRule
+                {
+                    Type = MessageType.Signal,
+                    Interface = "org.freedesktop.Notifications",
+                    Member = "ActionInvoked"
+                };
+
+                await connection.AddMatchAsync(
+                    actionMatchRule,
+                    (Message m, object? s) =>
                     {
-                        Console.WriteLine("[DEBUG] Action listener timeout (60s)");
-                    }
-                    catch (Exception ex)
+                        var reader = m.GetBodyReader();
+                        return (reader.ReadUInt32(), reader.ReadString());
+                    },
+                    (Exception? ex, (uint id, string actionKey) signal, object? readerState, object? handlerState) =>
                     {
-                        Console.WriteLine($"[DEBUG] Action listener error: {ex.Message}");
-                    }
-                });
+                        if (ex != null)
+                        {
+                            Console.WriteLine($"[DEBUG] Action listener error: {ex.Message}");
+                            return;
+                        }
+
+                        if (signal.id == notificationId)
+                        {
+                            Console.WriteLine($"[DEBUG] Action invoked: {signal.actionKey}");
+
+                            if (signal.actionKey == "yes")
+                            {
+                                Console.WriteLine("User responded: YES (productive)");
+                                SendResponse(true);
+                            }
+                            else if (signal.actionKey == "no")
+                            {
+                                Console.WriteLine("User responded: NO (not productive)");
+                                SendResponse(false);
+                            }
+
+                            cancellationSource.Cancel();
+                        }
+                    },
+                    ObserverFlags.None,
+                    null,
+                    null,
+                    true
+                );
+
+                // Keep connection alive until cancelled
+                Console.WriteLine("[DEBUG] Waiting for notification interaction (60s timeout)...");
+                await Task.Delay(-1, cancellationSource.Token).ContinueWith(_ => { });
             }
             catch (Exception ex)
             {
