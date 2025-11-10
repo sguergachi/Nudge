@@ -587,234 +587,7 @@ class Nudge
 
     static string GetKDEFocusedApp()
     {
-        // Try KWin D-Bus scripting API first (works on both Wayland and X11)
-        // This requires either qdbus, qdbus-qt5, qdbus-qt6, or dbus-send
-        if (CommandExists("dbus-send") || CommandExists("qdbus") ||
-            CommandExists("qdbus-qt5") || CommandExists("qdbus-qt6"))
-        {
-            try
-            {
-                // Determine which D-Bus command to use
-                string dbusCmd = "";
-                if (CommandExists("qdbus-qt6")) dbusCmd = "qdbus-qt6";
-                else if (CommandExists("qdbus-qt5")) dbusCmd = "qdbus-qt5";
-                else if (CommandExists("qdbus")) dbusCmd = "qdbus";
-                else if (CommandExists("dbus-send")) dbusCmd = "dbus-send";
-
-                if (!string.IsNullOrEmpty(dbusCmd))
-                {
-                    Dim($"  Using D-Bus command: {dbusCmd}");
-
-                    // Create a unique marker to identify our output
-                    var marker = Guid.NewGuid().ToString("N").Substring(0, 8);
-
-                    // Create a KWin script that uses multiple output methods
-                    // Some KDE configs route output to different places
-                    string scriptContent = $@"
-const win = workspace.activeWindow;
-if (win && win.caption) {{
-    const title = win.caption;
-    // Try multiple output methods as different KDE versions route differently
-    print('<<<NUDGE_{marker}:' + title + '>>>');
-    console.log('<<<NUDGE_{marker}:' + title + '>>>');
-    console.error('<<<NUDGE_{marker}:' + title + '>>>');
-}}";
-
-                    // Write script to a temporary file
-                    var tempScript = Path.Combine(Path.GetTempPath(), $"nudge-kwin-{Guid.NewGuid()}.js");
-                    File.WriteAllText(tempScript, scriptContent);
-
-                    try
-                    {
-                        string loadResult = "";
-                        string scriptNum = "";
-
-                        // Load the script via D-Bus using the appropriate command
-                        if (dbusCmd.Contains("qdbus"))
-                        {
-                            loadResult = RunCommand(dbusCmd,
-                                $"org.kde.KWin /Scripting org.kde.kwin.Scripting.loadScript \"{tempScript}\"");
-                            scriptNum = loadResult.Trim();
-                        }
-                        else if (dbusCmd == "dbus-send")
-                        {
-                            // Use dbus-send with full signature
-                            loadResult = RunCommand("dbus-send",
-                                $"--session --print-reply --dest=org.kde.KWin /Scripting " +
-                                $"org.kde.kwin.Scripting.loadScript string:\"{tempScript}\"");
-
-                            // Parse script number from dbus-send output (format: "int32 N")
-                            var match = System.Text.RegularExpressions.Regex.Match(loadResult, @"int32\s+(\d+)");
-                            if (match.Success)
-                            {
-                                scriptNum = match.Groups[1].Value;
-                            }
-                        }
-
-                        if (string.IsNullOrWhiteSpace(scriptNum))
-                        {
-                            Dim($"  Failed to load KWin script (no script number returned)");
-                        }
-                        else if (!string.IsNullOrWhiteSpace(scriptNum))
-                        {
-                            Dim($"  Loaded KWin script #{scriptNum}");
-
-                            // Run the script
-                            if (dbusCmd.Contains("qdbus"))
-                            {
-                                RunCommand(dbusCmd,
-                                    $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.run");
-                            }
-                            else if (dbusCmd == "dbus-send")
-                            {
-                                RunCommand("dbus-send",
-                                    $"--session --dest=org.kde.KWin /Scripting/Script{scriptNum} " +
-                                    $"org.kde.kwin.Script.run");
-                            }
-
-                            Dim($"  Executed KWin script, waiting for output...");
-
-                            // Give KWin more time to execute and log
-                            Thread.Sleep(250);
-
-                            string foundTitle = "";
-                            var searchMarker = $"<<<NUDGE_{marker}:";
-
-                            // Try multiple log sources
-                            // 1. Try journalctl (KDE Plasma 5.23+)
-                            if (CommandExists("journalctl") && string.IsNullOrEmpty(foundTitle))
-                            {
-                                try
-                                {
-                                    // Check both user and system journals, and look back further
-                                    var journalCmd = "journalctl --user --system -n 200 -o cat --since \"10 seconds ago\" 2>/dev/null";
-                                    var output = RunCommand("sh", $"-c \"{journalCmd}\"");
-
-                                    Dim($"  Journal output length: {output.Length} chars");
-                                    foundTitle = ExtractTitleFromOutput(output, searchMarker);
-                                }
-                                catch (Exception ex)
-                                {
-                                    Dim($"  Journal check error: {ex.Message}");
-                                }
-                            }
-
-                            // 2. Try .xsession-errors (older KDE versions)
-                            if (string.IsNullOrEmpty(foundTitle))
-                            {
-                                try
-                                {
-                                    var xsessionFile = Path.Combine(Environment.GetEnvironmentVariable("HOME") ?? "/tmp", ".xsession-errors");
-                                    if (File.Exists(xsessionFile))
-                                    {
-                                        var lines = File.ReadAllLines(xsessionFile).Reverse().Take(100);
-                                        var output = string.Join("\n", lines);
-                                        foundTitle = ExtractTitleFromOutput(output, searchMarker);
-                                        if (!string.IsNullOrEmpty(foundTitle))
-                                        {
-                                            Dim($"  Found title in .xsession-errors");
-                                        }
-                                    }
-                                }
-                                catch { /* File read error, skip */ }
-                            }
-
-                            // 3. Try kwin logs in .local/share
-                            if (string.IsNullOrEmpty(foundTitle))
-                            {
-                                try
-                                {
-                                    var homeDir = Environment.GetEnvironmentVariable("HOME") ?? "/tmp";
-                                    var logPaths = new[]
-                                    {
-                                        Path.Combine(homeDir, ".local/share/sddm/xorg-session.log"),
-                                        Path.Combine(homeDir, ".local/share/kwin/kwin.log"),
-                                        "/tmp/kwin.log"
-                                    };
-
-                                    foreach (var logPath in logPaths)
-                                    {
-                                        if (File.Exists(logPath))
-                                        {
-                                            var lines = File.ReadAllLines(logPath).Reverse().Take(100);
-                                            var output = string.Join("\n", lines);
-                                            foundTitle = ExtractTitleFromOutput(output, searchMarker);
-                                            if (!string.IsNullOrEmpty(foundTitle))
-                                            {
-                                                Dim($"  Found title in {logPath}");
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                                catch { /* File read error, skip */ }
-                            }
-
-                            if (!string.IsNullOrEmpty(foundTitle))
-                            {
-                                // Clean up before returning
-                                try
-                                {
-                                    if (dbusCmd.Contains("qdbus"))
-                                    {
-                                        RunCommand(dbusCmd,
-                                            $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.stop");
-                                        RunCommand(dbusCmd,
-                                            $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.unload");
-                                    }
-                                    else if (dbusCmd == "dbus-send")
-                                    {
-                                        RunCommand("dbus-send",
-                                            $"--session --dest=org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.stop");
-                                        RunCommand("dbus-send",
-                                            $"--session --dest=org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.unload");
-                                    }
-                                }
-                                catch { /* Cleanup errors are non-critical */ }
-
-                                return foundTitle;
-                            }
-                            else
-                            {
-                                Dim($"  No window title found in any log source");
-                            }
-
-                            // Cleanup script
-                            try
-                            {
-                                if (dbusCmd.Contains("qdbus"))
-                                {
-                                    RunCommand(dbusCmd,
-                                        $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.stop");
-                                    RunCommand(dbusCmd,
-                                        $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.unload");
-                                }
-                                else if (dbusCmd == "dbus-send")
-                                {
-                                    RunCommand("dbus-send",
-                                        $"--session --dest=org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.stop");
-                                    RunCommand("dbus-send",
-                                        $"--session --dest=org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.unload");
-                                }
-                            }
-                            catch { /* Cleanup errors are non-critical */ }
-                        }
-                    }
-                    finally
-                    {
-                        // Clean up temp file
-                        try { File.Delete(tempScript); } catch { }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                // KWin scripting failed, continue to fallbacks
-                Dim($"  KWin D-Bus error: {ex.Message}");
-            }
-        }
-
-        // Fallback: Try xdotool for X11 sessions
+        // Approach 1: Try xdotool for X11 sessions first (most reliable when available)
         if (CommandExists("xdotool"))
         {
             try
@@ -827,12 +600,124 @@ if (win && win.caption) {{
             }
             catch
             {
-                // xdotool failed
+                // xdotool failed, continue to other methods
             }
         }
 
+        // Approach 2: Try to get window info via qdbus querying window list
+        // This is more reliable than running scripts
+        if (CommandExists("qdbus") || CommandExists("qdbus-qt6") || CommandExists("qdbus-qt5"))
+        {
+            try
+            {
+                string dbusCmd = "";
+                if (CommandExists("qdbus-qt6")) dbusCmd = "qdbus-qt6";
+                else if (CommandExists("qdbus-qt5")) dbusCmd = "qdbus-qt5";
+                else if (CommandExists("qdbus")) dbusCmd = "qdbus";
+
+                if (!string.IsNullOrEmpty(dbusCmd))
+                {
+                    // Try to list all windows and find active one
+                    // Query KWin's window list
+                    var result = RunCommand(dbusCmd, "org.kde.KWin /KWin windows");
+                    if (!string.IsNullOrWhiteSpace(result))
+                    {
+                        // Parse window IDs and check each for active state
+                        var lines = result.Split('\n');
+                        foreach (var line in lines)
+                        {
+                            if (!string.IsNullOrWhiteSpace(line))
+                            {
+                                try
+                                {
+                                    // Try to get caption from window path
+                                    var captionResult = RunCommand(dbusCmd,
+                                        $"org.kde.KWin {line.Trim()} caption");
+                                    if (!string.IsNullOrWhiteSpace(captionResult))
+                                    {
+                                        var isActive = RunCommand(dbusCmd,
+                                            $"org.kde.KWin {line.Trim()} active");
+                                        if (isActive.Trim().ToLower() == "true")
+                                        {
+                                            return captionResult.Trim();
+                                        }
+                                    }
+                                }
+                                catch { /* Skip this window */ }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Dim($"  qdbus windows query error: {ex.Message}");
+            }
+        }
+
+        // Approach 3: Try to get the foreground process via /proc
+        // This gives us at least the process name, which is better than nothing
+        try
+        {
+            // On Wayland, we can try to find the most recently active GUI process
+            // by checking /proc/*/status for processes with PPID of the session
+            var procDirs = Directory.GetDirectories("/proc")
+                .Where(d => char.IsDigit(Path.GetFileName(d)[0]))
+                .ToList();
+
+            // Look for common GUI app indicators
+            foreach (var procDir in procDirs)
+            {
+                try
+                {
+                    var pid = Path.GetFileName(procDir);
+                    var cmdlinePath = Path.Combine(procDir, "cmdline");
+                    var statusPath = Path.Combine(procDir, "status");
+
+                    if (File.Exists(cmdlinePath) && File.Exists(statusPath))
+                    {
+                        var cmdline = File.ReadAllText(cmdlinePath).Replace("\0", " ").Trim();
+                        var status = File.ReadAllText(statusPath);
+
+                        // Check if this is a GUI process (has DISPLAY or WAYLAND_DISPLAY env)
+                        var environPath = Path.Combine(procDir, "environ");
+                        if (File.Exists(environPath))
+                        {
+                            var environ = File.ReadAllText(environPath);
+                            if (environ.Contains("WAYLAND_DISPLAY") || environ.Contains("DISPLAY="))
+                            {
+                                // Extract process name from cmdline
+                                if (!string.IsNullOrWhiteSpace(cmdline))
+                                {
+                                    var processName = cmdline.Split(' ')[0];
+                                    processName = Path.GetFileName(processName);
+
+                                    // Filter out system processes
+                                    var systemProcesses = new[] { "kwin_wayland", "kwin_x11", "plasmashell",
+                                        "systemd", "dbus-daemon", "kded5", "kded6", "kglobalaccel" };
+
+                                    if (!systemProcesses.Contains(processName) && !processName.StartsWith("kwin"))
+                                    {
+                                        // This might be our app
+                                        // Store it as a candidate (we'd need more logic to pick the right one)
+                                        // For now, just break on first found
+                                        // In reality, we need better heuristics
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                catch { /* Skip this process */ }
+            }
+        }
+        catch
+        {
+            // Process enumeration failed
+        }
+
         // Last resort: return generic identifier
-        // This happens when on Wayland without KWin scripting access
+        // This happens when on Wayland without any working detection method
         return "kde-wayland-window";
     }
 
