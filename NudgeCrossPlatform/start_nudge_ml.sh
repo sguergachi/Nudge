@@ -1,6 +1,13 @@
 #!/bin/bash
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Nudge ML Launcher - Start all ML components
+# Nudge ML Launcher - Start Nudge Tray with ML components
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# This script starts nudge-tray (the main GUI app) which automatically manages:
+# - The nudge process (productivity tracking)
+# - ML inference service (real-time predictions)
+# - Background trainer (continuous learning)
+#
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 set -e
@@ -144,87 +151,22 @@ if [[ ! $REPLY =~ ^[Yy]$ ]] && [[ ! -z $REPLY ]]; then
     exit 0
 fi
 
-# Clean up function
-cleanup() {
-    echo ""
-    header "Shutting Down"
-
-    if [ ! -z "$INFERENCE_PID" ]; then
-        info "Stopping inference server (PID: $INFERENCE_PID)"
-        kill $INFERENCE_PID 2>/dev/null || true
-    fi
-
-    if [ ! -z "$TRAINER_PID" ]; then
-        info "Stopping background trainer (PID: $TRAINER_PID)"
-        kill $TRAINER_PID 2>/dev/null || true
-    fi
-
-    success "Cleanup complete"
-    exit 0
-}
-
-trap cleanup EXIT INT TERM
-
-# Start components
-header "Starting Components"
-
-INFERENCE_PID=""
-TRAINER_PID=""
-
-if [ "$mode" = "ml" ]; then
-    # Start inference server
-    info "Starting ML inference server..."
-    python3 model_inference.py --model-dir "$MODEL_DIR" --socket /tmp/nudge_ml.sock 2>&1 | sed 's/^/  [INFERENCE] /' &
-    INFERENCE_PID=$!
-
-    # Wait for socket to be created
-    for i in {1..10}; do
-        if [ -S /tmp/nudge_ml.sock ]; then
-            success "Inference server ready (PID: $INFERENCE_PID)"
-            break
-        fi
-        sleep 0.5
-    done
-
-    if [ ! -S /tmp/nudge_ml.sock ]; then
-        error "Inference server failed to start"
-        exit 1
-    fi
-
-    # Test inference server
-    info "Testing inference server..."
-    if python3 model_inference.py --test >/dev/null 2>&1; then
-        success "Inference server test passed"
-    else
-        warning "Inference server test failed - but continuing anyway"
-    fi
-
-    # Start background trainer
-    info "Starting background trainer..."
-    python3 background_trainer.py \
-        --csv "$CSV_FILE" \
-        --model-dir "$MODEL_DIR" \
-        --architecture "$ARCHITECTURE" \
-        --min-new-samples 50 \
-        --check-interval 300 \
-        2>&1 | sed 's/^/  [TRAINER] /' &
-    TRAINER_PID=$!
-    success "Background trainer started (PID: $TRAINER_PID)"
-
-    sleep 1
-fi
-
-# Start main nudge application
+# Start nudge-tray (which manages all processes)
 echo ""
-header "Starting Nudge"
+header "Starting Nudge Tray"
 echo ""
 
 if [ "$mode" = "ml" ]; then
     info "Starting with ML-powered adaptive notifications..."
+    info "Nudge Tray will automatically manage:"
+    info "  - ML inference service (real-time predictions)"
+    info "  - Background trainer (continuous learning)"
+    info "  - Nudge process (productivity tracking)"
     echo ""
-    ./nudge --ml --interval "$INTERVAL" "$CSV_FILE"
+    ./nudge-tray --ml --interval "$INTERVAL"
 else
     info "Starting in data collection mode (interval-based)..."
+    info "Train a model after collecting 100+ samples"
     echo ""
-    ./nudge --interval "$INTERVAL" "$CSV_FILE"
+    ./nudge-tray --interval "$INTERVAL"
 fi

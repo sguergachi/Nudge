@@ -16,11 +16,11 @@ python3 -c "import tensorflow; print('TensorFlow version:', tensorflow.__version
 
 ### Step 1: Collect Initial Data (1-2 days)
 
-Start Nudge in data collection mode. Answer honestly for best results.
+Start Nudge Tray in data collection mode. Answer honestly for best results.
 
 ```bash
 # Start collecting data (5-minute intervals)
-./nudge --interval 5
+./nudge-tray --interval 5
 
 # Or use the launcher
 ./start_nudge_ml.sh
@@ -52,16 +52,17 @@ Expected output:
 
 ### Step 3: Enable ML Mode (Adaptive Notifications)
 
-Start all ML components with one command:
+Start Nudge Tray with ML enabled:
 
 ```bash
 ./start_nudge_ml.sh
 ```
 
-This starts:
+Nudge Tray automatically manages:
 - ✅ ML inference server (real-time predictions)
 - ✅ Background trainer (continuous learning)
-- ✅ Nudge with ML enabled (adaptive notifications)
+- ✅ Nudge process (adaptive notifications)
+- ✅ System tray GUI (easy responses)
 
 ## How It Works
 
@@ -84,28 +85,26 @@ ML Mode (Adaptive)
 ### Basic Usage
 
 ```bash
-# Data collection mode
-./nudge --interval 5
+# Data collection mode (no ML)
+./nudge-tray --interval 5
 
-# ML-powered mode
-./nudge --ml --interval 5
+# ML-powered mode (recommended)
+./nudge-tray --ml --interval 5
 
 # ML mode with 2-minute fallback
-./nudge --ml --interval 2
+./nudge-tray --ml --interval 2
+
+# Or use the convenient launcher
+./start_nudge_ml.sh
 ```
 
-### Advanced: Manual Control
+### What Nudge Tray Provides
 
-```bash
-# Terminal 1: Start inference server
-python3 model_inference.py --model-dir ./model
-
-# Terminal 2: Start background trainer
-python3 background_trainer.py --csv /tmp/HARVEST.CSV
-
-# Terminal 3: Start nudge with ML
-./nudge --ml
-```
+- 🖥️ System tray icon (always accessible)
+- 📢 Desktop notifications with buttons
+- 🔄 Automatic process management (no manual service starting)
+- 🧠 ML service lifecycle management
+- 🛑 Clean shutdown of all components
 
 ### Test Your Setup
 
@@ -306,8 +305,8 @@ Common issues:
 
 ```bash
 # Day 1: Collect data
-$ ./nudge --interval 5
-[... use normally for 8 hours ...]
+$ ./nudge-tray --interval 5
+[... system tray icon appears, use normally for 8 hours ...]
 
 # After work: Check progress
 $ tail -n +2 /tmp/HARVEST.CSV | wc -l
@@ -322,11 +321,13 @@ $ python3 train_model.py /tmp/HARVEST.CSV
 $ ./start_nudge_ml.sh
 
 Mode: ML-Powered (Adaptive)
-✓ Inference server ready
-✓ Background trainer started
-✓ ML inference server connected
-  ML-powered adaptive notifications enabled
-  Confidence threshold: 98%
+🧠 Starting ML services...
+  ✓ ML inference service started
+  ✓ Background trainer started
+✓ ML services ready
+[Nudge Tray launches with system tray icon]
+
+# Check tray menu shows: "🧠 ML: Active"
 
 [... system learns and adapts over time ...]
 ```

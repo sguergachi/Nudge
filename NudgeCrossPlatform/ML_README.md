@@ -62,8 +62,8 @@ This creates a personalized feedback loop that improves over time as the model l
 Start with regular interval-based notifications to collect initial training data:
 
 ```bash
-# Start nudge without ML (regular 5-minute intervals)
-./nudge --interval 5
+# Start nudge-tray without ML (regular 5-minute intervals)
+./nudge-tray --interval 5
 ```
 
 **Goal**: Collect at least 100 labeled examples (about 8 hours of usage)
@@ -92,20 +92,22 @@ python3 train_model.py /tmp/HARVEST.CSV --model-dir ./model
 
 ### Phase 3: Enable ML-Powered Notifications
 
-Start the inference server and run nudge with ML enabled:
+Start nudge-tray with ML enabled (it automatically manages all services):
 
 ```bash
-# Terminal 1: Start inference server
-python3 model_inference.py --model-dir ./model
+# Easy way - use the launcher
+./start_nudge_ml.sh
 
-# Terminal 2: Start background trainer (optional)
-python3 background_trainer.py --csv /tmp/HARVEST.CSV --model-dir ./model
-
-# Terminal 3: Start nudge with ML enabled
-./nudge --ml --interval 5
+# Or directly
+./nudge-tray --ml --interval 5
 ```
 
-Now Nudge will:
+Nudge Tray automatically starts:
+- ML inference server (real-time predictions)
+- Background trainer (continuous learning)
+- Nudge process (productivity tracking)
+
+Now the system will:
 - ✅ Send alerts when ML is >98% confident you're NOT productive
 - ⏭️  Skip alerts when ML is >98% confident you ARE productive
 - 🔄 Fall back to 5-minute intervals when confidence is low
@@ -113,21 +115,24 @@ Now Nudge will:
 
 ## Configuration Options
 
-### Main Application (nudge)
+### Main Application (nudge-tray)
 
 ```bash
-./nudge [options] [csv-path]
+./nudge-tray [options]
 
 Options:
   --ml              Enable ML-powered adaptive notifications
   --interval N      Fallback interval in minutes (default: 5)
-  --help            Show help
 
 Examples:
-  ./nudge --ml                    # ML with 5-min fallback
-  ./nudge --ml --interval 2       # ML with 2-min fallback
-  ./nudge --ml /data/harvest.csv  # Custom CSV path
+  ./nudge-tray                    # Data collection mode
+  ./nudge-tray --ml               # ML with 5-min fallback
+  ./nudge-tray --ml --interval 2  # ML with 2-min fallback
+  ./start_nudge_ml.sh             # Recommended launcher
 ```
+
+**Note**: Nudge Tray automatically manages all services (ML inference, background trainer, nudge process).
+No need to manually start Python services!
 
 ### Inference Service
 
