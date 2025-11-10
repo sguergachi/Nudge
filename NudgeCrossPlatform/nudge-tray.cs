@@ -268,14 +268,6 @@ namespace NudgeTray
         {
             Console.WriteLine("[DEBUG] ShowWindowsNotification called (custom notification with buttons)");
 
-            // Must run on UI thread
-            if (_trayIcon != null)
-            {
-                _trayIcon.BalloonTipTitle = "Nudge - Productivity Check";
-                _trayIcon.BalloonTipText = "Were you productive during the last interval?";
-                _trayIcon.ShowBalloonTip(5000);
-            }
-
             // Close existing notification if any and create new one on UI thread
             _messageLoopForm?.Invoke((Action)(() =>
             {
