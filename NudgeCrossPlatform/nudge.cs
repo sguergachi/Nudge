@@ -604,8 +604,8 @@ class Nudge
             }
         }
 
-        // Approach 2: Try to get window info via qdbus querying window list
-        // This is more reliable than running scripts
+        // Approach 2: Use KWin script to write window UUID to file, then query via getWindowInfo()
+        // This works because: script can write to file, then we use qdbus getWindowInfo(uuid)
         if (CommandExists("qdbus") || CommandExists("qdbus-qt6") || CommandExists("qdbus-qt5"))
         {
             try
@@ -617,107 +617,118 @@ class Nudge
 
                 if (!string.IsNullOrEmpty(dbusCmd))
                 {
-                    // Try to list all windows and find active one
-                    // Query KWin's window list
-                    var result = RunCommand(dbusCmd, "org.kde.KWin /KWin windows");
-                    if (!string.IsNullOrWhiteSpace(result))
+                    // Create temp file for script output
+                    var tempOutput = Path.Combine(Path.GetTempPath(), $"nudge-kwin-{Guid.NewGuid()}.txt");
+
+                    // Create KWin script that writes active window UUID to file
+                    string scriptContent = $@"
+const win = workspace.activeWindow;
+if (win) {{
+    const fs = require('fs');
+    const uuid = win.internalId.toString();
+    fs.writeFile('{tempOutput}', uuid, (err) => {{
+        if (err) {{
+            console.error('Error writing file:', err);
+        }}
+    }});
+}}";
+
+                    var tempScript = Path.Combine(Path.GetTempPath(), $"nudge-kwin-{Guid.NewGuid()}.js");
+                    File.WriteAllText(tempScript, scriptContent);
+
+                    try
                     {
-                        // Parse window IDs and check each for active state
-                        var lines = result.Split('\n');
-                        foreach (var line in lines)
+                        // Load and run the script
+                        var loadResult = RunCommand(dbusCmd,
+                            $"org.kde.KWin /Scripting org.kde.kwin.Scripting.loadScript \"{tempScript}\"");
+
+                        if (!string.IsNullOrWhiteSpace(loadResult))
                         {
-                            if (!string.IsNullOrWhiteSpace(line))
+                            var scriptNum = loadResult.Trim();
+
+                            // Run the script
+                            RunCommand(dbusCmd,
+                                $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.run");
+
+                            // Give script time to write file
+                            Thread.Sleep(100);
+
+                            // Read the UUID from file
+                            if (File.Exists(tempOutput))
                             {
-                                try
+                                var uuid = File.ReadAllText(tempOutput).Trim();
+
+                                if (!string.IsNullOrWhiteSpace(uuid))
                                 {
-                                    // Try to get caption from window path
-                                    var captionResult = RunCommand(dbusCmd,
-                                        $"org.kde.KWin {line.Trim()} caption");
-                                    if (!string.IsNullOrWhiteSpace(captionResult))
+                                    // Use getWindowInfo to get window details
+                                    var windowInfo = RunCommand(dbusCmd,
+                                        $"org.kde.KWin /KWin getWindowInfo \"{uuid}\"");
+
+                                    if (!string.IsNullOrWhiteSpace(windowInfo))
                                     {
-                                        var isActive = RunCommand(dbusCmd,
-                                            $"org.kde.KWin {line.Trim()} active");
-                                        if (isActive.Trim().ToLower() == "true")
+                                        // Parse caption from the output (it's a QVariantMap)
+                                        // Look for caption field
+                                        var lines = windowInfo.Split('\n');
+                                        foreach (var line in lines)
                                         {
-                                            return captionResult.Trim();
+                                            if (line.Contains("caption") || line.Contains("Caption"))
+                                            {
+                                                // Try to extract the value
+                                                var parts = line.Split(':');
+                                                if (parts.Length > 1)
+                                                {
+                                                    var caption = parts[1].Trim().Trim('"', '\'');
+                                                    if (!string.IsNullOrWhiteSpace(caption))
+                                                    {
+                                                        // Clean up
+                                                        try
+                                                        {
+                                                            RunCommand(dbusCmd,
+                                                                $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.stop");
+                                                            RunCommand(dbusCmd,
+                                                                $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.unload");
+                                                            File.Delete(tempOutput);
+                                                        }
+                                                        catch { }
+
+                                                        return caption;
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
-                                catch { /* Skip this window */ }
+
+                                // Clean up temp file
+                                try { File.Delete(tempOutput); } catch { }
                             }
+
+                            // Clean up script
+                            try
+                            {
+                                RunCommand(dbusCmd,
+                                    $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.stop");
+                                RunCommand(dbusCmd,
+                                    $"org.kde.KWin /Scripting/Script{scriptNum} org.kde.kwin.Script.unload");
+                            }
+                            catch { }
                         }
+                    }
+                    finally
+                    {
+                        // Clean up script file
+                        try { File.Delete(tempScript); } catch { }
+                        try { File.Delete(tempOutput); } catch { }
                     }
                 }
             }
             catch (Exception ex)
             {
-                Dim($"  qdbus windows query error: {ex.Message}");
+                Dim($"  KWin getWindowInfo error: {ex.Message}");
             }
-        }
-
-        // Approach 3: Try to get the foreground process via /proc
-        // This gives us at least the process name, which is better than nothing
-        try
-        {
-            // On Wayland, we can try to find the most recently active GUI process
-            // by checking /proc/*/status for processes with PPID of the session
-            var procDirs = Directory.GetDirectories("/proc")
-                .Where(d => char.IsDigit(Path.GetFileName(d)[0]))
-                .ToList();
-
-            // Look for common GUI app indicators
-            foreach (var procDir in procDirs)
-            {
-                try
-                {
-                    var pid = Path.GetFileName(procDir);
-                    var cmdlinePath = Path.Combine(procDir, "cmdline");
-                    var statusPath = Path.Combine(procDir, "status");
-
-                    if (File.Exists(cmdlinePath) && File.Exists(statusPath))
-                    {
-                        var cmdline = File.ReadAllText(cmdlinePath).Replace("\0", " ").Trim();
-                        var status = File.ReadAllText(statusPath);
-
-                        // Check if this is a GUI process (has DISPLAY or WAYLAND_DISPLAY env)
-                        var environPath = Path.Combine(procDir, "environ");
-                        if (File.Exists(environPath))
-                        {
-                            var environ = File.ReadAllText(environPath);
-                            if (environ.Contains("WAYLAND_DISPLAY") || environ.Contains("DISPLAY="))
-                            {
-                                // Extract process name from cmdline
-                                if (!string.IsNullOrWhiteSpace(cmdline))
-                                {
-                                    var processName = cmdline.Split(' ')[0];
-                                    processName = Path.GetFileName(processName);
-
-                                    // Filter out system processes
-                                    var systemProcesses = new[] { "kwin_wayland", "kwin_x11", "plasmashell",
-                                        "systemd", "dbus-daemon", "kded5", "kded6", "kglobalaccel" };
-
-                                    if (!systemProcesses.Contains(processName) && !processName.StartsWith("kwin"))
-                                    {
-                                        // This might be our app
-                                        // Store it as a candidate (we'd need more logic to pick the right one)
-                                        // For now, just break on first found
-                                        // In reality, we need better heuristics
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                catch { /* Skip this process */ }
-            }
-        }
-        catch
-        {
-            // Process enumeration failed
         }
 
         // Last resort: return generic identifier
-        // This happens when on Wayland without any working detection method
         return "kde-wayland-window";
     }
 
