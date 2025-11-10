@@ -28,8 +28,11 @@ namespace NudgeTray
     class Program
     {
         const int UDP_PORT = 45001;
-        const string VERSION = "1.0.1";
+        const string VERSION = "1.1.0";
         static Process? _nudgeProcess;
+        static Process? _mlInferenceProcess;
+        static Process? _mlTrainerProcess;
+        internal static bool _mlEnabled = false;
         static DateTime? _nextSnapshotTime;
         static int _intervalMinutes;
         static NotifyIcon? _trayIcon;
@@ -63,6 +66,27 @@ namespace NudgeTray
                     int.TryParse(args[i + 1], out interval);
                     i++; // Skip the interval value
                 }
+                else if (args[i] == "--ml")
+                {
+                    _mlEnabled = true;
+                }
+            }
+
+            // Print banner
+            Console.WriteLine("╔═══════════════════════════════════════════════════════╗");
+            Console.WriteLine("║        Nudge Tray - Productivity Tracker          ║");
+            Console.WriteLine($"║        Version {VERSION}                                   ║");
+            if (_mlEnabled)
+            {
+                Console.WriteLine("║        🧠 ML MODE ENABLED                         ║");
+            }
+            Console.WriteLine("╚═══════════════════════════════════════════════════════╝");
+            Console.WriteLine();
+
+            // Start ML services if enabled
+            if (_mlEnabled)
+            {
+                StartMLServices();
             }
 
             // Initialize Windows App SDK notifications
@@ -244,6 +268,113 @@ namespace NudgeTray
             return Icon.FromHandle(bitmap.GetHicon());
         }
 
+        static void StartMLServices()
+        {
+            try
+            {
+                Console.WriteLine("🧠 Starting ML services...");
+
+                // Check if Python is available
+                string python = "python3";
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    python = "python";
+                }
+
+                // Start ML inference service
+                Console.WriteLine("  Starting ML inference service...");
+                _mlInferenceProcess = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = python,
+                        Arguments = "model_inference.py --model-dir ./model",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+
+                _mlInferenceProcess.OutputDataReceived += (s, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        Console.WriteLine($"[ML Inference] {e.Data}");
+                    }
+                };
+
+                _mlInferenceProcess.ErrorDataReceived += (s, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        Console.WriteLine($"[ML Inference] {e.Data}");
+                    }
+                };
+
+                _mlInferenceProcess.Start();
+                _mlInferenceProcess.BeginOutputReadLine();
+                _mlInferenceProcess.BeginErrorReadLine();
+
+                // Wait a moment for socket to be created
+                Thread.Sleep(2000);
+
+                // Verify socket was created
+                if (File.Exists("/tmp/nudge_ml.sock"))
+                {
+                    Console.WriteLine("  ✓ ML inference service started (socket: /tmp/nudge_ml.sock)");
+                }
+                else
+                {
+                    Console.WriteLine("  ⚠ ML inference socket not found - service may not be ready");
+                }
+
+                // Start background trainer
+                Console.WriteLine("  Starting background trainer...");
+                _mlTrainerProcess = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = python,
+                        Arguments = "background_trainer.py --csv /tmp/HARVEST.CSV --model-dir ./model --check-interval 300",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+
+                _mlTrainerProcess.OutputDataReceived += (s, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        Console.WriteLine($"[ML Trainer] {e.Data}");
+                    }
+                };
+
+                _mlTrainerProcess.ErrorDataReceived += (s, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        Console.WriteLine($"[ML Trainer] {e.Data}");
+                    }
+                };
+
+                _mlTrainerProcess.Start();
+                _mlTrainerProcess.BeginOutputReadLine();
+                _mlTrainerProcess.BeginErrorReadLine();
+
+                Console.WriteLine("  ✓ Background trainer started");
+                Console.WriteLine("✓ ML services ready");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"⚠ Failed to start ML services: {ex.Message}");
+                Console.WriteLine("  Continuing without ML...");
+                _mlEnabled = false;
+            }
+        }
+
         static void StartNudge(int interval)
         {
             _intervalMinutes = interval;
@@ -256,13 +387,20 @@ namespace NudgeTray
                     ? "nudge.exe"
                     : "./nudge";
 
+                // Build arguments
+                string args = $"--interval {interval}";
+                if (_mlEnabled)
+                {
+                    args += " --ml";
+                }
+
                 // Start the main nudge process
                 _nudgeProcess = new Process
                 {
                     StartInfo = new ProcessStartInfo
                     {
                         FileName = nudgeExe,
-                        Arguments = $"--interval {interval}",
+                        Arguments = args,
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
                         UseShellExecute = false,
@@ -284,11 +422,23 @@ namespace NudgeTray
                     }
                 };
 
+                _nudgeProcess.ErrorDataReceived += (s, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        Console.WriteLine($"[Nudge] {e.Data}");
+                    }
+                };
+
                 _nudgeProcess.Start();
                 _nudgeProcess.BeginOutputReadLine();
                 _nudgeProcess.BeginErrorReadLine();
 
                 Console.WriteLine("✓ Nudge process started");
+                if (_mlEnabled)
+                {
+                    Console.WriteLine("  ML mode enabled - waiting for inference server connection...");
+                }
             }
             catch (Exception ex)
             {
@@ -545,6 +695,30 @@ namespace NudgeTray
         {
             Console.WriteLine("[DEBUG] Quit() called - shutting down Nudge...");
 
+            // Stop ML services
+            if (_mlInferenceProcess != null && !_mlInferenceProcess.HasExited)
+            {
+                try
+                {
+                    Console.WriteLine("  Stopping ML inference service...");
+                    _mlInferenceProcess.Kill();
+                    _mlInferenceProcess.Dispose();
+                }
+                catch { }
+            }
+
+            if (_mlTrainerProcess != null && !_mlTrainerProcess.HasExited)
+            {
+                try
+                {
+                    Console.WriteLine("  Stopping background trainer...");
+                    _mlTrainerProcess.Kill();
+                    _mlTrainerProcess.Dispose();
+                }
+                catch { }
+            }
+
+            // Stop main nudge process
             if (_nudgeProcess != null && !_nudgeProcess.HasExited)
             {
                 Console.WriteLine($"[DEBUG] Nudge process PID: {_nudgeProcess.Id}");
@@ -589,9 +763,9 @@ namespace NudgeTray
                 _menuRefreshTimer.Dispose();
             }
 
+            Console.WriteLine("✓ Shutdown complete");
             Console.WriteLine("[DEBUG] Exiting nudge-tray...");
             Application.Exit();
-            Environment.Exit(0);
         }
 
         public static DateTime? GetNextSnapshotTime()
