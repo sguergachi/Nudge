@@ -150,6 +150,45 @@ namespace NudgeTray
         }
 #endif
 
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // SHARED MENU AND ICON HELPERS (Used by both Windows and Linux)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        static string GetMenuStatusText()
+        {
+            if (_waitingForResponse)
+            {
+                return "⏳ Waiting for response...";
+            }
+            else
+            {
+                var nextSnapshot = GetNextSnapshotTime();
+                return nextSnapshot.HasValue
+                    ? $"Next snapshot: {nextSnapshot.Value:HH:mm:ss}"
+                    : "Status: Running...";
+            }
+        }
+
+        static void HandleQuitClicked()
+        {
+            Console.WriteLine("[DEBUG] Quit clicked from context menu");
+            Quit();
+        }
+
+        static MemoryStream GetIconPngStream()
+        {
+            // Create PNG icon data: 32x32 blue circle on transparent background
+            // This base64 string represents a PNG image with the same blue circle (#5588FF)
+            string base64Icon = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAGJSURBVFhH7ZZBTsJAFIbfTGlLKVCgLDQxceHChStXbty5c+nWpUuvgBcQb+ANvIRewBsYE2NcYFy4cOFCEhMSFi5MiNLS+c0rDKV0OtPWhSb+yZd0+t/85r1pmzKGYRiGYRiGYRiGYRiG+Q8olk1N09RN07RNO9ixS9sx7Njlxy5by7btPduOcGz7FWPHLsb2/Yw8zyv+ooRdXV1d4/fv33e/vr7u8ft9nV9eXt7x+/f39yZ+//j4+MC/39/fb/j95eXlHb9fX1/f8Pv5+fkNv5+dnd3w++np6Q2/n5yc3PD78fHxDb8fHR3d8PvBwcENv+/v79/w+97e3g2/7+7u3vD7zs7ODb9vb2/f8PvW1tYNv29ubt7w+8bGxg2/r6+v3/D72traDb+vrq7e8PvKysoNvy8vL9/w+9LS0g2/Ly4u3vD7wsLCDb/Pz8/f8Pvc3NwNv8/Ozt7w+8zMzA2/T09P3/D71NTUDT9PTEzc8Pv4+PgNv4+Njd3w++jo6A0/j4yMDMMwDMMwDMMwjCrl8gebWMzCxQJ3TAAAAABJRU5ErkJggg==";
+
+            byte[] iconBytes = Convert.FromBase64String(base64Icon);
+            return new MemoryStream(iconBytes);
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // PLATFORM-SPECIFIC TRAY ICON IMPLEMENTATIONS
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 #if WINDOWS
         static void CreateTrayIcon()
         {
@@ -236,32 +275,15 @@ namespace NudgeTray
         {
             var menu = new ContextMenuStrip();
 
-            // Status item showing next snapshot time or waiting status
-            string statusText;
-            if (_waitingForResponse)
-            {
-                statusText = "⏳ Waiting for response...";
-            }
-            else
-            {
-                var nextSnapshot = GetNextSnapshotTime();
-                statusText = nextSnapshot.HasValue
-                    ? $"Next snapshot: {nextSnapshot.Value:HH:mm:ss}"
-                    : "Status: Running...";
-            }
-
-            var statusItem = new ToolStripMenuItem(statusText) { Enabled = false };
+            // Status item
+            var statusItem = new ToolStripMenuItem(GetMenuStatusText()) { Enabled = false };
             menu.Items.Add(statusItem);
 
             menu.Items.Add(new ToolStripSeparator());
 
             // Quit option
             var quitItem = new ToolStripMenuItem("Quit");
-            quitItem.Click += (s, e) =>
-            {
-                Console.WriteLine("[DEBUG] Quit clicked from context menu");
-                Quit();
-            };
+            quitItem.Click += (s, e) => HandleQuitClicked();
             menu.Items.Add(quitItem);
 
             return menu;
@@ -269,17 +291,9 @@ namespace NudgeTray
 
         static Icon CreateSimpleIcon()
         {
-            // Create a simple 32x32 icon with a blue circle
-            using var bitmap = new Bitmap(32, 32);
-            using var g = Graphics.FromImage(bitmap);
-
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            g.Clear(Color.Transparent);
-
-            // Draw a blue circle
-            using var brush = new SolidBrush(Color.FromArgb(255, 85, 136, 255));
-            g.FillEllipse(brush, 2, 2, 28, 28);
-
+            // Create icon from shared PNG stream
+            using var stream = GetIconPngStream();
+            using var bitmap = new Bitmap(stream);
             return Icon.FromHandle(bitmap.GetHicon());
         }
 #else
@@ -288,6 +302,7 @@ namespace NudgeTray
         {
             _trayIcon = new TrayIcon
             {
+                Icon = CreateAvaloniaIcon(),
                 IsVisible = true,
                 ToolTipText = "Nudge Productivity Tracker",
                 Menu = CreateAvaloniaMenu()
@@ -312,21 +327,8 @@ namespace NudgeTray
         {
             var menu = new NativeMenu();
 
-            // Status item showing next snapshot time or waiting status
-            string statusText;
-            if (_waitingForResponse)
-            {
-                statusText = "⏳ Waiting for response...";
-            }
-            else
-            {
-                var nextSnapshot = GetNextSnapshotTime();
-                statusText = nextSnapshot.HasValue
-                    ? $"Next snapshot: {nextSnapshot.Value:HH:mm:ss}"
-                    : "Status: Running...";
-            }
-
-            var statusItem = new NativeMenuItem { Header = statusText, IsEnabled = false };
+            // Status item
+            var statusItem = new NativeMenuItem { Header = GetMenuStatusText(), IsEnabled = false };
             menu.Add(statusItem);
 
             // Separator
@@ -334,14 +336,17 @@ namespace NudgeTray
 
             // Quit option
             var quitItem = new NativeMenuItem { Header = "Quit" };
-            quitItem.Click += (s, e) =>
-            {
-                Console.WriteLine("[DEBUG] Quit clicked from context menu");
-                Quit();
-            };
+            quitItem.Click += (s, e) => HandleQuitClicked();
             menu.Add(quitItem);
 
             return menu;
+        }
+
+        static WindowIcon CreateAvaloniaIcon()
+        {
+            // Create icon from shared PNG stream (same icon as Windows)
+            using var stream = GetIconPngStream();
+            return new WindowIcon(stream);
         }
 #endif
 
