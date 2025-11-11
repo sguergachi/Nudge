@@ -25,6 +25,12 @@ using Tmds.DBus.Protocol;
 using System.Drawing;
 using System.Windows.Forms;
 using Microsoft.Toolkit.Uwp.Notifications;
+#else
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Platform;
+using Avalonia.Threading;
 #endif
 
 namespace NudgeTray
@@ -52,6 +58,9 @@ namespace NudgeTray
         static extern bool AllocConsole();
 
         const int ATTACH_PARENT_PROCESS = -1;
+#else
+        static TrayIcon? _trayIcon;
+        static System.Threading.Timer? _menuRefreshTimer;
 #endif
 
         [STAThread]
@@ -98,10 +107,11 @@ namespace NudgeTray
                 StartMLServices();
             }
 
-            StartNudge(interval);
+            _intervalMinutes = interval;
 
 #if WINDOWS
-            // Windows: Initialize notifications and system tray
+            // Windows: Initialize notifications and system tray with Windows Forms
+            StartNudge(interval);
             InitializeNotifications();
             CreateTrayIcon();
 
@@ -121,17 +131,24 @@ namespace NudgeTray
             // Run Windows message loop
             Application.Run(_messageLoopForm);
 #else
-            // Linux: Run without tray icon, just keep the process running
-            Console.WriteLine("Running in headless mode (no system tray on Linux)");
-            Console.WriteLine("Nudge is running. Press Ctrl+C to quit.");
-
-            // Keep the application running
-            while (true)
-            {
-                Thread.Sleep(1000);
-            }
+            // Linux: Use Avalonia for cross-platform tray icon
+            BuildAvaloniaApp(interval).StartWithClassicDesktopLifetime(args);
 #endif
         }
+
+#if !WINDOWS
+        static AppBuilder BuildAvaloniaApp(int interval)
+        {
+            return AppBuilder.Configure<App>()
+                .UsePlatformDetect()
+                .LogToTrace()
+                .AfterSetup(_ =>
+                {
+                    StartNudge(interval);
+                    CreateTrayIcon();
+                });
+        }
+#endif
 
 #if WINDOWS
         static void CreateTrayIcon()
@@ -264,6 +281,67 @@ namespace NudgeTray
             g.FillEllipse(brush, 2, 2, 28, 28);
 
             return Icon.FromHandle(bitmap.GetHicon());
+        }
+#else
+        // Linux: Avalonia-based tray icon
+        static void CreateTrayIcon()
+        {
+            _trayIcon = new TrayIcon
+            {
+                IsVisible = true,
+                ToolTipText = "Nudge Productivity Tracker",
+                Menu = CreateAvaloniaMenu()
+            };
+
+            // Start menu refresh timer (update every 10 seconds)
+            _menuRefreshTimer = new System.Threading.Timer(_ =>
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (_trayIcon != null)
+                    {
+                        _trayIcon.Menu = CreateAvaloniaMenu();
+                    }
+                });
+            }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+
+            Console.WriteLine("[DEBUG] Tray icon created with Avalonia TrayIcon");
+        }
+
+        static NativeMenu CreateAvaloniaMenu()
+        {
+            var menu = new NativeMenu();
+
+            // Status item showing next snapshot time or waiting status
+            string statusText;
+            if (_waitingForResponse)
+            {
+                statusText = "⏳ Waiting for response...";
+            }
+            else
+            {
+                var nextSnapshot = GetNextSnapshotTime();
+                statusText = nextSnapshot.HasValue
+                    ? $"Next snapshot: {nextSnapshot.Value:HH:mm:ss}"
+                    : "Status: Running...";
+            }
+
+            var statusItem = new NativeMenuItem { Header = statusText, IsEnabled = false };
+            menu.Add(statusItem);
+
+            // Separator
+            menu.Add(new NativeMenuItemSeparator());
+
+            // Quit option
+            var quitItem = new NativeMenuItem { Header = "Quit" };
+            quitItem.Click += (s, e) =>
+            {
+                Console.WriteLine("[DEBUG] Quit clicked from context menu");
+                Quit();
+            };
+            menu.Add(quitItem);
+
+            return menu;
         }
 #endif
 
@@ -764,10 +842,11 @@ namespace NudgeTray
                 Console.WriteLine("[DEBUG] Nudge process already exited or null");
             }
 
-#if WINDOWS
             if (_trayIcon != null)
             {
+#if WINDOWS
                 _trayIcon.Visible = false;
+#endif
                 _trayIcon.Dispose();
             }
 
@@ -775,7 +854,6 @@ namespace NudgeTray
             {
                 _menuRefreshTimer.Dispose();
             }
-#endif
 
             Console.WriteLine("✓ Shutdown complete");
             Console.WriteLine("[DEBUG] Exiting nudge-tray...");
@@ -792,4 +870,15 @@ namespace NudgeTray
             return _nextSnapshotTime;
         }
     }
+
+#if !WINDOWS
+    // Avalonia application class for Linux
+    public class App : Application
+    {
+        public override void Initialize()
+        {
+            // No XAML needed for headless tray app
+        }
+    }
+#endif
 }
