@@ -11,7 +11,6 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
@@ -20,6 +19,13 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Tmds.DBus.Protocol;
+
+#if WINDOWS
+using System.Drawing;
+using System.Windows.Forms;
+using Microsoft.Toolkit.Uwp.Notifications;
+#else
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -27,7 +33,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
-using Tmds.DBus.Protocol;
+#endif
 
 namespace NudgeTray
 {
@@ -39,10 +45,37 @@ namespace NudgeTray
         static Process? _mlInferenceProcess;
         static Process? _mlTrainerProcess;
         internal static bool _mlEnabled = false;
+        static DateTime? _nextSnapshotTime;
+        static int _intervalMinutes;
+
+#if WINDOWS
+        static NotifyIcon? _trayIcon;
+        static System.Threading.Timer? _menuRefreshTimer;
+        static Form? _messageLoopForm;
+
+        [DllImport("kernel32.dll")]
+        static extern bool AttachConsole(int dwProcessId);
+
+        [DllImport("kernel32.dll")]
+        static extern bool AllocConsole();
+
+        const int ATTACH_PARENT_PROCESS = -1;
+#else
+        static TrayIcon? _trayIcon;
+        static System.Threading.Timer? _menuRefreshTimer;
+#endif
 
         [STAThread]
         static void Main(string[] args)
         {
+#if WINDOWS
+            // Attach to parent console for logging (when run from terminal)
+            if (!AttachConsole(ATTACH_PARENT_PROCESS))
+            {
+                AllocConsole();
+            }
+#endif
+
             int interval = 5; // default 5 minutes
 
             // Parse arguments
@@ -76,10 +109,36 @@ namespace NudgeTray
                 StartMLServices();
             }
 
-            // Build Avalonia app
+            _intervalMinutes = interval;
+
+#if WINDOWS
+            // Windows: Initialize notifications and system tray with Windows Forms
+            StartNudge(interval);
+            InitializeNotifications();
+            CreateTrayIcon();
+
+            // Start menu refresh timer (update every 10 seconds)
+            _menuRefreshTimer = new System.Threading.Timer(_ =>
+            {
+                if (_trayIcon != null)
+                {
+                    _trayIcon.ContextMenuStrip = CreateContextMenu();
+                }
+            }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+
+            // Create hidden form for message loop and cross-thread invokes
+            _messageLoopForm = new Form { WindowState = FormWindowState.Minimized, ShowInTaskbar = false, Opacity = 0 };
+            _messageLoopForm.Load += (s, e) => _messageLoopForm.Hide();
+
+            // Run Windows message loop
+            Application.Run(_messageLoopForm);
+#else
+            // Linux: Use Avalonia for cross-platform tray icon
             BuildAvaloniaApp(interval).StartWithClassicDesktopLifetime(args);
+#endif
         }
 
+#if !WINDOWS
         static AppBuilder BuildAvaloniaApp(int interval)
         {
             return AppBuilder.Configure<App>()
@@ -88,8 +147,226 @@ namespace NudgeTray
                 .AfterSetup(_ =>
                 {
                     StartNudge(interval);
+                    CreateTrayIcon();
                 });
         }
+#endif
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // SHARED MENU AND ICON HELPERS (Used by both Windows and Linux)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        static string GetMenuStatusText()
+        {
+            if (_waitingForResponse)
+            {
+                return "⏳ Waiting for response...";
+            }
+            else
+            {
+                var nextSnapshot = GetNextSnapshotTime();
+                return nextSnapshot.HasValue
+                    ? $"Next snapshot: {nextSnapshot.Value:HH:mm:ss}"
+                    : "Status: Running...";
+            }
+        }
+
+        static void HandleQuitClicked()
+        {
+            Console.WriteLine("[DEBUG] Quit clicked from context menu");
+            Quit();
+        }
+
+        static MemoryStream GetIconPngStream()
+        {
+            // Create PNG icon data: 32x32 blue circle on transparent background
+            // This base64 string represents a PNG image with the same blue circle (#5588FF)
+            string base64Icon = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAGJSURBVFhH7ZZBTsJAFIbfTGlLKVCgLDQxceHChStXbty5c+nWpUuvgBcQb+ANvIRewBsYE2NcYFy4cOFCEhMSFi5MiNLS+c0rDKV0OtPWhSb+yZd0+t/85r1pmzKGYRiGYRiGYRiGYRiG+Q8olk1N09RN07RNO9ixS9sx7Njlxy5by7btPduOcGz7FWPHLsb2/Yw8zyv+ooRdXV1d4/fv33e/vr7u8ft9nV9eXt7x+/f39yZ+//j4+MC/39/fb/j95eXlHb9fX1/f8Pv5+fkNv5+dnd3w++np6Q2/n5yc3PD78fHxDb8fHR3d8PvBwcENv+/v79/w+97e3g2/7+7u3vD7zs7ODb9vb2/f8PvW1tYNv29ubt7w+8bGxg2/r6+v3/D72traDb+vrq7e8PvKysoNvy8vL9/w+9LS0g2/Ly4u3vD7wsLCDb/Pz8/f8Pvc3NwNv8/Ozt7w+8zMzA2/T09P3/D71NTUDT9PTEzc8Pv4+PgNv4+Njd3w++jo6A0/j4yMDMMwDMMwDMMwjCrl8gebWMzCxQJ3TAAAAABJRU5ErkJggg==";
+
+            byte[] iconBytes = Convert.FromBase64String(base64Icon);
+            return new MemoryStream(iconBytes);
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // PLATFORM-SPECIFIC TRAY ICON IMPLEMENTATIONS
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+#if WINDOWS
+        static void CreateTrayIcon()
+        {
+            _trayIcon = new NotifyIcon
+            {
+                Icon = CreateSimpleIcon(),
+                Visible = true,
+                Text = "Nudge Productivity Tracker",
+                ContextMenuStrip = CreateContextMenu()
+            };
+
+            Console.WriteLine("[DEBUG] Tray icon created with WinForms NotifyIcon");
+        }
+
+        static void InitializeNotifications()
+        {
+            try
+            {
+                // Register event handler for notification activation
+                // ToastNotificationManagerCompat handles COM registration automatically
+                ToastNotificationManagerCompat.OnActivated += OnNotificationActivated;
+
+                Console.WriteLine("[DEBUG] Toast notification handler registered");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] Failed to initialize notifications: {ex.Message}");
+            }
+        }
+
+        static void OnNotificationActivated(ToastNotificationActivatedEventArgsCompat e)
+        {
+            try
+            {
+                Console.WriteLine("[DEBUG] Notification button clicked");
+
+                // Parse the action argument from toast arguments
+                var args = ToastArguments.Parse(e.Argument);
+
+                if (args.Contains("action"))
+                {
+                    var action = args["action"];
+                    Console.WriteLine($"[DEBUG] Action: {action}");
+
+                    if (action == "yes")
+                    {
+                        Console.WriteLine("[DEBUG] User clicked YES from notification");
+                        _waitingForResponse = false;
+                        SendResponse(true);
+
+                        // Refresh tray menu on UI thread
+                        _messageLoopForm?.Invoke((Action)(() =>
+                        {
+                            if (_trayIcon != null)
+                            {
+                                _trayIcon.ContextMenuStrip = CreateContextMenu();
+                            }
+                        }));
+                    }
+                    else if (action == "no")
+                    {
+                        Console.WriteLine("[DEBUG] User clicked NO from notification");
+                        _waitingForResponse = false;
+                        SendResponse(false);
+
+                        // Refresh tray menu on UI thread
+                        _messageLoopForm?.Invoke((Action)(() =>
+                        {
+                            if (_trayIcon != null)
+                            {
+                                _trayIcon.ContextMenuStrip = CreateContextMenu();
+                            }
+                        }));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] Failed to handle notification action: {ex.Message}");
+            }
+        }
+
+        static ContextMenuStrip CreateContextMenu()
+        {
+            var menu = new ContextMenuStrip();
+
+            // Status item
+            var statusItem = new ToolStripMenuItem(GetMenuStatusText()) { Enabled = false };
+            menu.Items.Add(statusItem);
+
+            menu.Items.Add(new ToolStripSeparator());
+
+            // Quit option
+            var quitItem = new ToolStripMenuItem("Quit");
+            quitItem.Click += (s, e) => HandleQuitClicked();
+            menu.Items.Add(quitItem);
+
+            return menu;
+        }
+
+        static Icon CreateSimpleIcon()
+        {
+            // Create icon from shared PNG stream
+            using var stream = GetIconPngStream();
+            using var bitmap = new Bitmap(stream);
+            return Icon.FromHandle(bitmap.GetHicon());
+        }
+#else
+        // Linux: Avalonia-based tray icon
+        static void CreateTrayIcon()
+        {
+            _trayIcon = new TrayIcon
+            {
+                Icon = CreateAvaloniaIcon(),
+                IsVisible = true,
+                ToolTipText = "Nudge Productivity Tracker",
+                Menu = CreateAvaloniaMenu()
+            };
+
+            // Start menu refresh timer (update every 10 seconds)
+            _menuRefreshTimer = new System.Threading.Timer(_ =>
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (_trayIcon != null)
+                    {
+                        _trayIcon.Menu = CreateAvaloniaMenu();
+                    }
+                });
+            }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+
+            Console.WriteLine("[DEBUG] Tray icon created with Avalonia TrayIcon");
+        }
+
+        static NativeMenu CreateAvaloniaMenu()
+        {
+            var menu = new NativeMenu();
+
+            // Status item
+            var statusItem = new NativeMenuItem { Header = GetMenuStatusText(), IsEnabled = false };
+            menu.Add(statusItem);
+
+            // Separator
+            menu.Add(new NativeMenuItemSeparator());
+
+            // Quit option
+            var quitItem = new NativeMenuItem { Header = "Quit" };
+            quitItem.Click += (s, e) => HandleQuitClicked();
+            menu.Add(quitItem);
+
+            return menu;
+        }
+
+        static WindowIcon CreateAvaloniaIcon()
+        {
+            // Create icon programmatically for Linux using Avalonia APIs
+            // Create a 32x32 bitmap with blue circle (same as Windows)
+            var renderBitmap = new RenderTargetBitmap(new PixelSize(32, 32), new Vector(96, 96));
+
+            using (var ctx = renderBitmap.CreateDrawingContext())
+            {
+                // Clear with transparent background
+                ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, 32, 32));
+
+                // Draw blue circle (same color as Windows: #5588FF)
+                var brush = new SolidColorBrush(Color.FromRgb(85, 136, 255));
+                ctx.DrawGeometry(brush, null, new EllipseGeometry(new Rect(2, 2, 28, 28)));
+            }
+
+            // Save to memory stream as PNG
+            using var stream = new MemoryStream();
+            renderBitmap.Save(stream);
+            stream.Position = 0;
+            return new WindowIcon(stream);
+        }
+#endif
 
         static void StartMLServices()
         {
@@ -104,14 +381,19 @@ namespace NudgeTray
                     python = "python";
                 }
 
-                // Start ML inference service
+                // Get platform-specific CSV path
+                string csvPath = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                    ? Path.Combine(Path.GetTempPath(), "HARVEST.CSV")
+                    : "/tmp/HARVEST.CSV";
+
+                // Start ML inference service (TCP on port 45002)
                 Console.WriteLine("  Starting ML inference service...");
                 _mlInferenceProcess = new Process
                 {
                     StartInfo = new ProcessStartInfo
                     {
                         FileName = python,
-                        Arguments = "model_inference.py --model-dir ./model",
+                        Arguments = "model_inference.py --host 127.0.0.1 --port 45002 --model-dir ./model",
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
                         UseShellExecute = false,
@@ -139,17 +421,21 @@ namespace NudgeTray
                 _mlInferenceProcess.BeginOutputReadLine();
                 _mlInferenceProcess.BeginErrorReadLine();
 
-                // Wait a moment for socket to be created
+                // Wait for service to start
                 Thread.Sleep(2000);
 
-                // Verify socket was created
-                if (File.Exists("/tmp/nudge_ml.sock"))
+                // Try to verify TCP connection
+                try
                 {
-                    Console.WriteLine("  ✓ ML inference service started (socket: /tmp/nudge_ml.sock)");
+                    using (var client = new System.Net.Sockets.TcpClient())
+                    {
+                        client.Connect("127.0.0.1", 45002);
+                        Console.WriteLine("  ✓ ML inference service started (TCP port 45002)");
+                    }
                 }
-                else
+                catch
                 {
-                    Console.WriteLine("  ⚠ ML inference socket not found - service may not be ready");
+                    Console.WriteLine("  ⚠ ML inference service may not be ready yet");
                 }
 
                 // Start background trainer
@@ -159,7 +445,7 @@ namespace NudgeTray
                     StartInfo = new ProcessStartInfo
                     {
                         FileName = python,
-                        Arguments = "background_trainer.py --csv /tmp/HARVEST.CSV --model-dir ./model --check-interval 300",
+                        Arguments = $"background_trainer.py --csv \"{csvPath}\" --model-dir ./model --check-interval 300",
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
                         UseShellExecute = false,
@@ -188,7 +474,7 @@ namespace NudgeTray
                 _mlTrainerProcess.BeginErrorReadLine();
 
                 Console.WriteLine("  ✓ Background trainer started");
-                Console.WriteLine("✓ ML services ready");
+                Console.WriteLine($"✓ ML services ready (CSV: {csvPath})");
             }
             catch (Exception ex)
             {
@@ -200,6 +486,9 @@ namespace NudgeTray
 
         static void StartNudge(int interval)
         {
+            _intervalMinutes = interval;
+            _nextSnapshotTime = DateTime.Now.AddMinutes(interval);
+
             try
             {
                 // Determine nudge executable name based on platform
@@ -237,7 +526,7 @@ namespace NudgeTray
                         // Detect snapshot requests (exact match only)
                         if (e.Data.Trim() == "SNAPSHOT")
                         {
-                            Dispatcher.UIThread.Post(() => ShowSnapshotNotification());
+                            ShowSnapshotNotification();
                         }
                     }
                 };
@@ -269,14 +558,17 @@ namespace NudgeTray
 
         public static void ShowSnapshotNotification()
         {
+            _nextSnapshotTime = DateTime.Now.AddMinutes(_intervalMinutes);
             Console.WriteLine("📸 Snapshot taken! Respond using the notification buttons.");
 
             // Platform-specific notifications
+#if WINDOWS
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 ShowWindowsNotification();
                 return;
             }
+#endif
 
             // Linux: Try native DBus notifications first
             bool success = false;
@@ -291,14 +583,7 @@ namespace NudgeTray
                 Console.WriteLine($"⚠ DBus notification failed: {ex.Message}");
             }
 
-            // Fallback to kdialog if notifications don't work
-            if (!success && ShowKDialogNotification())
-            {
-                Console.WriteLine("✓ Dialog shown via kdialog (fallback)");
-                return;
-            }
-
-            // Last resort: notify-send (no buttons)
+            // Fallback notification methods for Linux
             if (!success)
             {
                 ShowFallbackNotification();
@@ -306,130 +591,55 @@ namespace NudgeTray
         }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // WINDOWS NOTIFICATIONS
+        // WINDOWS NOTIFICATIONS (Native Toast with Toolkit)
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+        private static bool _waitingForResponse = false;
+
+#if WINDOWS
         private static void ShowWindowsNotification()
         {
             try
             {
-                // Create PowerShell script for Windows toast notification
-                var scriptPath = Path.Combine(Path.GetTempPath(), $"nudge-notification-{Guid.NewGuid()}.ps1");
-                var scriptContent = @"
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
+                Console.WriteLine("[DEBUG] ShowWindowsNotification called (native toast with Toolkit)");
 
-$result = [System.Windows.Forms.MessageBox]::Show(
-    'Were you productive during the last interval?',
-    'Nudge - Productivity Check',
-    [System.Windows.Forms.MessageBoxButtons]::YesNo,
-    [System.Windows.Forms.MessageBoxIcon]::Question,
-    [System.Windows.Forms.MessageBoxDefaultButton]::Button1,
-    [System.Windows.Forms.MessageBoxOptions]::DefaultDesktopOnly
-)
+                _waitingForResponse = true;
 
-if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
-    # Send YES via UDP
-    $udp = New-Object System.Net.Sockets.UdpClient
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes('YES')
-    $udp.Send($bytes, $bytes.Length, 'localhost', " + UDP_PORT + @") | Out-Null
-    $udp.Close()
-    Write-Output 'YES'
-} elseif ($result -eq [System.Windows.Forms.DialogResult]::No) {
-    # Send NO via UDP
-    $udp = New-Object System.Net.Sockets.UdpClient
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes('NO')
-    $udp.Send($bytes, $bytes.Length, 'localhost', " + UDP_PORT + @") | Out-Null
-    $udp.Close()
-    Write-Output 'NO'
-}
-";
+                // Build native Windows toast notification with action buttons
+                new ToastContentBuilder()
+                    .AddText("Nudge - Productivity Check")
+                    .AddText("Were you productive during the last interval?")
+                    .AddButton(new ToastButton()
+                        .SetContent("Yes - Productive")
+                        .AddArgument("action", "yes")
+                        .SetBackgroundActivation())
+                    .AddButton(new ToastButton()
+                        .SetContent("No - Not Productive")
+                        .AddArgument("action", "no")
+                        .SetBackgroundActivation())
+                    .Show();
 
-                File.WriteAllText(scriptPath, scriptContent);
+                Console.WriteLine("✓ Native Windows toast notification shown with Yes/No buttons");
 
-                // Run PowerShell script in background
-                var process = new Process
+                // Refresh tray menu to show Yes/No options
+                _messageLoopForm?.Invoke((Action)(() =>
                 {
-                    StartInfo = new ProcessStartInfo
+                    if (_trayIcon != null)
                     {
-                        FileName = "powershell.exe",
-                        Arguments = $"-ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File \"{scriptPath}\"",
-                        UseShellExecute = false,
-                        CreateNoWindow = true,
-                        RedirectStandardOutput = true
+                        _trayIcon.ContextMenuStrip = CreateContextMenu();
                     }
-                };
-
-                process.OutputDataReceived += (s, e) =>
-                {
-                    if (!string.IsNullOrEmpty(e.Data))
-                    {
-                        Console.WriteLine($"User responded: {e.Data} via Windows notification");
-                    }
-                };
-
-                process.Exited += (s, e) =>
-                {
-                    try { File.Delete(scriptPath); } catch { }
-                };
-
-                process.EnableRaisingEvents = true;
-                process.Start();
-                process.BeginOutputReadLine();
-
-                Console.WriteLine("✓ Windows notification shown");
+                }));
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"✗ Windows notification failed: {ex.Message}");
-                Console.WriteLine("Use the tray menu to respond");
+                Console.WriteLine($"[ERROR] Failed to show Windows notification: {ex.Message}");
             }
         }
+#endif
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // LINUX NOTIFICATIONS (Native Tmds.DBus.Protocol with resident:true hint)
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-        private static bool ShowKDialogNotification()
-        {
-            try
-            {
-                var process = new Process
-                {
-                    StartInfo = new ProcessStartInfo
-                    {
-                        FileName = "kdialog",
-                        Arguments = "--title \"Nudge - Productivity Check\" " +
-                                   "--yesno \"Were you productive during the last interval?\" " +
-                                   "--yes-label \"Yes - Productive\" " +
-                                   "--no-label \"No - Not Productive\"",
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    }
-                };
-
-                process.Start();
-                process.WaitForExit();
-
-                // kdialog exit codes: 0 = yes, 1 = no, 2 = cancel
-                if (process.ExitCode == 0)
-                {
-                    Console.WriteLine("User responded: YES (productive)");
-                    SendResponse(true);
-                }
-                else if (process.ExitCode == 1)
-                {
-                    Console.WriteLine("User responded: NO (not productive)");
-                    SendResponse(false);
-                }
-
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
 
         private static async void ShowDbusNotification()
         {
@@ -481,58 +691,13 @@ if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
 
                     message = writer.CreateMessage();
                 }
-                // MessageWriter is now disposed, safe to await
 
                 var notificationId = await connection.CallMethodAsync(
                     message,
-                    (Message m, object? s) => m.GetBodyReader().ReadUInt32(),
+                    (Tmds.DBus.Protocol.Message m, object? s) => m.GetBodyReader().ReadUInt32(),
                     null);
 
                 Console.WriteLine($"[DEBUG] Notification ID: {notificationId}");
-
-                var cancellationSource = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-
-                // Listen for NotificationClosed to debug why it's closing
-                var closedMatchRule = new MatchRule
-                {
-                    Type = MessageType.Signal,
-                    Interface = "org.freedesktop.Notifications",
-                    Member = "NotificationClosed"
-                };
-
-                await connection.AddMatchAsync(
-                    closedMatchRule,
-                    (Message m, object? s) =>
-                    {
-                        var reader = m.GetBodyReader();
-                        return (reader.ReadUInt32(), reader.ReadUInt32());
-                    },
-                    (Exception? ex, (uint id, uint reason) signal, object? readerState, object? handlerState) =>
-                    {
-                        if (ex != null)
-                        {
-                            Console.WriteLine($"[DEBUG] Closed listener error: {ex.Message}");
-                            return;
-                        }
-
-                        if (signal.id == notificationId)
-                        {
-                            string reasonText = signal.reason switch
-                            {
-                                1 => "expired",
-                                2 => "dismissed by user",
-                                3 => "closed by CloseNotification call",
-                                4 => "undefined/reserved",
-                                _ => $"unknown ({signal.reason})"
-                            };
-                            Console.WriteLine($"[DEBUG] Notification closed: reason={reasonText}");
-                        }
-                    },
-                    ObserverFlags.None,
-                    null,
-                    null,
-                    true
-                );
 
                 // Listen for ActionInvoked signal
                 var actionMatchRule = new MatchRule
@@ -542,9 +707,11 @@ if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
                     Member = "ActionInvoked"
                 };
 
+                var cancellationSource = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(60));
+
                 await connection.AddMatchAsync(
                     actionMatchRule,
-                    (Message m, object? s) =>
+                    (Tmds.DBus.Protocol.Message m, object? s) =>
                     {
                         var reader = m.GetBodyReader();
                         return (reader.ReadUInt32(), reader.ReadString());
@@ -639,7 +806,7 @@ if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
 
         public static void Quit()
         {
-            Console.WriteLine("Shutting down...");
+            Console.WriteLine("[DEBUG] Quit() called - shutting down Nudge...");
 
             // Stop ML services
             if (_mlInferenceProcess != null && !_mlInferenceProcess.HasExited)
@@ -667,166 +834,74 @@ if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
             // Stop main nudge process
             if (_nudgeProcess != null && !_nudgeProcess.HasExited)
             {
+                Console.WriteLine($"[DEBUG] Nudge process PID: {_nudgeProcess.Id}");
+                Console.WriteLine("[DEBUG] Attempting to kill nudge process...");
+
                 try
                 {
-                    Console.WriteLine("  Stopping nudge process...");
-                    // Try graceful shutdown first
-                    _nudgeProcess.CloseMainWindow();
-                    if (!_nudgeProcess.WaitForExit(2000))
+                    _nudgeProcess.Kill(entireProcessTree: true); // Kill process and all children
+                    _nudgeProcess.WaitForExit(5000); // Wait up to 5 seconds
+
+                    if (_nudgeProcess.HasExited)
                     {
-                        // Force kill if graceful shutdown fails
-                        _nudgeProcess.Kill();
+                        Console.WriteLine($"[DEBUG] Nudge process terminated (exit code: {_nudgeProcess.ExitCode})");
+                    }
+                    else
+                    {
+                        Console.WriteLine("[WARN] Nudge process did not exit within timeout");
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Fallback to kill if graceful shutdown fails
-                    try { _nudgeProcess.Kill(); } catch { }
+                    Console.WriteLine($"[ERROR] Failed to kill nudge process: {ex.Message}");
                 }
                 finally
                 {
                     _nudgeProcess.Dispose();
                 }
             }
+            else
+            {
+                Console.WriteLine("[DEBUG] Nudge process already exited or null");
+            }
+
+            if (_trayIcon != null)
+            {
+#if WINDOWS
+                _trayIcon.Visible = false;
+#endif
+                _trayIcon.Dispose();
+            }
+
+            if (_menuRefreshTimer != null)
+            {
+                _menuRefreshTimer.Dispose();
+            }
 
             Console.WriteLine("✓ Shutdown complete");
+            Console.WriteLine("[DEBUG] Exiting nudge-tray...");
+
+#if WINDOWS
+            Application.Exit();
+#else
             Environment.Exit(0);
+#endif
+        }
+
+        public static DateTime? GetNextSnapshotTime()
+        {
+            return _nextSnapshotTime;
         }
     }
 
+#if !WINDOWS
+    // Avalonia application class for Linux
     public class App : Application
     {
-        private TrayIcon? _trayIcon;
-
         public override void Initialize()
         {
-            // Must call base first for Avalonia
-            base.Initialize();
-        }
-
-        private NativeMenu CreateMenu()
-        {
-            var menu = new NativeMenu();
-
-            // Status item
-            var statusItem = new NativeMenuItem("Status: Running...");
-            statusItem.IsEnabled = false;
-            menu.Add(statusItem);
-
-            // ML status if enabled
-            if (Program._mlEnabled)
-            {
-                var mlItem = new NativeMenuItem("🧠 ML: Active");
-                mlItem.IsEnabled = false;
-                menu.Add(mlItem);
-            }
-
-            menu.Add(new NativeMenuItemSeparator());
-
-            // Response buttons
-            var yesItem = new NativeMenuItem("✓ YES (Productive)");
-            yesItem.Click += (s, e) => Program.SendResponse(true);
-            menu.Add(yesItem);
-
-            var noItem = new NativeMenuItem("✗ NO (Not Productive)");
-            noItem.Click += (s, e) => Program.SendResponse(false);
-            menu.Add(noItem);
-
-            menu.Add(new NativeMenuItemSeparator());
-
-            // Quit
-            var quitItem = new NativeMenuItem("Quit");
-            quitItem.Click += (s, e) => Program.Quit();
-            menu.Add(quitItem);
-
-            return menu;
-        }
-
-        private void ShowStatus()
-        {
-            Console.WriteLine("Status window not yet implemented");
-        }
-
-        private WindowIcon? CreateSimpleIcon()
-        {
-            try
-            {
-                // Create a simple 32x32 icon programmatically
-                var width = 32;
-                var height = 32;
-                var bitmap = new WriteableBitmap(
-                    new PixelSize(width, height),
-                    new Vector(96, 96),
-                    Avalonia.Platform.PixelFormat.Bgra8888,
-                    AlphaFormat.Premul);
-
-                using (var fb = bitmap.Lock())
-                {
-                    unsafe
-                    {
-                        var ptr = (uint*)fb.Address.ToPointer();
-
-                        // Draw a simple blue circle on transparent background
-                        for (int y = 0; y < height; y++)
-                        {
-                            for (int x = 0; x < width; x++)
-                            {
-                                // Calculate distance from center
-                                float dx = x - width / 2.0f;
-                                float dy = y - height / 2.0f;
-                                float distance = (float)Math.Sqrt(dx * dx + dy * dy);
-
-                                // Create a filled circle
-                                if (distance < width / 2.0f - 2)
-                                {
-                                    // Blue color (BGRA format)
-                                    ptr[y * width + x] = 0xFF5588FF;
-                                }
-                                else
-                                {
-                                    // Transparent
-                                    ptr[y * width + x] = 0x00000000;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                return new WindowIcon(bitmap);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Failed to create icon: {ex.Message}");
-                return null;
-            }
-        }
-
-        public override void OnFrameworkInitializationCompleted()
-        {
-            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-            {
-                // Don't show any windows - we're tray-only
-                desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            }
-
-            // Create and configure tray icon
-            _trayIcon = new TrayIcon
-            {
-                ToolTipText = "Nudge Productivity Tracker",
-                Menu = CreateMenu(),
-                Icon = CreateSimpleIcon(),
-                IsVisible = true
-            };
-
-            _trayIcon.Clicked += (s, e) => ShowStatus();
-
-            // Add to TrayIcons collection
-            if (TrayIcon.GetIcons(this) == null)
-            {
-                TrayIcon.SetIcons(this, new TrayIcons { _trayIcon });
-            }
-
-            base.OnFrameworkInitializationCompleted();
+            // No XAML needed for headless tray app
         }
     }
+#endif
 }

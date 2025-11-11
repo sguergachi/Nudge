@@ -14,14 +14,15 @@ ML-powered productivity tracker that learns from your behavior.
 ## Requirements
 
 ### Linux
-- **Wayland** compositor (Sway, GNOME, or KDE)
+- **Wayland** compositor (Sway, GNOME, KDE) or **X11** desktop (Cinnamon, XFCE, etc.)
+- For X11: **xdotool** and **xprintidle** (install via `apt install xdotool xprintidle`)
 - **.NET SDK 8.0+** (dotnet)
-- **Python 3** with TensorFlow (for training - optional)
+- **Python 3** with TensorFlow (required for ML)
 
 ### Windows
 - **.NET SDK 8.0+**
 - **Windows 10 or later**
-- **Python 3** (for training - optional)
+- **Python 3** (required for ML)
 
 ## Build
 
@@ -149,8 +150,8 @@ Windows and Linux support use **conditional compilation** (`#if WINDOWS`) rather
 
 **Linux**: Direct D-Bus calls via Tmds.DBus.Protocol for notifications
 **Windows**: Direct Windows API P/Invoke for window detection and idle time
+**X11**: Direct xdotool/xprintidle commands for window detection and idle time
 
-If you need X11 support, add another conditional block.
 If you need macOS support, add another conditional block.
 
 Don't build abstractions for problems you don't have.

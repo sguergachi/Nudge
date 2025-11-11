@@ -22,7 +22,7 @@
 //   nudge --ml               # Enable ML-based predictions
 //
 // Requirements:
-//   - Windows 10+, or Linux with Wayland compositor (Sway, GNOME, KDE)
+//   - Windows 10+, or Linux with Wayland/X11 (Sway, GNOME, KDE, Cinnamon)
 //   - .NET 8.0 or later
 //
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -54,7 +54,8 @@ class Nudge
 
     // ML-powered adaptive notifications
     const double ML_CONFIDENCE_THRESHOLD = 0.98;  // 98% confidence required
-    const string ML_SOCKET_PATH = "/tmp/nudge_ml.sock";
+    const string ML_HOST = "127.0.0.1";
+    const int ML_PORT = 45002;
     static bool _mlEnabled = false;
     static bool _mlAvailable = false;
     static int _mlCheckCooldown = 0;  // Cooldown before checking ML again
@@ -226,32 +227,40 @@ class Nudge
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
-            // Check Wayland session
+            // Check session type (Wayland or X11)
             var sessionType = Environment.GetEnvironmentVariable("XDG_SESSION_TYPE");
-            if (sessionType != "wayland")
+            if (sessionType == "wayland")
             {
-                Warning($"Not running on Wayland (detected: {sessionType ?? "none"})");
-                Warning("Nudge works best on Wayland. Some features may not work.");
-                valid = false;
+                Success($"✓ Session: Wayland");
+            }
+            else if (sessionType == "x11")
+            {
+                Success($"✓ Session: X11");
+            }
+            else
+            {
+                Warning($"Unknown session type: {sessionType ?? "none"}");
+                Info("Attempting to detect desktop environment anyway...");
             }
 
-            // Detect compositor
+            // Detect compositor/desktop environment
             _compositor = DetectCompositor();
             if (_compositor == "unknown")
             {
-                Error("Could not detect compositor");
-                Error("Supported: Sway, GNOME, KDE Plasma");
+                Error("Could not detect compositor or desktop environment");
+                Error("Supported: Sway, GNOME, KDE Plasma, Cinnamon");
                 return false;
             }
 
-            Success($"✓ Compositor: {_compositor}");
+            Success($"✓ Desktop Environment: {_compositor}");
 
             // Check required commands
             var (cmd, desc) = _compositor switch
             {
                 "sway" => ("swaymsg", "Sway IPC"),
                 "gnome" => ("gdbus", "D-Bus communication"),
-                "kde" => ("qdbus", "Qt D-Bus"),
+                "kde" => ("xdotool", "X11 window detection"),
+                "cinnamon" => ("xdotool", "X11 window detection"),
                 _ => ("", "")
             };
 
@@ -308,6 +317,8 @@ class Nudge
         "swaymsg" => "sway (should be pre-installed with Sway)",
         "gdbus" => "glib2.0-bin (apt install glib2.0-bin)",
         "qdbus" => "qttools5-dev-tools (apt install qttools5-dev-tools)",
+        "xdotool" => "xdotool (apt install xdotool)",
+        "xprintidle" => "xprintidle (apt install xprintidle)",
         _ => "check your package manager"
     };
 
@@ -444,6 +455,12 @@ class Nudge
             return "gnome";
         if (desktop?.Contains("KDE") == true)
             return "kde";
+        if (desktop?.Contains("X-Cinnamon") == true)
+            return "cinnamon";
+
+        // Fallback: check for cinnamon-session process
+        if (CommandExists("pgrep") && !string.IsNullOrWhiteSpace(RunCommand("pgrep", "-x cinnamon-session")))
+            return "cinnamon";
 
         return "unknown";
     }
@@ -459,6 +476,7 @@ class Nudge
             "sway" => GetSwayFocusedApp(),
             "gnome" => GetGnomeFocusedApp(),
             "kde" => GetKDEFocusedApp(),
+            "cinnamon" => GetX11FocusedApp(),
             _ => "unknown"
         };
 
@@ -767,6 +785,26 @@ class Nudge
         return "kde-wayland-window";
     }
 
+    static string GetX11FocusedApp()
+    {
+        try
+        {
+            // Use xdotool to get active window name (works on all X11 environments)
+            var windowName = RunCommand("xdotool", "getactivewindow getwindowname");
+            if (!string.IsNullOrWhiteSpace(windowName))
+            {
+                return windowName.Trim().Split('\n')[0];
+            }
+
+            return "unknown";
+        }
+        catch (Exception ex)
+        {
+            Dim($"  X11 error: {ex.Message}");
+            return "unknown";
+        }
+    }
+
     static int GetIdleTime()
     {
         if (DateTime.Now < _idleCacheExpiry)
@@ -795,6 +833,10 @@ class Nudge
 
         // Method 2: Try GNOME-specific Mutter idle monitor
         idle = GetGnomeIdleTime();
+        if (idle > 0) return idle;
+
+        // Method 3: Try X11-specific xprintidle (works on Cinnamon, XFCE, and other X11 environments)
+        idle = GetX11IdleTime();
         if (idle > 0) return idle;
 
         return 0;
@@ -884,6 +926,26 @@ class Nudge
                 .Trim();
 
             return int.TryParse(cleaned, out int ms) ? ms : 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    static int GetX11IdleTime()
+    {
+        try
+        {
+            // xprintidle returns idle time in milliseconds
+            // This works on all X11 environments (Cinnamon, XFCE, etc.)
+            var output = RunCommand("xprintidle", "");
+            if (int.TryParse(output.Trim(), out int ms))
+            {
+                return ms;
+            }
+
+            return 0;
         }
         catch
         {
@@ -1083,20 +1145,14 @@ class Nudge
     {
         try
         {
-            // Check if socket exists
-            if (!File.Exists(ML_SOCKET_PATH))
-            {
-                return null;
-            }
+            // Create TCP socket client
+            using var client = new TcpClient();
+            client.SendTimeout = 1000;  // 1 second
+            client.ReceiveTimeout = 1000;
 
-            // Create Unix domain socket client
-            using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-            var endpoint = new UnixDomainSocketEndPoint(ML_SOCKET_PATH);
-
-            // Connect with timeout
-            socket.Connect(endpoint);
-            socket.SendTimeout = 1000;  // 1 second
-            socket.ReceiveTimeout = 1000;
+            // Connect to ML service
+            client.Connect(ML_HOST, ML_PORT);
+            using var stream = client.GetStream();
 
             // Prepare request
             int appHash = GetHash(app);
@@ -1111,11 +1167,11 @@ class Nudge
             byte[] requestBytes = Encoding.UTF8.GetBytes(requestJson);
 
             // Send request
-            socket.Send(requestBytes);
+            stream.Write(requestBytes, 0, requestBytes.Length);
 
             // Receive response
             byte[] buffer = new byte[4096];
-            int bytesRead = socket.Receive(buffer);
+            int bytesRead = stream.Read(buffer, 0, buffer.Length);
             string responseJson = Encoding.UTF8.GetString(buffer, 0, bytesRead).Trim();
 
             // Parse response
@@ -1135,28 +1191,16 @@ class Nudge
 
     static bool CheckMLAvailability()
     {
-        // Check if inference server is running
-        if (!File.Exists(ML_SOCKET_PATH))
-        {
-            if (_mlAvailable)
-            {
-                Warning("ML inference server stopped - falling back to interval-based");
-                _mlAvailable = false;
-            }
-            return false;
-        }
-
-        // Try a quick connection test
+        // Try a quick TCP connection test to inference server
         try
         {
-            using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-            var endpoint = new UnixDomainSocketEndPoint(ML_SOCKET_PATH);
-            socket.Connect(endpoint);
-            socket.Close();
+            using var client = new TcpClient();
+            client.Connect(ML_HOST, ML_PORT);
+            client.Close();
 
             if (!_mlAvailable)
             {
-                Success("✓ ML inference server connected");
+                Success($"✓ ML inference server connected (TCP {ML_HOST}:{ML_PORT})");
                 _mlAvailable = true;
             }
             return true;
@@ -1408,7 +1452,7 @@ class Nudge
         Console.WriteLine($"    {Color.YELLOW}nudge-notify NO{Color.RESET}    # I was not productive");
         Console.WriteLine();
         Console.WriteLine($"{Color.BOLD}REQUIREMENTS:{Color.RESET}");
-        Console.WriteLine($"  - Windows 10+, or Linux with Wayland compositor (Sway, GNOME, KDE)");
+        Console.WriteLine($"  - Windows 10+, or Linux with Wayland/X11 (Sway, GNOME, KDE, Cinnamon)");
         Console.WriteLine($"  - .NET 8.0 or later");
         Console.WriteLine();
     }

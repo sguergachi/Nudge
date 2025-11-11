@@ -8,9 +8,10 @@ Using ML to nudge you back into productivity. For RU Hack 2017 hackathon.
 
 Nudge now supports multiple platforms with native system integration:
 
-- **Linux** (Wayland: Sway, GNOME, KDE Plasma) - Full support
+- **Linux** (Wayland: Sway, GNOME, KDE Plasma; X11: Cinnamon) - Full support
   - Native DBus notifications with action buttons
   - Direct Wayland compositor integration
+  - X11 desktop environment support (Cinnamon, XFCE, etc.)
   - Tmds.DBus.Protocol for notification handling
 
 - **Windows 10/11** - Full support ✨ **NEW!** ✨
@@ -46,11 +47,12 @@ See [WINDOWS_README.md](WINDOWS_README.md) for detailed Windows instructions.
 ## Requirements
 
 - **.NET SDK 8.0 or later** - Required for building and running
-- **Python 3.x** - Optional, only needed for training custom ML models
+- **Python 3.x** - Required for ML functionality
 
 ### Platform-Specific Requirements
 
-- **Linux**: Wayland compositor (Sway, GNOME, or KDE Plasma)
+- **Linux**: Wayland compositor (Sway, GNOME, KDE Plasma) or X11 desktop (Cinnamon, XFCE, etc.)
+  - For X11 environments: Install `xdotool` and optionally `xprintidle` for idle detection
 - **Windows**: Windows 10 or later
 - **macOS**: macOS 10.15 or later (experimental)
 
