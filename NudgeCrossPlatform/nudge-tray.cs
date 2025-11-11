@@ -45,6 +45,7 @@ namespace NudgeTray
         static Process? _mlInferenceProcess;
         static Process? _mlTrainerProcess;
         internal static bool _mlEnabled = false;
+        static bool _forceTrainedModel = false;
         static DateTime? _nextSnapshotTime;
         static int _intervalMinutes;
 
@@ -89,6 +90,10 @@ namespace NudgeTray
                 else if (args[i] == "--ml")
                 {
                     _mlEnabled = true;
+                }
+                else if (args[i] == "--force-model")
+                {
+                    _forceTrainedModel = true;
                 }
             }
 
@@ -374,17 +379,9 @@ namespace NudgeTray
             {
                 Console.WriteLine("🧠 Starting ML services...");
 
-                // Check if Python is available
-                string python = "python3";
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                {
-                    python = "python";
-                }
-
-                // Get platform-specific CSV path
-                string csvPath = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-                    ? Path.Combine(Path.GetTempPath(), "HARVEST.CSV")
-                    : "/tmp/HARVEST.CSV";
+                // Use shared platform configuration
+                string python = PlatformConfig.PythonCommand;
+                string csvPath = PlatformConfig.CsvPath;
 
                 // Start ML inference service (TCP on port 45002)
                 Console.WriteLine("  Starting ML inference service...");
@@ -440,12 +437,18 @@ namespace NudgeTray
 
                 // Start background trainer
                 Console.WriteLine("  Starting background trainer...");
+                string trainerArgs = $"background_trainer.py --csv \"{csvPath}\" --model-dir ./model --check-interval 300";
+                if (_forceTrainedModel)
+                {
+                    trainerArgs += " --min-total-samples 1";
+                    Console.WriteLine("  Force model enabled: using min-total-samples=1");
+                }
                 _mlTrainerProcess = new Process
                 {
                     StartInfo = new ProcessStartInfo
                     {
                         FileName = python,
-                        Arguments = $"background_trainer.py --csv \"{csvPath}\" --model-dir ./model --check-interval 300",
+                        Arguments = trainerArgs,
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
                         UseShellExecute = false,
@@ -492,15 +495,17 @@ namespace NudgeTray
             try
             {
                 // Determine nudge executable name based on platform
-                string nudgeExe = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-                    ? "nudge.exe"
-                    : "./nudge";
+                string nudgeExe = PlatformConfig.IsWindows ? "nudge.exe" : "./nudge";
 
                 // Build arguments
                 string args = $"--interval {interval}";
                 if (_mlEnabled)
                 {
                     args += " --ml";
+                }
+                if (_forceTrainedModel)
+                {
+                    args += " --force-model";
                 }
 
                 // Start the main nudge process
@@ -563,7 +568,7 @@ namespace NudgeTray
 
             // Platform-specific notifications
 #if WINDOWS
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            if (PlatformConfig.IsWindows)
             {
                 ShowWindowsNotification();
                 return;
