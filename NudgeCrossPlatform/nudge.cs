@@ -605,23 +605,184 @@ class Nudge
 
     static string GetKDEFocusedApp()
     {
+        // Approach 1: Try xdotool for X11 sessions first (most reliable when available)
+        if (CommandExists("xdotool"))
+        {
+            try
+            {
+                var windowName = RunCommand("xdotool", "getactivewindow getwindowname");
+                if (!string.IsNullOrWhiteSpace(windowName))
+                {
+                    return windowName.Trim().Split('\n')[0];
+                }
+            }
+            catch
+            {
+                // xdotool failed, likely on Wayland
+            }
+        }
+
+        // Approach 2: On Wayland, KDE restricts window info for security
+        // KWin scripting approaches don't work (no console.log output, no file write access)
+        // So we skip straight to process-based detection
+        // Try to identify GUI application by process instead
+
         try
         {
-            // Try xdotool for X11 sessions (works non-intrusively)
-            var windowName = RunCommand("xdotool", "getactivewindow getwindowname");
-            if (!string.IsNullOrWhiteSpace(windowName))
+            // Use wmctrl or similar if available
+            if (CommandExists("wmctrl"))
             {
-                return windowName.Trim().Split('\n')[0];
+                var wmctrlOutput = RunCommand("wmctrl", "-lx");
+                if (!string.IsNullOrWhiteSpace(wmctrlOutput))
+                {
+                    // Parse wmctrl output for active window
+                    // This might work on some KDE configs
+                    var lines = wmctrlOutput.Split('\n');
+                    foreach (var line in lines)
+                    {
+                        if (line.Contains("*"))  // Active window marker in some wmctrl versions
+                        {
+                            var parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                            if (parts.Length > 2)
+                            {
+                                return parts[2];  // Window class
+                            }
+                        }
+                    }
+                }
             }
 
-            // On Wayland, window detection is blocked by design for security
-            // Return a generic identifier instead of trying intrusive methods
-            return "kde-wayland-window";
+            // If wmctrl didn't work, check recently active GUI processes
+            var candidates = new List<(string name, long cpuTime)>();
+            var procDirs = Directory.GetDirectories("/proc");
+
+            foreach (var procDir in procDirs)
+            {
+                var pidStr = Path.GetFileName(procDir);
+                if (!int.TryParse(pidStr, out int pid))
+                    continue;
+
+                try
+                {
+                    var cmdlinePath = Path.Combine(procDir, "cmdline");
+                    var statPath = Path.Combine(procDir, "stat");
+                    var environPath = Path.Combine(procDir, "environ");
+
+                    if (!File.Exists(cmdlinePath) || !File.Exists(environPath))
+                        continue;
+
+                    // Check if this is a GUI process
+                    var environ = File.ReadAllText(environPath);
+                    if (!environ.Contains("WAYLAND_DISPLAY") && !environ.Contains("DISPLAY="))
+                        continue;
+
+                    var cmdline = File.ReadAllText(cmdlinePath).Replace("\0", " ").Trim();
+                    if (string.IsNullOrWhiteSpace(cmdline))
+                        continue;
+
+                    // Filter out Nudge's own processes (ML trainer, inference, etc.)
+                    if (cmdline.Contains("background_trainer") ||
+                        cmdline.Contains("model_inference") ||
+                        cmdline.Contains("generate_sample_data") ||
+                        cmdline.Contains("start_nudge_ml") ||
+                        cmdline.Contains("nudge-tray") ||
+                        cmdline.Contains("/Nudge/") ||
+                        cmdline.Contains("NudgeCrossPlatform"))
+                        continue;
+
+                    var processName = cmdline.Split(' ')[0];
+                    processName = Path.GetFileName(processName);
+
+                    // Filter out system processes
+                    var systemProcesses = new[] {
+                        "kwin_wayland", "kwin_x11", "plasmashell", "kded5", "kded6",
+                        "kglobalaccel", "ksmserver", "systemd", "dbus-daemon",
+                        "kwalletd5", "kwalletd6", "baloo_file", "agent", "polkit",
+                        "xdg-desktop-portal", "xdg-document-portal", "xdg-permission-store"
+                    };
+
+                    if (systemProcesses.Any(sp => processName.Contains(sp)))
+                        continue;
+
+                    // Get process stats to determine if it's likely the active window
+                    // We look for: recent I/O activity, not backgrounded, interactive
+                    long activityScore = 0;
+                    if (File.Exists(statPath))
+                    {
+                        var stat = File.ReadAllText(statPath);
+                        var statParts = stat.Split(' ');
+                        if (statParts.Length > 20)
+                        {
+                            // Check if process is in foreground (tpgid == pgrp means foreground)
+                            if (int.TryParse(statParts[4], out int pgrp) &&
+                                int.TryParse(statParts[7], out int tpgid) &&
+                                tpgid > 0 && tpgid == pgrp)
+                            {
+                                activityScore += 1000; // Foreground bonus
+                            }
+
+                            // Get number of threads (more threads = more likely to be active GUI app)
+                            if (long.TryParse(statParts[19], out long numThreads))
+                            {
+                                activityScore += numThreads * 10;
+                            }
+
+                            // Get minor faults (page faults) - active apps cause more faults
+                            if (long.TryParse(statParts[9], out long minFaults))
+                            {
+                                activityScore += minFaults / 1000;
+                            }
+                        }
+                    }
+
+                    // Check I/O stats - active apps have more recent I/O
+                    var ioPath = Path.Combine(procDir, "io");
+                    if (File.Exists(ioPath))
+                    {
+                        try
+                        {
+                            var ioStats = File.ReadAllText(ioPath);
+                            // Look for read_bytes and write_bytes
+                            var lines = ioStats.Split('\n');
+                            foreach (var line in lines)
+                            {
+                                if (line.StartsWith("rchar:") || line.StartsWith("wchar:"))
+                                {
+                                    var parts = line.Split(':');
+                                    if (parts.Length > 1 && long.TryParse(parts[1].Trim(), out long ioBytes))
+                                    {
+                                        // More I/O = more likely to be active
+                                        activityScore += ioBytes / 1000000;
+                                    }
+                                }
+                            }
+                        }
+                        catch { /* IO stats might not be readable */ }
+                    }
+
+                    candidates.Add((processName, activityScore));
+                }
+                catch
+                {
+                    // Skip processes we can't read
+                    continue;
+                }
+            }
+
+            // Return the process with highest activity score (most likely active)
+            if (candidates.Count > 0)
+            {
+                var mostActive = candidates.OrderByDescending(c => c.Item2).First();
+                return mostActive.Item1;
+            }
         }
         catch
         {
-            return "kde-wayland-window";
+            // Process detection failed, fall through to generic identifier
         }
+
+        // Absolute last resort
+        return "kde-wayland-window";
     }
 
     static string GetX11FocusedApp()
@@ -1194,6 +1355,33 @@ class Nudge
         int end = input.IndexOf("\"", start);
 
         return end > start ? input.Substring(start, end - start) : "unknown";
+    }
+
+    static string ExtractTitleFromOutput(string output, string marker)
+    {
+        if (string.IsNullOrEmpty(output) || !output.Contains(marker))
+            return "";
+
+        var lines = output.Split('\n');
+        // Iterate backwards to get the most recent output
+        for (int i = lines.Length - 1; i >= 0; i--)
+        {
+            var line = lines[i];
+            if (line.Contains(marker))
+            {
+                var start = line.IndexOf(marker) + marker.Length;
+                var end = line.IndexOf(">>>", start);
+                if (end > start)
+                {
+                    var title = line.Substring(start, end - start).Trim();
+                    if (!string.IsNullOrWhiteSpace(title))
+                    {
+                        return title;
+                    }
+                }
+            }
+        }
+        return "";
     }
 
     static string FormatTime(int ms)
