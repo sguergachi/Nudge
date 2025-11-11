@@ -50,7 +50,9 @@ class Nudge
     const int UDP_PORT = 45001;          // UDP listener port
     const int RESPONSE_TIMEOUT_MS = 60000; // 60 seconds to respond
 
-    static int SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;  // 5 minutes (configurable)
+    static int SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;  // Random 5-10 minutes (configurable)
+    static bool _customInterval = false;  // Track if user specified custom interval
+    static Random _random = new Random();
 
     // ML-powered adaptive notifications
     const double ML_CONFIDENCE_THRESHOLD = 0.98;  // 98% confidence required
@@ -141,6 +143,20 @@ class Nudge
     static List<double> _mlConfidenceScores = new List<double>();
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // RANDOM INTERVAL - Generate random snapshot interval between 5-10 minutes
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    static void SetRandomInterval()
+    {
+        if (!_customInterval)
+        {
+            // Random interval between 5 and 10 minutes (in milliseconds)
+            int randomMinutes = _random.Next(5, 11);  // 5-10 inclusive
+            SNAPSHOT_INTERVAL_MS = randomMinutes * 60 * 1000;
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // MAIN - Entry point with professional argument parsing
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -166,6 +182,7 @@ class Nudge
                 if (i + 1 < args.Length && int.TryParse(args[i + 1], out int minutes))
                 {
                     SNAPSHOT_INTERVAL_MS = minutes * 60 * 1000;
+                    _customInterval = true;
                     i++; // Skip the interval value
                 }
                 continue;
@@ -195,9 +212,19 @@ class Nudge
         InitializeCSV();
         StartUDPListener();
 
+        // Set initial random interval if not custom
+        SetRandomInterval();
+
         // Main event loop
         Success("✓ Nudge is running");
-        Info($"  Taking snapshots every {SNAPSHOT_INTERVAL_MS/1000/60} minutes");
+        if (_customInterval)
+        {
+            Info($"  Taking snapshots every {SNAPSHOT_INTERVAL_MS/1000/60} minutes");
+        }
+        else
+        {
+            Info($"  Taking snapshots every 5-10 minutes (random)");
+        }
         if (_mlEnabled)
         {
             Info($"  {Color.BGREEN}ML-powered adaptive notifications enabled{Color.RESET}");
@@ -390,6 +417,7 @@ class Nudge
 
                     TakeSnapshot(app, idle, _attentionSpanMs);
                     elapsed = 0;
+                    SetRandomInterval();  // Set new random interval for next snapshot
                     lastMinute = -1; // Reset progress indicator
 
                     // Show ML stats every 10 snapshots
