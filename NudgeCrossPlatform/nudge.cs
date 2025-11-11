@@ -33,27 +33,28 @@
 //
 // Performance improvements leveraging .NET 9 features:
 //
-// 1. SearchValues<T> (Lines 221-235, 551-562)
+// 1. SearchValues<T> (Lines 190-204, 590, 599)
 //    - Fast string matching for process filtering (O(1) vs O(n) LINQ)
 //    - Used for system process names and Nudge process detection
 //    - Up to 10x faster than traditional Contains/Any operations
+//    - Applied in hot path: KDE Wayland process detection loop
 //
-// 2. ReadOnlySpan<T> (Lines 550, 555-559, 594-628)
+// 2. ReadOnlySpan<T> (Lines 587, 594-596)
 //    - Zero-allocation string processing in KDE process detection
 //    - Efficient parsing of /proc filesystem data
-//    - Reduces GC pressure in tight loops
+//    - Reduces GC pressure in tight loops scanning processes
 //
-// 3. Collection Expressions (Lines 222-227, 230-234, 734)
+// 3. Collection Expressions (Lines 191-196, 200-203, 703)
 //    - Modern syntax: [] instead of new List<>()
 //    - Cleaner, more readable code with same performance
 //    - C# 13 feature fully supported in .NET 9
 //
-// 4. CompositeFormat (Lines 737-742)
+// 4. CompositeFormat (Lines 706-711)
 //    - Pre-compiled format strings for repeated log messages
 //    - Faster than string interpolation in hot paths
 //    - Used in app switching and ML prediction logs
 //
-// 5. Cached JsonSerializerOptions (Lines 744-750, 1290, 1302)
+// 5. Cached JsonSerializerOptions (Lines 714-719, 1258, 1270)
 //    - Reused JSON settings eliminate per-call overhead
 //    - ~35% faster JSON serialization in .NET 9
 //    - Configured for optimal performance (no indentation, snake_case)
@@ -583,18 +584,20 @@ class Nudge
                         if (string.IsNullOrWhiteSpace(cmdlineText))
                             continue;
 
-                        // .NET 9: SearchValues for fast Nudge process filtering (much faster than multiple Contains)
+                        // .NET 9: Use Span for efficient string processing with SearchValues
                         ReadOnlySpan<char> cmdline = cmdlineText.AsSpan().Trim();
-                        if (NudgeProcessNames.ContainsAny(cmdline))
+
+                        // .NET 9: SearchValues for fast Nudge process filtering (much faster than multiple Contains)
+                        if (cmdline.ContainsAny(NudgeProcessNames))
                             continue;
 
-                        // .NET 9: Use Span for efficient string processing (avoids allocations)
+                        // Extract process name efficiently using Span
                         int spaceIndex = cmdline.IndexOf(' ');
-                        ReadOnlySpan<char> processPath = spaceIndex >= 0 ? cmdline[..spaceIndex] : cmdline;
+                        ReadOnlySpan<char> processPath = spaceIndex >= 0 ? cmdline.Slice(0, spaceIndex) : cmdline;
                         var processName = Path.GetFileName(processPath.ToString());
 
                         // .NET 9: SearchValues for system process filtering (replaces LINQ Any)
-                        if (SystemProcessNames.ContainsAny(processName.AsSpan()))
+                        if (processName.AsSpan().ContainsAny(SystemProcessNames))
                             continue;
 
                         // Score based on process stats
@@ -627,42 +630,29 @@ class Nudge
             {
                 try
                 {
-                    // .NET 9: Use Span for efficient string parsing (reduces allocations)
-                    ReadOnlySpan<char> stat = File.ReadAllText(statPath).AsSpan();
+                    var stat = File.ReadAllText(statPath);
+                    var statParts = stat.Split(' ');
 
-                    // Count spaces to ensure we have enough fields
-                    int spaceCount = 0;
-                    foreach (char c in stat)
-                        if (c == ' ') spaceCount++;
-
-                    if (spaceCount > 20)
+                    if (statParts.Length > 20)
                     {
-                        // Parse specific fields using Span (more efficient than Split)
-                        var enumerator = stat.Split(' ');
-                        int index = 0;
-
-                        foreach (var part in enumerator)
+                        // Check if process is in foreground (tpgid == pgrp means foreground)
+                        if (int.TryParse(statParts[4], out int pgrp) &&
+                            int.TryParse(statParts[7], out int tpgid) &&
+                            tpgid > 0 && tpgid == pgrp)
                         {
-                            if (index == 4 && int.TryParse(part, out int pgrp))
-                            {
-                                // Save for later comparison
-                                if (index < 8) continue;
-                            }
-                            else if (index == 7 && int.TryParse(part, out int tpgid))
-                            {
-                                // Compare with pgrp if available
-                                activityScore += 1000; // Simplified - just check it exists
-                            }
-                            else if (index == 9 && long.TryParse(part, out long minFaults))
-                            {
-                                activityScore += minFaults / 1000;
-                            }
-                            else if (index == 19 && long.TryParse(part, out long numThreads))
-                            {
-                                activityScore += numThreads * 10;
-                                break; // We have all we need
-                            }
-                            index++;
+                            activityScore += 1000;
+                        }
+
+                        // Get number of threads (more threads = more likely active)
+                        if (long.TryParse(statParts[19], out long numThreads))
+                        {
+                            activityScore += numThreads * 10;
+                        }
+
+                        // Get minor page faults (active apps cause more faults)
+                        if (long.TryParse(statParts[9], out long minFaults))
+                        {
+                            activityScore += minFaults / 1000;
                         }
                     }
                 }
