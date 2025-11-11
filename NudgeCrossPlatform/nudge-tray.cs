@@ -198,43 +198,19 @@ namespace NudgeTray
         {
             var menu = new ContextMenuStrip();
 
-            // If waiting for response, show Yes/No options prominently
+            // Status item showing next snapshot time or waiting status
+            string statusText;
             if (_waitingForResponse)
             {
-                var headerItem = new ToolStripMenuItem("Were you productive?") { Enabled = false, Font = new Font(SystemFonts.MenuFont ?? SystemFonts.DefaultFont, FontStyle.Bold) };
-                menu.Items.Add(headerItem);
-                menu.Items.Add(new ToolStripSeparator());
-
-                // Yes option
-                var yesItem = new ToolStripMenuItem("✓ Yes - Productive");
-                yesItem.Click += (s, e) =>
-                {
-                    Console.WriteLine("[DEBUG] User clicked YES from tray menu");
-                    _waitingForResponse = false;
-                    SendResponse(true);
-                    _trayIcon!.ContextMenuStrip = CreateContextMenu(); // Refresh menu
-                };
-                menu.Items.Add(yesItem);
-
-                // No option
-                var noItem = new ToolStripMenuItem("✗ No - Not Productive");
-                noItem.Click += (s, e) =>
-                {
-                    Console.WriteLine("[DEBUG] User clicked NO from tray menu");
-                    _waitingForResponse = false;
-                    SendResponse(false);
-                    _trayIcon!.ContextMenuStrip = CreateContextMenu(); // Refresh menu
-                };
-                menu.Items.Add(noItem);
-
-                menu.Items.Add(new ToolStripSeparator());
+                statusText = "⏳ Waiting for response...";
             }
-
-            // Status item showing next snapshot time
-            var nextSnapshot = GetNextSnapshotTime();
-            var statusText = nextSnapshot.HasValue
-                ? $"Next snapshot: {nextSnapshot.Value:HH:mm:ss}"
-                : "Status: Running...";
+            else
+            {
+                var nextSnapshot = GetNextSnapshotTime();
+                statusText = nextSnapshot.HasValue
+                    ? $"Next snapshot: {nextSnapshot.Value:HH:mm:ss}"
+                    : "Status: Running...";
+            }
 
             var statusItem = new ToolStripMenuItem(statusText) { Enabled = false };
             menu.Items.Add(statusItem);
