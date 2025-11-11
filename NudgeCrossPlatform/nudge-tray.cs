@@ -29,6 +29,8 @@ using Microsoft.Toolkit.Uwp.Notifications;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 #endif
@@ -344,8 +346,24 @@ namespace NudgeTray
 
         static WindowIcon CreateAvaloniaIcon()
         {
-            // Create icon from shared PNG stream (same icon as Windows)
-            using var stream = GetIconPngStream();
+            // Create icon programmatically for Linux using Avalonia APIs
+            // Create a 32x32 bitmap with blue circle (same as Windows)
+            var renderBitmap = new RenderTargetBitmap(new PixelSize(32, 32), new Vector(96, 96));
+
+            using (var ctx = renderBitmap.CreateDrawingContext())
+            {
+                // Clear with transparent background
+                ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, 32, 32));
+
+                // Draw blue circle (same color as Windows: #5588FF)
+                var brush = new SolidColorBrush(Color.FromRgb(85, 136, 255));
+                ctx.DrawGeometry(brush, null, new EllipseGeometry(new Rect(2, 2, 28, 28)));
+            }
+
+            // Save to memory stream as PNG
+            using var stream = new MemoryStream();
+            renderBitmap.Save(stream);
+            stream.Position = 0;
             return new WindowIcon(stream);
         }
 #endif
