@@ -37,6 +37,22 @@ using Avalonia.Threading;
 
 namespace NudgeTray
 {
+    // Shared platform configuration (same as in nudge.cs)
+    static class PlatformConfig
+    {
+        public static bool IsWindows => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+        public static bool IsLinux => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+        public static bool IsMacOS => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+
+        public static string CsvPath => IsWindows
+            ? Path.Combine(Path.GetTempPath(), "HARVEST.CSV")
+            : "/tmp/HARVEST.CSV";
+
+        public static string WhichCommand => IsWindows ? "where" : "which";
+
+        public static string PythonCommand => IsWindows ? "python" : "python3";
+    }
+
     class Program
     {
         const int UDP_PORT = 45001;
