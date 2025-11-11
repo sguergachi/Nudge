@@ -387,14 +387,27 @@ EOF
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+
+  <!-- Windows-specific settings -->
+  <PropertyGroup Condition="'\$(OS)' == 'Windows_NT'">
+    <UseWindowsForms>true</UseWindowsForms>
+    <DefineConstants>\$(DefineConstants);WINDOWS</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <Compile Include="nudge-tray.cs" />
   </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.2.2" />
     <PackageReference Include="Avalonia.Desktop" Version="11.2.2" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.2" />
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.0" />
+  </ItemGroup>
+
+  <!-- Windows-specific packages -->
+  <ItemGroup Condition="'\$(OS)' == 'Windows_NT'">
+    <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
   </ItemGroup>
 </Project>
 EOF

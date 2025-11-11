@@ -12,7 +12,6 @@
 
 using System;
 using System.Diagnostics;
-using System.Drawing;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -20,9 +19,13 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 using Tmds.DBus.Protocol;
+
+#if WINDOWS
+using System.Drawing;
+using System.Windows.Forms;
 using Microsoft.Toolkit.Uwp.Notifications;
+#endif
 
 namespace NudgeTray
 {
@@ -36,6 +39,8 @@ namespace NudgeTray
         internal static bool _mlEnabled = false;
         static DateTime? _nextSnapshotTime;
         static int _intervalMinutes;
+
+#if WINDOWS
         static NotifyIcon? _trayIcon;
         static System.Threading.Timer? _menuRefreshTimer;
         static Form? _messageLoopForm;
@@ -47,15 +52,18 @@ namespace NudgeTray
         static extern bool AllocConsole();
 
         const int ATTACH_PARENT_PROCESS = -1;
+#endif
 
         [STAThread]
         static void Main(string[] args)
         {
+#if WINDOWS
             // Attach to parent console for logging (when run from terminal)
             if (!AttachConsole(ATTACH_PARENT_PROCESS))
             {
                 AllocConsole();
             }
+#endif
 
             int interval = 5; // default 5 minutes
 
@@ -90,10 +98,11 @@ namespace NudgeTray
                 StartMLServices();
             }
 
-            // Initialize Windows App SDK notifications
-            InitializeNotifications();
-
             StartNudge(interval);
+
+#if WINDOWS
+            // Windows: Initialize notifications and system tray
+            InitializeNotifications();
             CreateTrayIcon();
 
             // Start menu refresh timer (update every 10 seconds)
@@ -111,8 +120,20 @@ namespace NudgeTray
 
             // Run Windows message loop
             Application.Run(_messageLoopForm);
+#else
+            // Linux: Run without tray icon, just keep the process running
+            Console.WriteLine("Running in headless mode (no system tray on Linux)");
+            Console.WriteLine("Nudge is running. Press Ctrl+C to quit.");
+
+            // Keep the application running
+            while (true)
+            {
+                Thread.Sleep(1000);
+            }
+#endif
         }
 
+#if WINDOWS
         static void CreateTrayIcon()
         {
             _trayIcon = new NotifyIcon
@@ -244,6 +265,7 @@ namespace NudgeTray
 
             return Icon.FromHandle(bitmap.GetHicon());
         }
+#endif
 
         static void StartMLServices()
         {
@@ -439,11 +461,13 @@ namespace NudgeTray
             Console.WriteLine("📸 Snapshot taken! Respond using the notification buttons.");
 
             // Platform-specific notifications
+#if WINDOWS
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 ShowWindowsNotification();
                 return;
             }
+#endif
 
             // Linux: Try native DBus notifications first
             bool success = false;
@@ -471,6 +495,7 @@ namespace NudgeTray
 
         private static bool _waitingForResponse = false;
 
+#if WINDOWS
         private static void ShowWindowsNotification()
         {
             try
@@ -509,6 +534,7 @@ namespace NudgeTray
                 Console.WriteLine($"[ERROR] Failed to show Windows notification: {ex.Message}");
             }
         }
+#endif
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // LINUX NOTIFICATIONS (Native Tmds.DBus.Protocol with resident:true hint)
@@ -738,6 +764,7 @@ namespace NudgeTray
                 Console.WriteLine("[DEBUG] Nudge process already exited or null");
             }
 
+#if WINDOWS
             if (_trayIcon != null)
             {
                 _trayIcon.Visible = false;
@@ -748,10 +775,16 @@ namespace NudgeTray
             {
                 _menuRefreshTimer.Dispose();
             }
+#endif
 
             Console.WriteLine("✓ Shutdown complete");
             Console.WriteLine("[DEBUG] Exiting nudge-tray...");
+
+#if WINDOWS
             Application.Exit();
+#else
+            Environment.Exit(0);
+#endif
         }
 
         public static DateTime? GetNextSnapshotTime()
