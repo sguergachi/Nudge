@@ -984,7 +984,7 @@ namespace NudgeTray
     }
 
     // Avalonia application class - used on all platforms for custom notifications
-    public class App : Application
+    public class App : Avalonia.Application
     {
         public override void Initialize()
         {
