@@ -197,6 +197,10 @@ namespace NudgeTray
                 Menu = CreateAvaloniaMenu()
             };
 
+            // Register the tray icon with the Application
+            var icons = new TrayIcons { _trayIcon };
+            TrayIcon.SetIcons(Application.Current, icons);
+
             // Start menu refresh timer (update every 10 seconds)
             _menuRefreshTimer = new System.Threading.Timer(_ =>
             {
