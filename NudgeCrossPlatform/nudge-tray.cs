@@ -31,8 +31,6 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 
 #if WINDOWS
-using System.Drawing;
-using System.Windows.Forms;
 using Microsoft.Toolkit.Uwp.Notifications;
 #endif
 
@@ -66,11 +64,11 @@ namespace NudgeTray
         static DateTime? _nextSnapshotTime;
         static int _intervalMinutes;
 
-#if WINDOWS
-        static NotifyIcon? _trayIcon;
+        // Common tray icon for all platforms
+        static TrayIcon? _trayIcon;
         static System.Threading.Timer? _menuRefreshTimer;
-        static Form? _messageLoopForm;
 
+#if WINDOWS
         [DllImport("kernel32.dll")]
         static extern bool AttachConsole(int dwProcessId);
 
@@ -78,9 +76,6 @@ namespace NudgeTray
         static extern bool AllocConsole();
 
         const int ATTACH_PARENT_PROCESS = -1;
-#else
-        static TrayIcon? _trayIcon;
-        static System.Threading.Timer? _menuRefreshTimer;
 #endif
 
         [STAThread]
@@ -133,35 +128,10 @@ namespace NudgeTray
 
             _intervalMinutes = interval;
 
-#if WINDOWS
-            // Windows: Initialize Avalonia first for custom notifications, then WinForms for tray
-            InitializeAvalonia();
-            StartNudge(interval);
-            InitializeNotifications();
-            CreateTrayIcon();
-
-            // Start menu refresh timer (update every 10 seconds)
-            _menuRefreshTimer = new System.Threading.Timer(_ =>
-            {
-                if (_trayIcon != null)
-                {
-                    _trayIcon.ContextMenuStrip = CreateContextMenu();
-                }
-            }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
-
-            // Create hidden form for message loop and cross-thread invokes
-            _messageLoopForm = new Form { WindowState = FormWindowState.Minimized, ShowInTaskbar = false, Opacity = 0 };
-            _messageLoopForm.Load += (s, e) => _messageLoopForm.Hide();
-
-            // Run Windows message loop
-            System.Windows.Forms.Application.Run(_messageLoopForm);
-#else
-            // Linux: Use Avalonia for cross-platform tray icon
+            // Use Avalonia for cross-platform tray icon on all platforms
             BuildAvaloniaApp(interval).StartWithClassicDesktopLifetime(args);
-#endif
         }
 
-#if !WINDOWS
         static AppBuilder BuildAvaloniaApp(int interval)
         {
             return AppBuilder.Configure<App>()
@@ -170,28 +140,13 @@ namespace NudgeTray
                 .AfterSetup(_ =>
                 {
                     StartNudge(interval);
+#if WINDOWS
+                    InitializeNotifications();
+#endif
                     CreateTrayIcon();
                 });
         }
-#endif
 
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // AVALONIA INITIALIZATION (For custom notifications on all platforms)
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-#if WINDOWS
-        private static void InitializeAvalonia()
-        {
-            // Initialize Avalonia for custom notification windows on Windows
-            // This allows us to use Avalonia windows alongside WinForms tray icon
-            AppBuilder.Configure<App>()
-                .UsePlatformDetect()
-                .LogToTrace()
-                .SetupWithoutStarting();
-
-            Console.WriteLine("[DEBUG] Avalonia initialized for custom notifications");
-        }
-#endif
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // SHARED MENU AND ICON HELPERS (Used by both Windows and Linux)
@@ -229,21 +184,32 @@ namespace NudgeTray
         }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // PLATFORM-SPECIFIC TRAY ICON IMPLEMENTATIONS
+        // COMMON TRAY ICON IMPLEMENTATION (Works on both Windows and Linux)
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-#if WINDOWS
         static void CreateTrayIcon()
         {
-            _trayIcon = new NotifyIcon
+            _trayIcon = new TrayIcon
             {
-                Icon = CreateSimpleIcon(),
-                Visible = true,
-                Text = "Nudge Productivity Tracker",
-                ContextMenuStrip = CreateContextMenu()
+                Icon = CreateCommonIcon(),
+                IsVisible = true,
+                ToolTipText = "Nudge Productivity Tracker",
+                Menu = CreateAvaloniaMenu()
             };
 
-            Console.WriteLine("[DEBUG] Tray icon created with WinForms NotifyIcon");
+            // Start menu refresh timer (update every 10 seconds)
+            _menuRefreshTimer = new System.Threading.Timer(_ =>
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (_trayIcon != null)
+                    {
+                        _trayIcon.Menu = CreateAvaloniaMenu();
+                    }
+                });
+            }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+
+            Console.WriteLine("[DEBUG] Tray icon created with Avalonia TrayIcon (cross-platform)");
         }
 
         static void InitializeNotifications()
@@ -283,13 +249,13 @@ namespace NudgeTray
                         SendResponse(true);
 
                         // Refresh tray menu on UI thread
-                        _messageLoopForm?.Invoke((Action)(() =>
+                        Dispatcher.UIThread.Post(() =>
                         {
                             if (_trayIcon != null)
                             {
-                                _trayIcon.ContextMenuStrip = CreateContextMenu();
+                                _trayIcon.Menu = CreateAvaloniaMenu();
                             }
-                        }));
+                        });
                     }
                     else if (action == "no")
                     {
@@ -298,13 +264,13 @@ namespace NudgeTray
                         SendResponse(false);
 
                         // Refresh tray menu on UI thread
-                        _messageLoopForm?.Invoke((Action)(() =>
+                        Dispatcher.UIThread.Post(() =>
                         {
                             if (_trayIcon != null)
                             {
-                                _trayIcon.ContextMenuStrip = CreateContextMenu();
+                                _trayIcon.Menu = CreateAvaloniaMenu();
                             }
-                        }));
+                        });
                     }
                 }
             }
@@ -313,58 +279,7 @@ namespace NudgeTray
                 Console.WriteLine($"[ERROR] Failed to handle notification action: {ex.Message}");
             }
         }
-
-        static ContextMenuStrip CreateContextMenu()
-        {
-            var menu = new ContextMenuStrip();
-
-            // Status item
-            var statusItem = new ToolStripMenuItem(GetMenuStatusText()) { Enabled = false };
-            menu.Items.Add(statusItem);
-
-            menu.Items.Add(new ToolStripSeparator());
-
-            // Quit option
-            var quitItem = new ToolStripMenuItem("Quit");
-            quitItem.Click += (s, e) => HandleQuitClicked();
-            menu.Items.Add(quitItem);
-
-            return menu;
-        }
-
-        static Icon CreateSimpleIcon()
-        {
-            // Create icon from shared PNG stream
-            using var stream = GetIconPngStream();
-            using var bitmap = new System.Drawing.Bitmap(stream);
-            return Icon.FromHandle(bitmap.GetHicon());
-        }
-#else
-        // Linux: Avalonia-based tray icon
-        static void CreateTrayIcon()
-        {
-            _trayIcon = new TrayIcon
-            {
-                Icon = CreateAvaloniaIcon(),
-                IsVisible = true,
-                ToolTipText = "Nudge Productivity Tracker",
-                Menu = CreateAvaloniaMenu()
-            };
-
-            // Start menu refresh timer (update every 10 seconds)
-            _menuRefreshTimer = new System.Threading.Timer(_ =>
-            {
-                Dispatcher.UIThread.Post(() =>
-                {
-                    if (_trayIcon != null)
-                    {
-                        _trayIcon.Menu = CreateAvaloniaMenu();
-                    }
-                });
-            }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
-
-            Console.WriteLine("[DEBUG] Tray icon created with Avalonia TrayIcon");
-        }
+#endif
 
         static NativeMenu CreateAvaloniaMenu()
         {
@@ -385,29 +300,12 @@ namespace NudgeTray
             return menu;
         }
 
-        static WindowIcon CreateAvaloniaIcon()
+        static WindowIcon CreateCommonIcon()
         {
-            // Create icon programmatically for Linux using Avalonia APIs
-            // Create a 32x32 bitmap with blue circle (same as Windows)
-            var renderBitmap = new RenderTargetBitmap(new PixelSize(32, 32), new Vector(96, 96));
-
-            using (var ctx = renderBitmap.CreateDrawingContext())
-            {
-                // Clear with transparent background
-                ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, 32, 32));
-
-                // Draw blue circle (same color as Windows: #5588FF)
-                var brush = new SolidColorBrush(Color.FromRgb(85, 136, 255));
-                ctx.DrawGeometry(brush, null, new EllipseGeometry(new Rect(2, 2, 28, 28)));
-            }
-
-            // Save to memory stream as PNG
-            using var stream = new MemoryStream();
-            renderBitmap.Save(stream);
-            stream.Position = 0;
+            // Create icon from shared PNG stream - works on all platforms
+            using var stream = GetIconPngStream();
             return new WindowIcon(stream);
         }
-#endif
 
         static void StartMLServices()
         {
@@ -630,15 +528,6 @@ namespace NudgeTray
                         SendResponse(productive);
 
                         // Refresh tray menu
-#if WINDOWS
-                        _messageLoopForm?.Invoke((Action)(() =>
-                        {
-                            if (_trayIcon != null)
-                            {
-                                _trayIcon.ContextMenuStrip = CreateContextMenu();
-                            }
-                        }));
-#else
                         Dispatcher.UIThread.Post(() =>
                         {
                             if (_trayIcon != null)
@@ -646,25 +535,12 @@ namespace NudgeTray
                                 _trayIcon.Menu = CreateAvaloniaMenu();
                             }
                         });
-#endif
                     });
                 });
 
                 Console.WriteLine("✓ Custom notification shown with animation");
 
                 // Refresh tray menu to show waiting state
-#if WINDOWS
-                if (_messageLoopForm != null)
-                {
-                    _messageLoopForm.Invoke((Action)(() =>
-                    {
-                        if (_trayIcon != null)
-                        {
-                            _trayIcon.ContextMenuStrip = CreateContextMenu();
-                        }
-                    }));
-                }
-#else
                 Dispatcher.UIThread.Post(() =>
                 {
                     if (_trayIcon != null)
@@ -672,7 +548,6 @@ namespace NudgeTray
                         _trayIcon.Menu = CreateAvaloniaMenu();
                     }
                 });
-#endif
             }
             catch (Exception ex)
             {
@@ -711,13 +586,13 @@ namespace NudgeTray
                 Console.WriteLine("✓ Native Windows toast notification shown with Yes/No buttons");
 
                 // Refresh tray menu to show Yes/No options
-                _messageLoopForm?.Invoke((Action)(() =>
+                Dispatcher.UIThread.Post(() =>
                 {
                     if (_trayIcon != null)
                     {
-                        _trayIcon.ContextMenuStrip = CreateContextMenu();
+                        _trayIcon.Menu = CreateAvaloniaMenu();
                     }
-                }));
+                });
             }
             catch (Exception ex)
             {
@@ -956,9 +831,7 @@ namespace NudgeTray
 
             if (_trayIcon != null)
             {
-#if WINDOWS
-                _trayIcon.Visible = false;
-#endif
+                _trayIcon.IsVisible = false;
                 _trayIcon.Dispose();
             }
 
@@ -970,11 +843,7 @@ namespace NudgeTray
             Console.WriteLine("✓ Shutdown complete");
             Console.WriteLine("[DEBUG] Exiting nudge-tray...");
 
-#if WINDOWS
-            System.Windows.Forms.Application.Exit();
-#else
             Environment.Exit(0);
-#endif
         }
 
         public static DateTime? GetNextSnapshotTime()
