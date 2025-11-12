@@ -81,6 +81,23 @@ namespace NudgeTray
         [STAThread]
         static void Main(string[] args)
         {
+            // Add global exception handlers
+            AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+            {
+                Console.WriteLine($"[FATAL] Unhandled exception: {e.ExceptionObject}");
+                if (e.ExceptionObject is Exception ex)
+                {
+                    Console.WriteLine($"[FATAL] Message: {ex.Message}");
+                    Console.WriteLine($"[FATAL] Stack: {ex.StackTrace}");
+                }
+            };
+
+            TaskScheduler.UnobservedTaskException += (s, e) =>
+            {
+                Console.WriteLine($"[FATAL] Unobserved task exception: {e.Exception.Message}");
+                e.SetObserved();
+            };
+
 #if WINDOWS
             // Attach to parent console for logging (when run from terminal)
             if (!AttachConsole(ATTACH_PARENT_PROCESS))
@@ -203,6 +220,9 @@ namespace NudgeTray
                 var icons = new TrayIcons { _trayIcon };
                 TrayIcon.SetIcons(Application.Current, icons);
 
+                // Disable menu refresh timer temporarily to test if it's causing issues
+                // We'll update the menu only when needed, not on a timer
+                /*
                 // Start menu refresh timer (update every 10 seconds)
                 _menuRefreshTimer = new System.Threading.Timer(_ =>
                 {
@@ -228,6 +248,7 @@ namespace NudgeTray
                         Console.WriteLine($"[ERROR] Timer callback failed: {ex.Message}");
                     }
                 }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+                */
 
                 Console.WriteLine("[DEBUG] Tray icon created with Avalonia TrayIcon (cross-platform)");
             }
@@ -313,20 +334,50 @@ namespace NudgeTray
         {
             try
             {
+                Console.WriteLine("[DEBUG] Creating menu...");
                 var menu = new NativeMenu();
 
-                // Status item
-                var statusItem = new NativeMenuItem { Header = GetMenuStatusText(), IsEnabled = false };
+                // Status item - make it simple and safe
+                string statusText = "Nudge Tracker";
+                try
+                {
+                    statusText = GetMenuStatusText();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[WARN] Failed to get status text: {ex.Message}");
+                }
+
+                var statusItem = new NativeMenuItem
+                {
+                    Header = statusText,
+                    IsEnabled = false
+                };
                 menu.Add(statusItem);
+                Console.WriteLine("[DEBUG] Added status item");
 
                 // Separator
                 menu.Add(new NativeMenuItemSeparator());
+                Console.WriteLine("[DEBUG] Added separator");
 
                 // Quit option
                 var quitItem = new NativeMenuItem { Header = "Quit" };
-                quitItem.Click += (s, e) => HandleQuitClicked();
+                quitItem.Click += (s, e) =>
+                {
+                    try
+                    {
+                        Console.WriteLine("[DEBUG] Quit menu item clicked");
+                        HandleQuitClicked();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[ERROR] Quit handler failed: {ex.Message}");
+                    }
+                };
                 menu.Add(quitItem);
+                Console.WriteLine("[DEBUG] Added quit item");
 
+                Console.WriteLine("[DEBUG] Menu created successfully");
                 return menu;
             }
             catch (Exception ex)
@@ -334,8 +385,17 @@ namespace NudgeTray
                 Console.WriteLine($"[ERROR] Failed to create menu: {ex.Message}");
                 Console.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
 
-                // Return empty menu as fallback
-                return new NativeMenu();
+                // Return minimal menu as fallback
+                try
+                {
+                    var fallbackMenu = new NativeMenu();
+                    fallbackMenu.Add(new NativeMenuItem { Header = "Nudge", IsEnabled = false });
+                    return fallbackMenu;
+                }
+                catch
+                {
+                    return new NativeMenu();
+                }
             }
         }
 
