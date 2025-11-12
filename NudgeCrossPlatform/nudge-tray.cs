@@ -212,6 +212,7 @@ namespace NudgeTray
             Console.WriteLine("[DEBUG] Tray icon created with Avalonia TrayIcon (cross-platform)");
         }
 
+#if WINDOWS
         static void InitializeNotifications()
         {
             try
