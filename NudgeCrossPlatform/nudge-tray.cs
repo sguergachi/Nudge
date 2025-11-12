@@ -21,11 +21,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Tmds.DBus.Protocol;
 
-#if WINDOWS
-using System.Drawing;
-using System.Windows.Forms;
-using Microsoft.Toolkit.Uwp.Notifications;
-#else
+// Avalonia - used on all platforms for custom notifications
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -33,6 +29,11 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+
+#if WINDOWS
+using System.Drawing;
+using System.Windows.Forms;
+using Microsoft.Toolkit.Uwp.Notifications;
 #endif
 
 namespace NudgeTray
@@ -982,8 +983,7 @@ namespace NudgeTray
         }
     }
 
-#if !WINDOWS
-    // Avalonia application class for Linux
+    // Avalonia application class - used on all platforms for custom notifications
     public class App : Application
     {
         public override void Initialize()
@@ -991,5 +991,4 @@ namespace NudgeTray
             // No XAML needed for headless tray app
         }
     }
-#endif
 }
