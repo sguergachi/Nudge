@@ -154,7 +154,7 @@ namespace NudgeTray
             _messageLoopForm.Load += (s, e) => _messageLoopForm.Hide();
 
             // Run Windows message loop
-            Application.Run(_messageLoopForm);
+            System.Windows.Forms.Application.Run(_messageLoopForm);
 #else
             // Linux: Use Avalonia for cross-platform tray icon
             BuildAvaloniaApp(interval).StartWithClassicDesktopLifetime(args);
@@ -336,7 +336,7 @@ namespace NudgeTray
         {
             // Create icon from shared PNG stream
             using var stream = GetIconPngStream();
-            using var bitmap = new Bitmap(stream);
+            using var bitmap = new System.Drawing.Bitmap(stream);
             return Icon.FromHandle(bitmap.GetHicon());
         }
 #else
@@ -971,7 +971,7 @@ namespace NudgeTray
             Console.WriteLine("[DEBUG] Exiting nudge-tray...");
 
 #if WINDOWS
-            Application.Exit();
+            System.Windows.Forms.Application.Exit();
 #else
             Environment.Exit(0);
 #endif
