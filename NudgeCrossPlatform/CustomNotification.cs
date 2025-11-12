@@ -53,8 +53,8 @@ namespace NudgeTray
 
         private void InitializeWindow()
         {
-            Width = 380;
-            Height = 180;
+            Width = 340;
+            Height = 140;
             CanResize = false;
             ShowInTaskbar = false;
             WindowStartupLocation = WindowStartupLocation.Manual;
@@ -69,23 +69,23 @@ namespace NudgeTray
 
         private void InitializeContent()
         {
-            // Main container - Linear-inspired clean design with blur effect
+            // Main container - sleek dark theme
             _mainBorder = new Border
             {
-                Background = new SolidColorBrush(Color.FromArgb(250, 255, 255, 255)), // Almost opaque white
-                CornerRadius = new CornerRadius(12),
-                Padding = new Thickness(20),
+                Background = new SolidColorBrush(Color.FromArgb(245, 18, 18, 20)), // Almost opaque black
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(16),
                 BoxShadow = new BoxShadows(
                     new BoxShadow
                     {
-                        Blur = 40,
+                        Blur = 32,
                         Spread = 0,
                         OffsetX = 0,
-                        OffsetY = 8,
-                        Color = Color.FromArgb(30, 0, 0, 0) // Subtle shadow
+                        OffsetY = 6,
+                        Color = Color.FromArgb(50, 0, 0, 0)
                     }
                 ),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(40, 0, 0, 0)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)),
                 BorderThickness = new Thickness(1)
             };
 
@@ -97,48 +97,47 @@ namespace NudgeTray
 
             var stackPanel = new StackPanel
             {
-                Spacing = 16,
+                Spacing = 12,
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
 
-            // Title with subtle accent
+            // Title - clean and minimal
             var titleText = new TextBlock
             {
                 Text = "Productivity Check",
-                FontSize = 16,
+                FontSize = 14,
                 FontWeight = FontWeight.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(30, 30, 40)),
+                Foreground = new SolidColorBrush(Color.FromRgb(240, 240, 245)),
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 0, 0, 4)
+                Margin = new Thickness(0, 0, 0, 2)
             };
 
-            // Message with lighter weight
+            // Message - subtle
             var messageText = new TextBlock
             {
-                Text = "Were you productive during the last interval?",
-                FontSize = 13,
+                Text = "Were you productive?",
+                FontSize = 12,
                 FontWeight = FontWeight.Normal,
-                Foreground = new SolidColorBrush(Color.FromRgb(100, 100, 120)),
+                Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 160)),
                 TextAlignment = TextAlignment.Center,
-                TextWrapping = TextWrapping.Wrap,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 0, 0, 8)
+                Margin = new Thickness(0, 0, 0, 4)
             };
 
             // Buttons Container
             var buttonsPanel = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                Spacing = 8,
+                Spacing = 6,
                 HorizontalAlignment = HorizontalAlignment.Center
             };
 
-            // YES Button - Linear's purple accent
+            // YES Button - vibrant accent
             var yesButton = CreateStyledButton(
                 "Yes",
                 "⌘Y",
-                Color.FromRgb(95, 90, 255),
-                Color.FromRgb(115, 110, 255),
+                Color.FromRgb(88, 166, 255),
+                Color.FromRgb(108, 186, 255),
                 () => HandleResponse(true)
             );
 
@@ -146,32 +145,19 @@ namespace NudgeTray
             var noButton = CreateStyledButton(
                 "No",
                 "⌘N",
-                Color.FromRgb(240, 240, 245),
-                Color.FromRgb(230, 230, 240),
+                Color.FromRgb(45, 45, 50),
+                Color.FromRgb(55, 55, 60),
                 () => HandleResponse(false),
-                false // Not primary
+                false
             );
 
             buttonsPanel.Children.Add(yesButton);
             buttonsPanel.Children.Add(noButton);
 
-            // Drag hint - very subtle
-            var dragHint = new TextBlock
-            {
-                Text = "Drag to move",
-                FontSize = 10,
-                FontWeight = FontWeight.Normal,
-                Foreground = new SolidColorBrush(Color.FromRgb(160, 160, 175)),
-                TextAlignment = TextAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 8, 0, 0)
-            };
-
             // Add all elements to stack
             stackPanel.Children.Add(titleText);
             stackPanel.Children.Add(messageText);
             stackPanel.Children.Add(buttonsPanel);
-            stackPanel.Children.Add(dragHint);
 
             _mainBorder.Child = stackPanel;
             Content = _mainBorder;
@@ -179,16 +165,16 @@ namespace NudgeTray
 
         private StackPanel CreateStyledButton(string mainText, string shortcutText, Color baseColor, Color hoverColor, Action onClick, bool isPrimary = true)
         {
-            // Create border for rounded corners - Linear style
+            // Create border for rounded corners - sleek and compact
             var border = new Border
             {
-                MinWidth = 140,
-                Height = 44,
-                CornerRadius = new CornerRadius(8),
+                MinWidth = 120,
+                Height = 36,
+                CornerRadius = new CornerRadius(6),
                 Background = new SolidColorBrush(baseColor),
                 BorderBrush = isPrimary
                     ? Brushes.Transparent
-                    : new SolidColorBrush(Color.FromArgb(30, 0, 0, 0)),
+                    : new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
                 BorderThickness = new Thickness(1),
                 Cursor = new Cursor(StandardCursorType.Hand)
             };
@@ -206,29 +192,29 @@ namespace NudgeTray
             var buttonContent = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                Spacing = 8,
+                Spacing = 6,
                 HorizontalAlignment = HorizontalAlignment.Center
             };
 
             var mainTextBlock = new TextBlock
             {
                 Text = mainText,
-                FontSize = 13,
+                FontSize = 12,
                 FontWeight = FontWeight.Medium,
                 Foreground = isPrimary
                     ? Brushes.White
-                    : new SolidColorBrush(Color.FromRgb(60, 60, 75)),
+                    : new SolidColorBrush(Color.FromRgb(200, 200, 210)),
                 VerticalAlignment = VerticalAlignment.Center
             };
 
             var shortcutTextBlock = new TextBlock
             {
                 Text = shortcutText,
-                FontSize = 11,
+                FontSize = 10,
                 FontWeight = FontWeight.Normal,
                 Foreground = isPrimary
                     ? new SolidColorBrush(Color.FromArgb(150, 255, 255, 255))
-                    : new SolidColorBrush(Color.FromRgb(140, 140, 160)),
+                    : new SolidColorBrush(Color.FromRgb(130, 130, 140)),
                 VerticalAlignment = VerticalAlignment.Center
             };
 
@@ -237,7 +223,7 @@ namespace NudgeTray
             button.Content = buttonContent;
             border.Child = button;
 
-            // Hover effects - subtle like Linear
+            // Hover effects - subtle
             border.PointerEntered += (s, e) =>
             {
                 border.Background = new SolidColorBrush(hoverColor);
@@ -418,8 +404,8 @@ namespace NudgeTray
 
         private async void AnimateSlideIn(PixelPoint targetPosition)
         {
-            int steps = 30;
-            int delayMs = 10;
+            int steps = 25;
+            int delayMs = 12;
 
             double startX = Position.X;
             double startOpacity = 0;
@@ -428,8 +414,9 @@ namespace NudgeTray
             {
                 double progress = (double)i / steps;
 
-                // Ease out cubic for smooth deceleration
-                double easedProgress = 1 - Math.Pow(1 - progress, 3);
+                // Windows 8 style: Ease-in (fast at first, slow at end)
+                // Using quadratic ease-in: y = x^2
+                double easedProgress = progress * progress;
 
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
