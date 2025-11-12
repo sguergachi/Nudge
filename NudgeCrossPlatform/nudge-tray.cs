@@ -189,31 +189,54 @@ namespace NudgeTray
 
         static void CreateTrayIcon()
         {
-            _trayIcon = new TrayIcon
+            try
             {
-                Icon = CreateCommonIcon(),
-                IsVisible = true,
-                ToolTipText = "Nudge Productivity Tracker",
-                Menu = CreateAvaloniaMenu()
-            };
-
-            // Register the tray icon with the Application
-            var icons = new TrayIcons { _trayIcon };
-            TrayIcon.SetIcons(Application.Current, icons);
-
-            // Start menu refresh timer (update every 10 seconds)
-            _menuRefreshTimer = new System.Threading.Timer(_ =>
-            {
-                Dispatcher.UIThread.Post(() =>
+                _trayIcon = new TrayIcon
                 {
-                    if (_trayIcon != null)
-                    {
-                        _trayIcon.Menu = CreateAvaloniaMenu();
-                    }
-                });
-            }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+                    Icon = CreateCommonIcon(),
+                    IsVisible = true,
+                    ToolTipText = "Nudge Productivity Tracker",
+                    Menu = CreateAvaloniaMenu()
+                };
 
-            Console.WriteLine("[DEBUG] Tray icon created with Avalonia TrayIcon (cross-platform)");
+                // Register the tray icon with the Application
+                var icons = new TrayIcons { _trayIcon };
+                TrayIcon.SetIcons(Application.Current, icons);
+
+                // Start menu refresh timer (update every 10 seconds)
+                _menuRefreshTimer = new System.Threading.Timer(_ =>
+                {
+                    try
+                    {
+                        Dispatcher.UIThread.Post(() =>
+                        {
+                            try
+                            {
+                                if (_trayIcon != null)
+                                {
+                                    _trayIcon.Menu = CreateAvaloniaMenu();
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"[ERROR] Menu refresh failed: {ex.Message}");
+                            }
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[ERROR] Timer callback failed: {ex.Message}");
+                    }
+                }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+
+                Console.WriteLine("[DEBUG] Tray icon created with Avalonia TrayIcon (cross-platform)");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] Failed to create tray icon: {ex.Message}");
+                Console.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
+                throw;
+            }
         }
 
 #if WINDOWS
@@ -288,21 +311,32 @@ namespace NudgeTray
 
         static NativeMenu CreateAvaloniaMenu()
         {
-            var menu = new NativeMenu();
+            try
+            {
+                var menu = new NativeMenu();
 
-            // Status item
-            var statusItem = new NativeMenuItem { Header = GetMenuStatusText(), IsEnabled = false };
-            menu.Add(statusItem);
+                // Status item
+                var statusItem = new NativeMenuItem { Header = GetMenuStatusText(), IsEnabled = false };
+                menu.Add(statusItem);
 
-            // Separator
-            menu.Add(new NativeMenuItemSeparator());
+                // Separator
+                menu.Add(new NativeMenuItemSeparator());
 
-            // Quit option
-            var quitItem = new NativeMenuItem { Header = "Quit" };
-            quitItem.Click += (s, e) => HandleQuitClicked();
-            menu.Add(quitItem);
+                // Quit option
+                var quitItem = new NativeMenuItem { Header = "Quit" };
+                quitItem.Click += (s, e) => HandleQuitClicked();
+                menu.Add(quitItem);
 
-            return menu;
+                return menu;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] Failed to create menu: {ex.Message}");
+                Console.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
+
+                // Return empty menu as fallback
+                return new NativeMenu();
+            }
         }
 
         static WindowIcon CreateCommonIcon()
