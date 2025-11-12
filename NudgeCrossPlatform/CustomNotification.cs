@@ -148,12 +148,11 @@ namespace NudgeTray
                 Margin = new Thickness(0, 0, 0, 8) // Fluent: 8px spacing
             };
 
-            // Buttons Container - left-aligned
-            var buttonsPanel = new StackPanel
+            // Buttons Container - Grid for equal spacing
+            var buttonsPanel = new Grid
             {
-                Orientation = Orientation.Horizontal,
-                Spacing = 8, // Fluent: 8px spacing between buttons
-                HorizontalAlignment = HorizontalAlignment.Left
+                ColumnDefinitions = new ColumnDefinitions("*,8,*"), // Equal columns with 8px gap
+                HorizontalAlignment = HorizontalAlignment.Stretch
             };
 
             // YES Button - vibrant accent
@@ -164,6 +163,7 @@ namespace NudgeTray
                 Color.FromRgb(108, 186, 255),
                 () => HandleResponse(true)
             );
+            Grid.SetColumn(yesButton, 0);
 
             // NO Button - subtle gray
             var noButton = CreateStyledButton(
@@ -174,6 +174,7 @@ namespace NudgeTray
                 () => HandleResponse(false),
                 false
             );
+            Grid.SetColumn(noButton, 2);
 
             buttonsPanel.Children.Add(yesButton);
             buttonsPanel.Children.Add(noButton);
@@ -193,7 +194,7 @@ namespace NudgeTray
             // Create border for rounded corners - Fluent Design System
             var border = new Border
             {
-                MinWidth = 120,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
                 Height = 32,
                 CornerRadius = new CornerRadius(4), // Fluent: 4px for in-page elements (buttons)
                 Background = new SolidColorBrush(baseColor),
@@ -207,6 +208,7 @@ namespace NudgeTray
 
             var button = new Button
             {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Center,
                 VerticalContentAlignment = VerticalAlignment.Center,
                 Background = Brushes.Transparent,
