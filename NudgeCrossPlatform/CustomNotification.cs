@@ -216,17 +216,26 @@ namespace NudgeTray
 
         private StackPanel CreateStyledButton(string mainText, string shortcutText, Color baseColor, Color hoverColor, Action onClick)
         {
-            var button = new Button
+            // Create border for rounded corners
+            var border = new Border
             {
                 Width = 180,
                 Height = 60,
-                HorizontalContentAlignment = HorizontalAlignment.Center,
-                VerticalContentAlignment = VerticalAlignment.Center,
+                CornerRadius = new CornerRadius(10),
                 Background = new SolidColorBrush(baseColor),
                 BorderBrush = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255)),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(10),
                 Cursor = new Cursor(StandardCursorType.Hand)
+            };
+
+            var button = new Button
+            {
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Cursor = new Cursor(StandardCursorType.Hand),
+                Padding = new Thickness(0)
             };
 
             var buttonContent = new StackPanel
@@ -255,23 +264,24 @@ namespace NudgeTray
             buttonContent.Children.Add(mainTextBlock);
             buttonContent.Children.Add(shortcutTextBlock);
             button.Content = buttonContent;
+            border.Child = button;
 
             // Hover effects
-            button.PointerEntered += (s, e) =>
+            border.PointerEntered += (s, e) =>
             {
-                button.Background = new SolidColorBrush(hoverColor);
-                button.RenderTransform = new ScaleTransform(1.05, 1.05);
+                border.Background = new SolidColorBrush(hoverColor);
+                border.RenderTransform = new ScaleTransform(1.05, 1.05);
             };
 
-            button.PointerExited += (s, e) =>
+            border.PointerExited += (s, e) =>
             {
-                button.Background = new SolidColorBrush(baseColor);
-                button.RenderTransform = new ScaleTransform(1.0, 1.0);
+                border.Background = new SolidColorBrush(baseColor);
+                border.RenderTransform = new ScaleTransform(1.0, 1.0);
             };
 
             button.Click += (s, e) => onClick();
 
-            return new StackPanel { Children = { button } };
+            return new StackPanel { Children = { border } };
         }
 
         private void StartPulseAnimation(Border iconBorder)
