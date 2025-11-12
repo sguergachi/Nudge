@@ -69,23 +69,23 @@ namespace NudgeTray
 
         private void InitializeContent()
         {
-            // Main container - sleek dark theme
+            // Main container - Fluent Design System specifications
             _mainBorder = new Border
             {
-                Background = new SolidColorBrush(Color.FromArgb(245, 18, 18, 20)), // Almost opaque black
-                CornerRadius = new CornerRadius(10),
-                Padding = new Thickness(16),
+                Background = new SolidColorBrush(Color.FromArgb(245, 18, 18, 20)), // Almost opaque black with acrylic effect
+                CornerRadius = new CornerRadius(8), // Fluent: 8px for top-level containers
+                Padding = new Thickness(16), // Fluent: 16px standard spacing
                 BoxShadow = new BoxShadows(
                     new BoxShadow
                     {
                         Blur = 32,
                         Spread = 0,
                         OffsetX = 0,
-                        OffsetY = 6,
-                        Color = Color.FromArgb(50, 0, 0, 0)
+                        OffsetY = 8,
+                        Color = Color.FromArgb(60, 0, 0, 0) // Elevated shadow
                     }
                 ),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
                 BorderThickness = new Thickness(1)
             };
 
@@ -97,7 +97,7 @@ namespace NudgeTray
 
             var stackPanel = new StackPanel
             {
-                Spacing = 12,
+                Spacing = 8, // Fluent: 8px spacing
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
 
@@ -109,7 +109,7 @@ namespace NudgeTray
                 FontWeight = FontWeight.SemiBold,
                 Foreground = new SolidColorBrush(Color.FromRgb(240, 240, 245)),
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 0, 0, 2)
+                Margin = new Thickness(0, 0, 0, 4) // Fluent: 4px base unit
             };
 
             // Message - subtle
@@ -121,14 +121,14 @@ namespace NudgeTray
                 Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 160)),
                 TextAlignment = TextAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 0, 0, 4)
+                Margin = new Thickness(0, 0, 0, 8) // Fluent: 8px spacing
             };
 
             // Buttons Container
             var buttonsPanel = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                Spacing = 6,
+                Spacing = 8, // Fluent: 8px spacing between buttons
                 HorizontalAlignment = HorizontalAlignment.Center
             };
 
@@ -165,18 +165,19 @@ namespace NudgeTray
 
         private StackPanel CreateStyledButton(string mainText, string shortcutText, Color baseColor, Color hoverColor, Action onClick, bool isPrimary = true)
         {
-            // Create border for rounded corners - sleek and compact
+            // Create border for rounded corners - Fluent Design System
             var border = new Border
             {
                 MinWidth = 120,
-                Height = 36,
-                CornerRadius = new CornerRadius(6),
+                Height = 32,
+                CornerRadius = new CornerRadius(4), // Fluent: 4px for in-page elements (buttons)
                 Background = new SolidColorBrush(baseColor),
                 BorderBrush = isPrimary
                     ? Brushes.Transparent
                     : new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
                 BorderThickness = new Thickness(1),
-                Cursor = new Cursor(StandardCursorType.Hand)
+                Cursor = new Cursor(StandardCursorType.Hand),
+                Padding = new Thickness(12, 0, 12, 0) // Fluent: 12px horizontal padding
             };
 
             var button = new Button
@@ -192,7 +193,7 @@ namespace NudgeTray
             var buttonContent = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                Spacing = 6,
+                Spacing = 8, // Fluent: 8px spacing between text elements
                 HorizontalAlignment = HorizontalAlignment.Center
             };
 
