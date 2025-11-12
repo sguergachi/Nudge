@@ -33,8 +33,6 @@ namespace NudgeTray
         private Point? _dragStartPosition;
         private bool _isDragging = false;
         private Action<bool>? _onResponse;
-        private DispatcherTimer? _pulseTimer;
-        private bool _pulseDirection = true;
         private Border? _mainBorder;
 
         // Notification configuration
@@ -55,13 +53,13 @@ namespace NudgeTray
 
         private void InitializeWindow()
         {
-            Width = 420;
-            Height = 220;
+            Width = 380;
+            Height = 180;
             CanResize = false;
             ShowInTaskbar = false;
             WindowStartupLocation = WindowStartupLocation.Manual;
             SystemDecorations = SystemDecorations.None;
-            TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
+            TransparencyLevelHint = new[] { WindowTransparencyLevel.Blur };
             Background = Brushes.Transparent;
             Topmost = true;
 
@@ -71,23 +69,23 @@ namespace NudgeTray
 
         private void InitializeContent()
         {
-            // Main container with rounded corners and shadow effect
+            // Main container - Linear-inspired clean design with blur effect
             _mainBorder = new Border
             {
-                Background = new SolidColorBrush(Color.FromRgb(28, 28, 35)),
-                CornerRadius = new CornerRadius(16),
-                Padding = new Thickness(24),
+                Background = new SolidColorBrush(Color.FromArgb(250, 255, 255, 255)), // Almost opaque white
+                CornerRadius = new CornerRadius(12),
+                Padding = new Thickness(20),
                 BoxShadow = new BoxShadows(
                     new BoxShadow
                     {
-                        Blur = 30,
+                        Blur = 40,
                         Spread = 0,
                         OffsetX = 0,
-                        OffsetY = 10,
-                        Color = Color.FromArgb(100, 0, 0, 0)
+                        OffsetY = 8,
+                        Color = Color.FromArgb(30, 0, 0, 0) // Subtle shadow
                     }
                 ),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(60, 60, 75)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(40, 0, 0, 0)),
                 BorderThickness = new Thickness(1)
             };
 
@@ -103,127 +101,94 @@ namespace NudgeTray
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
 
-            // Icon and Title Row
-            var headerPanel = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 12,
-                HorizontalAlignment = HorizontalAlignment.Center
-            };
-
-            // Icon (pulsing circle)
-            var iconBorder = new Border
-            {
-                Width = 40,
-                Height = 40,
-                CornerRadius = new CornerRadius(20),
-                Background = new LinearGradientBrush
-                {
-                    StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-                    EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
-                    GradientStops =
-                    {
-                        new GradientStop(Color.FromRgb(85, 136, 255), 0),
-                        new GradientStop(Color.FromRgb(120, 160, 255), 1)
-                    }
-                },
-                Child = new TextBlock
-                {
-                    Text = "📊",
-                    FontSize = 24,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center
-                }
-            };
-
+            // Title with subtle accent
             var titleText = new TextBlock
             {
-                Text = "Nudge - Productivity Check",
-                FontSize = 20,
-                FontWeight = FontWeight.Bold,
-                Foreground = Brushes.White,
-                VerticalAlignment = VerticalAlignment.Center
+                Text = "Productivity Check",
+                FontSize = 16,
+                FontWeight = FontWeight.SemiBold,
+                Foreground = new SolidColorBrush(Color.FromRgb(30, 30, 40)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 0, 0, 4)
             };
 
-            headerPanel.Children.Add(iconBorder);
-            headerPanel.Children.Add(titleText);
-
-            // Message
+            // Message with lighter weight
             var messageText = new TextBlock
             {
                 Text = "Were you productive during the last interval?",
-                FontSize = 14,
-                Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 210)),
+                FontSize = 13,
+                FontWeight = FontWeight.Normal,
+                Foreground = new SolidColorBrush(Color.FromRgb(100, 100, 120)),
                 TextAlignment = TextAlignment.Center,
                 TextWrapping = TextWrapping.Wrap,
-                HorizontalAlignment = HorizontalAlignment.Center
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 0, 0, 8)
             };
 
             // Buttons Container
             var buttonsPanel = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                Spacing = 12,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 8, 0, 0)
+                Spacing = 8,
+                HorizontalAlignment = HorizontalAlignment.Center
             };
 
-            // YES Button
+            // YES Button - Linear's purple accent
             var yesButton = CreateStyledButton(
-                "YES - Productive",
-                "Ctrl+Shift+Y",
-                Color.FromRgb(40, 180, 100),
-                Color.FromRgb(50, 200, 120),
+                "Yes",
+                "⌘Y",
+                Color.FromRgb(95, 90, 255),
+                Color.FromRgb(115, 110, 255),
                 () => HandleResponse(true)
             );
 
-            // NO Button
+            // NO Button - subtle gray
             var noButton = CreateStyledButton(
-                "NO - Not Productive",
-                "Ctrl+Shift+N",
-                Color.FromRgb(220, 60, 80),
-                Color.FromRgb(240, 80, 100),
-                () => HandleResponse(false)
+                "No",
+                "⌘N",
+                Color.FromRgb(240, 240, 245),
+                Color.FromRgb(230, 230, 240),
+                () => HandleResponse(false),
+                false // Not primary
             );
 
             buttonsPanel.Children.Add(yesButton);
             buttonsPanel.Children.Add(noButton);
 
-            // Drag hint
+            // Drag hint - very subtle
             var dragHint = new TextBlock
             {
-                Text = "💡 Drag to reposition • Stays on top",
-                FontSize = 11,
-                Foreground = new SolidColorBrush(Color.FromRgb(130, 130, 150)),
+                Text = "Drag to move",
+                FontSize = 10,
+                FontWeight = FontWeight.Normal,
+                Foreground = new SolidColorBrush(Color.FromRgb(160, 160, 175)),
                 TextAlignment = TextAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 4, 0, 0),
-                Opacity = 0.7
+                Margin = new Thickness(0, 8, 0, 0)
             };
 
             // Add all elements to stack
-            stackPanel.Children.Add(headerPanel);
+            stackPanel.Children.Add(titleText);
             stackPanel.Children.Add(messageText);
             stackPanel.Children.Add(buttonsPanel);
             stackPanel.Children.Add(dragHint);
 
             _mainBorder.Child = stackPanel;
             Content = _mainBorder;
-
-            // Start pulsing animation
-            StartPulseAnimation(iconBorder);
         }
 
-        private StackPanel CreateStyledButton(string mainText, string shortcutText, Color baseColor, Color hoverColor, Action onClick)
+        private StackPanel CreateStyledButton(string mainText, string shortcutText, Color baseColor, Color hoverColor, Action onClick, bool isPrimary = true)
         {
-            // Create border for rounded corners
+            // Create border for rounded corners - Linear style
             var border = new Border
             {
-                Width = 180,
-                Height = 60,
-                CornerRadius = new CornerRadius(10),
+                MinWidth = 140,
+                Height = 44,
+                CornerRadius = new CornerRadius(8),
                 Background = new SolidColorBrush(baseColor),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255)),
+                BorderBrush = isPrimary
+                    ? Brushes.Transparent
+                    : new SolidColorBrush(Color.FromArgb(30, 0, 0, 0)),
                 BorderThickness = new Thickness(1),
                 Cursor = new Cursor(StandardCursorType.Hand)
             };
@@ -240,25 +205,31 @@ namespace NudgeTray
 
             var buttonContent = new StackPanel
             {
-                Spacing = 4,
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
                 HorizontalAlignment = HorizontalAlignment.Center
             };
 
             var mainTextBlock = new TextBlock
             {
                 Text = mainText,
-                FontSize = 14,
-                FontWeight = FontWeight.SemiBold,
-                Foreground = Brushes.White,
-                HorizontalAlignment = HorizontalAlignment.Center
+                FontSize = 13,
+                FontWeight = FontWeight.Medium,
+                Foreground = isPrimary
+                    ? Brushes.White
+                    : new SolidColorBrush(Color.FromRgb(60, 60, 75)),
+                VerticalAlignment = VerticalAlignment.Center
             };
 
             var shortcutTextBlock = new TextBlock
             {
                 Text = shortcutText,
                 FontSize = 11,
-                Foreground = new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)),
-                HorizontalAlignment = HorizontalAlignment.Center
+                FontWeight = FontWeight.Normal,
+                Foreground = isPrimary
+                    ? new SolidColorBrush(Color.FromArgb(150, 255, 255, 255))
+                    : new SolidColorBrush(Color.FromRgb(140, 140, 160)),
+                VerticalAlignment = VerticalAlignment.Center
             };
 
             buttonContent.Children.Add(mainTextBlock);
@@ -266,11 +237,11 @@ namespace NudgeTray
             button.Content = buttonContent;
             border.Child = button;
 
-            // Hover effects
+            // Hover effects - subtle like Linear
             border.PointerEntered += (s, e) =>
             {
                 border.Background = new SolidColorBrush(hoverColor);
-                border.RenderTransform = new ScaleTransform(1.05, 1.05);
+                border.RenderTransform = new ScaleTransform(1.02, 1.02);
             };
 
             border.PointerExited += (s, e) =>
@@ -284,41 +255,6 @@ namespace NudgeTray
             return new StackPanel { Children = { border } };
         }
 
-        private void StartPulseAnimation(Border iconBorder)
-        {
-            _pulseTimer = new DispatcherTimer
-            {
-                Interval = TimeSpan.FromMilliseconds(50)
-            };
-
-            double minOpacity = 0.7;
-            double maxOpacity = 1.0;
-            double step = 0.03;
-
-            _pulseTimer.Tick += (s, e) =>
-            {
-                if (_pulseDirection)
-                {
-                    iconBorder.Opacity += step;
-                    if (iconBorder.Opacity >= maxOpacity)
-                    {
-                        iconBorder.Opacity = maxOpacity;
-                        _pulseDirection = false;
-                    }
-                }
-                else
-                {
-                    iconBorder.Opacity -= step;
-                    if (iconBorder.Opacity <= minOpacity)
-                    {
-                        iconBorder.Opacity = minOpacity;
-                        _pulseDirection = true;
-                    }
-                }
-            };
-
-            _pulseTimer.Start();
-        }
 
         private void SetupKeyboardShortcuts()
         {
@@ -512,9 +448,6 @@ namespace NudgeTray
         {
             Console.WriteLine($"[CustomNotification] User responded: {(productive ? "YES" : "NO")}");
 
-            // Stop pulse animation
-            _pulseTimer?.Stop();
-
             // Animate fade out
             await AnimateFadeOut();
 
@@ -543,7 +476,6 @@ namespace NudgeTray
 
         protected override void OnClosed(EventArgs e)
         {
-            _pulseTimer?.Stop();
             base.OnClosed(e);
         }
     }
