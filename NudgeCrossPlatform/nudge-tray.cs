@@ -307,8 +307,24 @@ namespace NudgeTray
 
         static WindowIcon CreateCommonIcon()
         {
-            // Create icon from shared PNG stream - works on all platforms
-            using var stream = GetIconPngStream();
+            // Create icon programmatically using Avalonia rendering
+            // This works on all platforms (Windows, Linux, macOS)
+            var renderBitmap = new RenderTargetBitmap(new PixelSize(32, 32), new Vector(96, 96));
+
+            using (var ctx = renderBitmap.CreateDrawingContext())
+            {
+                // Clear with transparent background
+                ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, 32, 32));
+
+                // Draw blue circle (same color #5588FF)
+                var brush = new SolidColorBrush(Color.FromRgb(85, 136, 255));
+                ctx.DrawGeometry(brush, null, new EllipseGeometry(new Rect(2, 2, 28, 28)));
+            }
+
+            // Save to memory stream as PNG
+            var stream = new MemoryStream();
+            renderBitmap.Save(stream);
+            stream.Position = 0;
             return new WindowIcon(stream);
         }
 
