@@ -3,8 +3,9 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //
 // Features:
-// - Smooth slide-in animation
-// - Modern, well-designed UI
+// - Smooth center zoom + fade animations
+// - Halo selection ring when active
+// - Modern, left-aligned UI
 // - Keyboard shortcuts: Ctrl+Shift+Y (YES), Ctrl+Shift+N (NO)
 // - Draggable window with position persistence
 // - Cross-platform support (Windows, Linux, macOS)
@@ -34,6 +35,8 @@ namespace NudgeTray
         private bool _isDragging = false;
         private Action<bool>? _onResponse;
         private Border? _mainBorder;
+        private Border? _haloRing;
+        private bool _isActive = false;
 
         // Notification configuration
         private class NotificationConfig
@@ -65,16 +68,42 @@ namespace NudgeTray
 
             // Enable keyboard focus
             Focusable = true;
+
+            // Setup focus tracking for halo ring
+            GotFocus += (s, e) => SetActiveState(true);
+            LostFocus += (s, e) => SetActiveState(false);
         }
 
         private void InitializeContent()
         {
+            // Halo ring - outer glow effect when active
+            _haloRing = new Border
+            {
+                Background = Brushes.Transparent,
+                CornerRadius = new CornerRadius(12),
+                Padding = new Thickness(4),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0, 88, 166, 255)), // Initially transparent
+                BorderThickness = new Thickness(2),
+                ClipToBounds = false, // Allow shadows to render outside bounds
+                BoxShadow = new BoxShadows(
+                    new BoxShadow
+                    {
+                        Blur = 0,
+                        Spread = 0,
+                        OffsetX = 0,
+                        OffsetY = 0,
+                        Color = Color.FromArgb(0, 88, 166, 255) // Initially transparent
+                    }
+                )
+            };
+
             // Main container - Fluent Design System specifications
             _mainBorder = new Border
             {
                 Background = new SolidColorBrush(Color.FromArgb(245, 18, 18, 20)), // Almost opaque black with acrylic effect
                 CornerRadius = new CornerRadius(8), // Fluent: 8px for top-level containers
                 Padding = new Thickness(16), // Fluent: 16px standard spacing
+                ClipToBounds = false, // Allow shadows to render outside bounds
                 BoxShadow = new BoxShadows(
                     new BoxShadow
                     {
@@ -86,7 +115,8 @@ namespace NudgeTray
                     }
                 ),
                 BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
-                BorderThickness = new Thickness(1)
+                BorderThickness = new Thickness(1),
+                RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative) // Center for scaling
             };
 
             // Add drag functionality to the border
@@ -101,55 +131,56 @@ namespace NudgeTray
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
 
-            // Title - clean and minimal
+            // Title - clean and minimal, left-aligned
             var titleText = new TextBlock
             {
                 Text = "Productivity Check",
                 FontSize = 14,
                 FontWeight = FontWeight.SemiBold,
                 Foreground = new SolidColorBrush(Color.FromRgb(240, 240, 245)),
-                HorizontalAlignment = HorizontalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Left,
                 Margin = new Thickness(0, 0, 0, 4) // Fluent: 4px base unit
             };
 
-            // Message - subtle
+            // Message - subtle, left-aligned
             var messageText = new TextBlock
             {
                 Text = "Were you productive?",
                 FontSize = 12,
                 FontWeight = FontWeight.Normal,
                 Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 160)),
-                TextAlignment = TextAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Center,
+                TextAlignment = TextAlignment.Left,
+                HorizontalAlignment = HorizontalAlignment.Left,
                 Margin = new Thickness(0, 0, 0, 8) // Fluent: 8px spacing
             };
 
-            // Buttons Container
-            var buttonsPanel = new StackPanel
+            // Buttons Container - Grid for equal spacing
+            var buttonsPanel = new Grid
             {
-                Orientation = Orientation.Horizontal,
-                Spacing = 8, // Fluent: 8px spacing between buttons
-                HorizontalAlignment = HorizontalAlignment.Center
+                ColumnDefinitions = new ColumnDefinitions("*,8,*"), // Equal columns with 8px gap
+                HorizontalAlignment = HorizontalAlignment.Stretch
             };
 
             // YES Button - vibrant accent
             var yesButton = CreateStyledButton(
                 "Yes",
-                "⌘Y",
+                "Ctrl+Shift+Y",
                 Color.FromRgb(88, 166, 255),
                 Color.FromRgb(108, 186, 255),
                 () => HandleResponse(true)
             );
+            Grid.SetColumn(yesButton, 0);
 
             // NO Button - subtle gray
             var noButton = CreateStyledButton(
                 "No",
-                "⌘N",
+                "Ctrl+Shift+N",
                 Color.FromRgb(45, 45, 50),
                 Color.FromRgb(55, 55, 60),
                 () => HandleResponse(false),
                 false
             );
+            Grid.SetColumn(noButton, 2);
 
             buttonsPanel.Children.Add(yesButton);
             buttonsPanel.Children.Add(noButton);
@@ -160,7 +191,8 @@ namespace NudgeTray
             stackPanel.Children.Add(buttonsPanel);
 
             _mainBorder.Child = stackPanel;
-            Content = _mainBorder;
+            _haloRing!.Child = _mainBorder;
+            Content = _haloRing;
         }
 
         private StackPanel CreateStyledButton(string mainText, string shortcutText, Color baseColor, Color hoverColor, Action onClick, bool isPrimary = true)
@@ -168,7 +200,7 @@ namespace NudgeTray
             // Create border for rounded corners - Fluent Design System
             var border = new Border
             {
-                MinWidth = 120,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
                 Height = 32,
                 CornerRadius = new CornerRadius(4), // Fluent: 4px for in-page elements (buttons)
                 Background = new SolidColorBrush(baseColor),
@@ -182,6 +214,7 @@ namespace NudgeTray
 
             var button = new Button
             {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Center,
                 VerticalContentAlignment = VerticalAlignment.Center,
                 Background = Brushes.Transparent,
@@ -390,42 +423,49 @@ namespace NudgeTray
         {
             _onResponse = onResponse;
 
-            // Set initial position for slide-in animation (start off-screen to the right)
-            var targetPosition = Position;
-            Position = new PixelPoint(targetPosition.X + 400, targetPosition.Y);
+            // Set initial state for zoom + fade animation
             Opacity = 0;
+            if (_mainBorder != null)
+            {
+                _mainBorder.RenderTransform = new ScaleTransform(0.8, 0.8);
+            }
 
             Show();
             Focus();
             Activate();
 
-            // Animate slide-in
-            AnimateSlideIn(targetPosition);
+            // Set active state and show halo ring
+            SetActiveState(true);
+
+            // Animate center zoom + fade in
+            AnimateZoomIn();
         }
 
-        private async void AnimateSlideIn(PixelPoint targetPosition)
+        private async void AnimateZoomIn()
         {
-            int steps = 25;
-            int delayMs = 12;
+            int steps = 20;
+            int delayMs = 15;
 
-            double startX = Position.X;
+            double startScale = 0.8;
+            double endScale = 1.0;
             double startOpacity = 0;
+            double endOpacity = 1.0;
 
             for (int i = 0; i <= steps; i++)
             {
                 double progress = (double)i / steps;
 
-                // Windows 8 style: Ease-in (fast at first, slow at end)
-                // Using quadratic ease-in: y = x^2
-                double easedProgress = progress * progress;
+                // Ease-out cubic for smooth deceleration
+                double easedProgress = 1 - Math.Pow(1 - progress, 3);
 
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    Position = new PixelPoint(
-                        (int)(startX + (targetPosition.X - startX) * easedProgress),
-                        targetPosition.Y
-                    );
-                    Opacity = startOpacity + (1.0 - startOpacity) * easedProgress;
+                    if (_mainBorder != null)
+                    {
+                        double scale = startScale + (endScale - startScale) * easedProgress;
+                        _mainBorder.RenderTransform = new ScaleTransform(scale, scale);
+                    }
+                    Opacity = startOpacity + (endOpacity - startOpacity) * easedProgress;
                 });
 
                 await System.Threading.Tasks.Task.Delay(delayMs);
@@ -449,16 +489,69 @@ namespace NudgeTray
         private async System.Threading.Tasks.Task AnimateFadeOut()
         {
             int steps = 15;
-            int delayMs = 10;
+            int delayMs = 12;
+
+            double startScale = 1.0;
+            double endScale = 0.8;
+            double startOpacity = 1.0;
+            double endOpacity = 0;
 
             for (int i = 0; i <= steps; i++)
             {
                 double progress = (double)i / steps;
+
+                // Ease-in cubic for smooth acceleration
+                double easedProgress = progress * progress * progress;
+
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    Opacity = 1.0 - progress;
+                    if (_mainBorder != null)
+                    {
+                        double scale = startScale + (endScale - startScale) * easedProgress;
+                        _mainBorder.RenderTransform = new ScaleTransform(scale, scale);
+                    }
+                    Opacity = startOpacity + (endOpacity - startOpacity) * easedProgress;
                 });
                 await System.Threading.Tasks.Task.Delay(delayMs);
+            }
+        }
+
+        private void SetActiveState(bool active)
+        {
+            _isActive = active;
+
+            if (_haloRing != null)
+            {
+                if (active)
+                {
+                    // Show halo ring with glow effect
+                    _haloRing.BorderBrush = new SolidColorBrush(Color.FromArgb(180, 88, 166, 255));
+                    _haloRing.BoxShadow = new BoxShadows(
+                        new BoxShadow
+                        {
+                            Blur = 20,
+                            Spread = 2,
+                            OffsetX = 0,
+                            OffsetY = 0,
+                            Color = Color.FromArgb(120, 88, 166, 255)
+                        }
+                    );
+                }
+                else
+                {
+                    // Hide halo ring
+                    _haloRing.BorderBrush = new SolidColorBrush(Color.FromArgb(0, 88, 166, 255));
+                    _haloRing.BoxShadow = new BoxShadows(
+                        new BoxShadow
+                        {
+                            Blur = 0,
+                            Spread = 0,
+                            OffsetX = 0,
+                            OffsetY = 0,
+                            Color = Color.FromArgb(0, 88, 166, 255)
+                        }
+                    );
+                }
             }
         }
 
