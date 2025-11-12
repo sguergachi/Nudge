@@ -21,11 +21,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Tmds.DBus.Protocol;
 
-#if WINDOWS
-using System.Drawing;
-using System.Windows.Forms;
-using Microsoft.Toolkit.Uwp.Notifications;
-#else
+// Avalonia - used on all platforms for custom notifications
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -33,6 +29,11 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+
+#if WINDOWS
+using System.Drawing;
+using System.Windows.Forms;
+using Microsoft.Toolkit.Uwp.Notifications;
 #endif
 
 namespace NudgeTray
@@ -56,7 +57,7 @@ namespace NudgeTray
     class Program
     {
         const int UDP_PORT = 45001;
-        const string VERSION = "1.1.0";
+        const string VERSION = "1.2.0";
         static Process? _nudgeProcess;
         static Process? _mlInferenceProcess;
         static Process? _mlTrainerProcess;
@@ -133,7 +134,8 @@ namespace NudgeTray
             _intervalMinutes = interval;
 
 #if WINDOWS
-            // Windows: Initialize notifications and system tray with Windows Forms
+            // Windows: Initialize Avalonia first for custom notifications, then WinForms for tray
+            InitializeAvalonia();
             StartNudge(interval);
             InitializeNotifications();
             CreateTrayIcon();
@@ -152,7 +154,7 @@ namespace NudgeTray
             _messageLoopForm.Load += (s, e) => _messageLoopForm.Hide();
 
             // Run Windows message loop
-            Application.Run(_messageLoopForm);
+            System.Windows.Forms.Application.Run(_messageLoopForm);
 #else
             // Linux: Use Avalonia for cross-platform tray icon
             BuildAvaloniaApp(interval).StartWithClassicDesktopLifetime(args);
@@ -170,6 +172,24 @@ namespace NudgeTray
                     StartNudge(interval);
                     CreateTrayIcon();
                 });
+        }
+#endif
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // AVALONIA INITIALIZATION (For custom notifications on all platforms)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+#if WINDOWS
+        private static void InitializeAvalonia()
+        {
+            // Initialize Avalonia for custom notification windows on Windows
+            // This allows us to use Avalonia windows alongside WinForms tray icon
+            AppBuilder.Configure<App>()
+                .UsePlatformDetect()
+                .LogToTrace()
+                .SetupWithoutStarting();
+
+            Console.WriteLine("[DEBUG] Avalonia initialized for custom notifications");
         }
 #endif
 
@@ -316,7 +336,7 @@ namespace NudgeTray
         {
             // Create icon from shared PNG stream
             using var stream = GetIconPngStream();
-            using var bitmap = new Bitmap(stream);
+            using var bitmap = new System.Drawing.Bitmap(stream);
             return Icon.FromHandle(bitmap.GetHicon());
         }
 #else
@@ -582,40 +602,88 @@ namespace NudgeTray
             _nextSnapshotTime = DateTime.Now.AddMinutes(_intervalMinutes);
             Console.WriteLine("📸 Snapshot taken! Respond using the notification buttons.");
 
-            // Platform-specific notifications
-#if WINDOWS
-            if (PlatformConfig.IsWindows)
-            {
-                ShowWindowsNotification();
-                return;
-            }
-#endif
+            // Use custom cross-platform notification
+            ShowCustomNotification();
+        }
 
-            // Linux: Try native DBus notifications first
-            bool success = false;
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // CUSTOM CROSS-PLATFORM NOTIFICATION
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        private static bool _waitingForResponse = false;
+
+        private static void ShowCustomNotification()
+        {
             try
             {
-                ShowDbusNotification();
-                Console.WriteLine("✓ Desktop notification sent via DBus");
-                success = true;
+                Console.WriteLine("[DEBUG] ShowCustomNotification called");
+
+                _waitingForResponse = true;
+
+                // Create and show custom notification window on Avalonia UI thread (works on all platforms)
+                Dispatcher.UIThread.Post(() =>
+                {
+                    var notificationWindow = new CustomNotificationWindow();
+                    notificationWindow.ShowWithAnimation((productive) =>
+                    {
+                        _waitingForResponse = false;
+                        SendResponse(productive);
+
+                        // Refresh tray menu
+#if WINDOWS
+                        _messageLoopForm?.Invoke((Action)(() =>
+                        {
+                            if (_trayIcon != null)
+                            {
+                                _trayIcon.ContextMenuStrip = CreateContextMenu();
+                            }
+                        }));
+#else
+                        Dispatcher.UIThread.Post(() =>
+                        {
+                            if (_trayIcon != null)
+                            {
+                                _trayIcon.Menu = CreateAvaloniaMenu();
+                            }
+                        });
+#endif
+                    });
+                });
+
+                Console.WriteLine("✓ Custom notification shown with animation");
+
+                // Refresh tray menu to show waiting state
+#if WINDOWS
+                if (_messageLoopForm != null)
+                {
+                    _messageLoopForm.Invoke((Action)(() =>
+                    {
+                        if (_trayIcon != null)
+                        {
+                            _trayIcon.ContextMenuStrip = CreateContextMenu();
+                        }
+                    }));
+                }
+#else
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (_trayIcon != null)
+                    {
+                        _trayIcon.Menu = CreateAvaloniaMenu();
+                    }
+                });
+#endif
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"⚠ DBus notification failed: {ex.Message}");
-            }
-
-            // Fallback notification methods for Linux
-            if (!success)
-            {
-                ShowFallbackNotification();
+                Console.WriteLine($"[ERROR] Failed to show custom notification: {ex.Message}");
+                Console.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
             }
         }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // WINDOWS NOTIFICATIONS (Native Toast with Toolkit)
+        // LEGACY NOTIFICATIONS (Kept for reference, not used)
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-        private static bool _waitingForResponse = false;
 
 #if WINDOWS
         private static void ShowWindowsNotification()
@@ -903,7 +971,7 @@ namespace NudgeTray
             Console.WriteLine("[DEBUG] Exiting nudge-tray...");
 
 #if WINDOWS
-            Application.Exit();
+            System.Windows.Forms.Application.Exit();
 #else
             Environment.Exit(0);
 #endif
@@ -915,14 +983,12 @@ namespace NudgeTray
         }
     }
 
-#if !WINDOWS
-    // Avalonia application class for Linux
-    public class App : Application
+    // Avalonia application class - used on all platforms for custom notifications
+    public class App : Avalonia.Application
     {
         public override void Initialize()
         {
             // No XAML needed for headless tray app
         }
     }
-#endif
 }

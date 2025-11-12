@@ -396,6 +396,7 @@ EOF
 
   <ItemGroup>
     <Compile Include="nudge-tray.cs" />
+    <Compile Include="CustomNotification.cs" />
   </ItemGroup>
 
   <ItemGroup>
