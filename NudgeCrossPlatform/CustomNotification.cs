@@ -68,6 +68,10 @@ namespace NudgeTray
 
             // Enable keyboard focus
             Focusable = true;
+
+            // Setup focus tracking for halo ring
+            GotFocus += (s, e) => SetActiveState(true);
+            LostFocus += (s, e) => SetActiveState(false);
         }
 
         private void InitializeContent()
@@ -80,6 +84,7 @@ namespace NudgeTray
                 Padding = new Thickness(4),
                 BorderBrush = new SolidColorBrush(Color.FromArgb(0, 88, 166, 255)), // Initially transparent
                 BorderThickness = new Thickness(2),
+                ClipToBounds = false, // Allow shadows to render outside bounds
                 BoxShadow = new BoxShadows(
                     new BoxShadow
                     {
@@ -98,6 +103,7 @@ namespace NudgeTray
                 Background = new SolidColorBrush(Color.FromArgb(245, 18, 18, 20)), // Almost opaque black with acrylic effect
                 CornerRadius = new CornerRadius(8), // Fluent: 8px for top-level containers
                 Padding = new Thickness(16), // Fluent: 16px standard spacing
+                ClipToBounds = false, // Allow shadows to render outside bounds
                 BoxShadow = new BoxShadows(
                     new BoxShadow
                     {
@@ -158,7 +164,7 @@ namespace NudgeTray
             // YES Button - vibrant accent
             var yesButton = CreateStyledButton(
                 "Yes",
-                "⌘Y",
+                "Ctrl+Shift+Y",
                 Color.FromRgb(88, 166, 255),
                 Color.FromRgb(108, 186, 255),
                 () => HandleResponse(true)
@@ -168,7 +174,7 @@ namespace NudgeTray
             // NO Button - subtle gray
             var noButton = CreateStyledButton(
                 "No",
-                "⌘N",
+                "Ctrl+Shift+N",
                 Color.FromRgb(45, 45, 50),
                 Color.FromRgb(55, 55, 60),
                 () => HandleResponse(false),
