@@ -352,16 +352,55 @@ namespace NudgeTray
 
         static WindowIcon CreateCommonIcon()
         {
-            // Load the PNG as a Bitmap first, then create WindowIcon from that
-            using var pngStream = GetIconPngStream();
-            var bitmap = new Bitmap(pngStream);
+            // Create a simple 16x16 icon programmatically
+            var width = 16;
+            var height = 16;
+            var bitmap = new WriteableBitmap(
+                new PixelSize(width, height),
+                new Vector(96, 96),
+                Avalonia.Platform.PixelFormat.Bgra8888,
+                Avalonia.Platform.AlphaFormat.Premul);
 
-            // Save bitmap to a new stream for WindowIcon
-            var iconStream = new MemoryStream();
-            bitmap.Save(iconStream);
-            iconStream.Position = 0;
+            using (var fb = bitmap.Lock())
+            {
+                unsafe
+                {
+                    var ptr = (uint*)fb.Address.ToPointer();
+                    var stride = fb.RowBytes / 4;
 
-            return new WindowIcon(iconStream);
+                    // Draw a blue circle
+                    var cx = width / 2;
+                    var cy = height / 2;
+                    var radius = 6;
+
+                    for (int y = 0; y < height; y++)
+                    {
+                        for (int x = 0; x < width; x++)
+                        {
+                            int dx = x - cx;
+                            int dy = y - cy;
+
+                            if (dx * dx + dy * dy <= radius * radius)
+                            {
+                                // Blue color: BGRA format (0xFFFF5588 = #5588FF)
+                                ptr[y * stride + x] = 0xFFFF5588;
+                            }
+                            else
+                            {
+                                // Transparent
+                                ptr[y * stride + x] = 0x00000000;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Save to PNG stream
+            var stream = new MemoryStream();
+            bitmap.Save(stream);
+            stream.Position = 0;
+
+            return new WindowIcon(stream);
         }
 
         static void StartMLServices()
