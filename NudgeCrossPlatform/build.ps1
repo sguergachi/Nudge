@@ -276,7 +276,6 @@ $trayProject = @"
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <DefineConstants>WINDOWS</DefineConstants>
-    <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="nudge-tray.cs" />
@@ -316,8 +315,8 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Success "  [OK] nudge-notify"
 
-# Build nudge-tray with Avalonia + WinForms
-Write-Host "  Building nudge-tray (with Avalonia UI + WinForms)..." -ForegroundColor Gray
+# Build nudge-tray with Avalonia
+Write-Host "  Building nudge-tray (with Avalonia UI)..." -ForegroundColor Gray
 Write-Host "Restore complete (0.7s)" -ForegroundColor Gray
 
 $trayTargetFramework = "${targetFramework}-windows10.0.17763.0"
@@ -365,7 +364,7 @@ Copy-Item "bin/Release/$targetFramework/nudge-notify.exe" -Destination "." -Forc
 Copy-Item "bin/Release/$targetFramework/nudge-notify.dll" -Destination "." -Force
 Copy-Item "bin/Release/$targetFramework/nudge-notify.runtimeconfig.json" -Destination "." -Force
 
-# Copy nudge-tray with all Avalonia + WinForms dependencies from publish folder
+# Copy nudge-tray with all Avalonia dependencies from publish folder
 Copy-Item "bin/Release/$trayTargetFramework/publish/nudge-tray.exe" -Destination "." -Force
 Copy-Item "bin/Release/$trayTargetFramework/publish/*.dll" -Destination "." -Force
 Copy-Item "bin/Release/$trayTargetFramework/publish/*.json" -Destination "." -Force

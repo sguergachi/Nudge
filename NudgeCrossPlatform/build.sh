@@ -390,7 +390,6 @@ EOF
 
   <!-- Windows-specific settings -->
   <PropertyGroup Condition="'\$(OS)' == 'Windows_NT'">
-    <UseWindowsForms>true</UseWindowsForms>
     <DefineConstants>\$(DefineConstants);WINDOWS</DefineConstants>
   </PropertyGroup>
 
