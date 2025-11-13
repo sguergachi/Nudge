@@ -43,9 +43,22 @@ namespace NudgeTray
         public static bool IsLinux => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
         public static bool IsMacOS => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
 
-        public static string CsvPath => IsWindows
-            ? Path.Combine(Path.GetTempPath(), "HARVEST.CSV")
-            : "/tmp/HARVEST.CSV";
+        public static string CsvPath
+        {
+            get
+            {
+                string homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                string nudgeDir = Path.Combine(homeDir, ".nudge");
+
+                // Create directory if it doesn't exist
+                if (!Directory.Exists(nudgeDir))
+                {
+                    Directory.CreateDirectory(nudgeDir);
+                }
+
+                return Path.Combine(nudgeDir, "HARVEST.CSV");
+            }
+        }
 
         public static string WhichCommand => IsWindows ? "where" : "which";
 

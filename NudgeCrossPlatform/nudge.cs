@@ -97,9 +97,22 @@ static class PlatformConfig
     public static bool IsLinux => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
     public static bool IsMacOS => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
 
-    public static string CsvPath => IsWindows
-        ? Path.Combine(Path.GetTempPath(), "HARVEST.CSV")
-        : "/tmp/HARVEST.CSV";
+    public static string CsvPath
+    {
+        get
+        {
+            string homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            string nudgeDir = Path.Combine(homeDir, ".nudge");
+
+            // Create directory if it doesn't exist
+            if (!Directory.Exists(nudgeDir))
+            {
+                Directory.CreateDirectory(nudgeDir);
+            }
+
+            return Path.Combine(nudgeDir, "HARVEST.CSV");
+        }
+    }
 
     public static string WhichCommand => IsWindows ? "where" : "which";
 
@@ -122,6 +135,7 @@ class Nudge
     static Random _random = new Random();
 
     // ML-powered adaptive notifications
+    const int ML_CHECK_INTERVAL_MS = 60 * 1000;  // Check ML every 1 minute
     const double ML_CONFIDENCE_THRESHOLD = 0.98;  // 98% confidence required
     const int MIN_SAMPLES_THRESHOLD = 100;  // Minimum samples before using trained model
     const string ML_HOST = "127.0.0.1";
@@ -989,6 +1003,7 @@ class Nudge
     static void RunMainLoop()
     {
         int elapsed = 0;
+        int mlElapsed = 0;
         int lastMinute = -1;
         int lastStatsSnapshot = 0;
 
@@ -1016,27 +1031,29 @@ class Nudge
 
             // Check for snapshot triggers
             elapsed += CYCLE_MS;
+            mlElapsed += CYCLE_MS;
             bool intervalReached = elapsed >= SNAPSHOT_INTERVAL_MS;
             bool mlTriggered = false;
 
             if (!_waitingForResponse)
             {
-                // ML-powered adaptive checking (if enabled)
-                if (_mlEnabled && _mlAvailable && !intervalReached)
+                // ML-powered adaptive checking (if enabled) - check every minute
+                if (_mlEnabled && _mlAvailable && mlElapsed >= ML_CHECK_INTERVAL_MS)
                 {
-                    // Check ML predictions every cycle when ML is enabled
+                    // Check ML predictions every minute when ML is enabled
                     if (ShouldTriggerSnapshot(app, idle, _attentionSpanMs))
                     {
                         mlTriggered = true;
                     }
+                    mlElapsed = 0; // Reset ML check timer
                 }
 
                 // Trigger snapshot if:
-                // 1. Interval reached (always trigger regardless of ML)
-                // 2. ML triggered with high confidence (only if before interval)
-                if (intervalReached || mlTriggered)
+                // 1. ML triggered with high confidence (checked every minute)
+                // 2. Interval reached (fallback when ML doesn't trigger)
+                if (mlTriggered || intervalReached)
                 {
-                    if (mlTriggered && !intervalReached)
+                    if (mlTriggered)
                     {
                         Info($"  {Color.BGREEN}✓ ML-TRIGGERED SNAPSHOT{Color.RESET} (detected unproductive)");
                     }
@@ -1051,6 +1068,7 @@ class Nudge
 
                     TakeSnapshot(app, idle, _attentionSpanMs);
                     elapsed = 0;
+                    mlElapsed = 0;
                     SetRandomInterval();  // Set new random interval for next snapshot
                     lastMinute = -1; // Reset progress indicator
 
