@@ -352,41 +352,8 @@ namespace NudgeTray
 
         static WindowIcon CreateCommonIcon()
         {
-            // For testing: Create a simple bitmap icon
-            // Create a 16x16 bitmap (Windows tray icons are typically 16x16)
-            var bitmap = new WriteableBitmap(new PixelSize(16, 16), new Vector(96, 96), Avalonia.Platform.PixelFormat.Bgra8888, Avalonia.Platform.AlphaFormat.Premul);
-
-            using (var framebuffer = bitmap.Lock())
-            {
-                unsafe
-                {
-                    var ptr = (uint*)framebuffer.Address.ToPointer();
-                    int stride = framebuffer.RowBytes / 4;
-
-                    // Fill with blue color (0xFFFF5588 in BGRA format = #5588FF in RGB)
-                    for (int y = 0; y < 16; y++)
-                    {
-                        for (int x = 0; x < 16; x++)
-                        {
-                            // Create a circle
-                            int dx = x - 8;
-                            int dy = y - 8;
-                            if (dx * dx + dy * dy <= 49) // radius ~7
-                            {
-                                ptr[y * stride + x] = 0xFF5588FF; // BGRA: Blue=FF, Green=88, Red=55, Alpha=FF
-                            }
-                            else
-                            {
-                                ptr[y * stride + x] = 0x00000000; // Transparent
-                            }
-                        }
-                    }
-                }
-            }
-
-            var stream = new MemoryStream();
-            bitmap.Save(stream);
-            stream.Position = 0;
+            // Use the PNG base64 data directly - properly formatted PNG
+            var stream = GetIconPngStream();
             return new WindowIcon(stream);
         }
 
