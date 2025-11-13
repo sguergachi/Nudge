@@ -143,7 +143,6 @@ class Nudge
     static bool _mlEnabled = false;
     static bool _mlAvailable = false;
     static bool _forceTrainedModel = false;  // Force use of trained model even if below threshold
-    static int _mlCheckCooldown = 0;  // Cooldown before checking ML again
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // ANSI COLORS - Professional terminal output
@@ -801,6 +800,7 @@ class Nudge
             // Random interval between 5 and 10 minutes (in milliseconds)
             int randomMinutes = _random.Next(5, 11);  // 5-10 inclusive
             SNAPSHOT_INTERVAL_MS = randomMinutes * 60 * 1000;
+            Dim($"  Next random interval: {randomMinutes} minutes");
         }
     }
 
@@ -865,9 +865,6 @@ class Nudge
         InitializeCSV();
         StartUDPListener();
 
-        // Set initial random interval if not custom
-        SetRandomInterval();
-
         // Main event loop
         Success("✓ Nudge is running");
         if (_customInterval)
@@ -877,6 +874,8 @@ class Nudge
         else
         {
             Info($"  Taking snapshots every 5-10 minutes (random)");
+            // Set initial random interval if not custom
+            SetRandomInterval();
         }
         if (_mlEnabled)
         {
@@ -1393,16 +1392,8 @@ class Nudge
             return true;  // Will be gated by elapsed time in main loop
         }
 
-        // Check ML availability periodically
-        if (_mlCheckCooldown <= 0)
-        {
-            CheckMLAvailability();
-            _mlCheckCooldown = 10;  // Check every 10 seconds
-        }
-        else
-        {
-            _mlCheckCooldown--;
-        }
+        // Check ML availability every time (this function is called once per minute)
+        CheckMLAvailability();
 
         // If ML not available, fall back to interval-based
         if (!_mlAvailable)
