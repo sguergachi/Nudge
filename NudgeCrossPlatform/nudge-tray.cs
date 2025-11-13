@@ -208,16 +208,21 @@ namespace NudgeTray
                 Console.WriteLine("[DEBUG] Icon created");
 
                 // Create TrayIcon using collection initializer syntax (like working examples)
-                var icons = new TrayIcons
+                _trayIcon = new TrayIcon
                 {
-                    new TrayIcon
-                    {
-                        Icon = icon,
-                        IsVisible = true,
-                        ToolTipText = "Nudge Productivity Tracker",
-                        Menu = CreateMenu()
-                    }
+                    Icon = icon,
+                    IsVisible = true,
+                    ToolTipText = "Nudge Productivity Tracker",
+                    Menu = CreateMenu()
                 };
+
+                // Add event handlers for debugging
+                _trayIcon.Clicked += (s, e) =>
+                {
+                    Console.WriteLine("[DEBUG] TrayIcon Clicked event fired!");
+                };
+
+                var icons = new TrayIcons { _trayIcon };
 
                 Console.WriteLine("[DEBUG] TrayIcons collection created with collection initializer");
 
@@ -228,7 +233,6 @@ namespace NudgeTray
                     throw new InvalidOperationException("Application.Current is null");
                 }
 
-                _trayIcon = icons[0];
                 TrayIcon.SetIcons(Application.Current, icons);
                 Console.WriteLine("[DEBUG] TrayIcon.SetIcons() called successfully");
 
@@ -318,42 +322,76 @@ namespace NudgeTray
 
         static NativeMenu CreateMenu()
         {
+            Console.WriteLine("[DEBUG] CreateMenu() called");
+
             var testItem1 = new NativeMenuItem("Test Item 1");
-            testItem1.Click += (s, e) => Console.WriteLine("[DEBUG] Test item 1 clicked!");
+            testItem1.Click += (s, e) =>
+            {
+                Console.WriteLine("[DEBUG] Test item 1 Click event fired!");
+                Console.WriteLine($"[DEBUG] TrayIcon.IsVisible after click: {_trayIcon?.IsVisible}");
+            };
 
             var testItem2 = new NativeMenuItem("Test Item 2");
-            testItem2.Click += (s, e) => Console.WriteLine("[DEBUG] Test item 2 clicked!");
+            testItem2.Click += (s, e) =>
+            {
+                Console.WriteLine("[DEBUG] Test item 2 Click event fired!");
+                Console.WriteLine($"[DEBUG] TrayIcon.IsVisible after click: {_trayIcon?.IsVisible}");
+            };
 
             var quitItem = new NativeMenuItem("Quit");
-            quitItem.Click += (s, e) => HandleQuitClicked();
+            quitItem.Click += (s, e) =>
+            {
+                Console.WriteLine("[DEBUG] Quit Click event fired!");
+                HandleQuitClicked();
+            };
 
-            return new NativeMenu
+            var menu = new NativeMenu
             {
                 testItem1,
                 testItem2,
                 quitItem
             };
+
+            Console.WriteLine($"[DEBUG] CreateMenu() returning menu with {menu.Items.Count} items");
+            return menu;
         }
 
         static WindowIcon CreateCommonIcon()
         {
-            // Create icon programmatically using Avalonia rendering
-            // This works on all platforms (Windows, Linux, macOS)
-            var renderBitmap = new RenderTargetBitmap(new PixelSize(32, 32), new Vector(96, 96));
+            // For testing: Create a simple bitmap icon
+            // Create a 16x16 bitmap (Windows tray icons are typically 16x16)
+            var bitmap = new WriteableBitmap(new PixelSize(16, 16), new Vector(96, 96), Avalonia.Platform.PixelFormat.Bgra8888, Avalonia.Platform.AlphaFormat.Premul);
 
-            using (var ctx = renderBitmap.CreateDrawingContext())
+            using (var framebuffer = bitmap.Lock())
             {
-                // Clear with transparent background
-                ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, 32, 32));
+                unsafe
+                {
+                    var ptr = (uint*)framebuffer.Address.ToPointer();
+                    int stride = framebuffer.RowBytes / 4;
 
-                // Draw blue circle (same color #5588FF)
-                var brush = new SolidColorBrush(Color.FromRgb(85, 136, 255));
-                ctx.DrawGeometry(brush, null, new EllipseGeometry(new Rect(2, 2, 28, 28)));
+                    // Fill with blue color (0xFFFF5588 in BGRA format = #5588FF in RGB)
+                    for (int y = 0; y < 16; y++)
+                    {
+                        for (int x = 0; x < 16; x++)
+                        {
+                            // Create a circle
+                            int dx = x - 8;
+                            int dy = y - 8;
+                            if (dx * dx + dy * dy <= 49) // radius ~7
+                            {
+                                ptr[y * stride + x] = 0xFF5588FF; // BGRA: Blue=FF, Green=88, Red=55, Alpha=FF
+                            }
+                            else
+                            {
+                                ptr[y * stride + x] = 0x00000000; // Transparent
+                            }
+                        }
+                    }
+                }
             }
 
-            // Save to memory stream as PNG
             var stream = new MemoryStream();
-            renderBitmap.Save(stream);
+            bitmap.Save(stream);
             stream.Position = 0;
             return new WindowIcon(stream);
         }
