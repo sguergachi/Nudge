@@ -324,28 +324,26 @@ namespace NudgeTray
                 Console.WriteLine("[DEBUG] Creating menu...");
                 var menu = new NativeMenu();
 
-                // Status item - make it simple and safe
-                string statusText = "Nudge Tracker";
-                try
+                // Test with simplest possible menu - just one enabled item
+                var testItem = new NativeMenuItem
                 {
-                    statusText = GetMenuStatusText();
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[WARN] Failed to get status text: {ex.Message}");
-                }
-
-                var statusItem = new NativeMenuItem
-                {
-                    Header = statusText,
-                    IsEnabled = false
+                    Header = "Test Item 1"
                 };
-                menu.Add(statusItem);
-                Console.WriteLine("[DEBUG] Added status item");
+                testItem.Click += (s, e) =>
+                {
+                    Console.WriteLine("[DEBUG] Test item 1 clicked!");
+                };
+                menu.Add(testItem);
 
-                // Separator
-                menu.Add(new NativeMenuItemSeparator());
-                Console.WriteLine("[DEBUG] Added separator");
+                var testItem2 = new NativeMenuItem
+                {
+                    Header = "Test Item 2"
+                };
+                testItem2.Click += (s, e) =>
+                {
+                    Console.WriteLine("[DEBUG] Test item 2 clicked!");
+                };
+                menu.Add(testItem2);
 
                 // Quit option
                 var quitItem = new NativeMenuItem { Header = "Quit" };
@@ -362,7 +360,6 @@ namespace NudgeTray
                     }
                 };
                 menu.Add(quitItem);
-                Console.WriteLine("[DEBUG] Added quit item");
 
                 Console.WriteLine("[DEBUG] Menu created successfully");
                 return menu;
@@ -376,7 +373,7 @@ namespace NudgeTray
                 try
                 {
                     var fallbackMenu = new NativeMenu();
-                    fallbackMenu.Add(new NativeMenuItem { Header = "Nudge", IsEnabled = false });
+                    fallbackMenu.Add(new NativeMenuItem { Header = "Nudge" });
                     return fallbackMenu;
                 }
                 catch
