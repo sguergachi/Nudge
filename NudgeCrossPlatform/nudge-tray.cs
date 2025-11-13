@@ -196,12 +196,12 @@ namespace NudgeTray
         // COMMON TRAY ICON IMPLEMENTATION (Works on both Windows and Linux)
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-        public static void CreateTrayIcon()
+        public static void CreateTrayIconForApp(Avalonia.Application app)
         {
             try
             {
-                Console.WriteLine("[DEBUG] CreateTrayIcon called");
-                Console.WriteLine($"[DEBUG] Application.Current is null: {Application.Current == null}");
+                Console.WriteLine("[DEBUG] CreateTrayIconForApp called");
+                Console.WriteLine($"[DEBUG] App instance is null: {app == null}");
 
                 // Create icon
                 var icon = CreateCommonIcon();
@@ -224,21 +224,15 @@ namespace NudgeTray
 
                 var icons = new TrayIcons { _trayIcon };
 
-                Console.WriteLine("[DEBUG] TrayIcons collection created with collection initializer");
+                Console.WriteLine("[DEBUG] TrayIcons collection created");
 
-                // Register the tray icon with the Application
-                if (Application.Current == null)
-                {
-                    Console.WriteLine("[ERROR] Application.Current is null! Cannot register tray icon.");
-                    throw new InvalidOperationException("Application.Current is null");
-                }
-
-                TrayIcon.SetIcons(Application.Current, icons);
-                Console.WriteLine("[DEBUG] TrayIcon.SetIcons() called successfully");
+                // Set icons on the App instance directly (not Application.Current)
+                TrayIcon.SetIcons(app, icons);
+                Console.WriteLine("[DEBUG] TrayIcon.SetIcons(app) called successfully");
 
                 // Verify it was set
-                var currentIcons = TrayIcon.GetIcons(Application.Current);
-                Console.WriteLine($"[DEBUG] Verified: Application now has {currentIcons?.Count ?? 0} tray icon(s)");
+                var currentIcons = TrayIcon.GetIcons(app);
+                Console.WriteLine($"[DEBUG] Verified: App now has {currentIcons?.Count ?? 0} tray icon(s)");
 
                 Console.WriteLine("[DEBUG] Tray icon created with Avalonia TrayIcon (cross-platform)");
             }
@@ -973,20 +967,8 @@ namespace NudgeTray
                 Program.InitializeNotifications();
 #endif
 
-                // Create the tray icon on the UI thread
-                Dispatcher.UIThread.Post(() =>
-                {
-                    try
-                    {
-                        Console.WriteLine("[DEBUG] Creating TrayIcon on UI thread");
-                        Program.CreateTrayIcon();
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[FATAL] Failed to create TrayIcon: {ex.Message}");
-                        Console.WriteLine($"[FATAL] Stack: {ex.StackTrace}");
-                    }
-                });
+                // Create the tray icon - use 'this' instead of Application.Current
+                Program.CreateTrayIconForApp(this);
             }
 
             base.OnFrameworkInitializationCompleted();
