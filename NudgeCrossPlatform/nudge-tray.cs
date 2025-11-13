@@ -352,9 +352,16 @@ namespace NudgeTray
 
         static WindowIcon CreateCommonIcon()
         {
-            // Use the PNG base64 data directly - properly formatted PNG
-            var stream = GetIconPngStream();
-            return new WindowIcon(stream);
+            // Load the PNG as a Bitmap first, then create WindowIcon from that
+            using var pngStream = GetIconPngStream();
+            var bitmap = new Bitmap(pngStream);
+
+            // Save bitmap to a new stream for WindowIcon
+            var iconStream = new MemoryStream();
+            bitmap.Save(iconStream);
+            iconStream.Position = 0;
+
+            return new WindowIcon(iconStream);
         }
 
         static void StartMLServices()
