@@ -208,47 +208,42 @@ namespace NudgeTray
         {
             try
             {
+                Console.WriteLine("[DEBUG] CreateTrayIcon called");
+                Console.WriteLine($"[DEBUG] Application.Current is null: {Application.Current == null}");
+
+                // Create menu first
+                var menu = CreateAvaloniaMenu();
+                Console.WriteLine($"[DEBUG] Menu created, item count: {menu.Items.Count}");
+
+                // Create icon
+                var icon = CreateCommonIcon();
+                Console.WriteLine("[DEBUG] Icon created");
+
                 _trayIcon = new TrayIcon
                 {
-                    Icon = CreateCommonIcon(),
+                    Icon = icon,
                     IsVisible = true,
                     ToolTipText = "Nudge Productivity Tracker",
-                    Menu = CreateAvaloniaMenu()
+                    Menu = menu
                 };
+                Console.WriteLine("[DEBUG] TrayIcon instance created");
 
                 // Register the tray icon with the Application
-                var icons = new TrayIcons { _trayIcon };
-                TrayIcon.SetIcons(Application.Current, icons);
-
-                // Disable menu refresh timer temporarily to test if it's causing issues
-                // We'll update the menu only when needed, not on a timer
-                /*
-                // Start menu refresh timer (update every 10 seconds)
-                _menuRefreshTimer = new System.Threading.Timer(_ =>
+                if (Application.Current == null)
                 {
-                    try
-                    {
-                        Dispatcher.UIThread.Post(() =>
-                        {
-                            try
-                            {
-                                if (_trayIcon != null)
-                                {
-                                    _trayIcon.Menu = CreateAvaloniaMenu();
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine($"[ERROR] Menu refresh failed: {ex.Message}");
-                            }
-                        });
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[ERROR] Timer callback failed: {ex.Message}");
-                    }
-                }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
-                */
+                    Console.WriteLine("[ERROR] Application.Current is null! Cannot register tray icon.");
+                    throw new InvalidOperationException("Application.Current is null");
+                }
+
+                var icons = new TrayIcons { _trayIcon };
+                Console.WriteLine($"[DEBUG] TrayIcons collection created with {icons.Count} icon(s)");
+
+                TrayIcon.SetIcons(Application.Current, icons);
+                Console.WriteLine("[DEBUG] TrayIcon.SetIcons() called successfully");
+
+                // Verify it was set
+                var currentIcons = TrayIcon.GetIcons(Application.Current);
+                Console.WriteLine($"[DEBUG] Verified: Application now has {currentIcons?.Count ?? 0} tray icon(s)");
 
                 Console.WriteLine("[DEBUG] Tray icon created with Avalonia TrayIcon (cross-platform)");
             }
@@ -973,6 +968,12 @@ namespace NudgeTray
         public override void Initialize()
         {
             // No XAML needed for headless tray app
+        }
+
+        public override void OnFrameworkInitializationCompleted()
+        {
+            Console.WriteLine("[DEBUG] App.OnFrameworkInitializationCompleted called");
+            base.OnFrameworkInitializationCompleted();
         }
     }
 }
