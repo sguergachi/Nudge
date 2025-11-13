@@ -151,17 +151,9 @@ namespace NudgeTray
 
         static AppBuilder BuildAvaloniaApp(int interval)
         {
-            return AppBuilder.Configure<App>()
+            return AppBuilder.Configure(() => new App(interval))
                 .UsePlatformDetect()
-                .LogToTrace()
-                .AfterSetup(_ =>
-                {
-                    StartNudge(interval);
-#if WINDOWS
-                    InitializeNotifications();
-#endif
-                    CreateTrayIcon();
-                });
+                .LogToTrace();
         }
 
 
@@ -204,7 +196,7 @@ namespace NudgeTray
         // COMMON TRAY ICON IMPLEMENTATION (Works on both Windows and Linux)
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-        static void CreateTrayIcon()
+        public static void CreateTrayIcon()
         {
             try
             {
@@ -256,7 +248,7 @@ namespace NudgeTray
         }
 
 #if WINDOWS
-        static void InitializeNotifications()
+        public static void InitializeNotifications()
         {
             try
             {
@@ -531,7 +523,7 @@ namespace NudgeTray
             }
         }
 
-        static void StartNudge(int interval)
+        public static void StartNudge(int interval)
         {
             _intervalMinutes = interval;
             _nextSnapshotTime = DateTime.Now.AddMinutes(interval);
@@ -965,6 +957,13 @@ namespace NudgeTray
     // Avalonia application class - used on all platforms for custom notifications
     public class App : Avalonia.Application
     {
+        private readonly int _interval;
+
+        public App(int interval)
+        {
+            _interval = interval;
+        }
+
         public override void Initialize()
         {
             // No XAML needed for headless tray app
@@ -973,6 +972,24 @@ namespace NudgeTray
         public override void OnFrameworkInitializationCompleted()
         {
             Console.WriteLine("[DEBUG] App.OnFrameworkInitializationCompleted called");
+
+            // Initialize services and tray icon AFTER framework is fully initialized
+            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+            {
+                Console.WriteLine("[DEBUG] Classic desktop lifetime detected");
+
+                // Start the nudge process
+                Program.StartNudge(_interval);
+
+#if WINDOWS
+                // Initialize Windows toast notifications
+                Program.InitializeNotifications();
+#endif
+
+                // Create the tray icon
+                Program.CreateTrayIcon();
+            }
+
             base.OnFrameworkInitializationCompleted();
         }
     }
