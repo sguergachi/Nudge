@@ -986,8 +986,20 @@ namespace NudgeTray
                 Program.InitializeNotifications();
 #endif
 
-                // Create the tray icon
-                Program.CreateTrayIcon();
+                // Create the tray icon on the UI thread
+                Dispatcher.UIThread.Post(() =>
+                {
+                    try
+                    {
+                        Console.WriteLine("[DEBUG] Creating TrayIcon on UI thread");
+                        Program.CreateTrayIcon();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[FATAL] Failed to create TrayIcon: {ex.Message}");
+                        Console.WriteLine($"[FATAL] Stack: {ex.StackTrace}");
+                    }
+                });
             }
 
             base.OnFrameworkInitializationCompleted();
