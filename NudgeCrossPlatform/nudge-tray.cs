@@ -203,22 +203,23 @@ namespace NudgeTray
                 Console.WriteLine("[DEBUG] CreateTrayIcon called");
                 Console.WriteLine($"[DEBUG] Application.Current is null: {Application.Current == null}");
 
-                // Create menu first
-                var menu = CreateAvaloniaMenu();
-                Console.WriteLine($"[DEBUG] Menu created, item count: {menu.Items.Count}");
-
                 // Create icon
                 var icon = CreateCommonIcon();
                 Console.WriteLine("[DEBUG] Icon created");
 
-                _trayIcon = new TrayIcon
+                // Create TrayIcon using collection initializer syntax (like working examples)
+                var icons = new TrayIcons
                 {
-                    Icon = icon,
-                    IsVisible = true,
-                    ToolTipText = "Nudge Productivity Tracker",
-                    Menu = menu
+                    new TrayIcon
+                    {
+                        Icon = icon,
+                        IsVisible = true,
+                        ToolTipText = "Nudge Productivity Tracker",
+                        Menu = CreateMenu()
+                    }
                 };
-                Console.WriteLine("[DEBUG] TrayIcon instance created");
+
+                Console.WriteLine("[DEBUG] TrayIcons collection created with collection initializer");
 
                 // Register the tray icon with the Application
                 if (Application.Current == null)
@@ -227,9 +228,7 @@ namespace NudgeTray
                     throw new InvalidOperationException("Application.Current is null");
                 }
 
-                var icons = new TrayIcons { _trayIcon };
-                Console.WriteLine($"[DEBUG] TrayIcons collection created with {icons.Count} icon(s)");
-
+                _trayIcon = icons[0];
                 TrayIcon.SetIcons(Application.Current, icons);
                 Console.WriteLine("[DEBUG] TrayIcon.SetIcons() called successfully");
 
@@ -289,7 +288,7 @@ namespace NudgeTray
                         {
                             if (_trayIcon != null)
                             {
-                                _trayIcon.Menu = CreateAvaloniaMenu();
+                                _trayIcon.Menu = CreateMenu();
                             }
                         });
                     }
@@ -304,7 +303,7 @@ namespace NudgeTray
                         {
                             if (_trayIcon != null)
                             {
-                                _trayIcon.Menu = CreateAvaloniaMenu();
+                                _trayIcon.Menu = CreateMenu();
                             }
                         });
                     }
@@ -317,70 +316,23 @@ namespace NudgeTray
         }
 #endif
 
-        static NativeMenu CreateAvaloniaMenu()
+        static NativeMenu CreateMenu()
         {
-            try
+            var testItem1 = new NativeMenuItem("Test Item 1");
+            testItem1.Click += (s, e) => Console.WriteLine("[DEBUG] Test item 1 clicked!");
+
+            var testItem2 = new NativeMenuItem("Test Item 2");
+            testItem2.Click += (s, e) => Console.WriteLine("[DEBUG] Test item 2 clicked!");
+
+            var quitItem = new NativeMenuItem("Quit");
+            quitItem.Click += (s, e) => HandleQuitClicked();
+
+            return new NativeMenu
             {
-                Console.WriteLine("[DEBUG] Creating menu...");
-                var menu = new NativeMenu();
-
-                // Test with simplest possible menu - just one enabled item
-                var testItem = new NativeMenuItem
-                {
-                    Header = "Test Item 1"
-                };
-                testItem.Click += (s, e) =>
-                {
-                    Console.WriteLine("[DEBUG] Test item 1 clicked!");
-                };
-                menu.Add(testItem);
-
-                var testItem2 = new NativeMenuItem
-                {
-                    Header = "Test Item 2"
-                };
-                testItem2.Click += (s, e) =>
-                {
-                    Console.WriteLine("[DEBUG] Test item 2 clicked!");
-                };
-                menu.Add(testItem2);
-
-                // Quit option
-                var quitItem = new NativeMenuItem { Header = "Quit" };
-                quitItem.Click += (s, e) =>
-                {
-                    try
-                    {
-                        Console.WriteLine("[DEBUG] Quit menu item clicked");
-                        HandleQuitClicked();
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[ERROR] Quit handler failed: {ex.Message}");
-                    }
-                };
-                menu.Add(quitItem);
-
-                Console.WriteLine("[DEBUG] Menu created successfully");
-                return menu;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[ERROR] Failed to create menu: {ex.Message}");
-                Console.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
-
-                // Return minimal menu as fallback
-                try
-                {
-                    var fallbackMenu = new NativeMenu();
-                    fallbackMenu.Add(new NativeMenuItem { Header = "Nudge" });
-                    return fallbackMenu;
-                }
-                catch
-                {
-                    return new NativeMenu();
-                }
-            }
+                testItem1,
+                testItem2,
+                quitItem
+            };
         }
 
         static WindowIcon CreateCommonIcon()
@@ -631,7 +583,7 @@ namespace NudgeTray
                         {
                             if (_trayIcon != null)
                             {
-                                _trayIcon.Menu = CreateAvaloniaMenu();
+                                _trayIcon.Menu = CreateMenu();
                             }
                         });
                     });
@@ -644,7 +596,7 @@ namespace NudgeTray
                 {
                     if (_trayIcon != null)
                     {
-                        _trayIcon.Menu = CreateAvaloniaMenu();
+                        _trayIcon.Menu = CreateMenu();
                     }
                 });
             }
@@ -689,7 +641,7 @@ namespace NudgeTray
                 {
                     if (_trayIcon != null)
                     {
-                        _trayIcon.Menu = CreateAvaloniaMenu();
+                        _trayIcon.Menu = CreateMenu();
                     }
                 });
             }
