@@ -2,19 +2,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="NudgeTray.App">
 
-    <!-- TrayIcon with EMPTY NativeMenu to prevent right-click crash -->
-    <!-- Using Clicked event with custom popup for left-click -->
+    <!-- TrayIcon with NO menu - let Windows handle right-click natively -->
+    <!-- Both left and right click will trigger Clicked event -->
     <TrayIcon.Icons>
         <TrayIcons>
             <TrayIcon ToolTipText="Nudge Productivity Tracker (Click for menu)"
-                      Clicked="TrayIcon_Clicked">
-                <TrayIcon.Menu>
-                    <NativeMenu>
-                        <!-- Empty menu prevents right-click crash -->
-                        <!-- Menu items with handlers cause crash, so keep it empty -->
-                    </NativeMenu>
-                </TrayIcon.Menu>
-            </TrayIcon>
+                      Clicked="TrayIcon_Clicked" />
         </TrayIcons>
     </TrayIcon.Icons>
 
