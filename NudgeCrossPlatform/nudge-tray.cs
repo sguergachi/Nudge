@@ -27,6 +27,7 @@ using Tmds.DBus.Protocol;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -371,12 +372,88 @@ namespace NudgeTray
         {
             Console.WriteLine("\n[TrayIcon] Icon clicked!");
 
-            // TODO: Show custom Avalonia popup window menu here
-            // For now, just show available actions in console
-            Console.WriteLine("Menu Actions:");
-            Console.WriteLine("  1. Status: " + GetMenuStatusText());
-            Console.WriteLine("  2. Quit (press Ctrl+C for now)");
-            Console.WriteLine();
+            // Show custom Avalonia popup window menu
+            Dispatcher.UIThread.Post(() =>
+            {
+                var menuWindow = new TrayMenuWindow();
+                menuWindow.Show();
+            });
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // CUSTOM TRAY MENU WINDOW
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        class TrayMenuWindow : Window
+        {
+            public TrayMenuWindow()
+            {
+                Title = "Nudge Menu";
+                Width = 200;
+                Height = 150;
+                CanResize = false;
+                WindowStartupLocation = WindowStartupLocation.CenterScreen;
+                SystemDecorations = SystemDecorations.BorderOnly;
+                Topmost = true;
+                ShowInTaskbar = false;
+
+                // Create menu items
+                var statusText = new TextBlock
+                {
+                    Text = GetMenuStatusText(),
+                    Margin = new Thickness(10),
+                    FontSize = 14
+                };
+
+                var quitButton = new Button
+                {
+                    Content = "Quit Nudge",
+                    Margin = new Thickness(10),
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    Padding = new Thickness(10)
+                };
+                quitButton.Click += (s, e) =>
+                {
+                    Console.WriteLine("[Menu] Quit clicked");
+                    Close();
+                    HandleQuitClicked();
+                };
+
+                var closeButton = new Button
+                {
+                    Content = "Close Menu",
+                    Margin = new Thickness(10),
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    Padding = new Thickness(10)
+                };
+                closeButton.Click += (s, e) =>
+                {
+                    Console.WriteLine("[Menu] Close clicked");
+                    Close();
+                };
+
+                // Layout
+                var stackPanel = new StackPanel
+                {
+                    Margin = new Thickness(5)
+                };
+                stackPanel.Children.Add(statusText);
+                stackPanel.Children.Add(quitButton);
+                stackPanel.Children.Add(closeButton);
+
+                Content = stackPanel;
+
+                // Position near cursor (best effort)
+                // Note: Getting cursor position is platform-specific, so we use CenterScreen
+                // On a real implementation, we could use platform-specific APIs
+
+                // Auto-close on deactivation
+                Deactivated += (s, e) =>
+                {
+                    Console.WriteLine("[Menu] Deactivated - closing");
+                    Close();
+                };
+            }
         }
 
 #if WINDOWS
