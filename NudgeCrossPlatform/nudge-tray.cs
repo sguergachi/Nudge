@@ -380,10 +380,21 @@ namespace NudgeTray
                 Width = 200;
                 Height = 150;
                 CanResize = false;
-                WindowStartupLocation = WindowStartupLocation.CenterScreen;
-                SystemDecorations = SystemDecorations.BorderOnly;
+                WindowStartupLocation = WindowStartupLocation.Manual;
+                SystemDecorations = SystemDecorations.None;
                 Topmost = true;
                 ShowInTaskbar = false;
+
+                // Position near system tray (bottom-right on Windows)
+                var screen = Screens.Primary;
+                if (screen != null)
+                {
+                    var workingArea = screen.WorkingArea;
+                    Position = new PixelPoint(
+                        workingArea.Right - (int)Width - 10,
+                        workingArea.Bottom - (int)Height - 10
+                    );
+                }
 
                 // Create menu items
                 var statusText = new TextBlock
@@ -420,25 +431,36 @@ namespace NudgeTray
                     Close();
                 };
 
-                // Layout
+                // Layout with border for menu-like appearance
                 var stackPanel = new StackPanel
                 {
-                    Margin = new Thickness(5)
+                    Margin = new Thickness(5),
+                    Background = Brushes.White
                 };
                 stackPanel.Children.Add(statusText);
                 stackPanel.Children.Add(quitButton);
                 stackPanel.Children.Add(closeButton);
 
-                Content = stackPanel;
+                var border = new Border
+                {
+                    BorderBrush = Brushes.Gray,
+                    BorderThickness = new Thickness(1),
+                    Background = Brushes.White,
+                    Child = stackPanel
+                };
 
-                // Position near cursor (best effort)
-                // Note: Getting cursor position is platform-specific, so we use CenterScreen
-                // On a real implementation, we could use platform-specific APIs
+                Content = border;
 
                 // Auto-close on deactivation
                 Deactivated += (s, e) =>
                 {
                     Console.WriteLine("[Menu] Deactivated - closing");
+                    Close();
+                };
+
+                // Close when losing focus
+                LostFocus += (s, e) =>
+                {
                     Close();
                 };
             }
