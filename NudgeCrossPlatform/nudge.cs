@@ -129,6 +129,7 @@ class Nudge
     const int CYCLE_MS = 1000;           // 1 second monitoring cycle
     const int UDP_PORT = 45001;          // UDP listener port
     const int RESPONSE_TIMEOUT_MS = 60000; // 60 seconds to respond
+    const int ACTIVITY_LOG_INTERVAL_MS = 60 * 1000;  // Log activity every 1 minute
 
     static int SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;  // Random 5-10 minutes (configurable)
     static bool _customInterval = false;  // Track if user specified custom interval
@@ -753,12 +754,14 @@ class Nudge
     static IPlatformService? _platformService;
     static string _csvPath = PlatformConfig.CsvPath;
     static StreamWriter? _csvFile;
+    static StreamWriter? _activityLogFile;
 
     // Activity tracking
     static string _currentApp = "";
     static int _attentionSpanMs = 0;
     static bool _waitingForResponse = false;
     static int _totalSnapshots = 0;
+    static int _activityLogElapsed = 0;  // Track elapsed time for activity logging
 
     // Snapshot state (captured when snapshot is taken)
     static string _snapshotApp = "";
@@ -1031,8 +1034,16 @@ class Nudge
             // Check for snapshot triggers
             elapsed += CYCLE_MS;
             mlElapsed += CYCLE_MS;
+            _activityLogElapsed += CYCLE_MS;
             bool intervalReached = elapsed >= SNAPSHOT_INTERVAL_MS;
             bool mlTriggered = false;
+
+            // Log activity every minute
+            if (_activityLogElapsed >= ACTIVITY_LOG_INTERVAL_MS)
+            {
+                LogActivity(app, idle);
+                _activityLogElapsed = 0;
+            }
 
             if (!_waitingForResponse)
             {
@@ -1141,12 +1152,29 @@ class Nudge
 
             if (!exists)
             {
-                _csvFile.WriteLine("foreground_app,idle_time,time_last_request,productive");
+                _csvFile.WriteLine("timestamp,hour_of_day,day_of_week,foreground_app,idle_time,time_last_request,productive");
                 Info($"Created new CSV: {_csvPath}");
             }
             else
             {
                 Info($"Appending to: {_csvPath}");
+            }
+
+            // Initialize activity log
+            var activityLogPath = Path.Combine(Path.GetDirectoryName(_csvPath) ?? "", "ACTIVITY_LOG.CSV");
+            bool activityExists = File.Exists(activityLogPath);
+
+            _activityLogFile = new StreamWriter(activityLogPath, append: true);
+            _activityLogFile.AutoFlush = true;
+
+            if (!activityExists)
+            {
+                _activityLogFile.WriteLine("timestamp,hour_of_day,day_of_week,foreground_app,idle_time");
+                Dim($"  Created activity log: {activityLogPath}");
+            }
+            else
+            {
+                Dim($"  Activity log: {activityLogPath}");
             }
         }
         catch (Exception ex)
@@ -1196,14 +1224,38 @@ class Nudge
         }, null, RESPONSE_TIMEOUT_MS, Timeout.Infinite);
     }
 
+    static void LogActivity(string app, int idle)
+    {
+        try
+        {
+            var now = DateTime.Now;
+            int appHash = GetHash(app);
+            int hourOfDay = now.Hour;  // 0-23
+            int dayOfWeek = (int)now.DayOfWeek;  // 0-6 (Sunday=0)
+            string timestamp = now.ToString("yyyy-MM-dd HH:mm:ss");
+
+            _activityLogFile?.WriteLine($"{timestamp},{hourOfDay},{dayOfWeek},{appHash},{idle}");
+        }
+        catch (Exception ex)
+        {
+            // Silent failure for activity logging - don't interrupt main flow
+            Dim($"  Activity log error: {ex.Message}");
+        }
+    }
+
     static void SaveSnapshot(string app, int idle, int attention, bool productive)
     {
         int appHash = GetHash(app);
         int productiveInt = productive ? 1 : 0;
 
+        var now = DateTime.Now;
+        int hourOfDay = now.Hour;  // 0-23
+        int dayOfWeek = (int)now.DayOfWeek;  // 0-6 (Sunday=0)
+        string timestamp = now.ToString("yyyy-MM-dd HH:mm:ss");
+
         try
         {
-            _csvFile?.WriteLine($"{appHash},{idle},{attention},{productiveInt}");
+            _csvFile?.WriteLine($"{timestamp},{hourOfDay},{dayOfWeek},{appHash},{idle},{attention},{productiveInt}");
 
             var label = productive ?
                 $"{Color.BGREEN}PRODUCTIVE{Color.RESET}" :
@@ -1321,10 +1373,16 @@ class Nudge
             client.Connect(ML_HOST, ML_PORT);
             using var stream = client.GetStream();
 
-            // Prepare request
+            // Prepare request with time-based features
+            var now = DateTime.Now;
             int appHash = GetHash(app);
+            int hourOfDay = now.Hour;  // 0-23
+            int dayOfWeek = (int)now.DayOfWeek;  // 0-6 (Sunday=0)
+
             var request = new
             {
+                hour_of_day = hourOfDay,
+                day_of_week = dayOfWeek,
                 foreground_app = appHash,
                 idle_time = idle,
                 time_last_request = attention
