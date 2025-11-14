@@ -334,50 +334,55 @@ namespace NudgeTray
         public static void CreateTrayIconForApp(Avalonia.Application app)
         {
             Console.WriteLine("\n═══════════════════════════════════════════════════════════");
-            Console.WriteLine("  FINAL SOLUTION: Use TrayIcon.Clicked instead of menu");
-            Console.WriteLine("  NativeMenu handlers are BROKEN on Windows");
+            Console.WriteLine("  THREADING FIX: Wrap Click handlers with Dispatcher");
+            Console.WriteLine("  NativeMenuItem.RaiseClicked() doesn't marshal to UI thread!");
             Console.WriteLine("═══════════════════════════════════════════════════════════");
-            Console.WriteLine("  Finding: ANY handler on NativeMenuItem crashes!");
-            Console.WriteLine("  - Click events → CRASH");
-            Console.WriteLine("  - ICommand → CRASH");
-            Console.WriteLine("  - Menu items without handlers → Works but useless");
-            Console.WriteLine("");
-            Console.WriteLine("  Solution: Use TrayIcon.Clicked event instead");
-            Console.WriteLine("  Right-click will show a custom Avalonia window menu");
+            Console.WriteLine("  Root Cause: Click events are invoked from platform thread");
+            Console.WriteLine("  Solution: Wrap all handlers with Dispatcher.UIThread.Post()");
             Console.WriteLine("═══════════════════════════════════════════════════════════\n");
 
-            // Create single working TrayIcon with Clicked event (NO menu handlers)
-            var icon = CreateColoredIcon(0xFF0088FF); // Blue
+            // Create icon
+            var icon = CreateCommonIcon();
 
+            // Create menu with THREAD-SAFE Click handlers
+            var menu = new NativeMenu();
+
+            // Status menu item (read-only)
+            var statusItem = new NativeMenuItem(GetMenuStatusText());
+            menu.Items.Add(statusItem);
+
+            // Separator
+            menu.Items.Add(new NativeMenuItemSeparator());
+
+            // Quit menu item with THREAD-SAFE Click handler
+            var quitItem = new NativeMenuItem("Quit");
+            quitItem.Click += (s, e) =>
+            {
+                Console.WriteLine("[Menu] Quit clicked (marshaling to UI thread...)");
+                // CRITICAL: Marshal to UI thread to avoid crash!
+                Dispatcher.UIThread.Post(() =>
+                {
+                    Console.WriteLine("[Menu] Quit executing on UI thread");
+                    HandleQuitClicked();
+                });
+            };
+            menu.Items.Add(quitItem);
+
+            // Create TrayIcon with menu
             _trayIcon = new TrayIcon
             {
                 Icon = icon,
                 ToolTipText = "Nudge Productivity Tracker",
+                Menu = menu,
                 IsVisible = true
             };
 
-            // Use TrayIcon.Clicked event instead of menu item handlers
-            // This is the ONLY way that works reliably on Windows!
-            _trayIcon.Clicked += OnTrayIconClicked;
-
-            // Set the single icon
+            // Set the icon
             TrayIcon.SetIcons(app, new TrayIcons { _trayIcon });
 
-            Console.WriteLine("✓ TrayIcon created successfully");
-            Console.WriteLine("  Click the tray icon to show menu");
-            Console.WriteLine("  (Using TrayIcon.Clicked event - no NativeMenu handlers)\n");
-        }
-
-        static void OnTrayIconClicked(object? sender, EventArgs e)
-        {
-            Console.WriteLine("\n[TrayIcon] Icon clicked!");
-
-            // Show custom Avalonia popup window menu
-            Dispatcher.UIThread.Post(() =>
-            {
-                var menuWindow = new TrayMenuWindow();
-                menuWindow.Show();
-            });
+            Console.WriteLine("✓ TrayIcon created with THREAD-SAFE NativeMenu");
+            Console.WriteLine("  All Click handlers wrapped with Dispatcher.UIThread.Post()");
+            Console.WriteLine("  Right-click to test menu!\n");
         }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -528,66 +533,28 @@ namespace NudgeTray
 
         static NativeMenu CreateMenu()
         {
-            // Default menu - use Commands
-            return CreateMenuWithCommands("DEFAULT");
-        }
+            // Create menu with THREAD-SAFE Click handlers
+            var menu = new NativeMenu();
 
-        static NativeMenu CreateMenuWithCommands(string label)
-        {
-            Console.WriteLine($"[{label}] CreateMenuWithCommands() called");
+            // Status menu item (read-only)
+            var statusItem = new NativeMenuItem(GetMenuStatusText());
+            menu.Items.Add(statusItem);
 
-            var menuCommand = new RelayCommand(parameter =>
-            {
-                var action = parameter as string;
-                Console.WriteLine($"[{label}] Command executed: {action}");
+            // Separator
+            menu.Items.Add(new NativeMenuItemSeparator());
 
-                if (action?.Contains("quit") == true)
-                {
-                    HandleQuitClicked();
-                }
-                else
-                {
-                    Console.WriteLine($"[{label}] Test action: {action}");
-                }
-            });
-
-            var menu = new NativeMenu
-            {
-                new NativeMenuItem($"Test Item [{label}]")
-                {
-                    Command = menuCommand,
-                    CommandParameter = $"{label}-test"
-                },
-                new NativeMenuItem("Quit")
-                {
-                    Command = menuCommand,
-                    CommandParameter = $"{label}-quit"
-                }
-            };
-
-            Console.WriteLine($"[{label}] Menu created with {menu.Items.Count} items");
-            return menu;
-        }
-
-        static NativeMenu CreateMenuWithClickEvents(string label)
-        {
-            Console.WriteLine($"[{label}] CreateMenuWithClickEvents() called");
-
-            var testItem = new NativeMenuItem($"Test Item [{label}]");
-            testItem.Click += (s, e) =>
-            {
-                Console.WriteLine($"[{label}] Test item clicked!");
-            };
-
+            // Quit menu item with THREAD-SAFE Click handler
             var quitItem = new NativeMenuItem("Quit");
             quitItem.Click += (s, e) =>
             {
-                Console.WriteLine($"[{label}] Quit clicked!");
-                HandleQuitClicked();
+                // CRITICAL: Marshal to UI thread to avoid crash!
+                Dispatcher.UIThread.Post(() =>
+                {
+                    HandleQuitClicked();
+                });
             };
+            menu.Items.Add(quitItem);
 
-            var menu = new NativeMenu { testItem, quitItem };
-            Console.WriteLine($"[{label}] Menu created with {menu.Items.Count} items");
             return menu;
         }
 
