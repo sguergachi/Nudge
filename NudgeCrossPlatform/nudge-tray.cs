@@ -224,50 +224,134 @@ namespace NudgeTray
 
         public static void CreateTrayIconForApp(Avalonia.Application app)
         {
+            Console.WriteLine("\n═══════════════════════════════════════════════════════════");
+            Console.WriteLine("  TESTING 5 DIFFERENT TRAYICON IMPLEMENTATIONS");
+            Console.WriteLine("  Each icon has a different color to identify it:");
+            Console.WriteLine("    🔴 RED    = Implementation 1: ICommand pattern");
+            Console.WriteLine("    🟢 GREEN  = Implementation 2: Menu added after creation");
+            Console.WriteLine("    🔵 BLUE   = Implementation 3: Click events");
+            Console.WriteLine("    🟡 YELLOW = Implementation 4: Pre-created menu");
+            Console.WriteLine("    🟣 PURPLE = Implementation 5: Lazy menu creation");
+            Console.WriteLine("═══════════════════════════════════════════════════════════\n");
+
+            var icons = new TrayIcons();
+
+            // Implementation 1: RED - ICommand pattern (current approach)
             try
             {
-                Console.WriteLine("[DEBUG] CreateTrayIconForApp called");
-                Console.WriteLine($"[DEBUG] App instance is null: {app == null}");
-
-                // Create icon
-                var icon = CreateCommonIcon();
-                Console.WriteLine("[DEBUG] Icon created");
-
-                // Create TrayIcon using collection initializer syntax (like working examples)
-                _trayIcon = new TrayIcon
+                Console.WriteLine("[IMPL 1 - RED] Creating with ICommand pattern...");
+                var icon1 = CreateColoredIcon(0xFFFF0000); // RED
+                var trayIcon1 = new TrayIcon
                 {
-                    Icon = icon,
+                    Icon = icon1,
                     IsVisible = true,
-                    ToolTipText = "Nudge Productivity Tracker",
-                    Menu = CreateMenu()
+                    ToolTipText = "Impl 1: ICommand",
+                    Menu = CreateMenuWithCommands("1-RED")
                 };
-
-                // Add event handlers for debugging
-                _trayIcon.Clicked += (s, e) =>
-                {
-                    Console.WriteLine("[DEBUG] TrayIcon Clicked event fired!");
-                };
-
-                var icons = new TrayIcons { _trayIcon };
-
-                Console.WriteLine("[DEBUG] TrayIcons collection created");
-
-                // Set icons on the App instance directly (not Application.Current)
-                TrayIcon.SetIcons(app, icons);
-                Console.WriteLine("[DEBUG] TrayIcon.SetIcons(app) called successfully");
-
-                // Verify it was set
-                var currentIcons = TrayIcon.GetIcons(app);
-                Console.WriteLine($"[DEBUG] Verified: App now has {currentIcons?.Count ?? 0} tray icon(s)");
-
-                Console.WriteLine("[DEBUG] Tray icon created with Avalonia TrayIcon (cross-platform)");
+                icons.Add(trayIcon1);
+                Console.WriteLine("[IMPL 1 - RED] ✓ Created successfully");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[ERROR] Failed to create tray icon: {ex.Message}");
-                Console.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
-                throw;
+                Console.WriteLine($"[IMPL 1 - RED] ✗ Failed: {ex.Message}");
             }
+
+            // Implementation 2: GREEN - Menu added after creation
+            try
+            {
+                Console.WriteLine("[IMPL 2 - GREEN] Creating without menu, then adding...");
+                var icon2 = CreateColoredIcon(0xFF00FF00); // GREEN
+                var trayIcon2 = new TrayIcon
+                {
+                    Icon = icon2,
+                    IsVisible = true,
+                    ToolTipText = "Impl 2: Post-Menu"
+                };
+                icons.Add(trayIcon2);
+                // Add menu after a delay
+                Task.Delay(100).ContinueWith(_ =>
+                {
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        trayIcon2.Menu = CreateMenuWithClickEvents("2-GREEN");
+                        Console.WriteLine("[IMPL 2 - GREEN] ✓ Menu added after creation");
+                    });
+                });
+                Console.WriteLine("[IMPL 2 - GREEN] ✓ Created successfully (menu pending)");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[IMPL 2 - GREEN] ✗ Failed: {ex.Message}");
+            }
+
+            // Implementation 3: BLUE - Click events (original approach)
+            try
+            {
+                Console.WriteLine("[IMPL 3 - BLUE] Creating with Click events...");
+                var icon3 = CreateColoredIcon(0xFF0000FF); // BLUE
+                var trayIcon3 = new TrayIcon
+                {
+                    Icon = icon3,
+                    IsVisible = true,
+                    ToolTipText = "Impl 3: Click Events",
+                    Menu = CreateMenuWithClickEvents("3-BLUE")
+                };
+                icons.Add(trayIcon3);
+                Console.WriteLine("[IMPL 3 - BLUE] ✓ Created successfully");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[IMPL 3 - BLUE] ✗ Failed: {ex.Message}");
+            }
+
+            // Implementation 4: YELLOW - Pre-created menu
+            try
+            {
+                Console.WriteLine("[IMPL 4 - YELLOW] Creating with pre-made menu...");
+                var icon4 = CreateColoredIcon(0xFFFFFF00); // YELLOW
+                var menu4 = CreateMenuWithClickEvents("4-YELLOW");
+                var trayIcon4 = new TrayIcon();
+                trayIcon4.Icon = icon4;
+                trayIcon4.Menu = menu4;
+                trayIcon4.ToolTipText = "Impl 4: Pre-Menu";
+                trayIcon4.IsVisible = true;
+                icons.Add(trayIcon4);
+                Console.WriteLine("[IMPL 4 - YELLOW] ✓ Created successfully");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[IMPL 4 - YELLOW] ✗ Failed: {ex.Message}");
+            }
+
+            // Implementation 5: PURPLE - Lazy menu (created on demand)
+            try
+            {
+                Console.WriteLine("[IMPL 5 - PURPLE] Creating with minimal setup...");
+                var icon5 = CreateColoredIcon(0xFFFF00FF); // PURPLE
+                var trayIcon5 = new TrayIcon
+                {
+                    Icon = icon5,
+                    IsVisible = false, // Start hidden
+                    ToolTipText = "Impl 5: Lazy"
+                };
+                icons.Add(trayIcon5);
+                // Show after setup
+                trayIcon5.Menu = CreateMenuWithCommands("5-PURPLE");
+                trayIcon5.IsVisible = true;
+                Console.WriteLine("[IMPL 5 - PURPLE] ✓ Created successfully");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[IMPL 5 - PURPLE] ✗ Failed: {ex.Message}");
+            }
+
+            // Set all icons at once
+            TrayIcon.SetIcons(app, icons);
+            Console.WriteLine($"\n✓ All implementations set. Total icons: {icons.Count}");
+            Console.WriteLine("Right-click each icon to test the menu.\n");
+
+            // Store first icon for compatibility
+            _trayIcon = icons.Count > 0 ? icons[0] : null;
         }
 
 #if WINDOWS
@@ -342,63 +426,72 @@ namespace NudgeTray
 
         static NativeMenu CreateMenu()
         {
-            Console.WriteLine("[DEBUG] CreateMenu() called");
+            // Default menu - use Commands
+            return CreateMenuWithCommands("DEFAULT");
+        }
 
-            // Create a single command that handles all menu actions
+        static NativeMenu CreateMenuWithCommands(string label)
+        {
+            Console.WriteLine($"[{label}] CreateMenuWithCommands() called");
+
             var menuCommand = new RelayCommand(parameter =>
             {
                 var action = parameter as string;
-                Console.WriteLine($"[DEBUG] Menu command executed with action: {action}");
+                Console.WriteLine($"[{label}] Command executed: {action}");
 
-                switch (action)
+                if (action?.Contains("quit") == true)
                 {
-                    case "test1":
-                        Console.WriteLine("[DEBUG] Test item 1 executed!");
-                        Console.WriteLine($"[DEBUG] TrayIcon.IsVisible after click: {_trayIcon?.IsVisible}");
-                        break;
-                    case "test2":
-                        Console.WriteLine("[DEBUG] Test item 2 executed!");
-                        Console.WriteLine($"[DEBUG] TrayIcon.IsVisible after click: {_trayIcon?.IsVisible}");
-                        break;
-                    case "quit":
-                        Console.WriteLine("[DEBUG] Quit command executed!");
-                        HandleQuitClicked();
-                        break;
+                    HandleQuitClicked();
+                }
+                else
+                {
+                    Console.WriteLine($"[{label}] Test action: {action}");
                 }
             });
 
-            var testItem1 = new NativeMenuItem("Test Item 1")
-            {
-                Command = menuCommand,
-                CommandParameter = "test1"
-            };
-
-            var testItem2 = new NativeMenuItem("Test Item 2")
-            {
-                Command = menuCommand,
-                CommandParameter = "test2"
-            };
-
-            var quitItem = new NativeMenuItem("Quit")
-            {
-                Command = menuCommand,
-                CommandParameter = "quit"
-            };
-
             var menu = new NativeMenu
             {
-                testItem1,
-                testItem2,
-                quitItem
+                new NativeMenuItem($"Test Item [{label}]")
+                {
+                    Command = menuCommand,
+                    CommandParameter = $"{label}-test"
+                },
+                new NativeMenuItem("Quit")
+                {
+                    Command = menuCommand,
+                    CommandParameter = $"{label}-quit"
+                }
             };
 
-            Console.WriteLine($"[DEBUG] CreateMenu() returning menu with {menu.Items.Count} items");
+            Console.WriteLine($"[{label}] Menu created with {menu.Items.Count} items");
             return menu;
         }
 
-        static WindowIcon CreateCommonIcon()
+        static NativeMenu CreateMenuWithClickEvents(string label)
         {
-            // Create a simple 16x16 icon programmatically
+            Console.WriteLine($"[{label}] CreateMenuWithClickEvents() called");
+
+            var testItem = new NativeMenuItem($"Test Item [{label}]");
+            testItem.Click += (s, e) =>
+            {
+                Console.WriteLine($"[{label}] Test item clicked!");
+            };
+
+            var quitItem = new NativeMenuItem("Quit");
+            quitItem.Click += (s, e) =>
+            {
+                Console.WriteLine($"[{label}] Quit clicked!");
+                HandleQuitClicked();
+            };
+
+            var menu = new NativeMenu { testItem, quitItem };
+            Console.WriteLine($"[{label}] Menu created with {menu.Items.Count} items");
+            return menu;
+        }
+
+        static WindowIcon CreateColoredIcon(uint argbColor)
+        {
+            // Create a simple 16x16 icon with specified color
             var width = 16;
             var height = 16;
             var bitmap = new WriteableBitmap(
@@ -414,7 +507,14 @@ namespace NudgeTray
                     var ptr = (uint*)fb.Address.ToPointer();
                     var stride = fb.RowBytes / 4;
 
-                    // Draw a blue circle
+                    // Convert ARGB to BGRA
+                    var a = (argbColor >> 24) & 0xFF;
+                    var r = (argbColor >> 16) & 0xFF;
+                    var g = (argbColor >> 8) & 0xFF;
+                    var b = (argbColor >> 0) & 0xFF;
+                    var bgraColor = (a << 24) | (r << 0) | (g << 8) | (b << 16);
+
+                    // Draw a filled circle
                     var cx = width / 2;
                     var cy = height / 2;
                     var radius = 6;
@@ -428,8 +528,7 @@ namespace NudgeTray
 
                             if (dx * dx + dy * dy <= radius * radius)
                             {
-                                // Blue color: BGRA format (0xFFFF5588 = #5588FF)
-                                ptr[y * stride + x] = 0xFFFF5588;
+                                ptr[y * stride + x] = bgraColor;
                             }
                             else
                             {
@@ -447,6 +546,12 @@ namespace NudgeTray
             stream.Position = 0;
 
             return new WindowIcon(stream);
+        }
+
+        static WindowIcon CreateCommonIcon()
+        {
+            // Default: Blue icon
+            return CreateColoredIcon(0xFF0088FF);
         }
 
         static void StartMLServices()
