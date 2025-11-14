@@ -1198,7 +1198,7 @@ namespace NudgeTray
             // Show custom menu window on UI thread
             Dispatcher.UIThread.Post(() =>
             {
-                var menuWindow = new TrayMenuWindow();
+                var menuWindow = new Program.TrayMenuWindow();
                 menuWindow.Show();
             });
         }
