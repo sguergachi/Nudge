@@ -335,8 +335,16 @@ namespace NudgeTray
         public static void SetTrayIconFromXaml(Avalonia.Application app)
         {
             Console.WriteLine("\n═══════════════════════════════════════════════════════════");
-            Console.WriteLine("  XAML-BASED TRAYICON - THE ONLY WAY THAT WORKS ON WINDOWS!");
-            Console.WriteLine("  Programmatic NativeMenu is BROKEN on Windows (GitHub #18225)");
+            Console.WriteLine("  FINAL WORKING SOLUTION: Custom Menu Window");
+            Console.WriteLine("  NativeMenu is COMPLETELY BROKEN on Windows Avalonia 11.3.8");
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+            Console.WriteLine("  Testing Results:");
+            Console.WriteLine("  ✗ Programmatic NativeMenu - BROKEN (GitHub #18225)");
+            Console.WriteLine("  ✗ XAML NativeMenu - ALSO BROKEN (just tested)");
+            Console.WriteLine("  ✗ Right-click detection - NO API EXISTS");
+            Console.WriteLine("");
+            Console.WriteLine("  Solution: LEFT-CLICK shows custom Avalonia window menu");
+            Console.WriteLine("  This is the only way that actually works!");
             Console.WriteLine("═══════════════════════════════════════════════════════════\n");
 
             // Get the TrayIcon defined in XAML
@@ -349,10 +357,9 @@ namespace NudgeTray
                 _trayIcon.Icon = CreateCommonIcon();
                 _trayIcon.IsVisible = true;
 
-                Console.WriteLine("✓ TrayIcon from XAML with programmatic icon");
-                Console.WriteLine("  Menu defined in App.axaml (XAML)");
-                Console.WriteLine("  This is the ONLY way NativeMenu works on Windows!");
-                Console.WriteLine("  Right-click to test native menu!\n");
+                Console.WriteLine("✓ TrayIcon loaded from XAML");
+                Console.WriteLine("  LEFT-CLICK the tray icon to show menu");
+                Console.WriteLine("  (Custom Avalonia window - no NativeMenu)\n");
             }
             else
             {
@@ -1156,7 +1163,7 @@ namespace NudgeTray
 
         public override void Initialize()
         {
-            // Load XAML for TrayIcon definition
+            // Load XAML for TrayIcon definition (NO NativeMenu - it's broken on Windows)
             AvaloniaXamlLoader.Load(this);
         }
 
@@ -1184,11 +1191,16 @@ namespace NudgeTray
             base.OnFrameworkInitializationCompleted();
         }
 
-        // Event handler for Quit menu item (defined in XAML)
-        private void QuitMenuItem_Click(object? sender, EventArgs e)
+        // Event handler for TrayIcon Click (left-click shows custom menu)
+        private void TrayIcon_Clicked(object? sender, EventArgs e)
         {
-            Console.WriteLine("[XAML Menu] Quit clicked");
-            Program.HandleQuitClicked();
+            Console.WriteLine("[TrayIcon] Clicked - showing custom menu window");
+            // Show custom menu window on UI thread
+            Dispatcher.UIThread.Post(() =>
+            {
+                var menuWindow = new TrayMenuWindow();
+                menuWindow.Show();
+            });
         }
     }
 }

@@ -2,17 +2,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="NudgeTray.App">
 
+    <!-- TrayIcon with NO NativeMenu (broken on Windows) -->
+    <!-- Using Clicked event with custom popup instead -->
     <TrayIcon.Icons>
         <TrayIcons>
-            <TrayIcon ToolTipText="Nudge Productivity Tracker">
-                <TrayIcon.Menu>
-                    <NativeMenu>
-                        <NativeMenuItem Header="Status: Running" />
-                        <NativeMenuItemSeparator />
-                        <NativeMenuItem Header="Quit" Click="QuitMenuItem_Click" />
-                    </NativeMenu>
-                </TrayIcon.Menu>
-            </TrayIcon>
+            <TrayIcon ToolTipText="Nudge Productivity Tracker (Click for menu)"
+                      Clicked="TrayIcon_Clicked" />
         </TrayIcons>
     </TrayIcon.Icons>
 
