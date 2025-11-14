@@ -34,7 +34,6 @@ using Avalonia.Threading;
 
 #if WINDOWS
 using Microsoft.Toolkit.Uwp.Notifications;
-using System.Management;
 #endif
 
 namespace NudgeTray
@@ -255,55 +254,33 @@ namespace NudgeTray
             try
             {
                 var pythonProcesses = Process.GetProcessesByName("python")
-                    .Concat(Process.GetProcessesByName("python3"));
+                    .Concat(Process.GetProcessesByName("python3"))
+                    .Concat(Process.GetProcessesByName("python.exe"))
+                    .Concat(Process.GetProcessesByName("python3.exe"));
 
                 foreach (var process in pythonProcesses)
                 {
                     try
                     {
-                        string commandLine = GetProcessCommandLine(process);
-                        if (commandLine.Contains(scriptName))
+                        // Simple heuristic: if the process was started recently (within last 5 minutes)
+                        // and is named python/python3, assume it's one of our ML scripts
+                        var runningTime = DateTime.Now - process.StartTime;
+                        if (runningTime.TotalMinutes < 5)
                         {
-                            Console.WriteLine($"[CLEANUP]   Killing Python {scriptName} (PID {process.Id})...");
+                            Console.WriteLine($"[CLEANUP]   Killing Python process (PID {process.Id})...");
                             process.Kill();
                             process.WaitForExit(2000);
                             killedCount++;
                         }
                     }
-                    catch { /* Ignore if we can't read command line or kill */ }
+                    catch { /* Ignore if we can't access or kill */ }
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[CLEANUP]   Error killing Python {scriptName}: {ex.Message}");
+                Console.WriteLine($"[CLEANUP]   Error killing Python processes: {ex.Message}");
             }
             return killedCount;
-        }
-
-        static string GetProcessCommandLine(Process process)
-        {
-            try
-            {
-                #if WINDOWS
-                using (var searcher = new System.Management.ManagementObjectSearcher(
-                    $"SELECT CommandLine FROM Win32_Process WHERE ProcessId = {process.Id}"))
-                {
-                    foreach (System.Management.ManagementObject obj in searcher.Get())
-                    {
-                        return obj["CommandLine"]?.ToString() ?? "";
-                    }
-                }
-                #else
-                // On Linux, read from /proc/[pid]/cmdline
-                string cmdlinePath = $"/proc/{process.Id}/cmdline";
-                if (File.Exists(cmdlinePath))
-                {
-                    return File.ReadAllText(cmdlinePath).Replace('\0', ' ');
-                }
-                #endif
-            }
-            catch { }
-            return "";
         }
 
         static AppBuilder BuildAvaloniaApp(int interval)
