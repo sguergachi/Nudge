@@ -13,6 +13,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
@@ -33,6 +34,7 @@ using Avalonia.Threading;
 
 #if WINDOWS
 using Microsoft.Toolkit.Uwp.Notifications;
+using System.Management;
 #endif
 
 namespace NudgeTray
