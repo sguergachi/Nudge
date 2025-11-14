@@ -33,7 +33,6 @@ using Avalonia.Threading;
 
 #if WINDOWS
 using Microsoft.Toolkit.Uwp.Notifications;
-using Avalonia.Win32;
 #endif
 
 namespace NudgeTray
@@ -178,22 +177,9 @@ namespace NudgeTray
 
         static AppBuilder BuildAvaloniaApp(int interval)
         {
-            var builder = AppBuilder.Configure(() => new App(interval))
+            return AppBuilder.Configure(() => new App(interval))
                 .UsePlatformDetect()
                 .LogToTrace();
-
-            // CRITICAL FIX: Use RedirectionSurface composition to avoid Windows 11 TrayIcon crashes
-            // RedirectionSurface disables WinUI Composition which can crash with TrayIcon menus
-            // See: https://github.com/AvaloniaUI/Avalonia/issues/17188
-            #if WINDOWS
-            Console.WriteLine("[FIX] Using RedirectionSurface composition mode for Windows 11 TrayIcon stability...");
-            builder = builder.With(new Win32PlatformOptions
-            {
-                CompositionMode = new[] { Win32CompositionMode.RedirectionSurface }
-            });
-            #endif
-
-            return builder;
         }
 
 
