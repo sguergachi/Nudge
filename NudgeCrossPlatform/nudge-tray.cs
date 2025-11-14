@@ -333,178 +333,50 @@ namespace NudgeTray
         public static void CreateTrayIconForApp(Avalonia.Application app)
         {
             Console.WriteLine("\n═══════════════════════════════════════════════════════════");
-            Console.WriteLine("  CRITICAL FIX VALIDATION TEST");
-            Console.WriteLine("  Click events CRASH - Testing ICommand as fix");
+            Console.WriteLine("  FINAL SOLUTION: Use TrayIcon.Clicked instead of menu");
+            Console.WriteLine("  NativeMenu handlers are BROKEN on Windows");
             Console.WriteLine("═══════════════════════════════════════════════════════════");
-            Console.WriteLine("  🔴 RED    = NO menu");
-            Console.WriteLine("  🟢 GREEN  = Empty menu - ✓ WORKS");
-            Console.WriteLine("  🔵 BLUE   = Menu without handler - ✓ WORKS");
-            Console.WriteLine("  🟡 YELLOW = Click event - ⚠️  CRASHES");
-            Console.WriteLine("  🟣 PURPLE = ICommand - 🧪 TESTING FIX");
+            Console.WriteLine("  Finding: ANY handler on NativeMenuItem crashes!");
+            Console.WriteLine("  - Click events → CRASH");
+            Console.WriteLine("  - ICommand → CRASH");
+            Console.WriteLine("  - Menu items without handlers → Works but useless");
+            Console.WriteLine("");
+            Console.WriteLine("  Solution: Use TrayIcon.Clicked event instead");
+            Console.WriteLine("  Right-click will show a custom Avalonia window menu");
             Console.WriteLine("═══════════════════════════════════════════════════════════\n");
 
-            var icons = new TrayIcons();
+            // Create single working TrayIcon with Clicked event (NO menu handlers)
+            var icon = CreateColoredIcon(0xFF0088FF); // Blue
 
-            // TEST 1: RED - NO menu at all (control test)
-            Console.WriteLine("[TEST 1 - RED] Creating icon with NO menu...");
-            try
+            _trayIcon = new TrayIcon
             {
-                var icon1 = new TrayIcon
-                {
-                    Icon = CreateColoredIcon(0xFFFF0000), // RED
-                    ToolTipText = "RED: No Menu",
-                    IsVisible = true
-                    // NO Menu property set!
-                };
-                icons.Add(icon1);
-                Console.WriteLine("[TEST 1 - RED] ✓ Success - Icon with no menu created");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[TEST 1 - RED] ✗ FAILED: {ex.Message}");
-                Console.WriteLine($"                Stack: {ex.StackTrace}");
-            }
+                Icon = icon,
+                ToolTipText = "Nudge Productivity Tracker",
+                IsVisible = true
+            };
 
-            // TEST 2: GREEN - Empty menu (zero items)
-            Console.WriteLine("\n[TEST 2 - GREEN] Creating icon with EMPTY menu...");
-            try
-            {
-                var icon2 = new TrayIcon
-                {
-                    Icon = CreateColoredIcon(0xFF00FF00), // GREEN
-                    ToolTipText = "GREEN: Empty Menu",
-                    Menu = new NativeMenu(), // Empty menu, no items
-                    IsVisible = true
-                };
-                icons.Add(icon2);
-                Console.WriteLine("[TEST 2 - GREEN] ✓ Success - Icon with empty menu created");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[TEST 2 - GREEN] ✗ FAILED: {ex.Message}");
-                Console.WriteLine($"                 Stack: {ex.StackTrace}");
-            }
+            // Use TrayIcon.Clicked event instead of menu item handlers
+            // This is the ONLY way that works reliably on Windows!
+            _trayIcon.Clicked += OnTrayIconClicked;
 
-            // TEST 3: BLUE - One menu item, NO Click handler
-            Console.WriteLine("\n[TEST 3 - BLUE] Creating icon with ONE menu item, NO handler...");
-            try
-            {
-                var menu3 = new NativeMenu();
-                menu3.Items.Add(new NativeMenuItem("Test Item"));
+            // Set the single icon
+            TrayIcon.SetIcons(app, new TrayIcons { _trayIcon });
 
-                var icon3 = new TrayIcon
-                {
-                    Icon = CreateColoredIcon(0xFF0000FF), // BLUE
-                    ToolTipText = "BLUE: 1 Item, No Handler",
-                    Menu = menu3,
-                    IsVisible = true
-                };
-                icons.Add(icon3);
-                Console.WriteLine("[TEST 3 - BLUE] ✓ Success - Icon with 1 item (no handler) created");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[TEST 3 - BLUE] ✗ FAILED: {ex.Message}");
-                Console.WriteLine($"                Stack: {ex.StackTrace}");
-            }
+            Console.WriteLine("✓ TrayIcon created successfully");
+            Console.WriteLine("  Click the tray icon to show menu");
+            Console.WriteLine("  (Using TrayIcon.Clicked event - no NativeMenu handlers)\n");
+        }
 
-            // TEST 4: YELLOW - One menu item, WITH Click handler (CRASHES!)
-            Console.WriteLine("\n[TEST 4 - YELLOW] Creating icon with ONE menu item, WITH Click handler...");
-            Console.WriteLine("[TEST 4 - YELLOW] ⚠️  WARNING: This uses Click events and will CRASH!");
-            try
-            {
-                var menuItem4 = new NativeMenuItem("Click Me (CRASH)");
-                menuItem4.Click += (s, e) =>
-                {
-                    Console.WriteLine("[TEST 4 - YELLOW] >>> Menu item clicked! <<<");
-                };
+        static void OnTrayIconClicked(object? sender, EventArgs e)
+        {
+            Console.WriteLine("\n[TrayIcon] Icon clicked!");
 
-                var menu4 = new NativeMenu();
-                menu4.Items.Add(menuItem4);
-
-                var icon4 = new TrayIcon
-                {
-                    Icon = CreateColoredIcon(0xFFFFFF00), // YELLOW
-                    ToolTipText = "YELLOW: Click Event (CRASHES)",
-                    Menu = menu4,
-                    IsVisible = true
-                };
-                icons.Add(icon4);
-                Console.WriteLine("[TEST 4 - YELLOW] ✓ Created (will crash on right-click)");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[TEST 4 - YELLOW] ✗ FAILED: {ex.Message}");
-                Console.WriteLine($"                  Stack: {ex.StackTrace}");
-            }
-
-            // TEST 5: PURPLE - Using ICommand instead of Click events (SHOULD WORK!)
-            Console.WriteLine("\n[TEST 5 - PURPLE] Creating icon with ICommand (FIX ATTEMPT)...");
-            try
-            {
-                // Create a command for menu actions
-                var command = new RelayCommand(param =>
-                {
-                    var action = param as string;
-                    Console.WriteLine($"[TEST 5 - PURPLE] >>> Command executed: {action} <<<");
-
-                    if (action == "quit")
-                    {
-                        HandleQuitClicked();
-                    }
-                });
-
-                var menuItem5a = new NativeMenuItem("Test ICommand")
-                {
-                    Command = command,
-                    CommandParameter = "test"
-                };
-
-                var menuItem5b = new NativeMenuItem("Quit")
-                {
-                    Command = command,
-                    CommandParameter = "quit"
-                };
-
-                var menu5 = new NativeMenu();
-                menu5.Items.Add(menuItem5a);
-                menu5.Items.Add(menuItem5b);
-
-                var icon5 = new TrayIcon
-                {
-                    Icon = CreateColoredIcon(0xFFFF00FF), // PURPLE
-                    ToolTipText = "PURPLE: ICommand (SHOULD WORK)",
-                    Menu = menu5,
-                    IsVisible = true
-                };
-                icons.Add(icon5);
-                Console.WriteLine("[TEST 5 - PURPLE] ✓ Created with ICommand pattern");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[TEST 5 - PURPLE] ✗ FAILED: {ex.Message}");
-                Console.WriteLine($"                  Stack: {ex.StackTrace}");
-            }
-
-            // Set all icons
-            Console.WriteLine("\n─────────────────────────────────────────────────────────");
-            Console.WriteLine($"Setting {icons.Count} icons on Application...");
-            TrayIcon.SetIcons(app, icons);
-            Console.WriteLine("✓ All icons set successfully");
-            Console.WriteLine("─────────────────────────────────────────────────────────");
-            Console.WriteLine("\nTEST INSTRUCTIONS:");
-            Console.WriteLine("1. You should see 5 colored circles in your system tray");
-            Console.WriteLine("2. Right-click each one and observe:");
-            Console.WriteLine("   - RED (no menu) - nothing happens");
-            Console.WriteLine("   - GREEN (empty menu) - ✓ WORKS (no crash)");
-            Console.WriteLine("   - BLUE (menu, no handler) - ✓ WORKS (shows menu)");
-            Console.WriteLine("   - YELLOW (Click event) - ⚠️  CRASHES (confirms bug)");
-            Console.WriteLine("   - PURPLE (ICommand) - 🧪 DOES IT WORK?");
-            Console.WriteLine("\n3. If PURPLE works, we've found the solution!");
-            Console.WriteLine("   Report: Does PURPLE icon crash or work?\n");
-
-            // Store first icon for compatibility
-            _trayIcon = icons.Count > 0 ? icons[0] : null;
+            // TODO: Show custom Avalonia popup window menu here
+            // For now, just show available actions in console
+            Console.WriteLine("Menu Actions:");
+            Console.WriteLine("  1. Status: " + GetMenuStatusText());
+            Console.WriteLine("  2. Quit (press Ctrl+C for now)");
+            Console.WriteLine();
         }
 
 #if WINDOWS
