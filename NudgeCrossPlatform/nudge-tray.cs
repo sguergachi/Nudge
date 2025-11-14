@@ -225,130 +225,224 @@ namespace NudgeTray
         public static void CreateTrayIconForApp(Avalonia.Application app)
         {
             Console.WriteLine("\n═══════════════════════════════════════════════════════════");
-            Console.WriteLine("  TESTING 5 DIFFERENT TRAYICON IMPLEMENTATIONS");
-            Console.WriteLine("  Each icon has a different color to identify it:");
-            Console.WriteLine("    🔴 RED    = Implementation 1: ICommand pattern");
-            Console.WriteLine("    🟢 GREEN  = Implementation 2: Menu added after creation");
-            Console.WriteLine("    🔵 BLUE   = Implementation 3: Click events");
-            Console.WriteLine("    🟡 YELLOW = Implementation 4: Pre-created menu");
-            Console.WriteLine("    🟣 PURPLE = Implementation 5: Lazy menu creation");
+            Console.WriteLine("  TESTING 10 DIFFERENT TRAYICON IMPLEMENTATIONS");
+            Console.WriteLine("  Based on research of working examples");
+            Console.WriteLine("═══════════════════════════════════════════════════════════");
+            Console.WriteLine("  🔴 RED     = Menu property with inline collection");
+            Console.WriteLine("  🟢 GREEN   = Nested menu structure");
+            Console.WriteLine("  🔵 BLUE    = Menu BEFORE Icon property");
+            Console.WriteLine("  🟡 YELLOW  = Simple flat menu with Click");
+            Console.WriteLine("  🟣 PURPLE  = Menu with single item");
+            Console.WriteLine("  🟠 ORANGE  = Use Application.Current");
+            Console.WriteLine("  🟤 BROWN   = Dispatcher.UIThread.Post creation");
+            Console.WriteLine("  ⚫ BLACK   = Empty menu, no items");
+            Console.WriteLine("  ⚪ WHITE   = Menu without ToolTipText");
+            Console.WriteLine("  🩷 PINK    = Inline NativeMenu creation");
             Console.WriteLine("═══════════════════════════════════════════════════════════\n");
 
             var icons = new TrayIcons();
 
-            // Implementation 1: RED - ICommand pattern (current approach)
+            // Implementation 1: RED - Direct Menu property assignment (like GitHub example)
             try
             {
-                Console.WriteLine("[IMPL 1 - RED] Creating with ICommand pattern...");
-                var icon1 = CreateColoredIcon(0xFFFF0000); // RED
+                Console.WriteLine("[1-RED] Menu property with inline collection initializer...");
                 var trayIcon1 = new TrayIcon
                 {
-                    Icon = icon1,
+                    Icon = CreateColoredIcon(0xFFFF0000),
+                    ToolTipText = "RED: Inline Collection",
                     IsVisible = true,
-                    ToolTipText = "Impl 1: ICommand",
-                    Menu = CreateMenuWithCommands("1-RED")
-                };
-                icons.Add(trayIcon1);
-                Console.WriteLine("[IMPL 1 - RED] ✓ Created successfully");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[IMPL 1 - RED] ✗ Failed: {ex.Message}");
-            }
-
-            // Implementation 2: GREEN - Menu added after creation
-            try
-            {
-                Console.WriteLine("[IMPL 2 - GREEN] Creating without menu, then adding...");
-                var icon2 = CreateColoredIcon(0xFF00FF00); // GREEN
-                var trayIcon2 = new TrayIcon
-                {
-                    Icon = icon2,
-                    IsVisible = true,
-                    ToolTipText = "Impl 2: Post-Menu"
-                };
-                icons.Add(trayIcon2);
-                // Add menu after a delay
-                Task.Delay(100).ContinueWith(_ =>
-                {
-                    Dispatcher.UIThread.Post(() =>
+                    Menu = new NativeMenu
                     {
-                        trayIcon2.Menu = CreateMenuWithClickEvents("2-GREEN");
-                        Console.WriteLine("[IMPL 2 - GREEN] ✓ Menu added after creation");
-                    });
+                        Items =
+                        {
+                            new NativeMenuItem("Test RED") { },
+                            new NativeMenuItem("Quit") { }
+                        }
+                    }
+                };
+                // Attach click handlers after creation
+                ((NativeMenuItem)trayIcon1.Menu.Items[0]).Click += (s,e) => Console.WriteLine("[1-RED] Test clicked!");
+                ((NativeMenuItem)trayIcon1.Menu.Items[1]).Click += (s,e) => { Console.WriteLine("[1-RED] Quit!"); HandleQuitClicked(); };
+                icons.Add(trayIcon1);
+                Console.WriteLine("[1-RED] ✓ Created");
+            }
+            catch (Exception ex) { Console.WriteLine($"[1-RED] ✗ Failed: {ex.Message}"); }
+
+            // Implementation 2: GREEN - Nested menu structure (submenu)
+            try
+            {
+                Console.WriteLine("[2-GREEN] Nested menu with submenu...");
+                var submenu = new NativeMenu();
+                submenu.Items.Add(new NativeMenuItem("Submenu Item"));
+
+                var menuItem = new NativeMenuItem("Settings") { Menu = submenu };
+                var quitItem = new NativeMenuItem("Quit");
+                quitItem.Click += (s,e) => { Console.WriteLine("[2-GREEN] Quit!"); HandleQuitClicked(); };
+
+                var menu = new NativeMenu();
+                menu.Items.Add(menuItem);
+                menu.Items.Add(quitItem);
+
+                icons.Add(new TrayIcon
+                {
+                    Icon = CreateColoredIcon(0xFF00FF00),
+                    ToolTipText = "GREEN: Nested Menu",
+                    Menu = menu,
+                    IsVisible = true
                 });
-                Console.WriteLine("[IMPL 2 - GREEN] ✓ Created successfully (menu pending)");
+                Console.WriteLine("[2-GREEN] ✓ Created");
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[IMPL 2 - GREEN] ✗ Failed: {ex.Message}");
-            }
+            catch (Exception ex) { Console.WriteLine($"[2-GREEN] ✗ Failed: {ex.Message}"); }
 
-            // Implementation 3: BLUE - Click events (original approach)
+            // Implementation 3: BLUE - Menu set BEFORE Icon
             try
             {
-                Console.WriteLine("[IMPL 3 - BLUE] Creating with Click events...");
-                var icon3 = CreateColoredIcon(0xFF0000FF); // BLUE
-                var trayIcon3 = new TrayIcon
-                {
-                    Icon = icon3,
-                    IsVisible = true,
-                    ToolTipText = "Impl 3: Click Events",
-                    Menu = CreateMenuWithClickEvents("3-BLUE")
-                };
+                Console.WriteLine("[3-BLUE] Menu property set before Icon...");
+                var trayIcon3 = new TrayIcon();
+                trayIcon3.Menu = CreateMenuWithClickEvents("3-BLUE");
+                trayIcon3.Icon = CreateColoredIcon(0xFF0000FF);
+                trayIcon3.ToolTipText = "BLUE: Menu First";
+                trayIcon3.IsVisible = true;
                 icons.Add(trayIcon3);
-                Console.WriteLine("[IMPL 3 - BLUE] ✓ Created successfully");
+                Console.WriteLine("[3-BLUE] ✓ Created");
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[IMPL 3 - BLUE] ✗ Failed: {ex.Message}");
-            }
+            catch (Exception ex) { Console.WriteLine($"[3-BLUE] ✗ Failed: {ex.Message}"); }
 
-            // Implementation 4: YELLOW - Pre-created menu
+            // Implementation 4: YELLOW - Simple flat menu
             try
             {
-                Console.WriteLine("[IMPL 4 - YELLOW] Creating with pre-made menu...");
-                var icon4 = CreateColoredIcon(0xFFFFFF00); // YELLOW
-                var menu4 = CreateMenuWithClickEvents("4-YELLOW");
-                var trayIcon4 = new TrayIcon();
-                trayIcon4.Icon = icon4;
-                trayIcon4.Menu = menu4;
-                trayIcon4.ToolTipText = "Impl 4: Pre-Menu";
-                trayIcon4.IsVisible = true;
-                icons.Add(trayIcon4);
-                Console.WriteLine("[IMPL 4 - YELLOW] ✓ Created successfully");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[IMPL 4 - YELLOW] ✗ Failed: {ex.Message}");
-            }
+                Console.WriteLine("[4-YELLOW] Simple flat menu structure...");
+                var item1 = new NativeMenuItem { Header = "Test YELLOW" };
+                item1.Click += (s,e) => Console.WriteLine("[4-YELLOW] Test!");
+                var item2 = new NativeMenuItem { Header = "Quit" };
+                item2.Click += (s,e) => { Console.WriteLine("[4-YELLOW] Quit!"); HandleQuitClicked(); };
 
-            // Implementation 5: PURPLE - Lazy menu (created on demand)
+                var menu = new NativeMenu();
+                menu.Items.Add(item1);
+                menu.Items.Add(item2);
+
+                icons.Add(new TrayIcon {
+                    Icon = CreateColoredIcon(0xFFFFFF00),
+                    Menu = menu,
+                    ToolTipText = "YELLOW: Simple",
+                    IsVisible = true
+                });
+                Console.WriteLine("[4-YELLOW] ✓ Created");
+            }
+            catch (Exception ex) { Console.WriteLine($"[4-YELLOW] ✗ Failed: {ex.Message}"); }
+
+            // Implementation 5: PURPLE - Menu with single item only
             try
             {
-                Console.WriteLine("[IMPL 5 - PURPLE] Creating with minimal setup...");
-                var icon5 = CreateColoredIcon(0xFFFF00FF); // PURPLE
-                var trayIcon5 = new TrayIcon
-                {
-                    Icon = icon5,
-                    IsVisible = false, // Start hidden
-                    ToolTipText = "Impl 5: Lazy"
+                Console.WriteLine("[5-PURPLE] Menu with single Quit item...");
+                var quitItem = new NativeMenuItem("Quit Only");
+                quitItem.Click += (s,e) => { Console.WriteLine("[5-PURPLE] Quit!"); HandleQuitClicked(); };
+
+                icons.Add(new TrayIcon {
+                    Icon = CreateColoredIcon(0xFFFF00FF),
+                    Menu = new NativeMenu { quitItem },
+                    ToolTipText = "PURPLE: Single Item",
+                    IsVisible = true
+                });
+                Console.WriteLine("[5-PURPLE] ✓ Created");
+            }
+            catch (Exception ex) { Console.WriteLine($"[5-PURPLE] ✗ Failed: {ex.Message}"); }
+
+            // Implementation 6: ORANGE - Use Application.Current instead of app parameter
+            try
+            {
+                Console.WriteLine("[6-ORANGE] Using Application.Current...");
+                var trayIcon6 = new TrayIcon {
+                    Icon = CreateColoredIcon(0xFFFF8800),
+                    Menu = CreateMenuWithClickEvents("6-ORANGE"),
+                    ToolTipText = "ORANGE: App.Current",
+                    IsVisible = true
                 };
-                icons.Add(trayIcon5);
-                // Show after setup
-                trayIcon5.Menu = CreateMenuWithCommands("5-PURPLE");
-                trayIcon5.IsVisible = true;
-                Console.WriteLine("[IMPL 5 - PURPLE] ✓ Created successfully");
+                var icons6 = new TrayIcons { trayIcon6 };
+                TrayIcon.SetIcons(Avalonia.Application.Current, icons6);
+                Console.WriteLine("[6-ORANGE] ✓ Created (separate SetIcons call)");
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[IMPL 5 - PURPLE] ✗ Failed: {ex.Message}");
-            }
+            catch (Exception ex) { Console.WriteLine($"[6-ORANGE] ✗ Failed: {ex.Message}"); }
 
-            // Set all icons at once
+            // Implementation 7: BROWN - Create on UI thread with Dispatcher
+            try
+            {
+                Console.WriteLine("[7-BROWN] Creating via Dispatcher.UIThread...");
+                Dispatcher.UIThread.Post(() =>
+                {
+                    try
+                    {
+                        var trayIcon7 = new TrayIcon {
+                            Icon = CreateColoredIcon(0xFF8B4513),
+                            Menu = CreateMenuWithClickEvents("7-BROWN"),
+                            ToolTipText = "BROWN: Dispatcher",
+                            IsVisible = true
+                        };
+                        icons.Add(trayIcon7);
+                        Console.WriteLine("[7-BROWN] ✓ Created on UI thread");
+                    }
+                    catch (Exception ex) { Console.WriteLine($"[7-BROWN] ✗ Failed: {ex.Message}"); }
+                }, DispatcherPriority.Background);
+                Console.WriteLine("[7-BROWN] Queued for UI thread...");
+            }
+            catch (Exception ex) { Console.WriteLine($"[7-BROWN] ✗ Failed: {ex.Message}"); }
+
+            // Implementation 8: BLACK - Empty menu (no items)
+            try
+            {
+                Console.WriteLine("[8-BLACK] Empty menu with no items...");
+                icons.Add(new TrayIcon {
+                    Icon = CreateColoredIcon(0xFF000000),
+                    Menu = new NativeMenu(), // Empty!
+                    ToolTipText = "BLACK: Empty Menu",
+                    IsVisible = true
+                });
+                Console.WriteLine("[8-BLACK] ✓ Created");
+            }
+            catch (Exception ex) { Console.WriteLine($"[8-BLACK] ✗ Failed: {ex.Message}"); }
+
+            // Implementation 9: WHITE - No ToolTipText
+            try
+            {
+                Console.WriteLine("[9-WHITE] No ToolTipText property...");
+                icons.Add(new TrayIcon {
+                    Icon = CreateColoredIcon(0xFFFFFFFF),
+                    Menu = CreateMenuWithClickEvents("9-WHITE"),
+                    IsVisible = true
+                    // No ToolTipText!
+                });
+                Console.WriteLine("[9-WHITE] ✓ Created");
+            }
+            catch (Exception ex) { Console.WriteLine($"[9-WHITE] ✗ Failed: {ex.Message}"); }
+
+            // Implementation 10: PINK - Inline NativeMenu with new() syntax
+            try
+            {
+                Console.WriteLine("[10-PINK] Inline NativeMenu creation...");
+                var trayIcon10 = new TrayIcon();
+                trayIcon10.Icon = CreateColoredIcon(0xFFFFC0CB);
+                trayIcon10.ToolTipText = "PINK: Inline new()";
+                trayIcon10.Menu = new() {
+                    new NativeMenuItem("Test PINK") { },
+                    new NativeMenuItem("Quit") { }
+                };
+                // Attach handlers
+                ((NativeMenuItem)trayIcon10.Menu.Items[0]).Click += (s,e) => Console.WriteLine("[10-PINK] Test!");
+                ((NativeMenuItem)trayIcon10.Menu.Items[1]).Click += (s,e) => { Console.WriteLine("[10-PINK] Quit!"); HandleQuitClicked(); };
+                trayIcon10.IsVisible = true;
+                icons.Add(trayIcon10);
+                Console.WriteLine("[10-PINK] ✓ Created");
+            }
+            catch (Exception ex) { Console.WriteLine($"[10-PINK] ✗ Failed: {ex.Message}"); }
+
+            // Small delay before setting icons to allow UI thread to process
+            Task.Delay(200).Wait();
+
+            // Set all icons (except #6 which sets itself)
             TrayIcon.SetIcons(app, icons);
-            Console.WriteLine($"\n✓ All implementations set. Total icons: {icons.Count}");
-            Console.WriteLine("Right-click each icon to test the menu.\n");
+            Console.WriteLine($"\n✓ All implementations created. Total icons in collection: {icons.Count}");
+            Console.WriteLine("Note: Implementation #6 (ORANGE) uses separate SetIcons call");
+            Console.WriteLine("\nRight-click each colored icon to test which one shows a menu!\n");
 
             // Store first icon for compatibility
             _trayIcon = icons.Count > 0 ? icons[0] : null;
