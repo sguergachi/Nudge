@@ -33,6 +33,7 @@ using Avalonia.Threading;
 
 #if WINDOWS
 using Microsoft.Toolkit.Uwp.Notifications;
+using Avalonia.Win32;
 #endif
 
 namespace NudgeTray
@@ -177,9 +178,21 @@ namespace NudgeTray
 
         static AppBuilder BuildAvaloniaApp(int interval)
         {
-            return AppBuilder.Configure(() => new App(interval))
+            var builder = AppBuilder.Configure(() => new App(interval))
                 .UsePlatformDetect()
                 .LogToTrace();
+
+            // CRITICAL FIX: Disable WindowsUIComposition to avoid Windows 11 24H2 TrayIcon crashes
+            // See: https://github.com/AvaloniaUI/Avalonia/issues/17188
+            #if WINDOWS
+            Console.WriteLine("[FIX] Disabling WindowsUIComposition for Windows 11 TrayIcon stability...");
+            builder = builder.With(new Win32PlatformOptions
+            {
+                UseWindowsUIComposition = false
+            });
+            #endif
+
+            return builder;
         }
 
 
