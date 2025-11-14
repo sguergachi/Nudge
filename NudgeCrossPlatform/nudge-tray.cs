@@ -137,6 +137,20 @@ namespace NudgeTray
                 e.SetObserved();
             };
 
+            // Start a keepalive thread to verify process is still running
+            var keepaliveThread = new Thread(() =>
+            {
+                while (true)
+                {
+                    Thread.Sleep(5000);
+                    Console.WriteLine($"[KEEPALIVE] Process still running at {DateTime.Now:HH:mm:ss}");
+                }
+            })
+            {
+                IsBackground = true
+            };
+            keepaliveThread.Start();
+
 #if WINDOWS
             // Attach to parent console for logging (when run from terminal)
             if (!AttachConsole(ATTACH_PARENT_PROCESS))
@@ -1238,24 +1252,47 @@ namespace NudgeTray
         // Event handler for TrayIcon Click (left-click shows custom menu)
         private void TrayIcon_Clicked(object? sender, EventArgs e)
         {
-            Console.WriteLine("[TrayIcon] Clicked - showing custom menu window");
+            Console.WriteLine($"[TrayIcon] === CLICKED EVENT FIRED at {DateTime.Now:HH:mm:ss.fff} ===");
 
-            // Get cursor position (Windows-specific)
-            PixelPoint? cursorPos = null;
-#if WINDOWS
-            if (Program.GetCursorPos(out Program.POINT point))
+            try
             {
-                cursorPos = new PixelPoint(point.X, point.Y);
-                Console.WriteLine($"[TrayIcon] Cursor position: {point.X}, {point.Y}");
-            }
+                // Get cursor position (Windows-specific)
+                PixelPoint? cursorPos = null;
+#if WINDOWS
+                if (Program.GetCursorPos(out Program.POINT point))
+                {
+                    cursorPos = new PixelPoint(point.X, point.Y);
+                    Console.WriteLine($"[TrayIcon] Cursor position: {point.X}, {point.Y}");
+                }
 #endif
 
-            // Show custom menu window on UI thread
-            Dispatcher.UIThread.Post(() =>
+                Console.WriteLine("[TrayIcon] About to show custom menu window...");
+
+                // Show custom menu window on UI thread
+                Dispatcher.UIThread.Post(() =>
+                {
+                    try
+                    {
+                        Console.WriteLine("[TrayIcon] Creating TrayMenuWindow...");
+                        var menuWindow = new Program.TrayMenuWindow(cursorPos);
+                        Console.WriteLine("[TrayIcon] Calling Show()...");
+                        menuWindow.Show();
+                        Console.WriteLine("[TrayIcon] Show() completed successfully");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[TrayIcon] ERROR in menu window creation: {ex.Message}");
+                        Console.WriteLine($"[TrayIcon] Stack: {ex.StackTrace}");
+                    }
+                });
+
+                Console.WriteLine("[TrayIcon] === CLICKED EVENT HANDLER COMPLETED ===");
+            }
+            catch (Exception ex)
             {
-                var menuWindow = new Program.TrayMenuWindow(cursorPos);
-                menuWindow.Show();
-            });
+                Console.WriteLine($"[TrayIcon] EXCEPTION in Clicked handler: {ex.Message}");
+                Console.WriteLine($"[TrayIcon] Stack: {ex.StackTrace}");
+            }
         }
     }
 }
