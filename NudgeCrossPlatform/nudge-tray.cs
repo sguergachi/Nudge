@@ -28,6 +28,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Layout;
+using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -331,59 +332,33 @@ namespace NudgeTray
         // COMMON TRAY ICON IMPLEMENTATION (Works on both Windows and Linux)
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-        public static void CreateTrayIconForApp(Avalonia.Application app)
+        public static void SetTrayIconFromXaml(Avalonia.Application app)
         {
             Console.WriteLine("\n═══════════════════════════════════════════════════════════");
-            Console.WriteLine("  FINAL FIX: InvokeAsync + Synchronous UI Thread Marshal");
-            Console.WriteLine("  Research shows Post() may not be sufficient for events");
+            Console.WriteLine("  XAML-BASED TRAYICON - THE ONLY WAY THAT WORKS ON WINDOWS!");
+            Console.WriteLine("  Programmatic NativeMenu is BROKEN on Windows (GitHub #18225)");
             Console.WriteLine("═══════════════════════════════════════════════════════════\n");
 
-            // Ensure we're on UI thread for icon creation
-            if (!Dispatcher.UIThread.CheckAccess())
+            // Get the TrayIcon defined in XAML
+            var icons = TrayIcon.GetIcons(app);
+            if (icons != null && icons.Count > 0)
             {
-                throw new InvalidOperationException("CreateTrayIconForApp must be called from UI thread");
+                _trayIcon = icons[0];
+
+                // Set the programmatically created icon
+                _trayIcon.Icon = CreateCommonIcon();
+                _trayIcon.IsVisible = true;
+
+                Console.WriteLine("✓ TrayIcon from XAML with programmatic icon");
+                Console.WriteLine("  Menu defined in App.axaml (XAML)");
+                Console.WriteLine("  This is the ONLY way NativeMenu works on Windows!");
+                Console.WriteLine("  Right-click to test native menu!\n");
             }
-
-            // Create icon
-            var icon = CreateCommonIcon();
-
-            // Create menu SYNCHRONOUSLY on UI thread
-            var menu = new NativeMenu();
-            menu.Items.Add(new NativeMenuItem(GetMenuStatusText()));
-            menu.Items.Add(new NativeMenuItemSeparator());
-
-            // Quit item with ASYNC UI thread marshal
-            var quitItem = new NativeMenuItem("Quit");
-            quitItem.Click += async (s, e) =>
+            else
             {
-                Console.WriteLine("[Menu] Quit clicked - using InvokeAsync");
-                // Use InvokeAsync instead of Post - ensures proper async marshaling
-                await Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    Console.WriteLine("[Menu] Quit executing on UI thread");
-                    HandleQuitClicked();
-                });
-            };
-            menu.Items.Add(quitItem);
-
-            // Create TrayIcon with native menu
-            _trayIcon = new TrayIcon
-            {
-                Icon = icon,
-                ToolTipText = "Nudge Productivity Tracker",
-                Menu = menu,
-                IsVisible = true
-            };
-
-            // Set the icon
-            TrayIcon.SetIcons(app, new TrayIcons { _trayIcon });
-
-            Console.WriteLine("✓ TrayIcon with NativeMenu using InvokeAsync pattern");
-            Console.WriteLine("  Key changes:");
-            Console.WriteLine("  1. Verified UI thread at creation");
-            Console.WriteLine("  2. Used async/await with InvokeAsync");
-            Console.WriteLine("  3. Proper async marshaling instead of fire-and-forget Post");
-            Console.WriteLine("  Right-click to test!\n");
+                Console.WriteLine("✗ ERROR: No TrayIcon found in XAML!");
+                Console.WriteLine("  Make sure App.axaml defines TrayIcon.Icons\n");
+            }
         }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1181,7 +1156,8 @@ namespace NudgeTray
 
         public override void Initialize()
         {
-            // No XAML needed for headless tray app
+            // Load XAML for TrayIcon definition
+            AvaloniaXamlLoader.Load(this);
         }
 
         public override void OnFrameworkInitializationCompleted()
@@ -1201,11 +1177,18 @@ namespace NudgeTray
                 Program.InitializeNotifications();
 #endif
 
-                // Create the tray icon - use 'this' instead of Application.Current
-                Program.CreateTrayIconForApp(this);
+                // Set the icon on the XAML-defined TrayIcon
+                Program.SetTrayIconFromXaml(this);
             }
 
             base.OnFrameworkInitializationCompleted();
+        }
+
+        // Event handler for Quit menu item (defined in XAML)
+        private void QuitMenuItem_Click(object? sender, EventArgs e)
+        {
+            Console.WriteLine("[XAML Menu] Quit clicked");
+            Program.HandleQuitClicked();
         }
     }
 }
