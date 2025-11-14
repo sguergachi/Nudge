@@ -334,22 +334,39 @@ namespace NudgeTray
         public static void CreateTrayIconForApp(Avalonia.Application app)
         {
             Console.WriteLine("\n═══════════════════════════════════════════════════════════");
-            Console.WriteLine("  SIMPLIFIED TEST: Creating minimal TrayIcon");
-            Console.WriteLine("  Testing with menu but NO Click handlers");
+            Console.WriteLine("  FINAL FIX: InvokeAsync + Synchronous UI Thread Marshal");
+            Console.WriteLine("  Research shows Post() may not be sufficient for events");
             Console.WriteLine("═══════════════════════════════════════════════════════════\n");
+
+            // Ensure we're on UI thread for icon creation
+            if (!Dispatcher.UIThread.CheckAccess())
+            {
+                throw new InvalidOperationException("CreateTrayIconForApp must be called from UI thread");
+            }
 
             // Create icon
             var icon = CreateCommonIcon();
 
-            // Create MINIMAL menu with NO handlers whatsoever
+            // Create menu SYNCHRONOUSLY on UI thread
             var menu = new NativeMenu();
-
-            // Just text items, no functionality
-            menu.Items.Add(new NativeMenuItem("Status: Running"));
+            menu.Items.Add(new NativeMenuItem(GetMenuStatusText()));
             menu.Items.Add(new NativeMenuItemSeparator());
-            menu.Items.Add(new NativeMenuItem("Quit (non-functional)"));
 
-            // Create TrayIcon with menu but NO event handlers
+            // Quit item with ASYNC UI thread marshal
+            var quitItem = new NativeMenuItem("Quit");
+            quitItem.Click += async (s, e) =>
+            {
+                Console.WriteLine("[Menu] Quit clicked - using InvokeAsync");
+                // Use InvokeAsync instead of Post - ensures proper async marshaling
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    Console.WriteLine("[Menu] Quit executing on UI thread");
+                    HandleQuitClicked();
+                });
+            };
+            menu.Items.Add(quitItem);
+
+            // Create TrayIcon with native menu
             _trayIcon = new TrayIcon
             {
                 Icon = icon,
@@ -361,10 +378,12 @@ namespace NudgeTray
             // Set the icon
             TrayIcon.SetIcons(app, new TrayIcons { _trayIcon });
 
-            Console.WriteLine("✓ TrayIcon created with menu but NO handlers");
-            Console.WriteLine("  Right-click to test if menu appears without crash\n");
-            Console.WriteLine("  If this works, the crash is in the Click handler invocation");
-            Console.WriteLine("  If this still crashes, the issue is in menu display itself\n");
+            Console.WriteLine("✓ TrayIcon with NativeMenu using InvokeAsync pattern");
+            Console.WriteLine("  Key changes:");
+            Console.WriteLine("  1. Verified UI thread at creation");
+            Console.WriteLine("  2. Used async/await with InvokeAsync");
+            Console.WriteLine("  3. Proper async marshaling instead of fire-and-forget Post");
+            Console.WriteLine("  Right-click to test!\n");
         }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -515,7 +534,7 @@ namespace NudgeTray
 
         static NativeMenu CreateMenu()
         {
-            // Create menu with THREAD-SAFE Click handlers
+            // Create menu with async UI thread marshaling
             var menu = new NativeMenu();
 
             // Status menu item (read-only)
@@ -525,12 +544,12 @@ namespace NudgeTray
             // Separator
             menu.Items.Add(new NativeMenuItemSeparator());
 
-            // Quit menu item with THREAD-SAFE Click handler
+            // Quit menu item with async/await marshaling
             var quitItem = new NativeMenuItem("Quit");
-            quitItem.Click += (s, e) =>
+            quitItem.Click += async (s, e) =>
             {
-                // CRITICAL: Marshal to UI thread to avoid crash!
-                Dispatcher.UIThread.Post(() =>
+                // Use InvokeAsync for proper async marshaling
+                await Dispatcher.UIThread.InvokeAsync(() =>
                 {
                     HandleQuitClicked();
                 });
