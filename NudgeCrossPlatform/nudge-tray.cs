@@ -19,6 +19,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Input;
 using Tmds.DBus.Protocol;
 
 // Avalonia - used on all platforms for custom notifications
@@ -50,6 +51,31 @@ namespace NudgeTray
         public static string WhichCommand => IsWindows ? "where" : "which";
 
         public static string PythonCommand => IsWindows ? "python" : "python3";
+    }
+
+    // Simple ICommand implementation for TrayIcon menu items
+    class RelayCommand : ICommand
+    {
+        private readonly Action<object?> _execute;
+        private readonly Func<object?, bool>? _canExecute;
+
+        public RelayCommand(Action<object?> execute, Func<object?, bool>? canExecute = null)
+        {
+            _execute = execute ?? throw new ArgumentNullException(nameof(execute));
+            _canExecute = canExecute;
+        }
+
+        public event EventHandler? CanExecuteChanged;
+
+        public bool CanExecute(object? parameter) => _canExecute?.Invoke(parameter) ?? true;
+
+        public void Execute(object? parameter)
+        {
+            Console.WriteLine($"[DEBUG] RelayCommand.Execute called with parameter: {parameter}");
+            _execute(parameter);
+        }
+
+        public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
     }
 
     class Program
@@ -318,25 +344,45 @@ namespace NudgeTray
         {
             Console.WriteLine("[DEBUG] CreateMenu() called");
 
-            var testItem1 = new NativeMenuItem("Test Item 1");
-            testItem1.Click += (s, e) =>
+            // Create a single command that handles all menu actions
+            var menuCommand = new RelayCommand(parameter =>
             {
-                Console.WriteLine("[DEBUG] Test item 1 Click event fired!");
-                Console.WriteLine($"[DEBUG] TrayIcon.IsVisible after click: {_trayIcon?.IsVisible}");
+                var action = parameter as string;
+                Console.WriteLine($"[DEBUG] Menu command executed with action: {action}");
+
+                switch (action)
+                {
+                    case "test1":
+                        Console.WriteLine("[DEBUG] Test item 1 executed!");
+                        Console.WriteLine($"[DEBUG] TrayIcon.IsVisible after click: {_trayIcon?.IsVisible}");
+                        break;
+                    case "test2":
+                        Console.WriteLine("[DEBUG] Test item 2 executed!");
+                        Console.WriteLine($"[DEBUG] TrayIcon.IsVisible after click: {_trayIcon?.IsVisible}");
+                        break;
+                    case "quit":
+                        Console.WriteLine("[DEBUG] Quit command executed!");
+                        HandleQuitClicked();
+                        break;
+                }
+            });
+
+            var testItem1 = new NativeMenuItem("Test Item 1")
+            {
+                Command = menuCommand,
+                CommandParameter = "test1"
             };
 
-            var testItem2 = new NativeMenuItem("Test Item 2");
-            testItem2.Click += (s, e) =>
+            var testItem2 = new NativeMenuItem("Test Item 2")
             {
-                Console.WriteLine("[DEBUG] Test item 2 Click event fired!");
-                Console.WriteLine($"[DEBUG] TrayIcon.IsVisible after click: {_trayIcon?.IsVisible}");
+                Command = menuCommand,
+                CommandParameter = "test2"
             };
 
-            var quitItem = new NativeMenuItem("Quit");
-            quitItem.Click += (s, e) =>
+            var quitItem = new NativeMenuItem("Quit")
             {
-                Console.WriteLine("[DEBUG] Quit Click event fired!");
-                HandleQuitClicked();
+                Command = menuCommand,
+                CommandParameter = "quit"
             };
 
             var menu = new NativeMenu
