@@ -182,13 +182,14 @@ namespace NudgeTray
                 .UsePlatformDetect()
                 .LogToTrace();
 
-            // CRITICAL FIX: Disable WindowsUIComposition to avoid Windows 11 24H2 TrayIcon crashes
+            // CRITICAL FIX: Use RedirectionSurface composition to avoid Windows 11 TrayIcon crashes
+            // RedirectionSurface disables WinUI Composition which can crash with TrayIcon menus
             // See: https://github.com/AvaloniaUI/Avalonia/issues/17188
             #if WINDOWS
-            Console.WriteLine("[FIX] Disabling WindowsUIComposition for Windows 11 TrayIcon stability...");
+            Console.WriteLine("[FIX] Using RedirectionSurface composition mode for Windows 11 TrayIcon stability...");
             builder = builder.With(new Win32PlatformOptions
             {
-                UseWindowsUIComposition = false
+                CompositionMode = new[] { Win32CompositionMode.RedirectionSurface }
             });
             #endif
 
