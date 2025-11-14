@@ -180,49 +180,128 @@ namespace NudgeTray
 
         static void KillExistingInstances()
         {
+            int totalKilled = 0;
+
             try
             {
                 var currentProcess = Process.GetCurrentProcess();
                 var currentProcessId = currentProcess.Id;
-                var processName = currentProcess.ProcessName;
 
-                Console.WriteLine($"[CLEANUP] Checking for existing '{processName}' processes...");
+                // 1. Kill other nudge-tray instances
+                Console.WriteLine("[CLEANUP] Checking for existing nudge-tray processes...");
+                totalKilled += KillProcessesByName("nudge-tray", currentProcessId);
 
-                var existingProcesses = Process.GetProcessesByName(processName);
-                int killedCount = 0;
+                // 2. Kill main nudge process
+                Console.WriteLine("[CLEANUP] Checking for existing nudge processes...");
+                totalKilled += KillProcessesByName("nudge", -1);
 
-                foreach (var process in existingProcesses)
+                // 3. Kill Python ML processes
+                Console.WriteLine("[CLEANUP] Checking for Python ML processes...");
+                totalKilled += KillPythonProcesses("model_inference.py");
+                totalKilled += KillPythonProcesses("train_model.py");
+
+                if (totalKilled > 0)
                 {
-                    if (process.Id != currentProcessId)
-                    {
-                        try
-                        {
-                            Console.WriteLine($"[CLEANUP] Killing existing process ID {process.Id}...");
-                            process.Kill();
-                            process.WaitForExit(2000); // Wait up to 2 seconds
-                            killedCount++;
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"[CLEANUP] Failed to kill process {process.Id}: {ex.Message}");
-                        }
-                    }
-                }
-
-                if (killedCount > 0)
-                {
-                    Console.WriteLine($"[CLEANUP] ✓ Killed {killedCount} existing instance(s)");
-                    Thread.Sleep(500); // Give OS time to clean up
+                    Console.WriteLine($"[CLEANUP] ✓ Killed {totalKilled} existing process(es) total");
+                    Thread.Sleep(1000); // Give OS time to clean up
                 }
                 else
                 {
-                    Console.WriteLine($"[CLEANUP] ✓ No existing instances found");
+                    Console.WriteLine("[CLEANUP] ✓ No existing instances found");
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[CLEANUP] Error during cleanup: {ex.Message}");
             }
+        }
+
+        static int KillProcessesByName(string processName, int excludeProcessId)
+        {
+            int killedCount = 0;
+            try
+            {
+                var processes = Process.GetProcessesByName(processName);
+                foreach (var process in processes)
+                {
+                    if (process.Id != excludeProcessId)
+                    {
+                        try
+                        {
+                            Console.WriteLine($"[CLEANUP]   Killing {processName} (PID {process.Id})...");
+                            process.Kill();
+                            process.WaitForExit(2000);
+                            killedCount++;
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[CLEANUP]   Failed to kill PID {process.Id}: {ex.Message}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[CLEANUP]   Error killing {processName}: {ex.Message}");
+            }
+            return killedCount;
+        }
+
+        static int KillPythonProcesses(string scriptName)
+        {
+            int killedCount = 0;
+            try
+            {
+                var pythonProcesses = Process.GetProcessesByName("python")
+                    .Concat(Process.GetProcessesByName("python3"));
+
+                foreach (var process in pythonProcesses)
+                {
+                    try
+                    {
+                        string commandLine = GetProcessCommandLine(process);
+                        if (commandLine.Contains(scriptName))
+                        {
+                            Console.WriteLine($"[CLEANUP]   Killing Python {scriptName} (PID {process.Id})...");
+                            process.Kill();
+                            process.WaitForExit(2000);
+                            killedCount++;
+                        }
+                    }
+                    catch { /* Ignore if we can't read command line or kill */ }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[CLEANUP]   Error killing Python {scriptName}: {ex.Message}");
+            }
+            return killedCount;
+        }
+
+        static string GetProcessCommandLine(Process process)
+        {
+            try
+            {
+                #if WINDOWS
+                using (var searcher = new System.Management.ManagementObjectSearcher(
+                    $"SELECT CommandLine FROM Win32_Process WHERE ProcessId = {process.Id}"))
+                {
+                    foreach (System.Management.ManagementObject obj in searcher.Get())
+                    {
+                        return obj["CommandLine"]?.ToString() ?? "";
+                    }
+                }
+                #else
+                // On Linux, read from /proc/[pid]/cmdline
+                string cmdlinePath = $"/proc/{process.Id}/cmdline";
+                if (File.Exists(cmdlinePath))
+                {
+                    return File.ReadAllText(cmdlinePath).Replace('\0', ' ');
+                }
+                #endif
+            }
+            catch { }
+            return "";
         }
 
         static AppBuilder BuildAvaloniaApp(int interval)
