@@ -312,7 +312,7 @@ namespace NudgeTray
             }
         }
 
-        static void HandleQuitClicked()
+        public static void HandleQuitClicked()
         {
             Console.WriteLine("[DEBUG] Quit clicked from context menu");
             Quit();
