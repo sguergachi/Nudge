@@ -372,7 +372,7 @@ namespace NudgeTray
         // CUSTOM TRAY MENU WINDOW
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-        class TrayMenuWindow : Window
+        public class TrayMenuWindow : Window
         {
             public TrayMenuWindow()
             {
