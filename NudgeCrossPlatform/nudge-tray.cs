@@ -132,6 +132,9 @@ namespace NudgeTray
             }
 #endif
 
+            // Kill any existing nudge-tray processes to ensure single instance
+            KillExistingInstances();
+
             int interval = 5; // default 5 minutes
 
             // Parse arguments
@@ -173,6 +176,53 @@ namespace NudgeTray
 
             // Use Avalonia for cross-platform tray icon on all platforms
             BuildAvaloniaApp(interval).StartWithClassicDesktopLifetime(args);
+        }
+
+        static void KillExistingInstances()
+        {
+            try
+            {
+                var currentProcess = Process.GetCurrentProcess();
+                var currentProcessId = currentProcess.Id;
+                var processName = currentProcess.ProcessName;
+
+                Console.WriteLine($"[CLEANUP] Checking for existing '{processName}' processes...");
+
+                var existingProcesses = Process.GetProcessesByName(processName);
+                int killedCount = 0;
+
+                foreach (var process in existingProcesses)
+                {
+                    if (process.Id != currentProcessId)
+                    {
+                        try
+                        {
+                            Console.WriteLine($"[CLEANUP] Killing existing process ID {process.Id}...");
+                            process.Kill();
+                            process.WaitForExit(2000); // Wait up to 2 seconds
+                            killedCount++;
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[CLEANUP] Failed to kill process {process.Id}: {ex.Message}");
+                        }
+                    }
+                }
+
+                if (killedCount > 0)
+                {
+                    Console.WriteLine($"[CLEANUP] ✓ Killed {killedCount} existing instance(s)");
+                    Thread.Sleep(500); // Give OS time to clean up
+                }
+                else
+                {
+                    Console.WriteLine($"[CLEANUP] ✓ No existing instances found");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[CLEANUP] Error during cleanup: {ex.Message}");
+            }
         }
 
         static AppBuilder BuildAvaloniaApp(int interval)
