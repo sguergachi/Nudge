@@ -334,41 +334,22 @@ namespace NudgeTray
         public static void CreateTrayIconForApp(Avalonia.Application app)
         {
             Console.WriteLine("\n═══════════════════════════════════════════════════════════");
-            Console.WriteLine("  THREADING FIX: Wrap Click handlers with Dispatcher");
-            Console.WriteLine("  NativeMenuItem.RaiseClicked() doesn't marshal to UI thread!");
-            Console.WriteLine("═══════════════════════════════════════════════════════════");
-            Console.WriteLine("  Root Cause: Click events are invoked from platform thread");
-            Console.WriteLine("  Solution: Wrap all handlers with Dispatcher.UIThread.Post()");
+            Console.WriteLine("  SIMPLIFIED TEST: Creating minimal TrayIcon");
+            Console.WriteLine("  Testing with menu but NO Click handlers");
             Console.WriteLine("═══════════════════════════════════════════════════════════\n");
 
             // Create icon
             var icon = CreateCommonIcon();
 
-            // Create menu with THREAD-SAFE Click handlers
+            // Create MINIMAL menu with NO handlers whatsoever
             var menu = new NativeMenu();
 
-            // Status menu item (read-only)
-            var statusItem = new NativeMenuItem(GetMenuStatusText());
-            menu.Items.Add(statusItem);
-
-            // Separator
+            // Just text items, no functionality
+            menu.Items.Add(new NativeMenuItem("Status: Running"));
             menu.Items.Add(new NativeMenuItemSeparator());
+            menu.Items.Add(new NativeMenuItem("Quit (non-functional)"));
 
-            // Quit menu item with THREAD-SAFE Click handler
-            var quitItem = new NativeMenuItem("Quit");
-            quitItem.Click += (s, e) =>
-            {
-                Console.WriteLine("[Menu] Quit clicked (marshaling to UI thread...)");
-                // CRITICAL: Marshal to UI thread to avoid crash!
-                Dispatcher.UIThread.Post(() =>
-                {
-                    Console.WriteLine("[Menu] Quit executing on UI thread");
-                    HandleQuitClicked();
-                });
-            };
-            menu.Items.Add(quitItem);
-
-            // Create TrayIcon with menu
+            // Create TrayIcon with menu but NO event handlers
             _trayIcon = new TrayIcon
             {
                 Icon = icon,
@@ -380,9 +361,10 @@ namespace NudgeTray
             // Set the icon
             TrayIcon.SetIcons(app, new TrayIcons { _trayIcon });
 
-            Console.WriteLine("✓ TrayIcon created with THREAD-SAFE NativeMenu");
-            Console.WriteLine("  All Click handlers wrapped with Dispatcher.UIThread.Post()");
-            Console.WriteLine("  Right-click to test menu!\n");
+            Console.WriteLine("✓ TrayIcon created with menu but NO handlers");
+            Console.WriteLine("  Right-click to test if menu appears without crash\n");
+            Console.WriteLine("  If this works, the crash is in the Click handler invocation");
+            Console.WriteLine("  If this still crashes, the issue is in menu display itself\n");
         }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
