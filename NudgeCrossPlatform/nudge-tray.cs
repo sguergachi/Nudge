@@ -104,6 +104,16 @@ namespace NudgeTray
         [DllImport("kernel32.dll")]
         static extern bool AllocConsole();
 
+        [DllImport("user32.dll")]
+        public static extern bool GetCursorPos(out POINT lpPoint);
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct POINT
+        {
+            public int X;
+            public int Y;
+        }
+
         const int ATTACH_PARENT_PROCESS = -1;
 #endif
 
@@ -374,7 +384,7 @@ namespace NudgeTray
 
         public class TrayMenuWindow : Window
         {
-            public TrayMenuWindow()
+            public TrayMenuWindow(PixelPoint? cursorPosition = null)
             {
                 Title = "Nudge Menu";
                 Width = 200;
@@ -385,15 +395,27 @@ namespace NudgeTray
                 Topmost = true;
                 ShowInTaskbar = false;
 
-                // Position near system tray (bottom-right on Windows)
-                var screen = Screens.Primary;
-                if (screen != null)
+                // Position near cursor if available, otherwise bottom-right
+                if (cursorPosition.HasValue)
                 {
-                    var workingArea = screen.WorkingArea;
+                    // Position menu near cursor (slightly above and to the left)
                     Position = new PixelPoint(
-                        workingArea.Right - (int)Width - 10,
-                        workingArea.Bottom - (int)Height - 10
+                        cursorPosition.Value.X - 10,
+                        cursorPosition.Value.Y - (int)Height - 10
                     );
+                }
+                else
+                {
+                    // Fallback: Position near system tray (bottom-right on Windows)
+                    var screen = Screens.Primary;
+                    if (screen != null)
+                    {
+                        var workingArea = screen.WorkingArea;
+                        Position = new PixelPoint(
+                            workingArea.Right - (int)Width - 10,
+                            workingArea.Bottom - (int)Height - 10
+                        );
+                    }
                 }
 
                 // Create menu items
@@ -1217,10 +1239,21 @@ namespace NudgeTray
         private void TrayIcon_Clicked(object? sender, EventArgs e)
         {
             Console.WriteLine("[TrayIcon] Clicked - showing custom menu window");
+
+            // Get cursor position (Windows-specific)
+            PixelPoint? cursorPos = null;
+#if WINDOWS
+            if (Program.GetCursorPos(out Program.POINT point))
+            {
+                cursorPos = new PixelPoint(point.X, point.Y);
+                Console.WriteLine($"[TrayIcon] Cursor position: {point.X}, {point.Y}");
+            }
+#endif
+
             // Show custom menu window on UI thread
             Dispatcher.UIThread.Post(() =>
             {
-                var menuWindow = new Program.TrayMenuWindow();
+                var menuWindow = new Program.TrayMenuWindow(cursorPos);
                 menuWindow.Show();
             });
         }
