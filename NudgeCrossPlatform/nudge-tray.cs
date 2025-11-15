@@ -150,6 +150,9 @@ namespace NudgeTray
             Console.WriteLine("╚═══════════════════════════════════════════════════════╝");
             Console.WriteLine();
 
+            // Clean up any old processes before starting new ones
+            CleanupOldProcesses();
+
             // Start ML services if enabled
             if (_mlEnabled)
             {
@@ -421,6 +424,60 @@ namespace NudgeTray
             renderBitmap.Save(stream);
             stream.Position = 0;
             return new WindowIcon(stream);
+        }
+
+        static void CleanupOldProcesses()
+        {
+            try
+            {
+                // Kill any existing nudge processes (except this one)
+                var currentPid = Environment.ProcessId;
+
+                if (PlatformConfig.IsWindows)
+                {
+                    // Windows: use taskkill
+                    try
+                    {
+                        var psi = new ProcessStartInfo
+                        {
+                            FileName = "taskkill",
+                            Arguments = "/F /IM nudge.exe /T",
+                            RedirectStandardOutput = true,
+                            RedirectStandardError = true,
+                            UseShellExecute = false,
+                            CreateNoWindow = true
+                        };
+                        Process.Start(psi)?.WaitForExit(2000);
+                    }
+                    catch { /* Ignore - processes might not exist */ }
+                }
+                else
+                {
+                    // Linux/macOS: use pkill
+                    try
+                    {
+                        var psi = new ProcessStartInfo
+                        {
+                            FileName = "pkill",
+                            Arguments = "-f \"(nudge|model_inference|background_trainer)\"",
+                            RedirectStandardOutput = true,
+                            RedirectStandardError = true,
+                            UseShellExecute = false,
+                            CreateNoWindow = true
+                        };
+                        var proc = Process.Start(psi);
+                        proc?.WaitForExit(2000);
+                    }
+                    catch { /* Ignore - processes might not exist */ }
+                }
+
+                // Wait for processes to cleanup
+                Thread.Sleep(500);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[DEBUG] Cleanup warning: {ex.Message}");
+            }
         }
 
         static void StartMLServices()
