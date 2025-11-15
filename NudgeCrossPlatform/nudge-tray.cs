@@ -310,14 +310,8 @@ namespace NudgeTray
                         _waitingForResponse = false;
                         SendResponse(true);
 
-                        // Refresh tray menu on UI thread
-                        Dispatcher.UIThread.Post(() =>
-                        {
-                            if (_trayIcon != null)
-                            {
-                                _trayIcon.Menu = CreateAvaloniaMenu();
-                            }
-                        });
+                        // Refresh tray menu on UI thread (safe method)
+                        Dispatcher.UIThread.Post(() => SafeUpdateMenu());
                     }
                     else if (action == "no")
                     {
@@ -325,14 +319,8 @@ namespace NudgeTray
                         _waitingForResponse = false;
                         SendResponse(false);
 
-                        // Refresh tray menu on UI thread
-                        Dispatcher.UIThread.Post(() =>
-                        {
-                            if (_trayIcon != null)
-                            {
-                                _trayIcon.Menu = CreateAvaloniaMenu();
-                            }
-                        });
+                        // Refresh tray menu on UI thread (safe method)
+                        Dispatcher.UIThread.Post(() => SafeUpdateMenu());
                     }
                 }
             }
@@ -638,6 +626,25 @@ namespace NudgeTray
 
         private static bool _waitingForResponse = false;
 
+        static void SafeUpdateMenu()
+        {
+            try
+            {
+                if (_trayIcon != null)
+                {
+                    // On Linux with DBus, menu updates can cause NullReferenceException
+                    // Only update if really necessary and catch any errors
+                    var newMenu = CreateAvaloniaMenu();
+                    _trayIcon.Menu = newMenu;
+                }
+            }
+            catch (Exception ex)
+            {
+                // Silent failure - menu updates are not critical
+                Console.WriteLine($"[DEBUG] Menu update skipped: {ex.Message}");
+            }
+        }
+
         private static void ShowCustomNotification()
         {
             try
@@ -655,27 +662,14 @@ namespace NudgeTray
                         _waitingForResponse = false;
                         SendResponse(productive);
 
-                        // Refresh tray menu
-                        Dispatcher.UIThread.Post(() =>
-                        {
-                            if (_trayIcon != null)
-                            {
-                                _trayIcon.Menu = CreateAvaloniaMenu();
-                            }
-                        });
+                        // Don't refresh menu after response - not necessary and can cause crashes on Linux
                     });
                 });
 
                 Console.WriteLine("✓ Custom notification shown with animation");
 
-                // Refresh tray menu to show waiting state
-                Dispatcher.UIThread.Post(() =>
-                {
-                    if (_trayIcon != null)
-                    {
-                        _trayIcon.Menu = CreateAvaloniaMenu();
-                    }
-                });
+                // Don't refresh menu to show waiting state - can cause DBus crashes on Linux
+                // The menu will update naturally on next user interaction
             }
             catch (Exception ex)
             {
@@ -713,14 +707,8 @@ namespace NudgeTray
 
                 Console.WriteLine("✓ Native Windows toast notification shown with Yes/No buttons");
 
-                // Refresh tray menu to show Yes/No options
-                Dispatcher.UIThread.Post(() =>
-                {
-                    if (_trayIcon != null)
-                    {
-                        _trayIcon.Menu = CreateAvaloniaMenu();
-                    }
-                });
+                // Refresh tray menu to show Yes/No options (safe method)
+                Dispatcher.UIThread.Post(() => SafeUpdateMenu());
             }
             catch (Exception ex)
             {
