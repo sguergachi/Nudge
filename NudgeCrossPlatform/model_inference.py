@@ -85,11 +85,13 @@ class ProductivityPredictor:
             print(f"❌ Error loading model: {e}", file=sys.stderr)
             return False
 
-    def predict(self, foreground_app, idle_time, time_last_request):
+    def predict(self, hour_of_day, day_of_week, foreground_app, idle_time, time_last_request):
         """
         Make prediction with confidence score
 
         Args:
+            hour_of_day: Hour of day (0-23)
+            day_of_week: Day of week (0-6, Sunday=0)
             foreground_app: Hash of foreground application
             idle_time: Idle time in milliseconds
             time_last_request: Time in current app (ms)
@@ -111,8 +113,8 @@ class ProductivityPredictor:
             }
 
         try:
-            # Prepare features
-            features = np.array([[foreground_app, idle_time, time_last_request]], dtype=np.float32)
+            # Prepare features (order must match training data)
+            features = np.array([[hour_of_day, day_of_week, foreground_app, idle_time, time_last_request]], dtype=np.float32)
 
             # Scale features if scaler is available
             if self.scaler_mean is not None and self.scaler_scale is not None:
@@ -210,7 +212,9 @@ class InferenceServer:
             # Parse request
             request = json.loads(data.decode('utf-8'))
 
-            # Extract features
+            # Extract features (including time-based features)
+            hour_of_day = request.get('hour_of_day', 0)
+            day_of_week = request.get('day_of_week', 0)
             foreground_app = request.get('foreground_app', 0)
             idle_time = request.get('idle_time', 0)
             time_last_request = request.get('time_last_request', 0)
@@ -218,8 +222,8 @@ class InferenceServer:
             # Time prediction
             start_time = time.time()
 
-            # Make prediction
-            result = self.predictor.predict(foreground_app, idle_time, time_last_request)
+            # Make prediction with all features
+            result = self.predictor.predict(hour_of_day, day_of_week, foreground_app, idle_time, time_last_request)
 
             # Track performance
             prediction_time = (time.time() - start_time) * 1000  # ms

@@ -61,7 +61,18 @@ def load_and_prepare_data(csv_file):
 
     df = pd.read_csv(csv_file)
 
-    required_cols = ['foreground_app', 'idle_time', 'time_last_request', 'productive']
+    # Check for both old and new format
+    if 'hour_of_day' in df.columns and 'day_of_week' in df.columns:
+        # New format with time features
+        required_cols = ['hour_of_day', 'day_of_week', 'foreground_app', 'idle_time', 'time_last_request', 'productive']
+        feature_cols = ['hour_of_day', 'day_of_week', 'foreground_app', 'idle_time', 'time_last_request']
+        print("   Using new format with time-based features")
+    else:
+        # Old format (backward compatibility)
+        required_cols = ['foreground_app', 'idle_time', 'time_last_request', 'productive']
+        feature_cols = ['foreground_app', 'idle_time', 'time_last_request']
+        print("   Using legacy format (no time features)")
+
     missing = [col for col in required_cols if col not in df.columns]
     if missing:
         raise ValueError(f"Missing columns: {missing}")
@@ -74,9 +85,12 @@ def load_and_prepare_data(csv_file):
     if len(df) < 20:
         raise ValueError("Need at least 20 examples!")
 
-    # Separate features and labels (3 features now: foreground_app, idle_time, attention_span)
-    X = df[required_cols[:-1]].values.astype(np.float32)
+    # Separate features and labels
+    X = df[feature_cols].values.astype(np.float32)
     y = df['productive'].values.astype(np.int32)
+
+    print(f"   Features: {feature_cols}")
+    print(f"   Feature shape: {X.shape}")
 
     # Report class distribution
     prod = np.sum(y == 1)
@@ -90,12 +104,12 @@ def load_and_prepare_data(csv_file):
 
     return X, y
 
-def build_modern_model(input_dim=3, architecture='standard', use_dropout=True, use_batchnorm=True):
+def build_modern_model(input_dim=5, architecture='standard', use_dropout=True, use_batchnorm=True):
     """
     Build modern neural network with latest best practices
 
     Args:
-        input_dim: Number of input features
+        input_dim: Number of input features (5 with time features, 3 without)
         architecture: 'lightweight', 'standard', or 'deep'
         use_dropout: Enable dropout for regularization
         use_batchnorm: Enable batch normalization
