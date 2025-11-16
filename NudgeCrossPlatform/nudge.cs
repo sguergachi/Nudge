@@ -1284,7 +1284,7 @@ class Nudge
         thread.IsBackground = true;
         thread.Start();
 
-        Success($"✓ UDP listener started on port {UDP_PORT}");
+        // Success message is now printed inside RunUDPListener after successful binding
     }
 
     static void RunUDPListener()
@@ -1293,6 +1293,7 @@ class Nudge
         try
         {
             listener = new UdpClient(UDP_PORT);
+            Success($"✓ UDP listener started on port {UDP_PORT}");
 
             while (true)
             {
