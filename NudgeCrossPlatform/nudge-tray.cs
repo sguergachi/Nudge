@@ -79,6 +79,7 @@ namespace NudgeTray
 
         // Common tray icon for all platforms
         static TrayIcon? _trayIcon;
+        static AnalyticsWindow? _analyticsWindow;
 
 #if WINDOWS
         [DllImport("kernel32.dll")]
@@ -277,6 +278,9 @@ namespace NudgeTray
                     Menu = CreateAvaloniaMenu()
                 };
 
+                // Add click handler for analytics window
+                _trayIcon.Clicked += OnTrayIconClicked;
+
                 // Register the tray icon with the Application
                 if (Application.Current != null)
                 {
@@ -452,6 +456,36 @@ namespace NudgeTray
                 {
                     return new NativeMenu();
                 }
+            }
+        }
+
+        static void OnTrayIconClicked(object? sender, EventArgs e)
+        {
+            try
+            {
+                Console.WriteLine("[DEBUG] Tray icon clicked - showing analytics window");
+
+                // Show analytics window on UI thread
+                Dispatcher.UIThread.Post(() =>
+                {
+                    // If window already exists and is visible, bring it to front
+                    if (_analyticsWindow != null && _analyticsWindow.IsVisible)
+                    {
+                        _analyticsWindow.Activate();
+                        _analyticsWindow.Focus();
+                    }
+                    else
+                    {
+                        // Create and show new window
+                        _analyticsWindow = new AnalyticsWindow();
+                        _analyticsWindow.Show();
+                        _analyticsWindow.Activate();
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] Failed to show analytics window: {ex.Message}");
             }
         }
 
