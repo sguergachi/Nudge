@@ -79,7 +79,6 @@ namespace NudgeTray
 
         // Common tray icon for all platforms
         static TrayIcon? _trayIcon;
-        static System.Threading.Timer? _menuRefreshTimer;
 
 #if WINDOWS
         [DllImport("kernel32.dll")]
@@ -268,8 +267,15 @@ namespace NudgeTray
                 };
 
                 // Register the tray icon with the Application
-                var icons = new TrayIcons { _trayIcon };
-                TrayIcon.SetIcons(Application.Current, icons);
+                if (Application.Current != null)
+                {
+                    var icons = new TrayIcons { _trayIcon };
+                    TrayIcon.SetIcons(Application.Current, icons);
+                }
+                else
+                {
+                    Console.WriteLine("[ERROR] Application.Current is null - cannot register tray icon");
+                }
 
                 // Disable menu refresh timer temporarily to test if it's causing issues
                 // We'll update the menu only when needed, not on a timer
