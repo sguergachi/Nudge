@@ -423,6 +423,16 @@ EOF
 
     success "  ✓ nudge-tray"
 
+    # Stop any running processes before copying (prevents "Text file busy" error)
+    info "Stopping running processes..."
+    pkill -9 -f "nudge-tray" 2>/dev/null || true
+    pkill -9 -f "nudge\$" 2>/dev/null || true
+    pkill -9 -f "model_inference" 2>/dev/null || true
+    pkill -9 -f "background_trainer" 2>/dev/null || true
+    sleep 1
+    success "  ✓ Processes stopped"
+    echo
+
     # Copy binaries and dependencies to root for easy access
     cp bin/Release/${TARGET_FRAMEWORK}/nudge ./
     cp bin/Release/${TARGET_FRAMEWORK}/nudge.dll ./
