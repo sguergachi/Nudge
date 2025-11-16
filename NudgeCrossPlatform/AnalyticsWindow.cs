@@ -755,7 +755,7 @@ namespace NudgeTray
             return mins > 0 ? $"{hours}h {mins}m" : $"{hours}h";
         }
 
-        private static DateTime GetFilterStartDate(TimeFilter filter)
+        public static DateTime GetFilterStartDate(TimeFilter filter)
         {
             DateTime now = DateTime.Now;
 
