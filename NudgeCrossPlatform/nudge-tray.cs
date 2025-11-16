@@ -243,7 +243,8 @@ namespace NudgeTray
                     Icon = CreateCommonIcon(),
                     IsVisible = true,
                     ToolTipText = "Nudge Productivity Tracker",
-                    Menu = CreateAvaloniaMenu()
+                    // On Linux, skip menu entirely to avoid DBus crashes
+                    Menu = PlatformConfig.IsWindows ? CreateAvaloniaMenu() : null
                 };
 
                 // Register the tray icon with the Application
