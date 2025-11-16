@@ -96,11 +96,22 @@ namespace NudgeTray
             // Add global exception handlers
             AppDomain.CurrentDomain.UnhandledException += (s, e) =>
             {
-                Console.WriteLine($"[FATAL] Unhandled exception: {e.ExceptionObject}");
-                if (e.ExceptionObject is Exception ex)
+                // For DBus exceptions during cleanup, exit gracefully instead of crashing
+                if (e.ExceptionObject is Exception ex &&
+                    (ex.ToString().Contains("DBus") ||
+                     ex.ToString().Contains("Tmds.DBus") ||
+                     ex.ToString().Contains("TaskCanceledException")))
                 {
-                    Console.WriteLine($"[FATAL] Message: {ex.Message}");
-                    Console.WriteLine($"[FATAL] Stack: {ex.StackTrace}");
+                    Console.WriteLine($"[INFO] DBus cleanup exception (expected on Linux) - exiting cleanly");
+                    Environment.Exit(0); // Clean exit instead of crash
+                }
+
+                // For real errors, log and let the app crash
+                Console.WriteLine($"[FATAL] Unhandled exception: {e.ExceptionObject}");
+                if (e.ExceptionObject is Exception exception)
+                {
+                    Console.WriteLine($"[FATAL] Message: {exception.Message}");
+                    Console.WriteLine($"[FATAL] Stack: {exception.StackTrace}");
                 }
             };
 
