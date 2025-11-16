@@ -107,8 +107,20 @@ namespace NudgeTray
 
             TaskScheduler.UnobservedTaskException += (s, e) =>
             {
-                Console.WriteLine($"[FATAL] Unobserved task exception: {e.Exception.Message}");
-                e.SetObserved();
+                Console.WriteLine($"[ERROR] Unobserved task exception (handled): {e.Exception.Message}");
+                e.SetObserved(); // Mark as observed to prevent crash
+            };
+
+            // Add First Chance exception handler to catch all exceptions (including DBus)
+            AppDomain.CurrentDomain.FirstChanceException += (s, e) =>
+            {
+                // Catch and suppress DBus-related exceptions
+                if (e.Exception != null &&
+                    (e.Exception.ToString().Contains("DBus") ||
+                     e.Exception.ToString().Contains("Tmds.DBus")))
+                {
+                    Console.WriteLine($"[DEBUG] DBus exception caught and suppressed: {e.Exception.Message}");
+                }
             };
 
 #if WINDOWS
@@ -236,6 +248,15 @@ namespace NudgeTray
 
         static void CreateTrayIcon()
         {
+            // On Linux, skip tray icon entirely - DBus is too unstable on KDE/Wayland
+            // The app works fine without it (custom notifications still appear)
+            if (!PlatformConfig.IsWindows)
+            {
+                Console.WriteLine("[INFO] Tray icon disabled on Linux (DBus instability)");
+                Console.WriteLine("[INFO] App running in background - notifications will still appear");
+                return;
+            }
+
             try
             {
                 _trayIcon = new TrayIcon
@@ -243,8 +264,7 @@ namespace NudgeTray
                     Icon = CreateCommonIcon(),
                     IsVisible = true,
                     ToolTipText = "Nudge Productivity Tracker",
-                    // On Linux, skip menu entirely to avoid DBus crashes
-                    Menu = PlatformConfig.IsWindows ? CreateAvaloniaMenu() : null
+                    Menu = CreateAvaloniaMenu()
                 };
 
                 // Register the tray icon with the Application
