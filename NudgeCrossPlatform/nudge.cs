@@ -1135,6 +1135,68 @@ class Nudge
     // DATA COLLECTION - CSV management with professional error handling
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    static void MigrateOldCsvFormat()
+    {
+        try
+        {
+            if (!File.Exists(_csvPath))
+                return; // No migration needed for new files
+
+            var lines = File.ReadAllLines(_csvPath);
+            if (lines.Length == 0)
+                return;
+
+            var header = lines[0];
+
+            // Check if this is old format (missing timestamp, hour_of_day, day_of_week, or app_name)
+            if (!header.Contains("timestamp") || !header.Contains("app_name"))
+            {
+                Dim("  Migrating CSV to new format...");
+
+                // Create backup
+                var backupPath = _csvPath + ".backup";
+                File.Copy(_csvPath, backupPath, overwrite: true);
+                Dim($"  Created backup: {backupPath}");
+
+                var migratedLines = new List<string>();
+
+                // New header with app_name for readability
+                migratedLines.Add("timestamp,hour_of_day,day_of_week,app_name,foreground_app,idle_time,time_last_request,productive");
+
+                // Migrate data rows
+                for (int i = 1; i < lines.Length; i++)
+                {
+                    var parts = lines[i].Split(',');
+                    if (parts.Length < 3) continue; // Skip malformed lines
+
+                    // Use file modification time as approximation for old data
+                    var fileTime = File.GetLastWriteTime(_csvPath);
+                    string timestamp = fileTime.ToString("yyyy-MM-dd HH:mm:ss");
+                    int hour = fileTime.Hour;
+                    int day = (int)fileTime.DayOfWeek;
+
+                    // Old format: foreground_app,idle_time,time_last_request,productive
+                    string appName = "unknown"; // Can't recover app name from hash
+                    string appHash = parts[0];
+                    string idle = parts.Length > 1 ? parts[1] : "0";
+                    string attention = parts.Length > 2 ? parts[2] : "0";
+                    string productive = parts.Length > 3 ? parts[3] : "0";
+
+                    migratedLines.Add($"{timestamp},{hour},{day},{appName},{appHash},{idle},{attention},{productive}");
+                }
+
+                // Write migrated data
+                File.WriteAllLines(_csvPath, migratedLines);
+                Success($"  ✓ Migrated {migratedLines.Count - 1} rows to new format");
+            }
+        }
+        catch (Exception ex)
+        {
+            Warning($"  CSV migration failed: {ex.Message}");
+            Warning($"  Continuing with existing file...");
+        }
+    }
+
     static void InitializeCSV()
     {
         try
@@ -1147,12 +1209,19 @@ class Nudge
                 Directory.CreateDirectory(dir);
             }
 
+            // Migrate old format if needed
+            if (exists)
+            {
+                MigrateOldCsvFormat();
+            }
+
             _csvFile = new StreamWriter(_csvPath, append: true);
             _csvFile.AutoFlush = true; // Ensure data is written immediately
 
             if (!exists)
             {
-                _csvFile.WriteLine("timestamp,hour_of_day,day_of_week,foreground_app,idle_time,time_last_request,productive");
+                // New format includes app_name for human readability
+                _csvFile.WriteLine("timestamp,hour_of_day,day_of_week,app_name,foreground_app,idle_time,time_last_request,productive");
                 Info($"Created new CSV: {_csvPath}");
             }
             else
@@ -1169,7 +1238,8 @@ class Nudge
 
             if (!activityExists)
             {
-                _activityLogFile.WriteLine("timestamp,hour_of_day,day_of_week,foreground_app,idle_time");
+                // Include app_name for human readability
+                _activityLogFile.WriteLine("timestamp,hour_of_day,day_of_week,app_name,foreground_app,idle_time");
                 Dim($"  Created activity log: {activityLogPath}");
             }
             else
@@ -1234,7 +1304,8 @@ class Nudge
             int dayOfWeek = (int)now.DayOfWeek;  // 0-6 (Sunday=0)
             string timestamp = now.ToString("yyyy-MM-dd HH:mm:ss");
 
-            _activityLogFile?.WriteLine($"{timestamp},{hourOfDay},{dayOfWeek},{appHash},{idle}");
+            // Include app_name for human readability, foreground_app (hash) for ML
+            _activityLogFile?.WriteLine($"{timestamp},{hourOfDay},{dayOfWeek},{app},{appHash},{idle}");
         }
         catch (Exception ex)
         {
@@ -1255,7 +1326,8 @@ class Nudge
 
         try
         {
-            _csvFile?.WriteLine($"{timestamp},{hourOfDay},{dayOfWeek},{appHash},{idle},{attention},{productiveInt}");
+            // Include app_name for human readability, foreground_app (hash) for ML
+            _csvFile?.WriteLine($"{timestamp},{hourOfDay},{dayOfWeek},{app},{appHash},{idle},{attention},{productiveInt}");
 
             var label = productive ?
                 $"{Color.BGREEN}PRODUCTIVE{Color.RESET}" :

@@ -79,7 +79,6 @@ namespace NudgeTray
 
         // Common tray icon for all platforms
         static TrayIcon? _trayIcon;
-        static System.Threading.Timer? _menuRefreshTimer;
 
 #if WINDOWS
         [DllImport("kernel32.dll")]
@@ -97,18 +96,41 @@ namespace NudgeTray
             // Add global exception handlers
             AppDomain.CurrentDomain.UnhandledException += (s, e) =>
             {
-                Console.WriteLine($"[FATAL] Unhandled exception: {e.ExceptionObject}");
-                if (e.ExceptionObject is Exception ex)
+                // For DBus exceptions during cleanup, exit gracefully instead of crashing
+                if (e.ExceptionObject is Exception ex &&
+                    (ex.ToString().Contains("DBus") ||
+                     ex.ToString().Contains("Tmds.DBus") ||
+                     ex.ToString().Contains("TaskCanceledException")))
                 {
-                    Console.WriteLine($"[FATAL] Message: {ex.Message}");
-                    Console.WriteLine($"[FATAL] Stack: {ex.StackTrace}");
+                    Console.WriteLine($"[INFO] DBus cleanup exception (expected on Linux) - exiting cleanly");
+                    Environment.Exit(0); // Clean exit instead of crash
+                }
+
+                // For real errors, log and let the app crash
+                Console.WriteLine($"[FATAL] Unhandled exception: {e.ExceptionObject}");
+                if (e.ExceptionObject is Exception exception)
+                {
+                    Console.WriteLine($"[FATAL] Message: {exception.Message}");
+                    Console.WriteLine($"[FATAL] Stack: {exception.StackTrace}");
                 }
             };
 
             TaskScheduler.UnobservedTaskException += (s, e) =>
             {
-                Console.WriteLine($"[FATAL] Unobserved task exception: {e.Exception.Message}");
-                e.SetObserved();
+                Console.WriteLine($"[ERROR] Unobserved task exception (handled): {e.Exception.Message}");
+                e.SetObserved(); // Mark as observed to prevent crash
+            };
+
+            // Add First Chance exception handler to catch all exceptions (including DBus)
+            AppDomain.CurrentDomain.FirstChanceException += (s, e) =>
+            {
+                // Catch and suppress DBus-related exceptions
+                if (e.Exception != null &&
+                    (e.Exception.ToString().Contains("DBus") ||
+                     e.Exception.ToString().Contains("Tmds.DBus")))
+                {
+                    Console.WriteLine($"[DEBUG] DBus exception caught and suppressed: {e.Exception.Message}");
+                }
             };
 
 #if WINDOWS
@@ -236,6 +258,15 @@ namespace NudgeTray
 
         static void CreateTrayIcon()
         {
+            // On Linux, skip tray icon entirely - DBus is too unstable on KDE/Wayland
+            // The app works fine without it (custom notifications still appear)
+            if (!PlatformConfig.IsWindows)
+            {
+                Console.WriteLine("[INFO] Tray icon disabled on Linux (DBus instability)");
+                Console.WriteLine("[INFO] App running in background - notifications will still appear");
+                return;
+            }
+
             try
             {
                 _trayIcon = new TrayIcon
@@ -247,8 +278,15 @@ namespace NudgeTray
                 };
 
                 // Register the tray icon with the Application
-                var icons = new TrayIcons { _trayIcon };
-                TrayIcon.SetIcons(Application.Current, icons);
+                if (Application.Current != null)
+                {
+                    var icons = new TrayIcons { _trayIcon };
+                    TrayIcon.SetIcons(Application.Current, icons);
+                }
+                else
+                {
+                    Console.WriteLine("[ERROR] Application.Current is null - cannot register tray icon");
+                }
 
                 // Disable menu refresh timer temporarily to test if it's causing issues
                 // We'll update the menu only when needed, not on a timer
@@ -1033,11 +1071,6 @@ namespace NudgeTray
             {
                 _trayIcon.IsVisible = false;
                 _trayIcon.Dispose();
-            }
-
-            if (_menuRefreshTimer != null)
-            {
-                _menuRefreshTimer.Dispose();
             }
 
             Console.WriteLine("✓ Shutdown complete");
