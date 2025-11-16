@@ -1073,11 +1073,6 @@ namespace NudgeTray
                 _trayIcon.Dispose();
             }
 
-            if (_menuRefreshTimer != null)
-            {
-                _menuRefreshTimer.Dispose();
-            }
-
             Console.WriteLine("✓ Shutdown complete");
             Console.WriteLine("[DEBUG] Exiting nudge-tray...");
 
