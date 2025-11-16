@@ -172,6 +172,20 @@ namespace NudgeTray
                 .LogToTrace()
                 .AfterSetup(_ =>
                 {
+                    // Add Dispatcher exception handler to prevent DBus crashes on Linux
+                    try
+                    {
+                        Dispatcher.UIThread.UnhandledException += (s, e) =>
+                        {
+                            Console.WriteLine($"[ERROR] Dispatcher exception (caught and handled): {e.Exception.Message}");
+                            e.Handled = true; // Prevent crash
+                        };
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[WARN] Could not set up Dispatcher exception handler: {ex.Message}");
+                    }
+
                     StartNudge(interval);
 #if WINDOWS
                     InitializeNotifications();
@@ -694,10 +708,16 @@ namespace NudgeTray
         {
             try
             {
+                // On Linux, skip menu updates entirely to avoid DBus crashes
+                // Menu updates are not critical and can cause NullReferenceException in DBus
+                if (!PlatformConfig.IsWindows)
+                {
+                    Console.WriteLine("[DEBUG] Menu update skipped on Linux (DBus instability)");
+                    return;
+                }
+
                 if (_trayIcon != null)
                 {
-                    // On Linux with DBus, menu updates can cause NullReferenceException
-                    // Only update if really necessary and catch any errors
                     var newMenu = CreateAvaloniaMenu();
                     _trayIcon.Menu = newMenu;
                 }
