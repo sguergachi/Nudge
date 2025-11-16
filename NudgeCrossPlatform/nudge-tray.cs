@@ -172,6 +172,20 @@ namespace NudgeTray
                 .LogToTrace()
                 .AfterSetup(_ =>
                 {
+                    // Add Dispatcher exception handler to prevent DBus crashes on Linux
+                    try
+                    {
+                        Dispatcher.UIThread.UnhandledException += (s, e) =>
+                        {
+                            Console.WriteLine($"[ERROR] Dispatcher exception (caught and handled): {e.Exception.Message}");
+                            e.Handled = true; // Prevent crash
+                        };
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[WARN] Could not set up Dispatcher exception handler: {ex.Message}");
+                    }
+
                     StartNudge(interval);
 #if WINDOWS
                     InitializeNotifications();
@@ -430,8 +444,7 @@ namespace NudgeTray
         {
             try
             {
-                // Kill any existing nudge processes (except this one)
-                var currentPid = Environment.ProcessId;
+                Console.WriteLine("[DEBUG] Cleaning up old processes...");
 
                 if (PlatformConfig.IsWindows)
                 {
@@ -453,26 +466,34 @@ namespace NudgeTray
                 }
                 else
                 {
-                    // Linux/macOS: use pkill
-                    try
+                    // Linux/macOS: kill each process type separately
+                    string[] processPatterns = { "nudge$", "model_inference", "background_trainer" };
+
+                    foreach (var pattern in processPatterns)
                     {
-                        var psi = new ProcessStartInfo
+                        try
                         {
-                            FileName = "pkill",
-                            Arguments = "-f \"(nudge|model_inference|background_trainer)\"",
-                            RedirectStandardOutput = true,
-                            RedirectStandardError = true,
-                            UseShellExecute = false,
-                            CreateNoWindow = true
-                        };
-                        var proc = Process.Start(psi);
-                        proc?.WaitForExit(2000);
+                            // Use pkill with pattern (no quotes needed when not using shell)
+                            var psi = new ProcessStartInfo
+                            {
+                                FileName = "pkill",
+                                Arguments = $"-9 -f {pattern}",  // -9 for SIGKILL, no quotes
+                                RedirectStandardOutput = true,
+                                RedirectStandardError = true,
+                                UseShellExecute = false,
+                                CreateNoWindow = true
+                            };
+                            var proc = Process.Start(psi);
+                            proc?.WaitForExit(1000);
+                        }
+                        catch { /* Ignore - processes might not exist */ }
                     }
-                    catch { /* Ignore - processes might not exist */ }
                 }
 
-                // Wait for processes to cleanup
-                Thread.Sleep(500);
+                // Wait longer for processes to cleanup
+                Console.WriteLine("[DEBUG] Waiting for processes to terminate...");
+                Thread.Sleep(1000);
+                Console.WriteLine("[DEBUG] Cleanup complete");
             }
             catch (Exception ex)
             {
@@ -687,10 +708,16 @@ namespace NudgeTray
         {
             try
             {
+                // On Linux, skip menu updates entirely to avoid DBus crashes
+                // Menu updates are not critical and can cause NullReferenceException in DBus
+                if (!PlatformConfig.IsWindows)
+                {
+                    Console.WriteLine("[DEBUG] Menu update skipped on Linux (DBus instability)");
+                    return;
+                }
+
                 if (_trayIcon != null)
                 {
-                    // On Linux with DBus, menu updates can cause NullReferenceException
-                    // Only update if really necessary and catch any errors
                     var newMenu = CreateAvaloniaMenu();
                     _trayIcon.Menu = newMenu;
                 }
