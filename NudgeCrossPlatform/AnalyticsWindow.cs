@@ -6,7 +6,7 @@
 // - Shows most used applications
 // - Displays hourly productivity patterns
 // - Filter by Today / This Week
-// - Clean, modern Fluent Design System UI
+// - Fluent Design System UI matching CustomNotification style
 //
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -33,7 +33,22 @@ namespace NudgeTray
         private AnalyticsData? _data;
         private ScrollViewer? _scrollViewer;
         private StackPanel? _contentPanel;
+        private Border? _filterButton;
         private TextBlock? _filterButtonText;
+
+        // Fluent Design System Colors - matching CustomNotification
+        private static readonly Color BackgroundColor = Color.FromRgb(18, 18, 20);
+        private static readonly Color SurfaceColor = Color.FromArgb(245, 18, 18, 20);
+        private static readonly Color CardColor = Color.FromRgb(25, 25, 28);
+        private static readonly Color PrimaryBlue = Color.FromRgb(88, 166, 255);
+        private static readonly Color PrimaryBlueHover = Color.FromRgb(108, 186, 255);
+        private static readonly Color TextPrimary = Color.FromRgb(240, 240, 245);
+        private static readonly Color TextSecondary = Color.FromRgb(150, 150, 160);
+        private static readonly Color TextTertiary = Color.FromRgb(120, 120, 130);
+        private static readonly Color BorderColor = Color.FromArgb(40, 255, 255, 255);
+        private static readonly Color ProgressBarBg = Color.FromRgb(35, 35, 40);
+        private static readonly Color ProductiveGreen = Color.FromRgb(76, 175, 80);
+        private static readonly Color UnproductiveRed = Color.FromRgb(244, 67, 54);
 
         public enum TimeFilter
         {
@@ -49,8 +64,8 @@ namespace NudgeTray
 
         private void InitializeWindow()
         {
-            Width = 450;
-            Height = 600;
+            Width = 480;
+            Height = 640;
             CanResize = true;
             MinWidth = 400;
             MinHeight = 500;
@@ -58,10 +73,7 @@ namespace NudgeTray
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             SystemDecorations = SystemDecorations.Full;
             Title = "Nudge Analytics";
-            Background = new SolidColorBrush(Color.FromRgb(18, 18, 20));
-
-            // Prevent multiple instances
-            Closing += (s, e) => { };
+            Background = new SolidColorBrush(BackgroundColor);
         }
 
         private void LoadDataAndDisplay()
@@ -81,7 +93,7 @@ namespace NudgeTray
         {
             var mainContainer = new Border
             {
-                Background = new SolidColorBrush(Color.FromRgb(18, 18, 20)),
+                Background = new SolidColorBrush(BackgroundColor),
                 Padding = new Thickness(0)
             };
 
@@ -91,40 +103,13 @@ namespace NudgeTray
             };
 
             // Header Section
-            var headerBorder = new Border
-            {
-                Background = new SolidColorBrush(Color.FromRgb(25, 25, 28)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
-                BorderThickness = new Thickness(0, 0, 0, 1),
-                Padding = new Thickness(20, 16, 20, 16)
-            };
-
-            var headerStack = new StackPanel
-            {
-                Spacing = 12
-            };
-
-            var titleText = new TextBlock
-            {
-                Text = "📊 Productivity Analytics",
-                FontSize = 20,
-                FontWeight = FontWeight.Bold,
-                Foreground = new SolidColorBrush(Color.FromRgb(240, 240, 245))
-            };
-
-            // Filter Toggle Button
-            var filterButton = CreateFilterButton();
-
-            headerStack.Children.Add(titleText);
-            headerStack.Children.Add(filterButton);
-            headerBorder.Child = headerStack;
-            mainStack.Children.Add(headerBorder);
+            mainStack.Children.Add(CreateHeader());
 
             // Scrollable Content
             _contentPanel = new StackPanel
             {
                 Spacing = 16,
-                Margin = new Thickness(20, 20, 20, 20)
+                Margin = new Thickness(20, 16, 20, 20)
             };
 
             _scrollViewer = new ScrollViewer
@@ -142,15 +127,91 @@ namespace NudgeTray
             RefreshContent();
         }
 
+        private Border CreateHeader()
+        {
+            var headerBorder = new Border
+            {
+                Background = new SolidColorBrush(SurfaceColor),
+                BorderBrush = new SolidColorBrush(BorderColor),
+                BorderThickness = new Thickness(0, 0, 0, 1),
+                Padding = new Thickness(20, 20, 20, 16),
+                BoxShadow = new BoxShadows(
+                    new BoxShadow
+                    {
+                        Blur = 8,
+                        Spread = 0,
+                        OffsetX = 0,
+                        OffsetY = 2,
+                        Color = Color.FromArgb(40, 0, 0, 0)
+                    }
+                )
+            };
+
+            var headerGrid = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("*,Auto")
+            };
+
+            var titleStack = new StackPanel
+            {
+                Spacing = 4,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            var titleText = new TextBlock
+            {
+                Text = "Productivity Analytics",
+                FontSize = 18,
+                FontWeight = FontWeight.SemiBold,
+                Foreground = new SolidColorBrush(TextPrimary)
+            };
+
+            var subtitleText = new TextBlock
+            {
+                Text = GetFilterSubtitle(),
+                FontSize = 12,
+                FontWeight = FontWeight.Normal,
+                Foreground = new SolidColorBrush(TextSecondary)
+            };
+
+            titleStack.Children.Add(titleText);
+            titleStack.Children.Add(subtitleText);
+
+            Grid.SetColumn(titleStack, 0);
+
+            // Filter Toggle Button
+            _filterButton = CreateFilterButton();
+            Grid.SetColumn(_filterButton, 1);
+
+            headerGrid.Children.Add(titleStack);
+            headerGrid.Children.Add(_filterButton);
+            headerBorder.Child = headerGrid;
+
+            return headerBorder;
+        }
+
+        private string GetFilterSubtitle()
+        {
+            if (_currentFilter == TimeFilter.Today)
+            {
+                return DateTime.Now.ToString("MMMM d, yyyy");
+            }
+            else
+            {
+                var startOfWeek = GetFilterStartDate(TimeFilter.ThisWeek);
+                var endOfWeek = startOfWeek.AddDays(6);
+                return $"{startOfWeek:MMM d} - {endOfWeek:MMM d}";
+            }
+        }
+
         private Border CreateFilterButton()
         {
             var border = new Border
             {
-                Background = new SolidColorBrush(Color.FromRgb(88, 166, 255)),
-                CornerRadius = new CornerRadius(6),
-                Padding = new Thickness(16, 8, 16, 8),
-                Cursor = new Cursor(StandardCursorType.Hand),
-                HorizontalAlignment = HorizontalAlignment.Left
+                Background = new SolidColorBrush(PrimaryBlue),
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(12, 8, 12, 8),
+                Cursor = new Cursor(StandardCursorType.Hand)
             };
 
             var button = new Button
@@ -163,28 +224,39 @@ namespace NudgeTray
                 VerticalContentAlignment = VerticalAlignment.Center
             };
 
-            _filterButtonText = new TextBlock
+            var stack = new StackPanel
             {
-                Text = GetFilterButtonText(),
-                FontSize = 13,
-                FontWeight = FontWeight.Medium,
-                Foreground = Brushes.White
+                Orientation = Orientation.Horizontal,
+                Spacing = 6
             };
 
-            button.Content = _filterButtonText;
+            var icon = new TextBlock
+            {
+                Text = _currentFilter == TimeFilter.Today ? "📅" : "📆",
+                FontSize = 13,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            _filterButtonText = new TextBlock
+            {
+                Text = _currentFilter == TimeFilter.Today ? "Today" : "This Week",
+                FontSize = 12,
+                FontWeight = FontWeight.Medium,
+                Foreground = Brushes.White,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            stack.Children.Add(icon);
+            stack.Children.Add(_filterButtonText);
+            button.Content = stack;
             button.Click += OnFilterButtonClick;
             border.Child = button;
 
             // Hover effects
-            border.PointerEntered += (s, e) => border.Background = new SolidColorBrush(Color.FromRgb(108, 186, 255));
-            border.PointerExited += (s, e) => border.Background = new SolidColorBrush(Color.FromRgb(88, 166, 255));
+            border.PointerEntered += (s, e) => border.Background = new SolidColorBrush(PrimaryBlueHover);
+            border.PointerExited += (s, e) => border.Background = new SolidColorBrush(PrimaryBlue);
 
             return border;
-        }
-
-        private string GetFilterButtonText()
-        {
-            return _currentFilter == TimeFilter.Today ? "📅 Today" : "📅 This Week";
         }
 
         private void OnFilterButtonClick(object? sender, RoutedEventArgs e)
@@ -192,13 +264,7 @@ namespace NudgeTray
             // Toggle filter
             _currentFilter = _currentFilter == TimeFilter.Today ? TimeFilter.ThisWeek : TimeFilter.Today;
 
-            // Update button text
-            if (_filterButtonText != null)
-            {
-                _filterButtonText.Text = GetFilterButtonText();
-            }
-
-            // Reload data
+            // Reload data and rebuild UI
             LoadDataAndDisplay();
         }
 
@@ -234,39 +300,51 @@ namespace NudgeTray
         {
             var border = new Border
             {
-                Background = new SolidColorBrush(Color.FromRgb(25, 25, 28)),
+                Background = new SolidColorBrush(SurfaceColor),
                 CornerRadius = new CornerRadius(8),
-                Padding = new Thickness(16),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
-                BorderThickness = new Thickness(1)
+                Padding = new Thickness(20),
+                BorderBrush = new SolidColorBrush(BorderColor),
+                BorderThickness = new Thickness(1),
+                ClipToBounds = false,
+                BoxShadow = new BoxShadows(
+                    new BoxShadow
+                    {
+                        Blur = 16,
+                        Spread = 0,
+                        OffsetX = 0,
+                        OffsetY = 4,
+                        Color = Color.FromArgb(30, 0, 0, 0)
+                    }
+                )
             };
 
             var grid = new Grid
             {
-                ColumnDefinitions = new ColumnDefinitions("*,*,*")
+                ColumnDefinitions = new ColumnDefinitions("*,*,*"),
+                RowDefinitions = new RowDefinitions("Auto")
             };
 
             // Total Activity
-            var activityPanel = CreateStatPanel(
-                "Total Activity",
+            var activityPanel = CreateStatCard(
+                "🕐",
                 FormatDuration(_data?.TotalActivityMinutes ?? 0),
-                "🕐"
+                "Total Activity"
             );
             Grid.SetColumn(activityPanel, 0);
 
             // Productive Time
-            var productivePanel = CreateStatPanel(
-                "Productive",
-                _data?.ProductivePercentage.ToString("F0") + "%",
-                "✅"
+            var productivePanel = CreateStatCard(
+                "✨",
+                (_data?.ProductivePercentage ?? 0).ToString("F0") + "%",
+                "Productive"
             );
             Grid.SetColumn(productivePanel, 1);
 
             // Apps Used
-            var appsPanel = CreateStatPanel(
-                "Apps Used",
+            var appsPanel = CreateStatCard(
+                "💻",
                 (_data?.AppUsage.Count ?? 0).ToString(),
-                "💻"
+                "Apps Used"
             );
             Grid.SetColumn(appsPanel, 2);
 
@@ -278,27 +356,28 @@ namespace NudgeTray
             return border;
         }
 
-        private StackPanel CreateStatPanel(string label, string value, string icon)
+        private StackPanel CreateStatCard(string icon, string value, string label)
         {
             var panel = new StackPanel
             {
-                Spacing = 4,
+                Spacing = 6,
                 HorizontalAlignment = HorizontalAlignment.Center
             };
 
             var iconText = new TextBlock
             {
                 Text = icon,
-                FontSize = 24,
-                HorizontalAlignment = HorizontalAlignment.Center
+                FontSize = 32,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 0, 0, 4)
             };
 
             var valueText = new TextBlock
             {
                 Text = value,
-                FontSize = 20,
-                FontWeight = FontWeight.Bold,
-                Foreground = new SolidColorBrush(Color.FromRgb(240, 240, 245)),
+                FontSize = 24,
+                FontWeight = FontWeight.SemiBold,
+                Foreground = new SolidColorBrush(TextPrimary),
                 HorizontalAlignment = HorizontalAlignment.Center
             };
 
@@ -306,7 +385,8 @@ namespace NudgeTray
             {
                 Text = label,
                 FontSize = 11,
-                Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 160)),
+                FontWeight = FontWeight.Normal,
+                Foreground = new SolidColorBrush(TextSecondary),
                 HorizontalAlignment = HorizontalAlignment.Center
             };
 
@@ -321,22 +401,32 @@ namespace NudgeTray
         {
             var border = new Border
             {
-                Background = new SolidColorBrush(Color.FromRgb(25, 25, 28)),
+                Background = new SolidColorBrush(SurfaceColor),
                 CornerRadius = new CornerRadius(8),
-                Padding = new Thickness(16),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
-                BorderThickness = new Thickness(1)
+                Padding = new Thickness(20),
+                BorderBrush = new SolidColorBrush(BorderColor),
+                BorderThickness = new Thickness(1),
+                ClipToBounds = false,
+                BoxShadow = new BoxShadows(
+                    new BoxShadow
+                    {
+                        Blur = 16,
+                        Spread = 0,
+                        OffsetX = 0,
+                        OffsetY = 4,
+                        Color = Color.FromArgb(30, 0, 0, 0)
+                    }
+                )
             };
 
-            var stack = new StackPanel { Spacing = 12 };
+            var stack = new StackPanel { Spacing = 16 };
 
             var titleText = new TextBlock
             {
                 Text = title,
-                FontSize = 15,
+                FontSize = 14,
                 FontWeight = FontWeight.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(240, 240, 245)),
-                Margin = new Thickness(0, 0, 0, 4)
+                Foreground = new SolidColorBrush(TextPrimary)
             };
 
             stack.Children.Add(titleText);
@@ -348,7 +438,7 @@ namespace NudgeTray
 
         private StackPanel CreateAppUsageView()
         {
-            var panel = new StackPanel { Spacing = 8 };
+            var panel = new StackPanel { Spacing = 10 };
 
             if (_data == null) return panel;
 
@@ -362,23 +452,16 @@ namespace NudgeTray
             return panel;
         }
 
-        private Border CreateAppUsageBar(string appName, int minutes, int totalMinutes)
+        private Grid CreateAppUsageBar(string appName, int minutes, int totalMinutes)
         {
-            var container = new Border
-            {
-                Background = new SolidColorBrush(Color.FromRgb(30, 30, 35)),
-                CornerRadius = new CornerRadius(4),
-                Padding = new Thickness(10, 8, 10, 8)
-            };
-
             var grid = new Grid
             {
-                ColumnDefinitions = new ColumnDefinitions("*,Auto")
+                ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+                Margin = new Thickness(0, 0, 0, 0)
             };
 
             var leftStack = new StackPanel
             {
-                Orientation = Orientation.Horizontal,
                 Spacing = 8,
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -389,26 +472,28 @@ namespace NudgeTray
                 Text = appName,
                 FontSize = 12,
                 FontWeight = FontWeight.Medium,
-                Foreground = new SolidColorBrush(Color.FromRgb(220, 220, 230)),
-                VerticalAlignment = VerticalAlignment.Center
+                Foreground = new SolidColorBrush(TextPrimary),
+                VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis
             };
 
             // Progress bar
             double percentage = totalMinutes > 0 ? (double)minutes / totalMinutes * 100 : 0;
             var progressBorder = new Border
             {
-                Width = 100,
                 Height = 6,
-                Background = new SolidColorBrush(Color.FromRgb(45, 45, 50)),
+                Background = new SolidColorBrush(ProgressBarBg),
                 CornerRadius = new CornerRadius(3),
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 4, 0, 0)
             };
 
             var progressFill = new Border
             {
-                Width = percentage,
+                Width = Math.Max(percentage * 1.5, 0), // Scale for visual impact
+                MaxWidth = 150,
                 Height = 6,
-                Background = new SolidColorBrush(Color.FromRgb(88, 166, 255)),
+                Background = new SolidColorBrush(PrimaryBlue),
                 CornerRadius = new CornerRadius(3),
                 HorizontalAlignment = HorizontalAlignment.Left
             };
@@ -421,30 +506,53 @@ namespace NudgeTray
             Grid.SetColumn(leftStack, 0);
 
             // Time display
+            var timeStack = new StackPanel
+            {
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(12, 0, 0, 0)
+            };
+
             var timeText = new TextBlock
             {
                 Text = FormatDuration(minutes),
                 FontSize = 12,
-                FontWeight = FontWeight.Medium,
-                Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 160)),
-                VerticalAlignment = VerticalAlignment.Center
+                FontWeight = FontWeight.SemiBold,
+                Foreground = new SolidColorBrush(TextPrimary),
+                HorizontalAlignment = HorizontalAlignment.Right
             };
-            Grid.SetColumn(timeText, 1);
+
+            var percentText = new TextBlock
+            {
+                Text = percentage.ToString("F0") + "%",
+                FontSize = 10,
+                FontWeight = FontWeight.Normal,
+                Foreground = new SolidColorBrush(TextSecondary),
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+
+            timeStack.Children.Add(timeText);
+            timeStack.Children.Add(percentText);
+
+            Grid.SetColumn(timeStack, 1);
 
             grid.Children.Add(leftStack);
-            grid.Children.Add(timeText);
-            container.Child = grid;
+            grid.Children.Add(timeStack);
 
-            return container;
+            return grid;
         }
 
         private StackPanel CreateHourlyProductivityView()
         {
-            var panel = new StackPanel { Spacing = 6 };
+            var panel = new StackPanel { Spacing = 8 };
 
             if (_data == null) return panel;
 
-            foreach (var hour in _data.HourlyProductivity.OrderBy(h => h.Key))
+            // Only show hours with activity
+            var activeHours = _data.HourlyProductivity
+                .Where(h => h.Value.Total > 0)
+                .OrderBy(h => h.Key);
+
+            foreach (var hour in activeHours)
             {
                 panel.Children.Add(CreateHourlyBar(hour.Key, hour.Value));
             }
@@ -452,18 +560,11 @@ namespace NudgeTray
             return panel;
         }
 
-        private Border CreateHourlyBar(int hour, ProductivityStats stats)
+        private Grid CreateHourlyBar(int hour, ProductivityStats stats)
         {
-            var container = new Border
-            {
-                Background = new SolidColorBrush(Color.FromRgb(30, 30, 35)),
-                CornerRadius = new CornerRadius(4),
-                Padding = new Thickness(10, 6, 10, 6)
-            };
-
             var grid = new Grid
             {
-                ColumnDefinitions = new ColumnDefinitions("50,*,Auto")
+                ColumnDefinitions = new ColumnDefinitions("45,*,60")
             };
 
             // Hour label
@@ -472,56 +573,57 @@ namespace NudgeTray
                 Text = $"{hour:D2}:00",
                 FontSize = 11,
                 FontWeight = FontWeight.Medium,
-                Foreground = new SolidColorBrush(Color.FromRgb(180, 180, 190)),
+                Foreground = new SolidColorBrush(TextSecondary),
                 VerticalAlignment = VerticalAlignment.Center
             };
             Grid.SetColumn(hourText, 0);
 
-            // Productivity bar
+            // Productivity bar container
             var barContainer = new Border
             {
-                Height = 20,
-                Background = new SolidColorBrush(Color.FromRgb(45, 45, 50)),
-                CornerRadius = new CornerRadius(3),
+                Height = 24,
+                Background = new SolidColorBrush(ProgressBarBg),
+                CornerRadius = new CornerRadius(4),
                 Margin = new Thickness(8, 0, 8, 0),
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Center,
+                ClipToBounds = true
             };
 
             var barGrid = new Grid();
 
+            // Calculate percentages
+            double productivePercentage = stats.Total > 0 ? (double)stats.ProductiveCount / stats.Total * 100 : 0;
+            double unproductivePercentage = stats.Total > 0 ? (double)stats.UnproductiveCount / stats.Total * 100 : 0;
+
             // Productive portion (green)
             if (stats.ProductiveCount > 0)
             {
-                double productivePercentage = stats.Total > 0 ? (double)stats.ProductiveCount / stats.Total * 100 : 0;
                 var productiveBar = new Border
                 {
-                    Width = double.IsNaN(productivePercentage) ? 0 : productivePercentage,
-                    Height = 20,
-                    Background = new SolidColorBrush(Color.FromRgb(76, 175, 80)),
-                    CornerRadius = new CornerRadius(3, 0, 0, 3),
+                    Width = productivePercentage,
+                    Height = 24,
+                    Background = new SolidColorBrush(ProductiveGreen),
+                    CornerRadius = new CornerRadius(4, 0, 0, 4),
                     HorizontalAlignment = HorizontalAlignment.Left
                 };
                 barGrid.Children.Add(productiveBar);
             }
 
-            // Unproductive portion (red) - starts after productive
+            // Unproductive portion (red)
             if (stats.UnproductiveCount > 0)
             {
-                double productivePercentage = stats.Total > 0 ? (double)stats.ProductiveCount / stats.Total * 100 : 0;
-                double unproductivePercentage = stats.Total > 0 ? (double)stats.UnproductiveCount / stats.Total * 100 : 0;
-
                 var unproductiveBar = new Border
                 {
-                    Width = double.IsNaN(unproductivePercentage) ? 0 : unproductivePercentage,
-                    Height = 20,
-                    Background = new SolidColorBrush(Color.FromRgb(244, 67, 54)),
+                    Width = unproductivePercentage,
+                    Height = 24,
+                    Background = new SolidColorBrush(UnproductiveRed),
                     HorizontalAlignment = HorizontalAlignment.Left,
                     Margin = new Thickness(productivePercentage, 0, 0, 0)
                 };
 
                 if (stats.ProductiveCount == 0)
                 {
-                    unproductiveBar.CornerRadius = new CornerRadius(3, 0, 0, 3);
+                    unproductiveBar.CornerRadius = new CornerRadius(4, 0, 0, 4);
                 }
 
                 barGrid.Children.Add(unproductiveBar);
@@ -531,54 +633,75 @@ namespace NudgeTray
             Grid.SetColumn(barContainer, 1);
 
             // Stats text
-            var statsText = new TextBlock
+            var statsStack = new StackPanel
             {
-                Text = $"{stats.ProductiveCount}✓ {stats.UnproductiveCount}✗",
-                FontSize = 11,
-                FontWeight = FontWeight.Medium,
-                Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 160)),
                 VerticalAlignment = VerticalAlignment.Center
             };
-            Grid.SetColumn(statsText, 2);
+
+            var statsText = new TextBlock
+            {
+                Text = $"{stats.ProductiveCount} / {stats.Total}",
+                FontSize = 11,
+                FontWeight = FontWeight.Medium,
+                Foreground = new SolidColorBrush(TextPrimary),
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+
+            var percentageText = new TextBlock
+            {
+                Text = $"{productivePercentage:F0}%",
+                FontSize = 9,
+                FontWeight = FontWeight.Normal,
+                Foreground = new SolidColorBrush(TextSecondary),
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+
+            statsStack.Children.Add(statsText);
+            statsStack.Children.Add(percentageText);
+
+            Grid.SetColumn(statsStack, 2);
 
             grid.Children.Add(hourText);
             grid.Children.Add(barContainer);
-            grid.Children.Add(statsText);
-            container.Child = grid;
+            grid.Children.Add(statsStack);
 
-            return container;
+            return grid;
         }
 
         private StackPanel CreateEmptyState()
         {
             var panel = new StackPanel
             {
-                Spacing = 12,
+                Spacing = 16,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 60, 0, 0)
+                Margin = new Thickness(0, 80, 0, 0)
             };
 
             var iconText = new TextBlock
             {
                 Text = "📭",
-                FontSize = 48,
-                HorizontalAlignment = HorizontalAlignment.Center
+                FontSize = 64,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Opacity = 0.6
             };
 
             var messageText = new TextBlock
             {
-                Text = "No data available for this period",
-                FontSize = 14,
-                Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 160)),
+                Text = "No data available",
+                FontSize = 16,
+                FontWeight = FontWeight.SemiBold,
+                Foreground = new SolidColorBrush(TextPrimary),
                 HorizontalAlignment = HorizontalAlignment.Center
             };
 
             var hintText = new TextBlock
             {
-                Text = "Keep using Nudge to build your analytics",
+                Text = _currentFilter == TimeFilter.Today
+                    ? "Keep using Nudge today to see your analytics"
+                    : "No activity recorded this week yet",
                 FontSize = 12,
-                Foreground = new SolidColorBrush(Color.FromRgb(120, 120, 130)),
+                Foreground = new SolidColorBrush(TextTertiary),
                 HorizontalAlignment = HorizontalAlignment.Center
             };
 
@@ -593,21 +716,31 @@ namespace NudgeTray
         {
             var errorPanel = new StackPanel
             {
-                Spacing = 12,
-                Margin = new Thickness(20),
+                Spacing = 16,
+                Margin = new Thickness(40),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
 
-            var errorText = new TextBlock
+            var iconText = new TextBlock
             {
-                Text = "❌ " + message,
-                FontSize = 14,
-                Foreground = new SolidColorBrush(Color.FromRgb(244, 67, 54)),
-                TextWrapping = TextWrapping.Wrap,
-                TextAlignment = TextAlignment.Center
+                Text = "⚠️",
+                FontSize = 48,
+                HorizontalAlignment = HorizontalAlignment.Center
             };
 
+            var errorText = new TextBlock
+            {
+                Text = message,
+                FontSize = 14,
+                FontWeight = FontWeight.Medium,
+                Foreground = new SolidColorBrush(UnproductiveRed),
+                TextWrapping = TextWrapping.Wrap,
+                TextAlignment = TextAlignment.Center,
+                MaxWidth = 300
+            };
+
+            errorPanel.Children.Add(iconText);
             errorPanel.Children.Add(errorText);
             Content = errorPanel;
         }
@@ -620,6 +753,24 @@ namespace NudgeTray
             int hours = minutes / 60;
             int mins = minutes % 60;
             return mins > 0 ? $"{hours}h {mins}m" : $"{hours}h";
+        }
+
+        private static DateTime GetFilterStartDate(TimeFilter filter)
+        {
+            DateTime now = DateTime.Now;
+
+            switch (filter)
+            {
+                case TimeFilter.Today:
+                    return now.Date;
+
+                case TimeFilter.ThisWeek:
+                    int daysFromMonday = ((int)now.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+                    return now.Date.AddDays(-daysFromMonday);
+
+                default:
+                    return now.Date;
+            }
         }
     }
 
@@ -653,7 +804,7 @@ namespace NudgeTray
             string activityLogPath = Path.Combine(nudgeDir, "ACTIVITY_LOG.CSV");
             string harvestPath = Path.Combine(nudgeDir, "HARVEST.CSV");
 
-            DateTime filterStartDate = GetFilterStartDate(filter);
+            DateTime filterStartDate = AnalyticsWindow.GetFilterStartDate(filter);
 
             // Load activity log for app usage (minute-by-minute data)
             if (File.Exists(activityLogPath))
@@ -715,12 +866,12 @@ namespace NudgeTray
                                         if (productive)
                                         {
                                             data.HourlyProductivity[hour].ProductiveCount++;
-                                            data.ProductiveMinutes += 1; // Approximate
+                                            data.ProductiveMinutes += 1;
                                         }
                                         else
                                         {
                                             data.HourlyProductivity[hour].UnproductiveCount++;
-                                            data.UnproductiveMinutes += 1; // Approximate
+                                            data.UnproductiveMinutes += 1;
                                         }
                                     }
                                 }
@@ -735,25 +886,6 @@ namespace NudgeTray
             }
 
             return data;
-        }
-
-        private static DateTime GetFilterStartDate(AnalyticsWindow.TimeFilter filter)
-        {
-            DateTime now = DateTime.Now;
-
-            switch (filter)
-            {
-                case AnalyticsWindow.TimeFilter.Today:
-                    return now.Date; // Start of today
-
-                case AnalyticsWindow.TimeFilter.ThisWeek:
-                    // Start of week (Monday)
-                    int daysFromMonday = ((int)now.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
-                    return now.Date.AddDays(-daysFromMonday);
-
-                default:
-                    return now.Date;
-            }
         }
     }
 }
