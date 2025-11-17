@@ -287,7 +287,7 @@ namespace NudgeTray
 
                 Console.WriteLine("[INFO] ✓ Tray icon created successfully");
                 Console.WriteLine("[INFO]   • Left-click: Open Analytics Dashboard");
-                Console.WriteLine("[INFO]   • Right-click: Show Menu")
+                Console.WriteLine("[INFO]   • Right-click: Show Menu");
             }
             catch (Exception ex)
             {
