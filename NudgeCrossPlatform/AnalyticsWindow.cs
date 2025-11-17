@@ -982,6 +982,10 @@ namespace NudgeTray
                                 {
                                     string appName = parts[3];
 
+                                    // Exclude Nudge itself from analytics
+                                    if (appName.ToLower().Contains("nudge"))
+                                        continue;
+
                                     if (!data.AppUsage.ContainsKey(appName))
                                         data.AppUsage[appName] = 0;
 
@@ -1014,6 +1018,12 @@ namespace NudgeTray
                             {
                                 if (timestamp >= filterStartDate)
                                 {
+                                    string appName = parts[3];
+
+                                    // Exclude Nudge itself from productivity stats
+                                    if (appName.ToLower().Contains("nudge"))
+                                        continue;
+
                                     if (int.TryParse(parts[1], out int hour))
                                     {
                                         if (!data.HourlyProductivity.ContainsKey(hour))
