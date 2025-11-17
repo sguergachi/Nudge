@@ -355,86 +355,30 @@ namespace NudgeTray
                 Console.WriteLine("[DEBUG] Creating menu...");
                 var menu = new NativeMenu();
 
-                if (_waitingForResponse)
+                // Status item - show next snapshot time
+                string statusText = "Nudge Tracker";
+                try
                 {
-                    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                    // WAITING FOR RESPONSE STATE - Show YES/NO options
-                    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-                    var questionItem = new NativeMenuItem
-                    {
-                        Header = "⏳ Were you productive?",
-                        IsEnabled = false
-                    };
-                    menu.Add(questionItem);
-                    Console.WriteLine("[DEBUG] Added question item");
-
-                    menu.Add(new NativeMenuItemSeparator());
-
-                    // YES - Productive option
-                    var yesItem = new NativeMenuItem { Header = "✓ Yes - Productive" };
-                    yesItem.Click += (s, e) =>
-                    {
-                        try
-                        {
-                            Console.WriteLine("[USER] Clicked: YES - Productive");
-                            HandleMenuResponse(true);
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"[ERROR] YES handler failed: {ex.Message}");
-                        }
-                    };
-                    menu.Add(yesItem);
-                    Console.WriteLine("[DEBUG] Added YES item");
-
-                    // NO - Not Productive option
-                    var noItem = new NativeMenuItem { Header = "✗ No - Not Productive" };
-                    noItem.Click += (s, e) =>
-                    {
-                        try
-                        {
-                            Console.WriteLine("[USER] Clicked: NO - Not Productive");
-                            HandleMenuResponse(false);
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"[ERROR] NO handler failed: {ex.Message}");
-                        }
-                    };
-                    menu.Add(noItem);
-                    Console.WriteLine("[DEBUG] Added NO item");
+                    statusText = GetMenuStatusText();
                 }
-                else
+                catch (Exception ex)
                 {
-                    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                    // NORMAL STATE - Show status and next snapshot time
-                    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-                    string statusText = "Nudge Tracker";
-                    try
-                    {
-                        statusText = GetMenuStatusText();
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[WARN] Failed to get status text: {ex.Message}");
-                    }
-
-                    var statusItem = new NativeMenuItem
-                    {
-                        Header = statusText,
-                        IsEnabled = false
-                    };
-                    menu.Add(statusItem);
-                    Console.WriteLine("[DEBUG] Added status item");
+                    Console.WriteLine($"[WARN] Failed to get status text: {ex.Message}");
                 }
+
+                var statusItem = new NativeMenuItem
+                {
+                    Header = statusText,
+                    IsEnabled = false
+                };
+                menu.Add(statusItem);
+                Console.WriteLine("[DEBUG] Added status item");
 
                 // Separator before quit option
                 menu.Add(new NativeMenuItemSeparator());
                 Console.WriteLine("[DEBUG] Added separator");
 
-                // Quit option (always visible)
+                // Quit option
                 var quitItem = new NativeMenuItem { Header = "Quit" };
                 quitItem.Click += (s, e) =>
                 {
@@ -471,20 +415,6 @@ namespace NudgeTray
                     return new NativeMenu();
                 }
             }
-        }
-
-        static void HandleMenuResponse(bool productive)
-        {
-            Console.WriteLine($"✓ Menu response: {(productive ? "PRODUCTIVE" : "NOT PRODUCTIVE")}");
-
-            // Clear waiting state
-            _waitingForResponse = false;
-
-            // Send response to nudge process
-            SendResponse(productive);
-
-            // Update menu back to normal state
-            UpdateTrayMenu();
         }
 
         static WindowIcon CreateCommonIcon()
@@ -774,56 +704,21 @@ namespace NudgeTray
 
         private static bool _waitingForResponse = false;
 
-        static void UpdateTrayMenu()
-        {
-            try
-            {
-                Dispatcher.UIThread.Post(() =>
-                {
-                    try
-                    {
-                        if (_trayIcon != null)
-                        {
-                            _trayIcon.Menu = CreateAvaloniaMenu();
-                            Console.WriteLine("[DEBUG] Tray menu updated");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[WARN] Menu update failed: {ex.Message}");
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[WARN] Failed to post menu update: {ex.Message}");
-            }
-        }
-
         private static void ShowCustomNotification()
         {
-            try
-            {
-                Console.WriteLine("[DEBUG] Snapshot notification triggered");
+            // Show native OS notification with YES/NO buttons
+            // This is a NOTIFICATION (popup toast), NOT the tray menu
+            _waitingForResponse = true;
 
-                // Set waiting state
-                _waitingForResponse = true;
-
-                // Update tray menu to show YES/NO options
-                UpdateTrayMenu();
-
-                Console.WriteLine("✓ Tray menu updated with response options");
-                Console.WriteLine("  Right-click the tray icon to respond (YES/NO)");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[ERROR] Failed to update notification menu: {ex.Message}");
-                Console.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
-            }
+#if WINDOWS
+            ShowWindowsNotification();
+#else
+            ShowDbusNotification();
+#endif
         }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // LEGACY NOTIFICATIONS (Kept for reference, not used)
+        // NATIVE OS NOTIFICATIONS (Windows Toast and Linux DBus)
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 #if WINDOWS
