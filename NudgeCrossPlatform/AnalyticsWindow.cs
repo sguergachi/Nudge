@@ -131,7 +131,8 @@ namespace NudgeTray
             var innerContainer = new Border
             {
                 CornerRadius = new CornerRadius(12),
-                ClipToBounds = true
+                ClipToBounds = true,
+                Height = 548 // Window (580) - margins (32) = available space for content
             };
 
             // Use Grid instead of StackPanel to properly constrain ScrollViewer
@@ -156,8 +157,7 @@ namespace NudgeTray
             {
                 Content = _contentPanel,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                MaxHeight = 430 // Window (580) - margins (32) - header (~118) = ~430
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
             };
 
             Grid.SetRow(_scrollViewer, 1);
@@ -361,7 +361,7 @@ namespace NudgeTray
             };
 
             button.Content = closeIcon;
-            button.Click += (s, e) => Close();
+            button.Click += (s, e) => Hide(); // Hide window instead of closing to prevent app shutdown
             border.Child = button;
 
             // Hover effects
