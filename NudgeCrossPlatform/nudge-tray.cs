@@ -125,12 +125,12 @@ namespace NudgeTray
             // Add First Chance exception handler to catch all exceptions (including DBus)
             AppDomain.CurrentDomain.FirstChanceException += (s, e) =>
             {
-                // Catch and suppress DBus-related exceptions
+                // Silently suppress DBus-related exceptions (expected on Linux when DBus services unavailable)
                 if (e.Exception != null &&
                     (e.Exception.ToString().Contains("DBus") ||
                      e.Exception.ToString().Contains("Tmds.DBus")))
                 {
-                    Console.WriteLine($"[DEBUG] DBus exception caught and suppressed: {e.Exception.Message}");
+                    // Suppressed - these are expected and handled gracefully
                 }
             };
 
