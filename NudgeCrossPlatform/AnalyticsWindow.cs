@@ -386,19 +386,32 @@ namespace NudgeTray
 
             _contentPanel.Children.Clear();
 
+            Console.WriteLine($"[Analytics] Refreshing content - AppUsage: {_data.AppUsage.Count} apps, HourlyProductivity: {_data.HourlyProductivity.Count} hours");
+            Console.WriteLine($"[Analytics] Total activity: {_data.TotalActivityMinutes}min, Productive: {_data.ProductiveMinutes}min");
+
             // Summary Section
             _contentPanel.Children.Add(CreateSummarySection());
 
             // App Usage Section
             if (_data.AppUsage.Any())
             {
+                Console.WriteLine($"[Analytics] Adding 'Most Used Apps' section with {_data.AppUsage.Count} apps");
                 _contentPanel.Children.Add(CreateSection("chart", "Most Used Apps", CreateAppUsageView()));
+            }
+            else
+            {
+                Console.WriteLine("[Analytics] Skipping 'Most Used Apps' section - no data");
             }
 
             // Hourly Productivity Section
             if (_data.HourlyProductivity.Any())
             {
+                Console.WriteLine($"[Analytics] Adding 'Productivity by Hour' section with {_data.HourlyProductivity.Count} hours");
                 _contentPanel.Children.Add(CreateSection("calendar", "Productivity by Hour", CreateHourlyProductivityView()));
+            }
+            else
+            {
+                Console.WriteLine("[Analytics] Skipping 'Productivity by Hour' section - no HARVEST.CSV data (respond to notifications to populate this)");
             }
 
             // Empty State
@@ -971,12 +984,18 @@ namespace NudgeTray
 
             DateTime filterStartDate = AnalyticsWindow.GetFilterStartDate(filter);
 
+            Console.WriteLine($"[Analytics] Loading data for {filter} (from {filterStartDate:yyyy-MM-dd HH:mm})");
+            Console.WriteLine($"[Analytics] Activity log: {activityLogPath}");
+            Console.WriteLine($"[Analytics] Harvest data: {harvestPath}");
+
             // Load activity log for app usage (minute-by-minute data)
             if (File.Exists(activityLogPath))
             {
                 try
                 {
                     var lines = File.ReadAllLines(activityLogPath);
+                    Console.WriteLine($"[Analytics] Found {lines.Length} lines in ACTIVITY_LOG.CSV");
+                    int processedLines = 0;
                     for (int i = 1; i < lines.Length; i++) // Skip header
                     {
                         var parts = lines[i].Split(',');
@@ -998,15 +1017,21 @@ namespace NudgeTray
 
                                     data.AppUsage[appName] += 1; // 1 minute per entry
                                     data.TotalActivityMinutes += 1;
+                                    processedLines++;
                                 }
                             }
                         }
                     }
+                    Console.WriteLine($"[Analytics] Processed {processedLines} activity log entries after filtering");
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"[Analytics] Error loading activity log: {ex.Message}");
                 }
+            }
+            else
+            {
+                Console.WriteLine("[Analytics] ACTIVITY_LOG.CSV not found");
             }
 
             // Load harvest data for productivity stats
@@ -1015,6 +1040,8 @@ namespace NudgeTray
                 try
                 {
                     var lines = File.ReadAllLines(harvestPath);
+                    Console.WriteLine($"[Analytics] Found {lines.Length} lines in HARVEST.CSV");
+                    int processedHarvest = 0;
                     for (int i = 1; i < lines.Length; i++) // Skip header
                     {
                         var parts = lines[i].Split(',');
@@ -1048,16 +1075,22 @@ namespace NudgeTray
                                             data.HourlyProductivity[hour].UnproductiveCount++;
                                             data.UnproductiveMinutes += 1;
                                         }
+                                        processedHarvest++;
                                     }
                                 }
                             }
                         }
                     }
+                    Console.WriteLine($"[Analytics] Processed {processedHarvest} harvest entries after filtering");
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"[Analytics] Error loading harvest data: {ex.Message}");
                 }
+            }
+            else
+            {
+                Console.WriteLine("[Analytics] HARVEST.CSV not found - respond to notifications to populate productivity data");
             }
 
             return data;
