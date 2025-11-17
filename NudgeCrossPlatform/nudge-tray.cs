@@ -259,17 +259,10 @@ namespace NudgeTray
 
         static void CreateTrayIcon()
         {
-            // On Linux, skip tray icon entirely - DBus is too unstable on KDE/Wayland
-            // The app works fine without it (custom notifications still appear)
-            if (!PlatformConfig.IsWindows)
-            {
-                Console.WriteLine("[INFO] Tray icon disabled on Linux (DBus instability)");
-                Console.WriteLine("[INFO] App running in background - notifications will still appear");
-                return;
-            }
-
             try
             {
+                Console.WriteLine($"[DEBUG] Creating tray icon for {(PlatformConfig.IsWindows ? "Windows" : "Linux")}...");
+
                 _trayIcon = new TrayIcon
                 {
                     Icon = CreateCommonIcon(),
@@ -278,7 +271,7 @@ namespace NudgeTray
                     Menu = CreateAvaloniaMenu()
                 };
 
-                // Add click handler for analytics window
+                // Add left-click handler for analytics window
                 _trayIcon.Clicked += OnTrayIconClicked;
 
                 // Register the tray icon with the Application
@@ -292,43 +285,17 @@ namespace NudgeTray
                     Console.WriteLine("[ERROR] Application.Current is null - cannot register tray icon");
                 }
 
-                // Disable menu refresh timer temporarily to test if it's causing issues
-                // We'll update the menu only when needed, not on a timer
-                /*
-                // Start menu refresh timer (update every 10 seconds)
-                _menuRefreshTimer = new System.Threading.Timer(_ =>
-                {
-                    try
-                    {
-                        Dispatcher.UIThread.Post(() =>
-                        {
-                            try
-                            {
-                                if (_trayIcon != null)
-                                {
-                                    _trayIcon.Menu = CreateAvaloniaMenu();
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine($"[ERROR] Menu refresh failed: {ex.Message}");
-                            }
-                        });
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[ERROR] Timer callback failed: {ex.Message}");
-                    }
-                }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
-                */
-
-                Console.WriteLine("[DEBUG] Tray icon created with Avalonia TrayIcon (cross-platform)");
+                Console.WriteLine("[INFO] ✓ Tray icon created successfully");
+                Console.WriteLine("[INFO]   • Left-click: Open Analytics Dashboard");
+                Console.WriteLine("[INFO]   • Right-click: Show Menu");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[ERROR] Failed to create tray icon: {ex.Message}");
                 Console.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
-                throw;
+
+                // Don't throw - allow app to continue without tray icon
+                Console.WriteLine("[WARN] Continuing without tray icon - notifications will still work");
             }
         }
 
@@ -419,6 +386,26 @@ namespace NudgeTray
                 // Separator
                 menu.Add(new NativeMenuItemSeparator());
                 Console.WriteLine("[DEBUG] Added separator");
+
+                // Analytics option
+                var analyticsItem = new NativeMenuItem { Header = "📊 Analytics" };
+                analyticsItem.Click += (s, e) =>
+                {
+                    try
+                    {
+                        Console.WriteLine("[DEBUG] Analytics menu item clicked");
+                        OnTrayIconClicked(s, e);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[ERROR] Analytics handler failed: {ex.Message}");
+                    }
+                };
+                menu.Add(analyticsItem);
+                Console.WriteLine("[DEBUG] Added analytics item");
+
+                // Separator
+                menu.Add(new NativeMenuItemSeparator());
 
                 // Quit option
                 var quitItem = new NativeMenuItem { Header = "Quit" };
@@ -780,14 +767,6 @@ namespace NudgeTray
         {
             try
             {
-                // On Linux, skip menu updates entirely to avoid DBus crashes
-                // Menu updates are not critical and can cause NullReferenceException in DBus
-                if (!PlatformConfig.IsWindows)
-                {
-                    Console.WriteLine("[DEBUG] Menu update skipped on Linux (DBus instability)");
-                    return;
-                }
-
                 if (_trayIcon != null)
                 {
                     var newMenu = CreateAvaloniaMenu();
@@ -797,7 +776,7 @@ namespace NudgeTray
             catch (Exception ex)
             {
                 // Silent failure - menu updates are not critical
-                Console.WriteLine($"[DEBUG] Menu update skipped: {ex.Message}");
+                Console.WriteLine($"[DEBUG] Menu update failed (non-critical): {ex.Message}");
             }
         }
 
