@@ -16,6 +16,7 @@ using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -42,6 +43,7 @@ namespace NudgeTray
         private DispatcherTimer? _countdownTimer;
         private int _remainingSeconds = AUTO_DISMISS_SECONDS;
         private bool _responseSent = false;
+        private Arc? _progressArc;
 
         // Notification configuration
         private class NotificationConfig
@@ -168,20 +170,60 @@ namespace NudgeTray
             };
             Grid.SetColumn(titleText, 0);
 
-            // Countdown timer - right-aligned
-            _countdownText = new TextBlock
+            // Countdown timer with progress wheel - right-aligned
+            var timerContainer = new Grid
             {
-                Text = $"{AUTO_DISMISS_SECONDS}s",
-                FontSize = 12,
-                FontWeight = FontWeight.Medium,
-                Foreground = new SolidColorBrush(Color.FromArgb(150, 255, 100, 100)), // Subtle red
+                Width = 36,
+                Height = 36,
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            Grid.SetColumn(_countdownText, 1);
+
+            // Background circle (track)
+            var backgroundCircle = new Arc
+            {
+                Width = 32,
+                Height = 32,
+                Stroke = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
+                StrokeThickness = 2,
+                StartAngle = 0,
+                SweepAngle = 360,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            // Progress arc (animates from 360° to 0°)
+            _progressArc = new Arc
+            {
+                Width = 32,
+                Height = 32,
+                Stroke = new SolidColorBrush(Color.FromArgb(180, 255, 100, 100)),
+                StrokeThickness = 2.5,
+                StartAngle = -90, // Start at top (12 o'clock)
+                SweepAngle = 360, // Full circle initially
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                StrokeLineCap = PenLineCap.Round
+            };
+
+            // Countdown text (overlaid in center)
+            _countdownText = new TextBlock
+            {
+                Text = $"{AUTO_DISMISS_SECONDS}s",
+                FontSize = 11,
+                FontWeight = FontWeight.SemiBold,
+                Foreground = new SolidColorBrush(Color.FromArgb(200, 255, 100, 100)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            timerContainer.Children.Add(backgroundCircle);
+            timerContainer.Children.Add(_progressArc);
+            timerContainer.Children.Add(_countdownText);
+            Grid.SetColumn(timerContainer, 1);
 
             headerPanel.Children.Add(titleText);
-            headerPanel.Children.Add(_countdownText);
+            headerPanel.Children.Add(timerContainer);
 
             // Message - subtle, left-aligned
             var messageText = new TextBlock
@@ -529,18 +571,39 @@ namespace NudgeTray
             {
                 _remainingSeconds--;
 
-                if (_countdownText != null)
+                // Calculate progress (percentage of time remaining)
+                double progress = (double)_remainingSeconds / AUTO_DISMISS_SECONDS;
+                double sweepAngle = 360 * progress;
+
+                // Update progress arc
+                if (_progressArc != null)
                 {
-                    _countdownText.Text = $"{_remainingSeconds}s";
+                    _progressArc.SweepAngle = sweepAngle;
 
                     // Change color to more urgent as time runs out
                     if (_remainingSeconds <= 2)
                     {
-                        _countdownText.Foreground = new SolidColorBrush(Color.FromArgb(200, 255, 80, 80)); // Brighter red
+                        _progressArc.Stroke = new SolidColorBrush(Color.FromArgb(220, 255, 50, 50)); // Bright red
                     }
                     else if (_remainingSeconds <= 3)
                     {
-                        _countdownText.Foreground = new SolidColorBrush(Color.FromArgb(180, 255, 100, 100)); // Medium red
+                        _progressArc.Stroke = new SolidColorBrush(Color.FromArgb(200, 255, 80, 80)); // Medium-bright red
+                    }
+                }
+
+                // Update countdown text
+                if (_countdownText != null)
+                {
+                    _countdownText.Text = $"{_remainingSeconds}s";
+
+                    // Change text color to match arc
+                    if (_remainingSeconds <= 2)
+                    {
+                        _countdownText.Foreground = new SolidColorBrush(Color.FromArgb(220, 255, 50, 50)); // Bright red
+                    }
+                    else if (_remainingSeconds <= 3)
+                    {
+                        _countdownText.Foreground = new SolidColorBrush(Color.FromArgb(200, 255, 80, 80)); // Medium-bright red
                     }
                 }
 
