@@ -408,6 +408,10 @@ namespace NudgeTray
             {
                 Console.WriteLine($"[Analytics] Adding 'Productivity by Hour' section with {_data.HourlyProductivity.Count} hours");
                 _contentPanel.Children.Add(CreateSection("calendar", "Productivity by Hour", CreateHourlyProductivityView()));
+
+                // Add visual timeline chart
+                Console.WriteLine($"[Analytics] Adding 'Activity Timeline' chart");
+                _contentPanel.Children.Add(CreateSection("chart", "Activity Timeline", CreateTimelineChart()));
             }
             else
             {
@@ -732,6 +736,176 @@ namespace NudgeTray
             }
 
             return panel;
+        }
+
+        private Canvas CreateTimelineChart()
+        {
+            if (_data == null || !_data.HourlyProductivity.Any())
+                return new Canvas { Height = 200 };
+
+            // Chart dimensions
+            const int chartWidth = 360;
+            const int chartHeight = 180;
+            const int marginBottom = 30;
+            const int marginLeft = 10;
+            const int marginRight = 10;
+
+            var canvas = new Canvas
+            {
+                Width = chartWidth,
+                Height = chartHeight + marginBottom,
+                Background = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255))
+            };
+
+            // Get all hours with activity, sorted
+            var activeHours = _data.HourlyProductivity
+                .Where(h => h.Value.Total > 0)
+                .OrderBy(h => h.Key)
+                .ToList();
+
+            if (!activeHours.Any()) return canvas;
+
+            // Find max value for scaling
+            int maxValue = activeHours.Max(h => h.Value.Total);
+            if (maxValue == 0) return canvas;
+
+            // Calculate bar width and spacing
+            int barCount = activeHours.Count;
+            double availableWidth = chartWidth - marginLeft - marginRight;
+            double barSpacing = 2;
+            double barWidth = (availableWidth - (barSpacing * (barCount - 1))) / barCount;
+            barWidth = Math.Max(barWidth, 4); // Minimum bar width
+
+            // Draw bars
+            double currentX = marginLeft;
+            foreach (var hourData in activeHours)
+            {
+                int hour = hourData.Key;
+                var stats = hourData.Value;
+
+                // Calculate heights (inverted because canvas Y goes top-down)
+                double productiveHeight = (double)stats.ProductiveCount / maxValue * chartHeight;
+                double unproductiveHeight = (double)stats.UnproductiveCount / maxValue * chartHeight;
+                double totalHeight = productiveHeight + unproductiveHeight;
+
+                // Draw stacked bar (productive on bottom, unproductive on top)
+                if (stats.ProductiveCount > 0)
+                {
+                    var productiveBar = new Border
+                    {
+                        Width = barWidth,
+                        Height = productiveHeight,
+                        Background = new SolidColorBrush(ProductiveGreen),
+                        CornerRadius = new CornerRadius(0)
+                    };
+                    Canvas.SetLeft(productiveBar, currentX);
+                    Canvas.SetTop(productiveBar, chartHeight - totalHeight);
+                    canvas.Children.Add(productiveBar);
+                }
+
+                if (stats.UnproductiveCount > 0)
+                {
+                    var unproductiveBar = new Border
+                    {
+                        Width = barWidth,
+                        Height = unproductiveHeight,
+                        Background = new SolidColorBrush(UnproductiveRed),
+                        CornerRadius = new CornerRadius(0)
+                    };
+                    Canvas.SetLeft(unproductiveBar, currentX);
+                    Canvas.SetTop(unproductiveBar, chartHeight - totalHeight + productiveHeight);
+                    canvas.Children.Add(unproductiveBar);
+                }
+
+                // Hour label below bar
+                var hourLabel = new TextBlock
+                {
+                    Text = $"{hour:D2}",
+                    FontSize = 8,
+                    FontWeight = FontWeight.Normal,
+                    Foreground = new SolidColorBrush(TextSecondary),
+                    TextAlignment = TextAlignment.Center,
+                    Width = barWidth
+                };
+                Canvas.SetLeft(hourLabel, currentX);
+                Canvas.SetTop(hourLabel, chartHeight + 5);
+                canvas.Children.Add(hourLabel);
+
+                currentX += barWidth + barSpacing;
+            }
+
+            // Draw baseline
+            var baseline = new Border
+            {
+                Width = chartWidth - marginLeft - marginRight,
+                Height = 1,
+                Background = new SolidColorBrush(BorderColor)
+            };
+            Canvas.SetLeft(baseline, marginLeft);
+            Canvas.SetTop(baseline, chartHeight);
+            canvas.Children.Add(baseline);
+
+            // Add legend
+            var legendStack = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 16
+            };
+
+            // Productive legend
+            var productiveLegend = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6
+            };
+            var productiveBox = new Border
+            {
+                Width = 12,
+                Height = 12,
+                Background = new SolidColorBrush(ProductiveGreen),
+                CornerRadius = new CornerRadius(2)
+            };
+            var productiveLabel = new TextBlock
+            {
+                Text = "Productive",
+                FontSize = 9,
+                Foreground = new SolidColorBrush(TextSecondary),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            productiveLegend.Children.Add(productiveBox);
+            productiveLegend.Children.Add(productiveLabel);
+
+            // Unproductive legend
+            var unproductiveLegend = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6
+            };
+            var unproductiveBox = new Border
+            {
+                Width = 12,
+                Height = 12,
+                Background = new SolidColorBrush(UnproductiveRed),
+                CornerRadius = new CornerRadius(2)
+            };
+            var unproductiveLabel = new TextBlock
+            {
+                Text = "Unproductive",
+                FontSize = 9,
+                Foreground = new SolidColorBrush(TextSecondary),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            unproductiveLegend.Children.Add(unproductiveBox);
+            unproductiveLegend.Children.Add(unproductiveLabel);
+
+            legendStack.Children.Add(productiveLegend);
+            legendStack.Children.Add(unproductiveLegend);
+
+            Canvas.SetLeft(legendStack, marginLeft);
+            Canvas.SetTop(legendStack, chartHeight + 20);
+            canvas.Children.Add(legendStack);
+
+            return canvas;
         }
 
         private Grid CreateHourlyBar(int hour, ProductivityStats stats)
