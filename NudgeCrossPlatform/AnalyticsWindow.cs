@@ -106,23 +106,23 @@ namespace NudgeTray
 
         private void BuildUI()
         {
-            // Outer container with shadow and rounded corners
+            // Outer container with subtle shadow and rounded corners
             var mainContainer = new Border
             {
                 Background = new SolidColorBrush(CardColor),
                 CornerRadius = new CornerRadius(12),
-                Margin = new Thickness(0),
+                Margin = new Thickness(16), // Add margin for shadow room
                 BorderBrush = new SolidColorBrush(BorderColor),
                 BorderThickness = new Thickness(1),
                 ClipToBounds = false,
                 BoxShadow = new BoxShadows(
                     new BoxShadow
                     {
-                        Blur = 32,
+                        Blur = 16,
                         Spread = 0,
                         OffsetX = 0,
-                        OffsetY = 8,
-                        Color = Color.FromArgb(80, 0, 0, 0)
+                        OffsetY = 2,
+                        Color = Color.FromArgb(25, 0, 0, 0)
                     }
                 )
             };
@@ -146,8 +146,8 @@ namespace NudgeTray
             {
                 Content = _contentPanel,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Visible,
-                Height = 480
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                MaxHeight = 460 // Constrain height to allow scrolling
             };
 
             mainStack.Children.Add(_scrollViewer);
