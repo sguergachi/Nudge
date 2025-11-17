@@ -34,8 +34,8 @@ namespace NudgeTray
         private AnalyticsData? _data;
         private ScrollViewer? _scrollViewer;
         private StackPanel? _contentPanel;
-        private Border? _filterButton;
-        private TextBlock? _filterButtonText;
+        private Border? _todayTab;
+        private Border? _weekTab;
 
         // Fluent Design System Colors - matching CustomNotification
         private static readonly Color BackgroundColor = Color.FromRgb(18, 18, 20);
@@ -146,8 +146,8 @@ namespace NudgeTray
             {
                 Content = _contentPanel,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                MaxHeight = 480
+                VerticalScrollBarVisibility = ScrollBarVisibility.Visible,
+                Height = 480
             };
 
             mainStack.Children.Add(_scrollViewer);
@@ -160,24 +160,19 @@ namespace NudgeTray
 
         private Border CreateHeader()
         {
-            var headerBorder = new Border
+            var headerStack = new StackPanel { Spacing = 0 };
+
+            // Top bar with title and close button
+            var topBar = new Border
             {
                 Background = new SolidColorBrush(SurfaceColor),
-                BorderBrush = new SolidColorBrush(BorderColor),
-                BorderThickness = new Thickness(0, 0, 0, 1),
                 Padding = new Thickness(16, 14, 12, 14),
                 CornerRadius = new CornerRadius(12, 12, 0, 0)
             };
 
-            var headerGrid = new Grid
+            var topGrid = new Grid
             {
-                ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto")
-            };
-
-            var titleStack = new StackPanel
-            {
-                Spacing = 2,
-                VerticalAlignment = VerticalAlignment.Center
+                ColumnDefinitions = new ColumnDefinitions("*,Auto")
             };
 
             var titleText = new TextBlock
@@ -185,61 +180,61 @@ namespace NudgeTray
                 Text = "Analytics",
                 FontSize = 15,
                 FontWeight = FontWeight.SemiBold,
-                Foreground = new SolidColorBrush(TextPrimary)
+                Foreground = new SolidColorBrush(TextPrimary),
+                VerticalAlignment = VerticalAlignment.Center
             };
 
-            var subtitleText = new TextBlock
-            {
-                Text = GetFilterSubtitle(),
-                FontSize = 11,
-                FontWeight = FontWeight.Normal,
-                Foreground = new SolidColorBrush(TextSecondary)
-            };
-
-            titleStack.Children.Add(titleText);
-            titleStack.Children.Add(subtitleText);
-
-            Grid.SetColumn(titleStack, 0);
-
-            // Filter Toggle Button
-            _filterButton = CreateFilterButton();
-            Grid.SetColumn(_filterButton, 1);
+            Grid.SetColumn(titleText, 0);
 
             // Close Button
             var closeButton = CreateCloseButton();
-            Grid.SetColumn(closeButton, 2);
+            Grid.SetColumn(closeButton, 1);
 
-            headerGrid.Children.Add(titleStack);
-            headerGrid.Children.Add(_filterButton);
-            headerGrid.Children.Add(closeButton);
-            headerBorder.Child = headerGrid;
+            topGrid.Children.Add(titleText);
+            topGrid.Children.Add(closeButton);
+            topBar.Child = topGrid;
+
+            // Tabs bar
+            var tabsBar = new Border
+            {
+                Background = new SolidColorBrush(SurfaceColor),
+                BorderBrush = new SolidColorBrush(BorderColor),
+                BorderThickness = new Thickness(0, 0, 0, 1),
+                Padding = new Thickness(16, 0, 16, 0)
+            };
+
+            var tabsStack = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8
+            };
+
+            _todayTab = CreateTab("Today", true);
+            _weekTab = CreateTab("This Week", false);
+
+            tabsStack.Children.Add(_todayTab);
+            tabsStack.Children.Add(_weekTab);
+            tabsBar.Child = tabsStack;
+
+            headerStack.Children.Add(topBar);
+            headerStack.Children.Add(tabsBar);
+
+            var headerBorder = new Border
+            {
+                Child = headerStack
+            };
 
             return headerBorder;
         }
 
-        private string GetFilterSubtitle()
-        {
-            if (_currentFilter == TimeFilter.Today)
-            {
-                return DateTime.Now.ToString("MMMM d, yyyy");
-            }
-            else
-            {
-                var startOfWeek = GetFilterStartDate(TimeFilter.ThisWeek);
-                var endOfWeek = startOfWeek.AddDays(6);
-                return $"{startOfWeek:MMM d} - {endOfWeek:MMM d}";
-            }
-        }
-
-        private Border CreateFilterButton()
+        private Border CreateTab(string label, bool isActive)
         {
             var border = new Border
             {
-                Background = new SolidColorBrush(PrimaryBlue),
-                CornerRadius = new CornerRadius(6),
-                Padding = new Thickness(10, 6, 10, 6),
+                Padding = new Thickness(12, 10, 12, 10),
                 Cursor = new Cursor(StandardCursorType.Hand),
-                Margin = new Thickness(0, 0, 8, 0)
+                BorderThickness = new Thickness(0, 0, 0, 2),
+                BorderBrush = isActive ? new SolidColorBrush(PrimaryBlue) : Brushes.Transparent
             };
 
             var button = new Button
@@ -248,44 +243,74 @@ namespace NudgeTray
                 BorderThickness = new Thickness(0),
                 Cursor = new Cursor(StandardCursorType.Hand),
                 Padding = new Thickness(0),
-                HorizontalContentAlignment = HorizontalAlignment.Center,
-                VerticalContentAlignment = VerticalAlignment.Center
+                Content = new TextBlock
+                {
+                    Text = label,
+                    FontSize = 11,
+                    FontWeight = isActive ? FontWeight.SemiBold : FontWeight.Medium,
+                    Foreground = new SolidColorBrush(isActive ? PrimaryBlue : TextSecondary)
+                }
             };
 
-            var stack = new StackPanel
+            button.Click += (s, e) =>
             {
-                Orientation = Orientation.Horizontal,
-                Spacing = 5
+                var newFilter = label == "Today" ? TimeFilter.Today : TimeFilter.ThisWeek;
+                if (newFilter != _currentFilter)
+                {
+                    _currentFilter = newFilter;
+                    UpdateTabStyles();
+                    LoadDataAndDisplay();
+                }
             };
 
-            var icon = new TextBlock
-            {
-                Text = _currentFilter == TimeFilter.Today ? "📅" : "📆",
-                FontSize = 12,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-
-            _filterButtonText = new TextBlock
-            {
-                Text = _currentFilter == TimeFilter.Today ? "Today" : "Week",
-                FontSize = 11,
-                FontWeight = FontWeight.Medium,
-                Foreground = Brushes.White,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-
-            stack.Children.Add(icon);
-            stack.Children.Add(_filterButtonText);
-            button.Content = stack;
-            button.Click += OnFilterButtonClick;
             border.Child = button;
 
-            // Hover effects
-            border.PointerEntered += (s, e) => border.Background = new SolidColorBrush(PrimaryBlueHover);
-            border.PointerExited += (s, e) => border.Background = new SolidColorBrush(PrimaryBlue);
+            // Hover effect for inactive tabs
+            if (!isActive)
+            {
+                border.PointerEntered += (s, e) =>
+                {
+                    if (border.Child is Button btn && btn.Content is TextBlock tb)
+                    {
+                        tb.Foreground = new SolidColorBrush(TextPrimary);
+                    }
+                };
+                border.PointerExited += (s, e) =>
+                {
+                    if (border.Child is Button btn && btn.Content is TextBlock tb)
+                    {
+                        tb.Foreground = new SolidColorBrush(TextSecondary);
+                    }
+                };
+            }
 
             return border;
         }
+
+        private void UpdateTabStyles()
+        {
+            if (_todayTab != null && _weekTab != null)
+            {
+                bool todayActive = _currentFilter == TimeFilter.Today;
+
+                // Update Today tab
+                _todayTab.BorderBrush = todayActive ? new SolidColorBrush(PrimaryBlue) : Brushes.Transparent;
+                if (_todayTab.Child is Button todayBtn && todayBtn.Content is TextBlock todayTb)
+                {
+                    todayTb.FontWeight = todayActive ? FontWeight.SemiBold : FontWeight.Medium;
+                    todayTb.Foreground = new SolidColorBrush(todayActive ? PrimaryBlue : TextSecondary);
+                }
+
+                // Update Week tab
+                _weekTab.BorderBrush = !todayActive ? new SolidColorBrush(PrimaryBlue) : Brushes.Transparent;
+                if (_weekTab.Child is Button weekBtn && weekBtn.Content is TextBlock weekTb)
+                {
+                    weekTb.FontWeight = !todayActive ? FontWeight.SemiBold : FontWeight.Medium;
+                    weekTb.Foreground = new SolidColorBrush(!todayActive ? PrimaryBlue : TextSecondary);
+                }
+            }
+        }
+
 
         private Border CreateCloseButton()
         {
@@ -339,14 +364,6 @@ namespace NudgeTray
             return border;
         }
 
-        private void OnFilterButtonClick(object? sender, RoutedEventArgs e)
-        {
-            // Toggle filter
-            _currentFilter = _currentFilter == TimeFilter.Today ? TimeFilter.ThisWeek : TimeFilter.Today;
-
-            // Reload data and rebuild UI
-            LoadDataAndDisplay();
-        }
 
         private void RefreshContent()
         {
