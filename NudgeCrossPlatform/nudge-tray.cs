@@ -861,123 +861,137 @@ namespace NudgeTray
         {
             Console.WriteLine("[DEBUG] ShowDbusNotification called (native DBus)");
 
-            try
+            // Run DBus operations without capturing Avalonia synchronization context
+            // This prevents DBus from trying to use Avalonia dispatcher during cleanup
+            await Task.Run(async () =>
             {
-                using var connection = new Connection(Address.Session!);
-                await connection.ConnectAsync();
+                // Clear synchronization context to prevent DBus from capturing it
+                var oldContext = SynchronizationContext.Current;
+                SynchronizationContext.SetSynchronizationContext(null);
 
-                // Create and send Notify method call
-                MessageBuffer message;
+                try
                 {
-                    using var writer = connection.GetMessageWriter();
+                    using var connection = new Connection(Address.Session!);
+                    await connection.ConnectAsync().ConfigureAwait(false);
 
-                    writer.WriteMethodCallHeader(
-                        destination: "org.freedesktop.Notifications",
-                        path: "/org/freedesktop/Notifications",
-                        @interface: "org.freedesktop.Notifications",
-                        signature: "susssasa{sv}i",
-                        member: "Notify");
+                    // Create and send Notify method call
+                    MessageBuffer message;
+                    {
+                        using var writer = connection.GetMessageWriter();
 
-                    writer.WriteString("Nudge");  // app_name
-                    writer.WriteUInt32(0);        // replaces_id
-                    writer.WriteString("");       // app_icon
-                    writer.WriteString("Nudge - Productivity Check"); // summary
-                    writer.WriteString("Were you productive during the last interval?"); // body
+                        writer.WriteMethodCallHeader(
+                            destination: "org.freedesktop.Notifications",
+                            path: "/org/freedesktop/Notifications",
+                            @interface: "org.freedesktop.Notifications",
+                            signature: "susssasa{sv}i",
+                            member: "Notify");
 
-                    // Write actions array
-                    writer.WriteArray(new string[] { "yes", "Yes - Productive", "no", "No - Not Productive" });
+                        writer.WriteString("Nudge");  // app_name
+                        writer.WriteUInt32(0);        // replaces_id
+                        writer.WriteString("");       // app_icon
+                        writer.WriteString("Nudge - Productivity Check"); // summary
+                        writer.WriteString("Were you productive during the last interval?"); // body
 
-                    // Write hints dictionary with RESIDENT:TRUE for persistent notifications
-                    var arrayStart = writer.WriteDictionaryStart();
-                    writer.WriteDictionaryEntryStart();
-                    writer.WriteString("urgency");
-                    writer.WriteVariant(VariantValue.Byte(2));
-                    writer.WriteDictionaryEntryStart();
-                    writer.WriteString("resident");
-                    writer.WriteVariant(VariantValue.Bool(true));
-                    writer.WriteDictionaryEntryStart();
-                    writer.WriteString("x-kde-appname");
-                    writer.WriteVariant(VariantValue.String("Nudge"));
-                    writer.WriteDictionaryEntryStart();
-                    writer.WriteString("x-kde-eventId");
-                    writer.WriteVariant(VariantValue.String("productivity-check"));
-                    writer.WriteDictionaryEnd(arrayStart);
+                        // Write actions array
+                        writer.WriteArray(new string[] { "yes", "Yes - Productive", "no", "No - Not Productive" });
 
-                    writer.WriteInt32(0);  // expire_timeout (0 = infinite)
+                        // Write hints dictionary with RESIDENT:TRUE for persistent notifications
+                        var arrayStart = writer.WriteDictionaryStart();
+                        writer.WriteDictionaryEntryStart();
+                        writer.WriteString("urgency");
+                        writer.WriteVariant(VariantValue.Byte(2));
+                        writer.WriteDictionaryEntryStart();
+                        writer.WriteString("resident");
+                        writer.WriteVariant(VariantValue.Bool(true));
+                        writer.WriteDictionaryEntryStart();
+                        writer.WriteString("x-kde-appname");
+                        writer.WriteVariant(VariantValue.String("Nudge"));
+                        writer.WriteDictionaryEntryStart();
+                        writer.WriteString("x-kde-eventId");
+                        writer.WriteVariant(VariantValue.String("productivity-check"));
+                        writer.WriteDictionaryEnd(arrayStart);
 
-                    message = writer.CreateMessage();
+                        writer.WriteInt32(0);  // expire_timeout (0 = infinite)
+
+                        message = writer.CreateMessage();
+                    }
+
+                    var notificationId = await connection.CallMethodAsync(
+                        message,
+                        (Tmds.DBus.Protocol.Message m, object? s) => m.GetBodyReader().ReadUInt32(),
+                        null);
+
+                    Console.WriteLine($"[DEBUG] Notification ID: {notificationId}");
+
+                    // Listen for ActionInvoked signal
+                    var actionMatchRule = new MatchRule
+                    {
+                        Type = MessageType.Signal,
+                        Interface = "org.freedesktop.Notifications",
+                        Member = "ActionInvoked"
+                    };
+
+                    var cancellationSource = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(60));
+
+                    await connection.AddMatchAsync(
+                        actionMatchRule,
+                        (Tmds.DBus.Protocol.Message m, object? s) =>
+                        {
+                            var reader = m.GetBodyReader();
+                            return (reader.ReadUInt32(), reader.ReadString());
+                        },
+                        (Exception? ex, (uint id, string actionKey) signal, object? readerState, object? handlerState) =>
+                        {
+                            if (ex != null)
+                            {
+                                Console.WriteLine($"[DEBUG] Action listener error: {ex.Message}");
+                                return;
+                            }
+
+                            if (signal.id == notificationId)
+                            {
+                                Console.WriteLine($"[DEBUG] Action invoked: {signal.actionKey}");
+
+                                if (signal.actionKey == "yes")
+                                {
+                                    Console.WriteLine("User responded: YES (productive)");
+                                    SendResponse(true);
+                                }
+                                else if (signal.actionKey == "no")
+                                {
+                                    Console.WriteLine("User responded: NO (not productive)");
+                                    SendResponse(false);
+                                }
+
+                                cancellationSource.Cancel();
+                            }
+                        },
+                        ObserverFlags.None,
+                        null,
+                        null,
+                        true
+                    );
+
+                    // Keep connection alive until cancelled
+                    Console.WriteLine("[DEBUG] Waiting for notification interaction (60s timeout)...");
+                    await Task.Delay(-1, cancellationSource.Token).ContinueWith(_ => { });
                 }
-
-                var notificationId = await connection.CallMethodAsync(
-                    message,
-                    (Tmds.DBus.Protocol.Message m, object? s) => m.GetBodyReader().ReadUInt32(),
-                    null);
-
-                Console.WriteLine($"[DEBUG] Notification ID: {notificationId}");
-
-                // Listen for ActionInvoked signal
-                var actionMatchRule = new MatchRule
+                catch (TaskCanceledException)
                 {
-                    Type = MessageType.Signal,
-                    Interface = "org.freedesktop.Notifications",
-                    Member = "ActionInvoked"
-                };
-
-                var cancellationSource = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(60));
-
-                await connection.AddMatchAsync(
-                    actionMatchRule,
-                    (Tmds.DBus.Protocol.Message m, object? s) =>
-                    {
-                        var reader = m.GetBodyReader();
-                        return (reader.ReadUInt32(), reader.ReadString());
-                    },
-                    (Exception? ex, (uint id, string actionKey) signal, object? readerState, object? handlerState) =>
-                    {
-                        if (ex != null)
-                        {
-                            Console.WriteLine($"[DEBUG] Action listener error: {ex.Message}");
-                            return;
-                        }
-
-                        if (signal.id == notificationId)
-                        {
-                            Console.WriteLine($"[DEBUG] Action invoked: {signal.actionKey}");
-
-                            if (signal.actionKey == "yes")
-                            {
-                                Console.WriteLine("User responded: YES (productive)");
-                                SendResponse(true);
-                            }
-                            else if (signal.actionKey == "no")
-                            {
-                                Console.WriteLine("User responded: NO (not productive)");
-                                SendResponse(false);
-                            }
-
-                            cancellationSource.Cancel();
-                        }
-                    },
-                    ObserverFlags.None,
-                    null,
-                    null,
-                    true
-                );
-
-                // Keep connection alive until cancelled
-                Console.WriteLine("[DEBUG] Waiting for notification interaction (60s timeout)...");
-                await Task.Delay(-1, cancellationSource.Token).ContinueWith(_ => { });
-            }
-            catch (TaskCanceledException)
-            {
-                Console.WriteLine("[DEBUG] DBus notification cancelled (expected during cleanup)");
-                // Swallow cancellation exceptions - these are expected
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[DEBUG] Native DBus notification failed: {ex.Message}");
-                // Don't rethrow - just log and continue
-            }
+                    Console.WriteLine("[DEBUG] DBus notification cancelled (expected during cleanup)");
+                    // Swallow cancellation exceptions - these are expected
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[DEBUG] Native DBus notification failed: {ex.Message}");
+                    // Don't rethrow - just log and continue
+                }
+                finally
+                {
+                    // Restore original synchronization context
+                    SynchronizationContext.SetSynchronizationContext(oldContext);
+                }
+            }).ConfigureAwait(false);
         }
 
         private static void ShowFallbackNotification()
