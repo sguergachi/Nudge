@@ -170,22 +170,23 @@ namespace NudgeTray
             };
             Grid.SetColumn(titleText, 0);
 
-            // Countdown timer with progress wheel - right-aligned
+            // Countdown timer with progress wheel - right-aligned (compact size)
             var timerContainer = new Grid
             {
-                Width = 36,
-                Height = 36,
+                Width = 28,
+                Height = 28,
                 HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, -2, 0, 0) // Slight upward adjustment to align with title
             };
 
             // Background circle (track)
             var backgroundCircle = new Arc
             {
-                Width = 32,
-                Height = 32,
+                Width = 24,
+                Height = 24,
                 Stroke = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
-                StrokeThickness = 2,
+                StrokeThickness = 1.5,
                 StartAngle = 0,
                 SweepAngle = 360,
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -195,10 +196,10 @@ namespace NudgeTray
             // Progress arc (animates from 360° to 0°)
             _progressArc = new Arc
             {
-                Width = 32,
-                Height = 32,
+                Width = 24,
+                Height = 24,
                 Stroke = new SolidColorBrush(Color.FromArgb(180, 255, 100, 100)),
-                StrokeThickness = 2.5,
+                StrokeThickness = 2,
                 StartAngle = -90, // Start at top (12 o'clock)
                 SweepAngle = 360, // Full circle initially
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -210,7 +211,7 @@ namespace NudgeTray
             _countdownText = new TextBlock
             {
                 Text = $"{AUTO_DISMISS_SECONDS}s",
-                FontSize = 11,
+                FontSize = 10,
                 FontWeight = FontWeight.SemiBold,
                 Foreground = new SolidColorBrush(Color.FromArgb(200, 255, 100, 100)),
                 HorizontalAlignment = HorizontalAlignment.Center,
