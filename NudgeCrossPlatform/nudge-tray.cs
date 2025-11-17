@@ -258,15 +258,6 @@ namespace NudgeTray
 
         static void CreateTrayIcon()
         {
-            // On Linux, skip tray icon entirely - DBus is too unstable on KDE/Wayland
-            // The app works fine without it (custom notifications still appear)
-            if (!PlatformConfig.IsWindows)
-            {
-                Console.WriteLine("[INFO] Tray icon disabled on Linux (DBus instability)");
-                Console.WriteLine("[INFO] App running in background - notifications will still appear");
-                return;
-            }
-
             try
             {
                 _trayIcon = new TrayIcon
@@ -288,37 +279,8 @@ namespace NudgeTray
                     Console.WriteLine("[ERROR] Application.Current is null - cannot register tray icon");
                 }
 
-                // Disable menu refresh timer temporarily to test if it's causing issues
-                // We'll update the menu only when needed, not on a timer
-                /*
-                // Start menu refresh timer (update every 10 seconds)
-                _menuRefreshTimer = new System.Threading.Timer(_ =>
-                {
-                    try
-                    {
-                        Dispatcher.UIThread.Post(() =>
-                        {
-                            try
-                            {
-                                if (_trayIcon != null)
-                                {
-                                    _trayIcon.Menu = CreateAvaloniaMenu();
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine($"[ERROR] Menu refresh failed: {ex.Message}");
-                            }
-                        });
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[ERROR] Timer callback failed: {ex.Message}");
-                    }
-                }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
-                */
-
                 Console.WriteLine("[DEBUG] Tray icon created with Avalonia TrayIcon (cross-platform)");
+                Console.WriteLine("[INFO] Right-click the tray icon to respond to snapshots");
             }
             catch (Exception ex)
             {
@@ -364,18 +326,12 @@ namespace NudgeTray
                         Console.WriteLine("[DEBUG] User clicked YES from notification");
                         _waitingForResponse = false;
                         SendResponse(true);
-
-                        // Refresh tray menu on UI thread (safe method)
-                        Dispatcher.UIThread.Post(() => SafeUpdateMenu());
                     }
                     else if (action == "no")
                     {
                         Console.WriteLine("[DEBUG] User clicked NO from notification");
                         _waitingForResponse = false;
                         SendResponse(false);
-
-                        // Refresh tray menu on UI thread (safe method)
-                        Dispatcher.UIThread.Post(() => SafeUpdateMenu());
                     }
                 }
             }
@@ -393,7 +349,7 @@ namespace NudgeTray
                 Console.WriteLine("[DEBUG] Creating menu...");
                 var menu = new NativeMenu();
 
-                // Status item - make it simple and safe
+                // Status item - show next snapshot time
                 string statusText = "Nudge Tracker";
                 try
                 {
@@ -412,7 +368,7 @@ namespace NudgeTray
                 menu.Add(statusItem);
                 Console.WriteLine("[DEBUG] Added status item");
 
-                // Separator
+                // Separator before quit option
                 menu.Add(new NativeMenuItemSeparator());
                 Console.WriteLine("[DEBUG] Added separator");
 
@@ -749,31 +705,6 @@ namespace NudgeTray
 
         private static bool _waitingForResponse = false;
 
-        static void SafeUpdateMenu()
-        {
-            try
-            {
-                // On Linux, skip menu updates entirely to avoid DBus crashes
-                // Menu updates are not critical and can cause NullReferenceException in DBus
-                if (!PlatformConfig.IsWindows)
-                {
-                    Console.WriteLine("[DEBUG] Menu update skipped on Linux (DBus instability)");
-                    return;
-                }
-
-                if (_trayIcon != null)
-                {
-                    var newMenu = CreateAvaloniaMenu();
-                    _trayIcon.Menu = newMenu;
-                }
-            }
-            catch (Exception ex)
-            {
-                // Silent failure - menu updates are not critical
-                Console.WriteLine($"[DEBUG] Menu update skipped: {ex.Message}");
-            }
-        }
-
         private static void ShowCustomNotification()
         {
             try
@@ -844,9 +775,6 @@ namespace NudgeTray
                     .Show();
 
                 Console.WriteLine("✓ Native Windows toast notification shown with Yes/No buttons");
-
-                // Refresh tray menu to show Yes/No options (safe method)
-                Dispatcher.UIThread.Post(() => SafeUpdateMenu());
             }
             catch (Exception ex)
             {
