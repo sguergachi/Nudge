@@ -115,7 +115,6 @@ namespace NudgeTray
                 BorderBrush = new SolidColorBrush(BorderColor),
                 BorderThickness = new Thickness(1),
                 ClipToBounds = false,
-                Height = 548, // Window height (580) minus margins (32)
                 BoxShadow = new BoxShadows(
                     new BoxShadow
                     {
@@ -128,10 +127,18 @@ namespace NudgeTray
                 )
             };
 
+            // Inner container to clip content while outer maintains shadow
+            var innerContainer = new Border
+            {
+                CornerRadius = new CornerRadius(12),
+                ClipToBounds = true
+            };
+
             // Use Grid instead of StackPanel to properly constrain ScrollViewer
             var mainGrid = new Grid
             {
-                RowDefinitions = new RowDefinitions("Auto,*") // Header is auto, content fills remaining
+                RowDefinitions = new RowDefinitions("Auto,*"), // Header is auto, content fills remaining
+                Height = 548 // Window height (580) minus margins (32)
             };
 
             // Header Section with close button
@@ -151,13 +158,13 @@ namespace NudgeTray
                 Content = _contentPanel,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto
-                // No MaxHeight - let it fill available space from Grid
             };
 
             Grid.SetRow(_scrollViewer, 1);
             mainGrid.Children.Add(_scrollViewer);
 
-            mainContainer.Child = mainGrid;
+            innerContainer.Child = mainGrid;
+            mainContainer.Child = innerContainer;
             Content = mainContainer;
 
             // Populate content

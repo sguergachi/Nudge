@@ -287,7 +287,7 @@ namespace NudgeTray
 
                 Console.WriteLine("[INFO] ✓ Tray icon created successfully");
                 Console.WriteLine("[INFO]   • Left-click: Open Analytics Dashboard");
-                Console.WriteLine("[INFO]   • Right-click: Show Menu");
+                Console.WriteLine("[INFO]   • Right-click: Show Menu")
             }
             catch (Exception ex)
             {
@@ -335,18 +335,12 @@ namespace NudgeTray
                         Console.WriteLine("[DEBUG] User clicked YES from notification");
                         _waitingForResponse = false;
                         SendResponse(true);
-
-                        // Refresh tray menu on UI thread (safe method)
-                        Dispatcher.UIThread.Post(() => SafeUpdateMenu());
                     }
                     else if (action == "no")
                     {
                         Console.WriteLine("[DEBUG] User clicked NO from notification");
                         _waitingForResponse = false;
                         SendResponse(false);
-
-                        // Refresh tray menu on UI thread (safe method)
-                        Dispatcher.UIThread.Post(() => SafeUpdateMenu());
                     }
                 }
             }
@@ -364,7 +358,7 @@ namespace NudgeTray
                 Console.WriteLine("[DEBUG] Creating menu...");
                 var menu = new NativeMenu();
 
-                // Status item - make it simple and safe
+                // Status item - show next snapshot time
                 string statusText = "Nudge Tracker";
                 try
                 {
@@ -383,7 +377,7 @@ namespace NudgeTray
                 menu.Add(statusItem);
                 Console.WriteLine("[DEBUG] Added status item");
 
-                // Separator
+                // Separator before quit option
                 menu.Add(new NativeMenuItemSeparator());
                 Console.WriteLine("[DEBUG] Added separator");
 
@@ -770,23 +764,6 @@ namespace NudgeTray
 
         private static bool _waitingForResponse = false;
 
-        static void SafeUpdateMenu()
-        {
-            try
-            {
-                if (_trayIcon != null)
-                {
-                    var newMenu = CreateAvaloniaMenu();
-                    _trayIcon.Menu = newMenu;
-                }
-            }
-            catch (Exception ex)
-            {
-                // Silent failure - menu updates are not critical
-                Console.WriteLine($"[DEBUG] Menu update failed (non-critical): {ex.Message}");
-            }
-        }
-
         private static void ShowCustomNotification()
         {
             try
@@ -857,9 +834,6 @@ namespace NudgeTray
                     .Show();
 
                 Console.WriteLine("✓ Native Windows toast notification shown with Yes/No buttons");
-
-                // Refresh tray menu to show Yes/No options (safe method)
-                Dispatcher.UIThread.Post(() => SafeUpdateMenu());
             }
             catch (Exception ex)
             {
