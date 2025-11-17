@@ -137,8 +137,7 @@ namespace NudgeTray
             // Use Grid instead of StackPanel to properly constrain ScrollViewer
             var mainGrid = new Grid
             {
-                RowDefinitions = new RowDefinitions("Auto,*"), // Header is auto, content fills remaining
-                Height = 548 // Window height (580) minus margins (32)
+                RowDefinitions = new RowDefinitions("Auto,*") // Header is auto, content fills remaining
             };
 
             // Header Section with close button
@@ -157,7 +156,8 @@ namespace NudgeTray
             {
                 Content = _contentPanel,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                MaxHeight = 430 // Window (580) - margins (32) - header (~118) = ~430
             };
 
             Grid.SetRow(_scrollViewer, 1);
