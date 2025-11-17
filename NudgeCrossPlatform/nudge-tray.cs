@@ -120,9 +120,11 @@ namespace NudgeTray
             TaskScheduler.UnobservedTaskException += (s, e) =>
             {
                 // Handle DBus-related task exceptions gracefully
-                if (e.Exception.ToString().Contains("DBus") ||
-                    e.Exception.ToString().Contains("Tmds.DBus") ||
-                    e.Exception is TaskCanceledException)
+                // Note: e.Exception is AggregateException, so check string representation for inner types
+                var exceptionStr = e.Exception.ToString();
+                if (exceptionStr.Contains("DBus") ||
+                    exceptionStr.Contains("Tmds.DBus") ||
+                    exceptionStr.Contains("TaskCanceledException"))
                 {
                     Console.WriteLine($"[WARN] DBus task exception (handled): {e.Exception.Message}");
                 }
