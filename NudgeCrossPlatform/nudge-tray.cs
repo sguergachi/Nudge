@@ -68,7 +68,7 @@ namespace NudgeTray
     class Program
     {
         const int UDP_PORT = 45001;
-        const string VERSION = "1.2.0";
+        const string VERSION = "1.3.0";
         static Process? _nudgeProcess;
         static Process? _mlInferenceProcess;
         static Process? _mlTrainerProcess;
@@ -119,7 +119,17 @@ namespace NudgeTray
 
             TaskScheduler.UnobservedTaskException += (s, e) =>
             {
-                Console.WriteLine($"[ERROR] Unobserved task exception (handled): {e.Exception.Message}");
+                // Handle DBus-related task exceptions gracefully
+                if (e.Exception.ToString().Contains("DBus") ||
+                    e.Exception.ToString().Contains("Tmds.DBus") ||
+                    e.Exception is TaskCanceledException)
+                {
+                    Console.WriteLine($"[WARN] DBus task exception (handled): {e.Exception.Message}");
+                }
+                else
+                {
+                    Console.WriteLine($"[ERROR] Unobserved task exception: {e.Exception.Message}");
+                }
                 e.SetObserved(); // Mark as observed to prevent crash
             };
 
@@ -958,10 +968,15 @@ namespace NudgeTray
                 Console.WriteLine("[DEBUG] Waiting for notification interaction (60s timeout)...");
                 await Task.Delay(-1, cancellationSource.Token).ContinueWith(_ => { });
             }
+            catch (TaskCanceledException)
+            {
+                Console.WriteLine("[DEBUG] DBus notification cancelled (expected during cleanup)");
+                // Swallow cancellation exceptions - these are expected
+            }
             catch (Exception ex)
             {
                 Console.WriteLine($"[DEBUG] Native DBus notification failed: {ex.Message}");
-                throw;
+                // Don't rethrow - just log and continue
             }
         }
 
