@@ -157,7 +157,8 @@ namespace NudgeTray
             {
                 Content = _contentPanel,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                MaxHeight = 430 // Constrain height to trigger scrollbar (innerContainer 548 - header ~118)
             };
 
             Grid.SetRow(_scrollViewer, 1);
