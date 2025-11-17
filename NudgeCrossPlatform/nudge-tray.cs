@@ -326,18 +326,12 @@ namespace NudgeTray
                         Console.WriteLine("[DEBUG] User clicked YES from notification");
                         _waitingForResponse = false;
                         SendResponse(true);
-
-                        // Refresh tray menu to normal state
-                        UpdateTrayMenu();
                     }
                     else if (action == "no")
                     {
                         Console.WriteLine("[DEBUG] User clicked NO from notification");
                         _waitingForResponse = false;
                         SendResponse(false);
-
-                        // Refresh tray menu to normal state
-                        UpdateTrayMenu();
                     }
                 }
             }
@@ -706,19 +700,39 @@ namespace NudgeTray
 
         private static void ShowCustomNotification()
         {
-            // Show native OS notification with YES/NO buttons
-            // This is a NOTIFICATION (popup toast), NOT the tray menu
-            _waitingForResponse = true;
+            try
+            {
+                Console.WriteLine("[DEBUG] ShowCustomNotification called");
 
-#if WINDOWS
-            ShowWindowsNotification();
-#else
-            ShowDbusNotification();
-#endif
+                _waitingForResponse = true;
+
+                // Create and show custom notification window on Avalonia UI thread (works on all platforms)
+                Dispatcher.UIThread.Post(() =>
+                {
+                    var notificationWindow = new CustomNotificationWindow();
+                    notificationWindow.ShowWithAnimation((productive) =>
+                    {
+                        _waitingForResponse = false;
+                        SendResponse(productive);
+
+                        // Don't refresh menu after response - not necessary and can cause crashes on Linux
+                    });
+                });
+
+                Console.WriteLine("✓ Custom notification shown with animation");
+
+                // Don't refresh menu to show waiting state - can cause DBus crashes on Linux
+                // The menu will update naturally on next user interaction
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] Failed to show custom notification: {ex.Message}");
+                Console.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
+            }
         }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // NATIVE OS NOTIFICATIONS (Windows Toast and Linux DBus)
+        // LEGACY NOTIFICATIONS (Kept for reference, not used)
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 #if WINDOWS
@@ -745,9 +759,6 @@ namespace NudgeTray
                     .Show();
 
                 Console.WriteLine("✓ Native Windows toast notification shown with Yes/No buttons");
-
-                // Refresh tray menu to show Yes/No options
-                UpdateTrayMenu();
             }
             catch (Exception ex)
             {
