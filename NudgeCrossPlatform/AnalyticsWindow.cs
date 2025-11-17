@@ -259,7 +259,9 @@ namespace NudgeTray
                 {
                     _currentFilter = newFilter;
                     UpdateTabStyles();
-                    LoadDataAndDisplay();
+                    // Reload data and refresh content only (don't rebuild entire UI)
+                    _data = AnalyticsData.LoadFromCSV(_currentFilter);
+                    RefreshContent();
                 }
             };
 
@@ -377,13 +379,13 @@ namespace NudgeTray
             // App Usage Section
             if (_data.AppUsage.Any())
             {
-                _contentPanel.Children.Add(CreateSection("\uE8B7", "Most Used Apps", CreateAppUsageView())); // AppIconDefault icon
+                _contentPanel.Children.Add(CreateSection("📊", "Most Used Apps", CreateAppUsageView()));
             }
 
             // Hourly Productivity Section
             if (_data.HourlyProductivity.Any())
             {
-                _contentPanel.Children.Add(CreateSection("\uE9D2", "Productivity by Hour", CreateHourlyProductivityView())); // CalendarDay icon
+                _contentPanel.Children.Add(CreateSection("📅", "Productivity by Hour", CreateHourlyProductivityView()));
             }
 
             // Empty State
@@ -410,25 +412,25 @@ namespace NudgeTray
                 RowDefinitions = new RowDefinitions("Auto")
             };
 
-            // Total Activity (Clock icon)
+            // Total Activity
             var activityPanel = CreateStatCard(
-                "\uE916", // Clock icon
+                "⏱", // Clock emoji
                 FormatDuration(_data?.TotalActivityMinutes ?? 0),
                 "Activity"
             );
             Grid.SetColumn(activityPanel, 0);
 
-            // Productive Time (Star icon)
+            // Productive Time
             var productivePanel = CreateStatCard(
-                "\uE734", // Star icon
+                "⭐", // Star emoji
                 (_data?.ProductivePercentage ?? 0).ToString("F0") + "%",
                 "Productive"
             );
             Grid.SetColumn(productivePanel, 1);
 
-            // Apps Used (Apps icon)
+            // Apps Used
             var appsPanel = CreateStatCard(
-                "\uE8FD", // DockLeft icon (represents apps)
+                "📱", // Apps emoji
                 (_data?.AppUsage.Count ?? 0).ToString(),
                 "Apps"
             );
@@ -453,11 +455,9 @@ namespace NudgeTray
             var iconText = new TextBlock
             {
                 Text = icon,
-                FontFamily = new FontFamily("Segoe Fluent Icons,Segoe MDL2 Assets"),
                 FontSize = 24,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 0, 0, 2),
-                Foreground = new SolidColorBrush(PrimaryBlue)
+                Margin = new Thickness(0, 0, 0, 2)
             };
 
             var valueText = new TextBlock
@@ -509,9 +509,7 @@ namespace NudgeTray
             var iconText = new TextBlock
             {
                 Text = icon,
-                FontFamily = new FontFamily("Segoe Fluent Icons,Segoe MDL2 Assets"),
                 FontSize = 14,
-                Foreground = new SolidColorBrush(PrimaryBlue),
                 VerticalAlignment = VerticalAlignment.Center
             };
 
@@ -778,12 +776,10 @@ namespace NudgeTray
 
             var iconText = new TextBlock
             {
-                Text = "\uE7C3", // PageEmpty icon
-                FontFamily = new FontFamily("Segoe Fluent Icons,Segoe MDL2 Assets"),
+                Text = "📭",
                 FontSize = 64,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Foreground = new SolidColorBrush(TextTertiary),
-                Opacity = 0.5
+                Opacity = 0.6
             };
 
             var messageText = new TextBlock
