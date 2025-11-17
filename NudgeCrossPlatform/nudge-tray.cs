@@ -258,15 +258,6 @@ namespace NudgeTray
 
         static void CreateTrayIcon()
         {
-            // On Linux, skip tray icon entirely - DBus is too unstable on KDE/Wayland
-            // The app works fine without it (custom notifications still appear)
-            if (!PlatformConfig.IsWindows)
-            {
-                Console.WriteLine("[INFO] Tray icon disabled on Linux (DBus instability)");
-                Console.WriteLine("[INFO] App running in background - notifications will still appear");
-                return;
-            }
-
             try
             {
                 _trayIcon = new TrayIcon
@@ -288,37 +279,8 @@ namespace NudgeTray
                     Console.WriteLine("[ERROR] Application.Current is null - cannot register tray icon");
                 }
 
-                // Disable menu refresh timer temporarily to test if it's causing issues
-                // We'll update the menu only when needed, not on a timer
-                /*
-                // Start menu refresh timer (update every 10 seconds)
-                _menuRefreshTimer = new System.Threading.Timer(_ =>
-                {
-                    try
-                    {
-                        Dispatcher.UIThread.Post(() =>
-                        {
-                            try
-                            {
-                                if (_trayIcon != null)
-                                {
-                                    _trayIcon.Menu = CreateAvaloniaMenu();
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine($"[ERROR] Menu refresh failed: {ex.Message}");
-                            }
-                        });
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[ERROR] Timer callback failed: {ex.Message}");
-                    }
-                }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
-                */
-
                 Console.WriteLine("[DEBUG] Tray icon created with Avalonia TrayIcon (cross-platform)");
+                Console.WriteLine("[INFO] Right-click the tray icon to respond to snapshots");
             }
             catch (Exception ex)
             {
@@ -365,8 +327,8 @@ namespace NudgeTray
                         _waitingForResponse = false;
                         SendResponse(true);
 
-                        // Refresh tray menu on UI thread (safe method)
-                        Dispatcher.UIThread.Post(() => SafeUpdateMenu());
+                        // Refresh tray menu to normal state
+                        UpdateTrayMenu();
                     }
                     else if (action == "no")
                     {
@@ -374,8 +336,8 @@ namespace NudgeTray
                         _waitingForResponse = false;
                         SendResponse(false);
 
-                        // Refresh tray menu on UI thread (safe method)
-                        Dispatcher.UIThread.Post(() => SafeUpdateMenu());
+                        // Refresh tray menu to normal state
+                        UpdateTrayMenu();
                     }
                 }
             }
@@ -393,30 +355,86 @@ namespace NudgeTray
                 Console.WriteLine("[DEBUG] Creating menu...");
                 var menu = new NativeMenu();
 
-                // Status item - make it simple and safe
-                string statusText = "Nudge Tracker";
-                try
+                if (_waitingForResponse)
                 {
-                    statusText = GetMenuStatusText();
+                    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    // WAITING FOR RESPONSE STATE - Show YES/NO options
+                    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+                    var questionItem = new NativeMenuItem
+                    {
+                        Header = "⏳ Were you productive?",
+                        IsEnabled = false
+                    };
+                    menu.Add(questionItem);
+                    Console.WriteLine("[DEBUG] Added question item");
+
+                    menu.Add(new NativeMenuItemSeparator());
+
+                    // YES - Productive option
+                    var yesItem = new NativeMenuItem { Header = "✓ Yes - Productive" };
+                    yesItem.Click += (s, e) =>
+                    {
+                        try
+                        {
+                            Console.WriteLine("[USER] Clicked: YES - Productive");
+                            HandleMenuResponse(true);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[ERROR] YES handler failed: {ex.Message}");
+                        }
+                    };
+                    menu.Add(yesItem);
+                    Console.WriteLine("[DEBUG] Added YES item");
+
+                    // NO - Not Productive option
+                    var noItem = new NativeMenuItem { Header = "✗ No - Not Productive" };
+                    noItem.Click += (s, e) =>
+                    {
+                        try
+                        {
+                            Console.WriteLine("[USER] Clicked: NO - Not Productive");
+                            HandleMenuResponse(false);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[ERROR] NO handler failed: {ex.Message}");
+                        }
+                    };
+                    menu.Add(noItem);
+                    Console.WriteLine("[DEBUG] Added NO item");
                 }
-                catch (Exception ex)
+                else
                 {
-                    Console.WriteLine($"[WARN] Failed to get status text: {ex.Message}");
+                    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    // NORMAL STATE - Show status and next snapshot time
+                    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+                    string statusText = "Nudge Tracker";
+                    try
+                    {
+                        statusText = GetMenuStatusText();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[WARN] Failed to get status text: {ex.Message}");
+                    }
+
+                    var statusItem = new NativeMenuItem
+                    {
+                        Header = statusText,
+                        IsEnabled = false
+                    };
+                    menu.Add(statusItem);
+                    Console.WriteLine("[DEBUG] Added status item");
                 }
 
-                var statusItem = new NativeMenuItem
-                {
-                    Header = statusText,
-                    IsEnabled = false
-                };
-                menu.Add(statusItem);
-                Console.WriteLine("[DEBUG] Added status item");
-
-                // Separator
+                // Separator before quit option
                 menu.Add(new NativeMenuItemSeparator());
                 Console.WriteLine("[DEBUG] Added separator");
 
-                // Quit option
+                // Quit option (always visible)
                 var quitItem = new NativeMenuItem { Header = "Quit" };
                 quitItem.Click += (s, e) =>
                 {
@@ -453,6 +471,20 @@ namespace NudgeTray
                     return new NativeMenu();
                 }
             }
+        }
+
+        static void HandleMenuResponse(bool productive)
+        {
+            Console.WriteLine($"✓ Menu response: {(productive ? "PRODUCTIVE" : "NOT PRODUCTIVE")}");
+
+            // Clear waiting state
+            _waitingForResponse = false;
+
+            // Send response to nudge process
+            SendResponse(productive);
+
+            // Update menu back to normal state
+            UpdateTrayMenu();
         }
 
         static WindowIcon CreateCommonIcon()
@@ -742,28 +774,29 @@ namespace NudgeTray
 
         private static bool _waitingForResponse = false;
 
-        static void SafeUpdateMenu()
+        static void UpdateTrayMenu()
         {
             try
             {
-                // On Linux, skip menu updates entirely to avoid DBus crashes
-                // Menu updates are not critical and can cause NullReferenceException in DBus
-                if (!PlatformConfig.IsWindows)
+                Dispatcher.UIThread.Post(() =>
                 {
-                    Console.WriteLine("[DEBUG] Menu update skipped on Linux (DBus instability)");
-                    return;
-                }
-
-                if (_trayIcon != null)
-                {
-                    var newMenu = CreateAvaloniaMenu();
-                    _trayIcon.Menu = newMenu;
-                }
+                    try
+                    {
+                        if (_trayIcon != null)
+                        {
+                            _trayIcon.Menu = CreateAvaloniaMenu();
+                            Console.WriteLine("[DEBUG] Tray menu updated");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[WARN] Menu update failed: {ex.Message}");
+                    }
+                });
             }
             catch (Exception ex)
             {
-                // Silent failure - menu updates are not critical
-                Console.WriteLine($"[DEBUG] Menu update skipped: {ex.Message}");
+                Console.WriteLine($"[WARN] Failed to post menu update: {ex.Message}");
             }
         }
 
@@ -771,31 +804,20 @@ namespace NudgeTray
         {
             try
             {
-                Console.WriteLine("[DEBUG] ShowCustomNotification called");
+                Console.WriteLine("[DEBUG] Snapshot notification triggered");
 
+                // Set waiting state
                 _waitingForResponse = true;
 
-                // Create and show custom notification window on Avalonia UI thread (works on all platforms)
-                Dispatcher.UIThread.Post(() =>
-                {
-                    var notificationWindow = new CustomNotificationWindow();
-                    notificationWindow.ShowWithAnimation((productive) =>
-                    {
-                        _waitingForResponse = false;
-                        SendResponse(productive);
+                // Update tray menu to show YES/NO options
+                UpdateTrayMenu();
 
-                        // Don't refresh menu after response - not necessary and can cause crashes on Linux
-                    });
-                });
-
-                Console.WriteLine("✓ Custom notification shown with animation");
-
-                // Don't refresh menu to show waiting state - can cause DBus crashes on Linux
-                // The menu will update naturally on next user interaction
+                Console.WriteLine("✓ Tray menu updated with response options");
+                Console.WriteLine("  Right-click the tray icon to respond (YES/NO)");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[ERROR] Failed to show custom notification: {ex.Message}");
+                Console.WriteLine($"[ERROR] Failed to update notification menu: {ex.Message}");
                 Console.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
             }
         }
@@ -829,8 +851,8 @@ namespace NudgeTray
 
                 Console.WriteLine("✓ Native Windows toast notification shown with Yes/No buttons");
 
-                // Refresh tray menu to show Yes/No options (safe method)
-                Dispatcher.UIThread.Post(() => SafeUpdateMenu());
+                // Refresh tray menu to show Yes/No options
+                UpdateTrayMenu();
             }
             catch (Exception ex)
             {
