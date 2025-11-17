@@ -126,11 +126,11 @@ namespace NudgeTray
                 BoxShadow = new BoxShadows(
                     new BoxShadow
                     {
-                        Blur = 32,
+                        Blur = 24,
                         Spread = 0,
                         OffsetX = 0,
-                        OffsetY = 8,
-                        Color = Color.FromArgb(60, 0, 0, 0) // Elevated shadow
+                        OffsetY = 4,
+                        Color = Color.FromArgb(40, 0, 0, 0) // Subtle shadow
                     }
                 ),
                 BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),

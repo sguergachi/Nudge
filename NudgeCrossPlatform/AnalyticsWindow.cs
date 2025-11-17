@@ -377,13 +377,13 @@ namespace NudgeTray
             // App Usage Section
             if (_data.AppUsage.Any())
             {
-                _contentPanel.Children.Add(CreateSection("Most Used Applications", CreateAppUsageView()));
+                _contentPanel.Children.Add(CreateSection("\uE8B7", "Most Used Apps", CreateAppUsageView())); // AppIconDefault icon
             }
 
             // Hourly Productivity Section
             if (_data.HourlyProductivity.Any())
             {
-                _contentPanel.Children.Add(CreateSection("Productivity by Hour", CreateHourlyProductivityView()));
+                _contentPanel.Children.Add(CreateSection("\uE9D2", "Productivity by Hour", CreateHourlyProductivityView())); // CalendarDay icon
             }
 
             // Empty State
@@ -410,25 +410,25 @@ namespace NudgeTray
                 RowDefinitions = new RowDefinitions("Auto")
             };
 
-            // Total Activity
+            // Total Activity (Clock icon)
             var activityPanel = CreateStatCard(
-                "🕐",
+                "\uE916", // Clock icon
                 FormatDuration(_data?.TotalActivityMinutes ?? 0),
                 "Activity"
             );
             Grid.SetColumn(activityPanel, 0);
 
-            // Productive Time
+            // Productive Time (Star icon)
             var productivePanel = CreateStatCard(
-                "✨",
+                "\uE734", // Star icon
                 (_data?.ProductivePercentage ?? 0).ToString("F0") + "%",
                 "Productive"
             );
             Grid.SetColumn(productivePanel, 1);
 
-            // Apps Used
+            // Apps Used (Apps icon)
             var appsPanel = CreateStatCard(
-                "💻",
+                "\uE8FD", // DockLeft icon (represents apps)
                 (_data?.AppUsage.Count ?? 0).ToString(),
                 "Apps"
             );
@@ -453,9 +453,11 @@ namespace NudgeTray
             var iconText = new TextBlock
             {
                 Text = icon,
+                FontFamily = new FontFamily("Segoe Fluent Icons,Segoe MDL2 Assets"),
                 FontSize = 24,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 0, 0, 2)
+                Margin = new Thickness(0, 0, 0, 2),
+                Foreground = new SolidColorBrush(PrimaryBlue)
             };
 
             var valueText = new TextBlock
@@ -483,7 +485,7 @@ namespace NudgeTray
             return panel;
         }
 
-        private Border CreateSection(string title, Control content)
+        private Border CreateSection(string icon, string title, Control content)
         {
             var border = new Border
             {
@@ -496,16 +498,36 @@ namespace NudgeTray
 
             var stack = new StackPanel { Spacing = 10 };
 
+            // Title with icon
+            var titleStack = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
+                Margin = new Thickness(0, 0, 0, 4)
+            };
+
+            var iconText = new TextBlock
+            {
+                Text = icon,
+                FontFamily = new FontFamily("Segoe Fluent Icons,Segoe MDL2 Assets"),
+                FontSize = 14,
+                Foreground = new SolidColorBrush(PrimaryBlue),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
             var titleText = new TextBlock
             {
                 Text = title,
                 FontSize = 12,
                 FontWeight = FontWeight.SemiBold,
                 Foreground = new SolidColorBrush(TextPrimary),
-                Margin = new Thickness(0, 0, 0, 4)
+                VerticalAlignment = VerticalAlignment.Center
             };
 
-            stack.Children.Add(titleText);
+            titleStack.Children.Add(iconText);
+            titleStack.Children.Add(titleText);
+
+            stack.Children.Add(titleStack);
             stack.Children.Add(content);
             border.Child = stack;
 
@@ -756,10 +778,12 @@ namespace NudgeTray
 
             var iconText = new TextBlock
             {
-                Text = "📭",
+                Text = "\uE7C3", // PageEmpty icon
+                FontFamily = new FontFamily("Segoe Fluent Icons,Segoe MDL2 Assets"),
                 FontSize = 64,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Opacity = 0.6
+                Foreground = new SolidColorBrush(TextTertiary),
+                Opacity = 0.5
             };
 
             var messageText = new TextBlock
