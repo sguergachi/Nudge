@@ -441,7 +441,7 @@ namespace NudgeTray
         {
             try
             {
-                string configPath = Path.Combine(
+                string configPath = System.IO.Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                     CONFIG_FILE
                 );
@@ -486,7 +486,7 @@ namespace NudgeTray
                     HasSavedPosition = true
                 };
 
-                string configPath = Path.Combine(
+                string configPath = System.IO.Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                     CONFIG_FILE
                 );
