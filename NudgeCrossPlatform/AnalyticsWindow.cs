@@ -127,13 +127,16 @@ namespace NudgeTray
                 )
             };
 
-            var mainStack = new StackPanel
+            // Use Grid instead of StackPanel to properly constrain ScrollViewer
+            var mainGrid = new Grid
             {
-                Spacing = 0
+                RowDefinitions = new RowDefinitions("Auto,*") // Header is auto, content fills remaining
             };
 
             // Header Section with close button
-            mainStack.Children.Add(CreateHeader());
+            var header = CreateHeader();
+            Grid.SetRow(header, 0);
+            mainGrid.Children.Add(header);
 
             // Scrollable Content
             _contentPanel = new StackPanel
@@ -146,12 +149,14 @@ namespace NudgeTray
             {
                 Content = _contentPanel,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                MaxHeight = 460 // Constrain height to allow scrolling
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+                // No MaxHeight - let it fill available space from Grid
             };
 
-            mainStack.Children.Add(_scrollViewer);
-            mainContainer.Child = mainStack;
+            Grid.SetRow(_scrollViewer, 1);
+            mainGrid.Children.Add(_scrollViewer);
+
+            mainContainer.Child = mainGrid;
             Content = mainContainer;
 
             // Populate content
@@ -379,13 +384,13 @@ namespace NudgeTray
             // App Usage Section
             if (_data.AppUsage.Any())
             {
-                _contentPanel.Children.Add(CreateSection("📊", "Most Used Apps", CreateAppUsageView()));
+                _contentPanel.Children.Add(CreateSection("chart", "Most Used Apps", CreateAppUsageView()));
             }
 
             // Hourly Productivity Section
             if (_data.HourlyProductivity.Any())
             {
-                _contentPanel.Children.Add(CreateSection("📅", "Productivity by Hour", CreateHourlyProductivityView()));
+                _contentPanel.Children.Add(CreateSection("calendar", "Productivity by Hour", CreateHourlyProductivityView()));
             }
 
             // Empty State
@@ -414,7 +419,7 @@ namespace NudgeTray
 
             // Total Activity
             var activityPanel = CreateStatCard(
-                "⏱", // Clock emoji
+                "clock",
                 FormatDuration(_data?.TotalActivityMinutes ?? 0),
                 "Activity"
             );
@@ -422,7 +427,7 @@ namespace NudgeTray
 
             // Productive Time
             var productivePanel = CreateStatCard(
-                "⭐", // Star emoji
+                "star",
                 (_data?.ProductivePercentage ?? 0).ToString("F0") + "%",
                 "Productive"
             );
@@ -430,7 +435,7 @@ namespace NudgeTray
 
             // Apps Used
             var appsPanel = CreateStatCard(
-                "📱", // Apps emoji
+                "apps",
                 (_data?.AppUsage.Count ?? 0).ToString(),
                 "Apps"
             );
@@ -444,7 +449,7 @@ namespace NudgeTray
             return border;
         }
 
-        private StackPanel CreateStatCard(string icon, string value, string label)
+        private StackPanel CreateStatCard(string iconType, string value, string label)
         {
             var panel = new StackPanel
             {
@@ -452,13 +457,29 @@ namespace NudgeTray
                 HorizontalAlignment = HorizontalAlignment.Center
             };
 
-            var iconText = new TextBlock
+            // Create icon container with SVG path
+            var iconViewBox = new Viewbox
             {
-                Text = icon,
-                FontSize = 24,
+                Width = 24,
+                Height = 24,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Margin = new Thickness(0, 0, 0, 2)
             };
+
+            var iconCanvas = new Canvas
+            {
+                Width = 24,
+                Height = 24
+            };
+
+            var iconPath = new Avalonia.Controls.Shapes.Path
+            {
+                Fill = new SolidColorBrush(PrimaryBlue),
+                Data = Geometry.Parse(GetIconPath(iconType))
+            };
+
+            iconCanvas.Children.Add(iconPath);
+            iconViewBox.Child = iconCanvas;
 
             var valueText = new TextBlock
             {
@@ -478,14 +499,34 @@ namespace NudgeTray
                 HorizontalAlignment = HorizontalAlignment.Center
             };
 
-            panel.Children.Add(iconText);
+            panel.Children.Add(iconViewBox);
             panel.Children.Add(valueText);
             panel.Children.Add(labelText);
 
             return panel;
         }
 
-        private Border CreateSection(string icon, string title, Control content)
+        private string GetIconPath(string iconType)
+        {
+            // Material Design Icons SVG paths
+            switch (iconType)
+            {
+                case "clock": // Clock/Time icon
+                    return "M12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22C6.47,22 2,17.5 2,12A10,10 0 0,1 12,2M12.5,7V12.25L17,14.92L16.25,16.15L11,13V7H12.5Z";
+                case "star": // Star/Achievement icon
+                    return "M12,17.27L18.18,21L16.54,13.97L22,9.24L14.81,8.62L12,2L9.19,8.62L2,9.24L7.45,13.97L5.82,21L12,17.27Z";
+                case "apps": // Apps/Application icon
+                    return "M16,20H20V16H16M16,14H20V10H16M10,8H14V4H10M16,8H20V4H16M10,14H14V10H10M4,14H8V10H4M4,20H8V16H4M10,20H14V16H10M4,8H8V4H4V8Z";
+                case "chart": // Chart/Stats icon
+                    return "M22,21H2V3H4V19H6V17H10V19H12V16H16V19H18V17H22V21M18,14H22V16H18V14M12,6H16V14H12V6M6,10H10V15H6V10M4,8V11H2V8H4Z";
+                case "calendar": // Calendar/Time icon
+                    return "M19,19H5V8H19M16,1V3H8V1H6V3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3H18V1M17,12H12V17H17V12Z";
+                default:
+                    return "M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2Z"; // Circle fallback
+            }
+        }
+
+        private Border CreateSection(string iconType, string title, Control content)
         {
             var border = new Border
             {
@@ -506,12 +547,28 @@ namespace NudgeTray
                 Margin = new Thickness(0, 0, 0, 4)
             };
 
-            var iconText = new TextBlock
+            // Create SVG icon
+            var iconViewBox = new Viewbox
             {
-                Text = icon,
-                FontSize = 14,
+                Width = 16,
+                Height = 16,
                 VerticalAlignment = VerticalAlignment.Center
             };
+
+            var iconCanvas = new Canvas
+            {
+                Width = 24,
+                Height = 24
+            };
+
+            var iconPath = new Avalonia.Controls.Shapes.Path
+            {
+                Fill = new SolidColorBrush(TextSecondary),
+                Data = Geometry.Parse(GetIconPath(iconType))
+            };
+
+            iconCanvas.Children.Add(iconPath);
+            iconViewBox.Child = iconCanvas;
 
             var titleText = new TextBlock
             {
@@ -522,7 +579,7 @@ namespace NudgeTray
                 VerticalAlignment = VerticalAlignment.Center
             };
 
-            titleStack.Children.Add(iconText);
+            titleStack.Children.Add(iconViewBox);
             titleStack.Children.Add(titleText);
 
             stack.Children.Add(titleStack);
@@ -776,10 +833,12 @@ namespace NudgeTray
 
             var iconText = new TextBlock
             {
-                Text = "📭",
-                FontSize = 64,
+                Text = "○",
+                FontSize = 80,
+                FontWeight = FontWeight.Light,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Opacity = 0.6
+                Foreground = new SolidColorBrush(TextSecondary),
+                Opacity = 0.5
             };
 
             var messageText = new TextBlock
@@ -820,9 +879,11 @@ namespace NudgeTray
 
             var iconText = new TextBlock
             {
-                Text = "⚠️",
-                FontSize = 48,
-                HorizontalAlignment = HorizontalAlignment.Center
+                Text = "△",
+                FontSize = 56,
+                FontWeight = FontWeight.Light,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Foreground = new SolidColorBrush(UnproductiveRed)
             };
 
             var errorText = new TextBlock

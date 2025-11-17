@@ -403,6 +403,9 @@ namespace NudgeTray
                 {
                     _mainBorder.Cursor = new Cursor(StandardCursorType.SizeAll);
                 }
+
+                // Pause countdown timer while dragging
+                _countdownTimer?.Stop();
             }
         }
 
@@ -431,6 +434,12 @@ namespace NudgeTray
                 if (_mainBorder != null)
                 {
                     _mainBorder.Cursor = new Cursor(StandardCursorType.Hand);
+                }
+
+                // Resume countdown timer after dragging
+                if (!_responseSent && _remainingSeconds > 0)
+                {
+                    _countdownTimer?.Start();
                 }
 
                 // Save new position
