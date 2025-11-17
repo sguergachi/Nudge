@@ -115,6 +115,7 @@ namespace NudgeTray
                 BorderBrush = new SolidColorBrush(BorderColor),
                 BorderThickness = new Thickness(1),
                 ClipToBounds = false,
+                Height = 548, // Window height (580) minus margins (32)
                 BoxShadow = new BoxShadows(
                     new BoxShadow
                     {
