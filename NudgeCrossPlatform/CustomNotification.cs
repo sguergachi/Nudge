@@ -16,6 +16,7 @@ using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -31,12 +32,18 @@ namespace NudgeTray
     public class CustomNotificationWindow : Window
     {
         private const string CONFIG_FILE = "nudge-notification-config.json";
+        private const int AUTO_DISMISS_SECONDS = 5;
         private Point? _dragStartPosition;
         private bool _isDragging = false;
-        private Action<bool>? _onResponse;
+        private Action<bool?>? _onResponse; // Nullable bool: true=YES, false=NO, null=auto-dismissed
         private Border? _mainBorder;
         private Border? _haloRing;
         private bool _isActive = false;
+        private TextBlock? _countdownText;
+        private DispatcherTimer? _countdownTimer;
+        private int _remainingSeconds = AUTO_DISMISS_SECONDS;
+        private bool _responseSent = false;
+        private Arc? _progressArc;
 
         // Notification configuration
         private class NotificationConfig
@@ -69,9 +76,21 @@ namespace NudgeTray
             // Enable keyboard focus
             Focusable = true;
 
-            // Setup focus tracking for halo ring
+            // Setup focus tracking for halo ring (multiple handlers for Linux compatibility)
             GotFocus += (s, e) => SetActiveState(true);
             LostFocus += (s, e) => SetActiveState(false);
+            Activated += (s, e) => SetActiveState(true);
+            Deactivated += (s, e) => SetActiveState(false);
+
+            // Also hide halo when mouse leaves (additional fallback for Linux)
+            PointerExited += (s, e) =>
+            {
+                // Only hide halo if window is not focused
+                if (!IsFocused && !IsActive)
+                {
+                    SetActiveState(false);
+                }
+            };
         }
 
         private void InitializeContent()
@@ -131,6 +150,14 @@ namespace NudgeTray
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
 
+            // Header with title and countdown
+            var headerPanel = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Margin = new Thickness(0, 0, 0, 4)
+            };
+
             // Title - clean and minimal, left-aligned
             var titleText = new TextBlock
             {
@@ -139,8 +166,65 @@ namespace NudgeTray
                 FontWeight = FontWeight.SemiBold,
                 Foreground = new SolidColorBrush(Color.FromRgb(240, 240, 245)),
                 HorizontalAlignment = HorizontalAlignment.Left,
-                Margin = new Thickness(0, 0, 0, 4) // Fluent: 4px base unit
+                VerticalAlignment = VerticalAlignment.Center
             };
+            Grid.SetColumn(titleText, 0);
+
+            // Countdown timer with progress wheel - right-aligned (compact size)
+            var timerContainer = new Grid
+            {
+                Width = 28,
+                Height = 28,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, -2, 0, 0) // Slight upward adjustment to align with title
+            };
+
+            // Background circle (track)
+            var backgroundCircle = new Arc
+            {
+                Width = 24,
+                Height = 24,
+                Stroke = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
+                StrokeThickness = 1.5,
+                StartAngle = 0,
+                SweepAngle = 360,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            // Progress arc (animates from 360° to 0°)
+            _progressArc = new Arc
+            {
+                Width = 24,
+                Height = 24,
+                Stroke = new SolidColorBrush(Color.FromArgb(180, 255, 100, 100)),
+                StrokeThickness = 2,
+                StartAngle = -90, // Start at top (12 o'clock)
+                SweepAngle = 360, // Full circle initially
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                StrokeLineCap = PenLineCap.Round
+            };
+
+            // Countdown text (overlaid in center)
+            _countdownText = new TextBlock
+            {
+                Text = $"{AUTO_DISMISS_SECONDS}s",
+                FontSize = 10,
+                FontWeight = FontWeight.SemiBold,
+                Foreground = new SolidColorBrush(Color.FromArgb(200, 255, 100, 100)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            timerContainer.Children.Add(backgroundCircle);
+            timerContainer.Children.Add(_progressArc);
+            timerContainer.Children.Add(_countdownText);
+            Grid.SetColumn(timerContainer, 1);
+
+            headerPanel.Children.Add(titleText);
+            headerPanel.Children.Add(timerContainer);
 
             // Message - subtle, left-aligned
             var messageText = new TextBlock
@@ -186,7 +270,7 @@ namespace NudgeTray
             buttonsPanel.Children.Add(noButton);
 
             // Add all elements to stack
-            stackPanel.Children.Add(titleText);
+            stackPanel.Children.Add(headerPanel);
             stackPanel.Children.Add(messageText);
             stackPanel.Children.Add(buttonsPanel);
 
@@ -358,7 +442,7 @@ namespace NudgeTray
         {
             try
             {
-                string configPath = Path.Combine(
+                string configPath = System.IO.Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                     CONFIG_FILE
                 );
@@ -403,7 +487,7 @@ namespace NudgeTray
                     HasSavedPosition = true
                 };
 
-                string configPath = Path.Combine(
+                string configPath = System.IO.Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                     CONFIG_FILE
                 );
@@ -419,9 +503,11 @@ namespace NudgeTray
             }
         }
 
-        public void ShowWithAnimation(Action<bool> onResponse)
+        public void ShowWithAnimation(Action<bool?> onResponse)
         {
             _onResponse = onResponse;
+            _responseSent = false;
+            _remainingSeconds = AUTO_DISMISS_SECONDS;
 
             // Set initial state for zoom + fade animation
             Opacity = 0;
@@ -436,6 +522,9 @@ namespace NudgeTray
 
             // Set active state and show halo ring
             SetActiveState(true);
+
+            // Start countdown timer
+            StartCountdownTimer();
 
             // Animate center zoom + fade in
             AnimateZoomIn();
@@ -472,14 +561,99 @@ namespace NudgeTray
             }
         }
 
-        private async void HandleResponse(bool productive)
+        private void StartCountdownTimer()
         {
-            Console.WriteLine($"[CustomNotification] User responded: {(productive ? "YES" : "NO")}");
+            _countdownTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(1)
+            };
+
+            _countdownTimer.Tick += (s, e) =>
+            {
+                _remainingSeconds--;
+
+                // Calculate progress (percentage of time remaining)
+                double progress = (double)_remainingSeconds / AUTO_DISMISS_SECONDS;
+                double sweepAngle = 360 * progress;
+
+                // Update progress arc
+                if (_progressArc != null)
+                {
+                    _progressArc.SweepAngle = sweepAngle;
+
+                    // Change color to more urgent as time runs out
+                    if (_remainingSeconds <= 2)
+                    {
+                        _progressArc.Stroke = new SolidColorBrush(Color.FromArgb(220, 255, 50, 50)); // Bright red
+                    }
+                    else if (_remainingSeconds <= 3)
+                    {
+                        _progressArc.Stroke = new SolidColorBrush(Color.FromArgb(200, 255, 80, 80)); // Medium-bright red
+                    }
+                }
+
+                // Update countdown text
+                if (_countdownText != null)
+                {
+                    _countdownText.Text = $"{_remainingSeconds}s";
+
+                    // Change text color to match arc
+                    if (_remainingSeconds <= 2)
+                    {
+                        _countdownText.Foreground = new SolidColorBrush(Color.FromArgb(220, 255, 50, 50)); // Bright red
+                    }
+                    else if (_remainingSeconds <= 3)
+                    {
+                        _countdownText.Foreground = new SolidColorBrush(Color.FromArgb(200, 255, 80, 80)); // Medium-bright red
+                    }
+                }
+
+                if (_remainingSeconds <= 0)
+                {
+                    _countdownTimer?.Stop();
+                    AutoDismiss();
+                }
+            };
+
+            _countdownTimer.Start();
+        }
+
+        private async void AutoDismiss()
+        {
+            if (_responseSent)
+                return;
+
+            _responseSent = true;
+            Console.WriteLine("[CustomNotification] Auto-dismissed after timeout - no snapshot taken");
+
+            // Stop timer
+            _countdownTimer?.Stop();
 
             // Animate fade out
             await AnimateFadeOut();
 
-            // Invoke callback
+            // Invoke callback with null to signal auto-dismiss (no snapshot taken)
+            _onResponse?.Invoke(null);
+
+            // Close window
+            Close();
+        }
+
+        private async void HandleResponse(bool productive)
+        {
+            if (_responseSent)
+                return;
+
+            _responseSent = true;
+            Console.WriteLine($"[CustomNotification] User responded: {(productive ? "YES" : "NO")}");
+
+            // Stop countdown timer
+            _countdownTimer?.Stop();
+
+            // Animate fade out
+            await AnimateFadeOut();
+
+            // Invoke callback (snapshot will be taken)
             _onResponse?.Invoke(productive);
 
             // Close window
@@ -557,6 +731,10 @@ namespace NudgeTray
 
         protected override void OnClosed(EventArgs e)
         {
+            // Clean up timer
+            _countdownTimer?.Stop();
+            _countdownTimer = null;
+
             base.OnClosed(e);
         }
     }

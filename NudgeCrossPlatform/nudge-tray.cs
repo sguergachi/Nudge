@@ -750,6 +750,13 @@ namespace NudgeTray
 
         public static void ShowSnapshotNotification()
         {
+            // Don't show notification if already waiting for a response
+            if (_waitingForResponse)
+            {
+                Console.WriteLine("[DEBUG] Skipping notification - already waiting for response");
+                return;
+            }
+
             _nextSnapshotTime = DateTime.Now.AddMinutes(_intervalMinutes);
             Console.WriteLine("📸 Snapshot taken! Respond using the notification buttons.");
 
@@ -795,7 +802,16 @@ namespace NudgeTray
                     notificationWindow.ShowWithAnimation((productive) =>
                     {
                         _waitingForResponse = false;
-                        SendResponse(productive);
+
+                        // If productive is null, notification was auto-dismissed (no snapshot taken)
+                        if (productive.HasValue)
+                        {
+                            SendResponse(productive.Value);
+                        }
+                        else
+                        {
+                            Console.WriteLine("[DEBUG] Notification auto-dismissed - no response sent");
+                        }
 
                         // Don't refresh menu after response - not necessary and can cause crashes on Linux
                     });
