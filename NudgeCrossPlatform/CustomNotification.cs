@@ -69,7 +69,7 @@ namespace NudgeTray
             ShowInTaskbar = false;
             WindowStartupLocation = WindowStartupLocation.Manual;
             SystemDecorations = SystemDecorations.None;
-            TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
+            TransparencyLevelHint = new[] { WindowTransparencyLevel.AcrylicBlur };
             Background = Brushes.Transparent;
             Topmost = true;
 
@@ -708,16 +708,16 @@ namespace NudgeTray
             {
                 if (active)
                 {
-                    // Show halo ring with glow effect
-                    _haloRing.BorderBrush = new SolidColorBrush(Color.FromArgb(180, 88, 166, 255));
+                    // Show halo ring with minimal, tight glow
+                    _haloRing.BorderBrush = new SolidColorBrush(Color.FromArgb(60, 88, 166, 255));
                     _haloRing.BoxShadow = new BoxShadows(
                         new BoxShadow
                         {
-                            Blur = 20,
-                            Spread = 2,
+                            Blur = 4,
+                            Spread = 0,
                             OffsetX = 0,
                             OffsetY = 0,
-                            Color = Color.FromArgb(120, 88, 166, 255)
+                            Color = Color.FromArgb(40, 88, 166, 255)
                         }
                     );
                 }
