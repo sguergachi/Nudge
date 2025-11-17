@@ -65,16 +65,30 @@ namespace NudgeTray
 
         private void InitializeWindow()
         {
-            Width = 480;
-            Height = 640;
-            CanResize = true;
-            MinWidth = 400;
-            MinHeight = 500;
-            ShowInTaskbar = true;
-            WindowStartupLocation = WindowStartupLocation.CenterScreen;
-            SystemDecorations = SystemDecorations.Full;
+            Width = 420;
+            Height = 580;
+            CanResize = false;
+            ShowInTaskbar = false;
+            SystemDecorations = SystemDecorations.None;
             Title = "Nudge Analytics";
-            Background = new SolidColorBrush(BackgroundColor);
+            Background = Brushes.Transparent;
+            TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
+
+            // Position near bottom-right (typical tray icon location)
+            var screen = Screens.Primary;
+            if (screen != null)
+            {
+                var workingArea = screen.WorkingArea;
+                Position = new PixelPoint(
+                    workingArea.Right - 420 - 20,
+                    workingArea.Bottom - 580 - 20
+                );
+            }
+            else
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual;
+                Position = new PixelPoint(100, 100);
+            }
         }
 
         private void LoadDataAndDisplay()
@@ -92,10 +106,25 @@ namespace NudgeTray
 
         private void BuildUI()
         {
+            // Outer container with shadow and rounded corners
             var mainContainer = new Border
             {
-                Background = new SolidColorBrush(BackgroundColor),
-                Padding = new Thickness(0)
+                Background = new SolidColorBrush(CardColor),
+                CornerRadius = new CornerRadius(12),
+                Margin = new Thickness(0),
+                BorderBrush = new SolidColorBrush(BorderColor),
+                BorderThickness = new Thickness(1),
+                ClipToBounds = false,
+                BoxShadow = new BoxShadows(
+                    new BoxShadow
+                    {
+                        Blur = 32,
+                        Spread = 0,
+                        OffsetX = 0,
+                        OffsetY = 8,
+                        Color = Color.FromArgb(80, 0, 0, 0)
+                    }
+                )
             };
 
             var mainStack = new StackPanel
@@ -103,21 +132,22 @@ namespace NudgeTray
                 Spacing = 0
             };
 
-            // Header Section
+            // Header Section with close button
             mainStack.Children.Add(CreateHeader());
 
             // Scrollable Content
             _contentPanel = new StackPanel
             {
-                Spacing = 16,
-                Margin = new Thickness(20, 16, 20, 20)
+                Spacing = 12,
+                Margin = new Thickness(16, 12, 16, 16)
             };
 
             _scrollViewer = new ScrollViewer
             {
                 Content = _contentPanel,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                MaxHeight = 480
             };
 
             mainStack.Children.Add(_scrollViewer);
@@ -135,34 +165,25 @@ namespace NudgeTray
                 Background = new SolidColorBrush(SurfaceColor),
                 BorderBrush = new SolidColorBrush(BorderColor),
                 BorderThickness = new Thickness(0, 0, 0, 1),
-                Padding = new Thickness(20, 20, 20, 16),
-                BoxShadow = new BoxShadows(
-                    new BoxShadow
-                    {
-                        Blur = 8,
-                        Spread = 0,
-                        OffsetX = 0,
-                        OffsetY = 2,
-                        Color = Color.FromArgb(40, 0, 0, 0)
-                    }
-                )
+                Padding = new Thickness(16, 14, 12, 14),
+                CornerRadius = new CornerRadius(12, 12, 0, 0)
             };
 
             var headerGrid = new Grid
             {
-                ColumnDefinitions = new ColumnDefinitions("*,Auto")
+                ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto")
             };
 
             var titleStack = new StackPanel
             {
-                Spacing = 4,
+                Spacing = 2,
                 VerticalAlignment = VerticalAlignment.Center
             };
 
             var titleText = new TextBlock
             {
-                Text = "Productivity Analytics",
-                FontSize = 18,
+                Text = "Analytics",
+                FontSize = 15,
                 FontWeight = FontWeight.SemiBold,
                 Foreground = new SolidColorBrush(TextPrimary)
             };
@@ -170,7 +191,7 @@ namespace NudgeTray
             var subtitleText = new TextBlock
             {
                 Text = GetFilterSubtitle(),
-                FontSize = 12,
+                FontSize = 11,
                 FontWeight = FontWeight.Normal,
                 Foreground = new SolidColorBrush(TextSecondary)
             };
@@ -184,8 +205,13 @@ namespace NudgeTray
             _filterButton = CreateFilterButton();
             Grid.SetColumn(_filterButton, 1);
 
+            // Close Button
+            var closeButton = CreateCloseButton();
+            Grid.SetColumn(closeButton, 2);
+
             headerGrid.Children.Add(titleStack);
             headerGrid.Children.Add(_filterButton);
+            headerGrid.Children.Add(closeButton);
             headerBorder.Child = headerGrid;
 
             return headerBorder;
@@ -210,9 +236,10 @@ namespace NudgeTray
             var border = new Border
             {
                 Background = new SolidColorBrush(PrimaryBlue),
-                CornerRadius = new CornerRadius(4),
-                Padding = new Thickness(12, 8, 12, 8),
-                Cursor = new Cursor(StandardCursorType.Hand)
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(10, 6, 10, 6),
+                Cursor = new Cursor(StandardCursorType.Hand),
+                Margin = new Thickness(0, 0, 8, 0)
             };
 
             var button = new Button
@@ -228,20 +255,20 @@ namespace NudgeTray
             var stack = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                Spacing = 6
+                Spacing = 5
             };
 
             var icon = new TextBlock
             {
                 Text = _currentFilter == TimeFilter.Today ? "📅" : "📆",
-                FontSize = 13,
+                FontSize = 12,
                 VerticalAlignment = VerticalAlignment.Center
             };
 
             _filterButtonText = new TextBlock
             {
-                Text = _currentFilter == TimeFilter.Today ? "Today" : "This Week",
-                FontSize = 12,
+                Text = _currentFilter == TimeFilter.Today ? "Today" : "Week",
+                FontSize = 11,
                 FontWeight = FontWeight.Medium,
                 Foreground = Brushes.White,
                 VerticalAlignment = VerticalAlignment.Center
@@ -256,6 +283,58 @@ namespace NudgeTray
             // Hover effects
             border.PointerEntered += (s, e) => border.Background = new SolidColorBrush(PrimaryBlueHover);
             border.PointerExited += (s, e) => border.Background = new SolidColorBrush(PrimaryBlue);
+
+            return border;
+        }
+
+        private Border CreateCloseButton()
+        {
+            var border = new Border
+            {
+                Background = Brushes.Transparent,
+                CornerRadius = new CornerRadius(6),
+                Width = 32,
+                Height = 32,
+                Cursor = new Cursor(StandardCursorType.Hand)
+            };
+
+            var button = new Button
+            {
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Cursor = new Cursor(StandardCursorType.Hand),
+                Padding = new Thickness(0),
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Width = 32,
+                Height = 32
+            };
+
+            var closeIcon = new TextBlock
+            {
+                Text = "✕",
+                FontSize = 16,
+                FontWeight = FontWeight.Normal,
+                Foreground = new SolidColorBrush(TextSecondary),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            button.Content = closeIcon;
+            button.Click += (s, e) => Close();
+            border.Child = button;
+
+            // Hover effects
+            border.PointerEntered += (s, e) =>
+            {
+                border.Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255));
+                closeIcon.Foreground = new SolidColorBrush(TextPrimary);
+            };
+            border.PointerExited += (s, e) =>
+            {
+                border.Background = Brushes.Transparent;
+                closeIcon.Foreground = new SolidColorBrush(TextSecondary);
+            };
 
             return border;
         }
@@ -303,20 +382,9 @@ namespace NudgeTray
             {
                 Background = new SolidColorBrush(SurfaceColor),
                 CornerRadius = new CornerRadius(8),
-                Padding = new Thickness(20),
+                Padding = new Thickness(14),
                 BorderBrush = new SolidColorBrush(BorderColor),
-                BorderThickness = new Thickness(1),
-                ClipToBounds = false,
-                BoxShadow = new BoxShadows(
-                    new BoxShadow
-                    {
-                        Blur = 16,
-                        Spread = 0,
-                        OffsetX = 0,
-                        OffsetY = 4,
-                        Color = Color.FromArgb(30, 0, 0, 0)
-                    }
-                )
+                BorderThickness = new Thickness(1)
             };
 
             var grid = new Grid
@@ -329,7 +397,7 @@ namespace NudgeTray
             var activityPanel = CreateStatCard(
                 "🕐",
                 FormatDuration(_data?.TotalActivityMinutes ?? 0),
-                "Total Activity"
+                "Activity"
             );
             Grid.SetColumn(activityPanel, 0);
 
@@ -345,7 +413,7 @@ namespace NudgeTray
             var appsPanel = CreateStatCard(
                 "💻",
                 (_data?.AppUsage.Count ?? 0).ToString(),
-                "Apps Used"
+                "Apps"
             );
             Grid.SetColumn(appsPanel, 2);
 
@@ -361,22 +429,22 @@ namespace NudgeTray
         {
             var panel = new StackPanel
             {
-                Spacing = 6,
+                Spacing = 4,
                 HorizontalAlignment = HorizontalAlignment.Center
             };
 
             var iconText = new TextBlock
             {
                 Text = icon,
-                FontSize = 32,
+                FontSize = 24,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 0, 0, 4)
+                Margin = new Thickness(0, 0, 0, 2)
             };
 
             var valueText = new TextBlock
             {
                 Text = value,
-                FontSize = 24,
+                FontSize = 19,
                 FontWeight = FontWeight.SemiBold,
                 Foreground = new SolidColorBrush(TextPrimary),
                 HorizontalAlignment = HorizontalAlignment.Center
@@ -385,7 +453,7 @@ namespace NudgeTray
             var labelText = new TextBlock
             {
                 Text = label,
-                FontSize = 11,
+                FontSize = 10,
                 FontWeight = FontWeight.Normal,
                 Foreground = new SolidColorBrush(TextSecondary),
                 HorizontalAlignment = HorizontalAlignment.Center
@@ -404,30 +472,20 @@ namespace NudgeTray
             {
                 Background = new SolidColorBrush(SurfaceColor),
                 CornerRadius = new CornerRadius(8),
-                Padding = new Thickness(20),
+                Padding = new Thickness(14),
                 BorderBrush = new SolidColorBrush(BorderColor),
-                BorderThickness = new Thickness(1),
-                ClipToBounds = false,
-                BoxShadow = new BoxShadows(
-                    new BoxShadow
-                    {
-                        Blur = 16,
-                        Spread = 0,
-                        OffsetX = 0,
-                        OffsetY = 4,
-                        Color = Color.FromArgb(30, 0, 0, 0)
-                    }
-                )
+                BorderThickness = new Thickness(1)
             };
 
-            var stack = new StackPanel { Spacing = 16 };
+            var stack = new StackPanel { Spacing = 10 };
 
             var titleText = new TextBlock
             {
                 Text = title,
-                FontSize = 14,
+                FontSize = 12,
                 FontWeight = FontWeight.SemiBold,
-                Foreground = new SolidColorBrush(TextPrimary)
+                Foreground = new SolidColorBrush(TextPrimary),
+                Margin = new Thickness(0, 0, 0, 4)
             };
 
             stack.Children.Add(titleText);
@@ -439,7 +497,7 @@ namespace NudgeTray
 
         private StackPanel CreateAppUsageView()
         {
-            var panel = new StackPanel { Spacing = 10 };
+            var panel = new StackPanel { Spacing = 8 };
 
             if (_data == null) return panel;
 
@@ -463,7 +521,7 @@ namespace NudgeTray
 
             var leftStack = new StackPanel
             {
-                Spacing = 8,
+                Spacing = 5,
                 VerticalAlignment = VerticalAlignment.Center
             };
 
@@ -471,7 +529,7 @@ namespace NudgeTray
             var nameText = new TextBlock
             {
                 Text = appName,
-                FontSize = 12,
+                FontSize = 11,
                 FontWeight = FontWeight.Medium,
                 Foreground = new SolidColorBrush(TextPrimary),
                 VerticalAlignment = VerticalAlignment.Center,
@@ -482,20 +540,20 @@ namespace NudgeTray
             double percentage = totalMinutes > 0 ? (double)minutes / totalMinutes * 100 : 0;
             var progressBorder = new Border
             {
-                Height = 6,
+                Height = 5,
                 Background = new SolidColorBrush(ProgressBarBg),
-                CornerRadius = new CornerRadius(3),
+                CornerRadius = new CornerRadius(2.5),
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 4, 0, 0)
+                Margin = new Thickness(0, 3, 0, 0)
             };
 
             var progressFill = new Border
             {
-                Width = Math.Max(percentage * 1.5, 0), // Scale for visual impact
-                MaxWidth = 150,
-                Height = 6,
+                Width = Math.Max(percentage * 1.4, 0),
+                MaxWidth = 140,
+                Height = 5,
                 Background = new SolidColorBrush(PrimaryBlue),
-                CornerRadius = new CornerRadius(3),
+                CornerRadius = new CornerRadius(2.5),
                 HorizontalAlignment = HorizontalAlignment.Left
             };
 
@@ -510,13 +568,13 @@ namespace NudgeTray
             var timeStack = new StackPanel
             {
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(12, 0, 0, 0)
+                Margin = new Thickness(10, 0, 0, 0)
             };
 
             var timeText = new TextBlock
             {
                 Text = FormatDuration(minutes),
-                FontSize = 12,
+                FontSize = 11,
                 FontWeight = FontWeight.SemiBold,
                 Foreground = new SolidColorBrush(TextPrimary),
                 HorizontalAlignment = HorizontalAlignment.Right
@@ -525,7 +583,7 @@ namespace NudgeTray
             var percentText = new TextBlock
             {
                 Text = percentage.ToString("F0") + "%",
-                FontSize = 10,
+                FontSize = 9,
                 FontWeight = FontWeight.Normal,
                 Foreground = new SolidColorBrush(TextSecondary),
                 HorizontalAlignment = HorizontalAlignment.Right
@@ -565,14 +623,14 @@ namespace NudgeTray
         {
             var grid = new Grid
             {
-                ColumnDefinitions = new ColumnDefinitions("45,*,60")
+                ColumnDefinitions = new ColumnDefinitions("40,*,55")
             };
 
             // Hour label
             var hourText = new TextBlock
             {
                 Text = $"{hour:D2}:00",
-                FontSize = 11,
+                FontSize = 10,
                 FontWeight = FontWeight.Medium,
                 Foreground = new SolidColorBrush(TextSecondary),
                 VerticalAlignment = VerticalAlignment.Center
@@ -582,10 +640,10 @@ namespace NudgeTray
             // Productivity bar container
             var barContainer = new Border
             {
-                Height = 24,
+                Height = 20,
                 Background = new SolidColorBrush(ProgressBarBg),
-                CornerRadius = new CornerRadius(4),
-                Margin = new Thickness(8, 0, 8, 0),
+                CornerRadius = new CornerRadius(3),
+                Margin = new Thickness(6, 0, 6, 0),
                 VerticalAlignment = VerticalAlignment.Center,
                 ClipToBounds = true
             };
@@ -602,9 +660,9 @@ namespace NudgeTray
                 var productiveBar = new Border
                 {
                     Width = productivePercentage,
-                    Height = 24,
+                    Height = 20,
                     Background = new SolidColorBrush(ProductiveGreen),
-                    CornerRadius = new CornerRadius(4, 0, 0, 4),
+                    CornerRadius = new CornerRadius(3, 0, 0, 3),
                     HorizontalAlignment = HorizontalAlignment.Left
                 };
                 barGrid.Children.Add(productiveBar);
@@ -616,7 +674,7 @@ namespace NudgeTray
                 var unproductiveBar = new Border
                 {
                     Width = unproductivePercentage,
-                    Height = 24,
+                    Height = 20,
                     Background = new SolidColorBrush(UnproductiveRed),
                     HorizontalAlignment = HorizontalAlignment.Left,
                     Margin = new Thickness(productivePercentage, 0, 0, 0)
