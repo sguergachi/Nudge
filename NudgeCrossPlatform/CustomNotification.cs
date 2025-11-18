@@ -63,13 +63,13 @@ namespace NudgeTray
 
         private void InitializeWindow()
         {
-            Width = 340;
-            Height = 140;
+            Width = 360;  // Increased to account for shadow space
+            Height = 160; // Increased to account for shadow space
             CanResize = false;
             ShowInTaskbar = false;
             WindowStartupLocation = WindowStartupLocation.Manual;
             SystemDecorations = SystemDecorations.None;
-            TransparencyLevelHint = new[] { WindowTransparencyLevel.Blur };
+            TransparencyLevelHint = new[] { WindowTransparencyLevel.AcrylicBlur };
             Background = Brushes.Transparent;
             Topmost = true;
 
@@ -101,6 +101,7 @@ namespace NudgeTray
                 Background = Brushes.Transparent,
                 CornerRadius = new CornerRadius(12),
                 Padding = new Thickness(4),
+                Margin = new Thickness(10, 8, 10, 12), // Space for shadow (left, top, right, bottom)
                 BorderBrush = new SolidColorBrush(Color.FromArgb(0, 88, 166, 255)), // Initially transparent
                 BorderThickness = new Thickness(2),
                 ClipToBounds = false, // Allow shadows to render outside bounds
@@ -119,18 +120,18 @@ namespace NudgeTray
             // Main container - Fluent Design System specifications
             _mainBorder = new Border
             {
-                Background = new SolidColorBrush(Color.FromArgb(245, 18, 18, 20)), // Almost opaque black with acrylic effect
+                Background = new SolidColorBrush(Color.FromArgb(250, 18, 18, 20)), // Almost opaque black
                 CornerRadius = new CornerRadius(8), // Fluent: 8px for top-level containers
                 Padding = new Thickness(16), // Fluent: 16px standard spacing
                 ClipToBounds = false, // Allow shadows to render outside bounds
                 BoxShadow = new BoxShadows(
                     new BoxShadow
                     {
-                        Blur = 32,
-                        Spread = 0,
+                        Blur = 12,
+                        Spread = -2,
                         OffsetX = 0,
-                        OffsetY = 8,
-                        Color = Color.FromArgb(60, 0, 0, 0) // Elevated shadow
+                        OffsetY = 4,
+                        Color = Color.FromArgb(50, 0, 0, 0) // Crisp shadow with negative spread
                     }
                 ),
                 BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
@@ -403,6 +404,9 @@ namespace NudgeTray
                 {
                     _mainBorder.Cursor = new Cursor(StandardCursorType.SizeAll);
                 }
+
+                // Pause countdown timer while dragging
+                _countdownTimer?.Stop();
             }
         }
 
@@ -431,6 +435,12 @@ namespace NudgeTray
                 if (_mainBorder != null)
                 {
                     _mainBorder.Cursor = new Cursor(StandardCursorType.Hand);
+                }
+
+                // Resume countdown timer after dragging
+                if (!_responseSent && _remainingSeconds > 0)
+                {
+                    _countdownTimer?.Start();
                 }
 
                 // Save new position
@@ -698,16 +708,16 @@ namespace NudgeTray
             {
                 if (active)
                 {
-                    // Show halo ring with glow effect
-                    _haloRing.BorderBrush = new SolidColorBrush(Color.FromArgb(180, 88, 166, 255));
+                    // Show halo ring with minimal, tight glow
+                    _haloRing.BorderBrush = new SolidColorBrush(Color.FromArgb(60, 88, 166, 255));
                     _haloRing.BoxShadow = new BoxShadows(
                         new BoxShadow
                         {
-                            Blur = 20,
-                            Spread = 2,
+                            Blur = 4,
+                            Spread = 0,
                             OffsetX = 0,
                             OffsetY = 0,
-                            Color = Color.FromArgb(120, 88, 166, 255)
+                            Color = Color.FromArgb(40, 88, 166, 255)
                         }
                     );
                 }

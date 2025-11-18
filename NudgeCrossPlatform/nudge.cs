@@ -125,7 +125,7 @@ class Nudge
     // VERSION & CONSTANTS
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    const string VERSION = "1.2.0";
+    const string VERSION = "1.3.0";
     const int CYCLE_MS = 1000;           // 1 second monitoring cycle
     const int UDP_PORT = 45001;          // UDP listener port
     const int RESPONSE_TIMEOUT_MS = 60000; // 60 seconds to respond
@@ -1015,8 +1015,14 @@ class Nudge
             string app = _platformService?.GetForegroundApp() ?? "unknown";
             int idle = _platformService?.GetIdleTime() ?? 0;
 
-            // Track attention span
-            if (app != _currentApp)
+            // Ignore Nudge notification window in app tracking (shows as "Window" or contains "Notification")
+            // This prevents the notification from polluting analytics data
+            bool isNudgeWindow = app == "Window" ||
+                                 app.Contains("Notification", StringComparison.OrdinalIgnoreCase) ||
+                                 app.Contains("CustomNotification", StringComparison.OrdinalIgnoreCase);
+
+            // Track attention span (skip if it's our notification window)
+            if (!isNudgeWindow && app != _currentApp)
             {
                 if (!string.IsNullOrEmpty(_currentApp))
                 {
@@ -1026,9 +1032,15 @@ class Nudge
                 _currentApp = app;
                 _attentionSpanMs = 0;
             }
-            else
+            else if (!isNudgeWindow)
             {
                 _attentionSpanMs += CYCLE_MS;
+            }
+
+            // If notification window is focused, use the last valid app for data collection
+            if (isNudgeWindow && !string.IsNullOrEmpty(_currentApp))
+            {
+                app = _currentApp; // Use previous app instead of notification window
             }
 
             // Check for snapshot triggers
