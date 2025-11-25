@@ -68,7 +68,7 @@ namespace NudgeTray
     class Program
     {
         const int UDP_PORT = 45001;
-        const string VERSION = "1.2.0";
+        const string VERSION = "1.3.0";
         static Process? _nudgeProcess;
         static Process? _mlInferenceProcess;
         static Process? _mlTrainerProcess;
@@ -79,6 +79,7 @@ namespace NudgeTray
 
         // Common tray icon for all platforms
         static TrayIcon? _trayIcon;
+        static AnalyticsWindow? _analyticsWindow;
 
 #if WINDOWS
         [DllImport("kernel32.dll")]
@@ -96,14 +97,15 @@ namespace NudgeTray
             // Add global exception handlers
             AppDomain.CurrentDomain.UnhandledException += (s, e) =>
             {
-                // For DBus exceptions during cleanup, exit gracefully instead of crashing
+                // For DBus exceptions, log and continue - don't crash the app
                 if (e.ExceptionObject is Exception ex &&
                     (ex.ToString().Contains("DBus") ||
                      ex.ToString().Contains("Tmds.DBus") ||
                      ex.ToString().Contains("TaskCanceledException")))
                 {
-                    Console.WriteLine($"[INFO] DBus cleanup exception (expected on Linux) - exiting cleanly");
-                    Environment.Exit(0); // Clean exit instead of crash
+                    Console.WriteLine($"[WARN] DBus exception caught (expected on Linux): {ex.Message}");
+                    Console.WriteLine($"[INFO] Application continuing normally...");
+                    return; // Don't crash - just log and continue
                 }
 
                 // For real errors, log and let the app crash
@@ -117,19 +119,31 @@ namespace NudgeTray
 
             TaskScheduler.UnobservedTaskException += (s, e) =>
             {
-                Console.WriteLine($"[ERROR] Unobserved task exception (handled): {e.Exception.Message}");
+                // Handle DBus-related task exceptions gracefully
+                // Note: e.Exception is AggregateException, so check string representation for inner types
+                var exceptionStr = e.Exception.ToString();
+                if (exceptionStr.Contains("DBus") ||
+                    exceptionStr.Contains("Tmds.DBus") ||
+                    exceptionStr.Contains("TaskCanceledException"))
+                {
+                    Console.WriteLine($"[WARN] DBus task exception (handled): {e.Exception.Message}");
+                }
+                else
+                {
+                    Console.WriteLine($"[ERROR] Unobserved task exception: {e.Exception.Message}");
+                }
                 e.SetObserved(); // Mark as observed to prevent crash
             };
 
             // Add First Chance exception handler to catch all exceptions (including DBus)
             AppDomain.CurrentDomain.FirstChanceException += (s, e) =>
             {
-                // Catch and suppress DBus-related exceptions
+                // Silently suppress DBus-related exceptions (expected on Linux when DBus services unavailable)
                 if (e.Exception != null &&
                     (e.Exception.ToString().Contains("DBus") ||
                      e.Exception.ToString().Contains("Tmds.DBus")))
                 {
-                    Console.WriteLine($"[DEBUG] DBus exception caught and suppressed: {e.Exception.Message}");
+                    // Suppressed - these are expected and handled gracefully
                 }
             };
 
@@ -260,6 +274,8 @@ namespace NudgeTray
         {
             try
             {
+                Console.WriteLine($"[DEBUG] Creating tray icon for {(PlatformConfig.IsWindows ? "Windows" : "Linux")}...");
+
                 _trayIcon = new TrayIcon
                 {
                     Icon = CreateCommonIcon(),
@@ -267,6 +283,9 @@ namespace NudgeTray
                     ToolTipText = "Nudge Productivity Tracker",
                     Menu = CreateAvaloniaMenu()
                 };
+
+                // Add left-click handler for analytics window
+                _trayIcon.Clicked += OnTrayIconClicked;
 
                 // Register the tray icon with the Application
                 if (Application.Current != null)
@@ -279,14 +298,17 @@ namespace NudgeTray
                     Console.WriteLine("[ERROR] Application.Current is null - cannot register tray icon");
                 }
 
-                Console.WriteLine("[DEBUG] Tray icon created with Avalonia TrayIcon (cross-platform)");
-                Console.WriteLine("[INFO] Right-click the tray icon to respond to snapshots");
+                Console.WriteLine("[INFO] ✓ Tray icon created successfully");
+                Console.WriteLine("[INFO]   • Left-click: Open Analytics Dashboard");
+                Console.WriteLine("[INFO]   • Right-click: Show Menu");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[ERROR] Failed to create tray icon: {ex.Message}");
                 Console.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
-                throw;
+
+                // Don't throw - allow app to continue without tray icon
+                Console.WriteLine("[WARN] Continuing without tray icon - notifications will still work");
             }
         }
 
@@ -372,6 +394,26 @@ namespace NudgeTray
                 menu.Add(new NativeMenuItemSeparator());
                 Console.WriteLine("[DEBUG] Added separator");
 
+                // Analytics option
+                var analyticsItem = new NativeMenuItem { Header = "📊 Analytics" };
+                analyticsItem.Click += (s, e) =>
+                {
+                    try
+                    {
+                        Console.WriteLine("[DEBUG] Analytics menu item clicked");
+                        OnTrayIconClicked(s, e);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[ERROR] Analytics handler failed: {ex.Message}");
+                    }
+                };
+                menu.Add(analyticsItem);
+                Console.WriteLine("[DEBUG] Added analytics item");
+
+                // Separator
+                menu.Add(new NativeMenuItemSeparator());
+
                 // Quit option
                 var quitItem = new NativeMenuItem { Header = "Quit" };
                 quitItem.Click += (s, e) =>
@@ -408,6 +450,36 @@ namespace NudgeTray
                 {
                     return new NativeMenu();
                 }
+            }
+        }
+
+        static void OnTrayIconClicked(object? sender, EventArgs e)
+        {
+            try
+            {
+                Console.WriteLine("[DEBUG] Tray icon clicked - showing analytics window");
+
+                // Show analytics window on UI thread
+                Dispatcher.UIThread.Post(() =>
+                {
+                    // If window already exists and is visible, bring it to front
+                    if (_analyticsWindow != null && _analyticsWindow.IsVisible)
+                    {
+                        _analyticsWindow.Activate();
+                        _analyticsWindow.Focus();
+                    }
+                    else
+                    {
+                        // Create and show new window
+                        _analyticsWindow = new AnalyticsWindow();
+                        _analyticsWindow.Show();
+                        _analyticsWindow.Activate();
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] Failed to show analytics window: {ex.Message}");
             }
         }
 
@@ -791,118 +863,137 @@ namespace NudgeTray
         {
             Console.WriteLine("[DEBUG] ShowDbusNotification called (native DBus)");
 
-            try
+            // Run DBus operations without capturing Avalonia synchronization context
+            // This prevents DBus from trying to use Avalonia dispatcher during cleanup
+            await Task.Run(async () =>
             {
-                using var connection = new Connection(Address.Session!);
-                await connection.ConnectAsync();
+                // Clear synchronization context to prevent DBus from capturing it
+                var oldContext = SynchronizationContext.Current;
+                SynchronizationContext.SetSynchronizationContext(null);
 
-                // Create and send Notify method call
-                MessageBuffer message;
+                try
                 {
-                    using var writer = connection.GetMessageWriter();
+                    using var connection = new Connection(Address.Session!);
+                    await connection.ConnectAsync().ConfigureAwait(false);
 
-                    writer.WriteMethodCallHeader(
-                        destination: "org.freedesktop.Notifications",
-                        path: "/org/freedesktop/Notifications",
-                        @interface: "org.freedesktop.Notifications",
-                        signature: "susssasa{sv}i",
-                        member: "Notify");
+                    // Create and send Notify method call
+                    MessageBuffer message;
+                    {
+                        using var writer = connection.GetMessageWriter();
 
-                    writer.WriteString("Nudge");  // app_name
-                    writer.WriteUInt32(0);        // replaces_id
-                    writer.WriteString("");       // app_icon
-                    writer.WriteString("Nudge - Productivity Check"); // summary
-                    writer.WriteString("Were you productive during the last interval?"); // body
+                        writer.WriteMethodCallHeader(
+                            destination: "org.freedesktop.Notifications",
+                            path: "/org/freedesktop/Notifications",
+                            @interface: "org.freedesktop.Notifications",
+                            signature: "susssasa{sv}i",
+                            member: "Notify");
 
-                    // Write actions array
-                    writer.WriteArray(new string[] { "yes", "Yes - Productive", "no", "No - Not Productive" });
+                        writer.WriteString("Nudge");  // app_name
+                        writer.WriteUInt32(0);        // replaces_id
+                        writer.WriteString("");       // app_icon
+                        writer.WriteString("Nudge - Productivity Check"); // summary
+                        writer.WriteString("Were you productive during the last interval?"); // body
 
-                    // Write hints dictionary with RESIDENT:TRUE for persistent notifications
-                    var arrayStart = writer.WriteDictionaryStart();
-                    writer.WriteDictionaryEntryStart();
-                    writer.WriteString("urgency");
-                    writer.WriteVariant(VariantValue.Byte(2));
-                    writer.WriteDictionaryEntryStart();
-                    writer.WriteString("resident");
-                    writer.WriteVariant(VariantValue.Bool(true));
-                    writer.WriteDictionaryEntryStart();
-                    writer.WriteString("x-kde-appname");
-                    writer.WriteVariant(VariantValue.String("Nudge"));
-                    writer.WriteDictionaryEntryStart();
-                    writer.WriteString("x-kde-eventId");
-                    writer.WriteVariant(VariantValue.String("productivity-check"));
-                    writer.WriteDictionaryEnd(arrayStart);
+                        // Write actions array
+                        writer.WriteArray(new string[] { "yes", "Yes - Productive", "no", "No - Not Productive" });
 
-                    writer.WriteInt32(0);  // expire_timeout (0 = infinite)
+                        // Write hints dictionary with RESIDENT:TRUE for persistent notifications
+                        var arrayStart = writer.WriteDictionaryStart();
+                        writer.WriteDictionaryEntryStart();
+                        writer.WriteString("urgency");
+                        writer.WriteVariant(VariantValue.Byte(2));
+                        writer.WriteDictionaryEntryStart();
+                        writer.WriteString("resident");
+                        writer.WriteVariant(VariantValue.Bool(true));
+                        writer.WriteDictionaryEntryStart();
+                        writer.WriteString("x-kde-appname");
+                        writer.WriteVariant(VariantValue.String("Nudge"));
+                        writer.WriteDictionaryEntryStart();
+                        writer.WriteString("x-kde-eventId");
+                        writer.WriteVariant(VariantValue.String("productivity-check"));
+                        writer.WriteDictionaryEnd(arrayStart);
 
-                    message = writer.CreateMessage();
+                        writer.WriteInt32(0);  // expire_timeout (0 = infinite)
+
+                        message = writer.CreateMessage();
+                    }
+
+                    var notificationId = await connection.CallMethodAsync(
+                        message,
+                        (Tmds.DBus.Protocol.Message m, object? s) => m.GetBodyReader().ReadUInt32(),
+                        null);
+
+                    Console.WriteLine($"[DEBUG] Notification ID: {notificationId}");
+
+                    // Listen for ActionInvoked signal
+                    var actionMatchRule = new MatchRule
+                    {
+                        Type = MessageType.Signal,
+                        Interface = "org.freedesktop.Notifications",
+                        Member = "ActionInvoked"
+                    };
+
+                    var cancellationSource = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(60));
+
+                    await connection.AddMatchAsync(
+                        actionMatchRule,
+                        (Tmds.DBus.Protocol.Message m, object? s) =>
+                        {
+                            var reader = m.GetBodyReader();
+                            return (reader.ReadUInt32(), reader.ReadString());
+                        },
+                        (Exception? ex, (uint id, string actionKey) signal, object? readerState, object? handlerState) =>
+                        {
+                            if (ex != null)
+                            {
+                                Console.WriteLine($"[DEBUG] Action listener error: {ex.Message}");
+                                return;
+                            }
+
+                            if (signal.id == notificationId)
+                            {
+                                Console.WriteLine($"[DEBUG] Action invoked: {signal.actionKey}");
+
+                                if (signal.actionKey == "yes")
+                                {
+                                    Console.WriteLine("User responded: YES (productive)");
+                                    SendResponse(true);
+                                }
+                                else if (signal.actionKey == "no")
+                                {
+                                    Console.WriteLine("User responded: NO (not productive)");
+                                    SendResponse(false);
+                                }
+
+                                cancellationSource.Cancel();
+                            }
+                        },
+                        ObserverFlags.None,
+                        null,
+                        null,
+                        true
+                    );
+
+                    // Keep connection alive until cancelled
+                    Console.WriteLine("[DEBUG] Waiting for notification interaction (60s timeout)...");
+                    await Task.Delay(-1, cancellationSource.Token).ContinueWith(_ => { });
                 }
-
-                var notificationId = await connection.CallMethodAsync(
-                    message,
-                    (Tmds.DBus.Protocol.Message m, object? s) => m.GetBodyReader().ReadUInt32(),
-                    null);
-
-                Console.WriteLine($"[DEBUG] Notification ID: {notificationId}");
-
-                // Listen for ActionInvoked signal
-                var actionMatchRule = new MatchRule
+                catch (TaskCanceledException)
                 {
-                    Type = MessageType.Signal,
-                    Interface = "org.freedesktop.Notifications",
-                    Member = "ActionInvoked"
-                };
-
-                var cancellationSource = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(60));
-
-                await connection.AddMatchAsync(
-                    actionMatchRule,
-                    (Tmds.DBus.Protocol.Message m, object? s) =>
-                    {
-                        var reader = m.GetBodyReader();
-                        return (reader.ReadUInt32(), reader.ReadString());
-                    },
-                    (Exception? ex, (uint id, string actionKey) signal, object? readerState, object? handlerState) =>
-                    {
-                        if (ex != null)
-                        {
-                            Console.WriteLine($"[DEBUG] Action listener error: {ex.Message}");
-                            return;
-                        }
-
-                        if (signal.id == notificationId)
-                        {
-                            Console.WriteLine($"[DEBUG] Action invoked: {signal.actionKey}");
-
-                            if (signal.actionKey == "yes")
-                            {
-                                Console.WriteLine("User responded: YES (productive)");
-                                SendResponse(true);
-                            }
-                            else if (signal.actionKey == "no")
-                            {
-                                Console.WriteLine("User responded: NO (not productive)");
-                                SendResponse(false);
-                            }
-
-                            cancellationSource.Cancel();
-                        }
-                    },
-                    ObserverFlags.None,
-                    null,
-                    null,
-                    true
-                );
-
-                // Keep connection alive until cancelled
-                Console.WriteLine("[DEBUG] Waiting for notification interaction (60s timeout)...");
-                await Task.Delay(-1, cancellationSource.Token).ContinueWith(_ => { });
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[DEBUG] Native DBus notification failed: {ex.Message}");
-                throw;
-            }
+                    Console.WriteLine("[DEBUG] DBus notification cancelled (expected during cleanup)");
+                    // Swallow cancellation exceptions - these are expected
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[DEBUG] Native DBus notification failed: {ex.Message}");
+                    // Don't rethrow - just log and continue
+                }
+                finally
+                {
+                    // Restore original synchronization context
+                    SynchronizationContext.SetSynchronizationContext(oldContext);
+                }
+            }).ConfigureAwait(false);
         }
 
         private static void ShowFallbackNotification()

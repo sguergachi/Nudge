@@ -227,3 +227,7 @@ ModelManifest.xml
 
 # FAKE - F# Make
 .fake/
+
+# Claude Code temporary analysis files
+CODEBASE_ANALYSIS.md
+QUICK_REFERENCE.md
