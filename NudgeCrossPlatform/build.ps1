@@ -126,13 +126,32 @@ Write-Host ""
 # Check Python (required for ML)
 $pythonWorks = $false
 $pythonVersion = ""
+$pythonCmd = "python"
 
+# First try 'python' command
 if (Get-Command python -ErrorAction SilentlyContinue) {
     try {
         $pythonVersion = python --version 2>&1 | Out-String
         $pythonVersion = $pythonVersion.Trim()
         if ($pythonVersion -and $LASTEXITCODE -eq 0) {
             $pythonWorks = $true
+            $pythonCmd = "python"
+        }
+    }
+    catch {
+        $pythonWorks = $false
+    }
+}
+
+# If 'python' doesn't work, try 'py' (Windows Python Launcher)
+if (-not $pythonWorks -and (Get-Command py -ErrorAction SilentlyContinue)) {
+    try {
+        $pythonVersion = py --version 2>&1 | Out-String
+        $pythonVersion = $pythonVersion.Trim()
+        if ($pythonVersion -and $LASTEXITCODE -eq 0) {
+            $pythonWorks = $true
+            $pythonCmd = "py"
+            Write-Info "Using Python launcher (py) instead of python command"
         }
     }
     catch {
@@ -145,34 +164,76 @@ if (-not $pythonWorks) {
     Write-Host ""
 
     if ($hasWinget) {
-        Write-Info "Installing Python via winget..."
+        # Check if Python is already installed via winget
+        $wingetList = winget list --id Python.Python.3.12 2>&1 | Out-String
+        $pythonAlreadyInstalled = $wingetList -match "Python\.Python\.3\.12"
+
+        if ($pythonAlreadyInstalled) {
+            Write-Warn "Python appears to be installed but not in PATH"
+            Write-Host ""
+            Write-Info "Attempting to repair/reinstall Python with PATH enabled..."
+
+            # Uninstall and reinstall to fix PATH
+            winget uninstall Python.Python.3.12 --silent 2>&1 | Out-Null
+            Start-Sleep -Seconds 2
+        }
+        else {
+            Write-Info "Installing Python via winget..."
+        }
+
         winget install Python.Python.3.12 --silent --accept-package-agreements --accept-source-agreements
 
-        # Refresh PATH
+        # Refresh PATH from registry
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 
         # Test if python works now
-        try {
-            $pythonVersion = python --version 2>&1 | Out-String
-            $pythonVersion = $pythonVersion.Trim()
-            if ($pythonVersion -and $LASTEXITCODE -eq 0) {
-                Write-Success "[OK] Python installed successfully"
+        Start-Sleep -Seconds 1
+        $pythonWorksNow = $false
+
+        # Try 'python' first
+        if (Get-Command python -ErrorAction SilentlyContinue) {
+            try {
+                $pythonVersion = python --version 2>&1 | Out-String
+                $pythonVersion = $pythonVersion.Trim()
+                if ($pythonVersion -and $LASTEXITCODE -eq 0) {
+                    $pythonWorksNow = $true
+                    $pythonCmd = "python"
+                }
             }
-            else {
-                Write-Err "[ERROR] Python installation failed - python command not working"
-                Write-Err "Please install manually from: https://www.python.org/downloads/"
-                exit 1
-            }
+            catch { }
         }
-        catch {
-            Write-Err "[ERROR] Python installation failed"
-            Write-Err "Please install manually from: https://www.python.org/downloads/"
+
+        # Try 'py' as fallback
+        if (-not $pythonWorksNow -and (Get-Command py -ErrorAction SilentlyContinue)) {
+            try {
+                $pythonVersion = py --version 2>&1 | Out-String
+                $pythonVersion = $pythonVersion.Trim()
+                if ($pythonVersion -and $LASTEXITCODE -eq 0) {
+                    $pythonWorksNow = $true
+                    $pythonCmd = "py"
+                }
+            }
+            catch { }
+        }
+
+        if ($pythonWorksNow) {
+            Write-Success "[OK] Python installed successfully"
+        }
+        else {
+            Write-Err "[ERROR] Python installation failed - python command not working"
+            Write-Host ""
+            Write-Warn "Python may be installed but not in your PATH. Try one of these:"
+            Write-Host "  1. Close and reopen PowerShell, then run build.ps1 again" -ForegroundColor Yellow
+            Write-Host "  2. Reinstall Python from https://www.python.org/downloads/" -ForegroundColor Yellow
+            Write-Host "     Make sure to check 'Add Python to PATH' during installation" -ForegroundColor Yellow
+            Write-Host "  3. Add Python manually to your PATH environment variable" -ForegroundColor Yellow
             exit 1
         }
     }
     else {
         Write-Err "[ERROR] winget not available"
         Write-Err "Please install Python manually from: https://www.python.org/downloads/"
+        Write-Err "Make sure to check 'Add Python to PATH' during installation"
         Write-Err "Or install winget: https://aka.ms/getwinget"
         exit 1
     }
@@ -192,7 +253,8 @@ if (Test-Path "requirements-cpu.txt") {
     $ErrorActionPreference = "Continue"
 
     # Run pip install and capture all output (--disable-pip-version-check suppresses upgrade notices)
-    $pipOutput = & python -m pip install --user --disable-pip-version-check -r requirements-cpu.txt 2>&1 | Out-String
+    # Use the detected Python command (either 'python' or 'py')
+    $pipOutput = & $pythonCmd -m pip install --user --disable-pip-version-check -r requirements-cpu.txt 2>&1 | Out-String
     $pipExitCode = $LASTEXITCODE
 
     # Restore error action preference
