@@ -245,22 +245,22 @@ Write-Host ""
 
 # Install Python dependencies (required)
 if (Test-Path "requirements-cpu.txt") {
-    Write-Info "Installing Python ML dependencies..."
+    Write-Info "Installing Python ML dependencies (this may take 5-10 minutes)..."
+    Write-Host "  Downloading TensorFlow-CPU (~400MB) and other ML packages..." -ForegroundColor Gray
     Write-Host ""
 
     # Temporarily allow errors for pip install (pip writes progress to stderr)
     $previousErrorAction = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
 
-    # Run pip install and capture all output (--disable-pip-version-check suppresses upgrade notices)
+    # Run pip install with real-time output so user sees progress
     # Use the detected Python command (either 'python' or 'py')
-    $pipOutput = & $pythonCmd -m pip install --user --disable-pip-version-check -r requirements-cpu.txt 2>&1 | Out-String
+    & $pythonCmd -m pip install --user --disable-pip-version-check -r requirements-cpu.txt
     $pipExitCode = $LASTEXITCODE
 
     # Restore error action preference
     $ErrorActionPreference = $previousErrorAction
 
-    Write-Host $pipOutput -ForegroundColor Gray
     Write-Host ""
 
     if ($pipExitCode -eq 0) {
