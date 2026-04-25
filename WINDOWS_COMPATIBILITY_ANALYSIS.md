@@ -3,10 +3,12 @@
 > **STATUS: IMPLEMENTATION COMPLETED** ✓
 >
 > Windows support has been fully implemented. This document now serves as historical reference for the analysis that guided the implementation. For current documentation, see:
+>
 > - [WINDOWS_README.md](WINDOWS_README.md) - Windows user guide
 > - [NudgeCrossPlatform/README.md](NudgeCrossPlatform/README.md) - Updated main README
 >
 > **Implementation Summary:**
+>
 > - Window detection: ✓ Implemented using Windows API (`GetForegroundWindow`, `GetWindowText`)
 > - Idle time detection: ✓ Implemented using Windows API (`GetLastInputInfo`)
 > - Notifications: ✓ Implemented using PowerShell + MessageBox dialogs
@@ -16,6 +18,7 @@
 > - Platform detection: ✓ Using `RuntimeInformation.IsOSPlatform()`
 >
 > **Commits:**
+>
 > - 1cb3c8e: Implement native cross-platform notifications using DesktopNotifications
 > - 66a2582: Remove Tmds.DBus.Protocol dependency and use simpler notification approach
 > - f82bcfe: Restore working DBus API code from commit 3f4e633
@@ -29,6 +32,7 @@
 ## 1. PROJECT OVERVIEW
 
 ### Project Type
+
 - **Language**: C# (.NET 9.0)
 - **Framework**: 
   - .NET 9.0 cross-platform runtime
@@ -50,6 +54,7 @@
 ### Critical Linux/Wayland Dependencies
 
 #### 2.1 Environment Variables (Linux/X11 Specific)
+
 **File**: nudge.cs (lines 170, 305)
 
 ```csharp
@@ -64,6 +69,7 @@ if (desktop?.Contains("KDE") == true) { ... }
 ```
 
 **Windows Impact**: 
+
 - XDG_SESSION_TYPE doesn't exist on Windows
 - XDG_CURRENT_DESKTOP is Linux/Unix specific
 - Will fail environment validation on Windows
@@ -77,18 +83,17 @@ if (desktop?.Contains("KDE") == true) { ... }
 Three separate implementations for different Linux desktop environments:
 
 1. **Sway (Wayland compositor)**
-   ```csharp
+  ```csharp
    static string GetSwayFocusedApp() {
        var json = RunCommand("swaymsg", "-t get_tree");
        return ExtractFocusedAppFromSwayTree(json);
    }
-   ```
-   - Calls external `swaymsg` command
-   - Parses JSON output from Sway IPC
-   - **Windows Equivalent Needed**: Windows API (GetForegroundWindow, GetWindowTextA)
-
+  ```
+  - Calls external `swaymsg` command
+  - Parses JSON output from Sway IPC
+  - **Windows Equivalent Needed**: Windows API (GetForegroundWindow, GetWindowTextA)
 2. **GNOME (GTK on Wayland/X11)**
-   ```csharp
+  ```csharp
    static string GetGnomeFocusedApp() {
        var output = RunCommand("gdbus", "call --session --dest org.gnome.Shell " +
            "--object-path /org/gnome/Shell " +
@@ -96,12 +101,11 @@ Three separate implementations for different Linux desktop environments:
            "\"global.display.focus_window.get_wm_class()\"");
        return ExtractQuotedString(output);
    }
-   ```
-   - Uses D-Bus to communicate with GNOME Shell
-   - **Windows Equivalent Needed**: Windows API (EnumWindows, GetForegroundWindow)
-
+  ```
+  - Uses D-Bus to communicate with GNOME Shell
+  - **Windows Equivalent Needed**: Windows API (EnumWindows, GetForegroundWindow)
 3. **KDE/Plasma (Qt on Wayland/X11)**
-   ```csharp
+  ```csharp
    static string GetKDEFocusedApp() {
        // Primary: Uses KWin D-Bus scripting API (Wayland + X11)
        // Loads a KWin script via qdbus to get window caption
@@ -114,10 +118,10 @@ Three separate implementations for different Linux desktop environments:
        // Fallback 2: Generic identifier if all methods fail
        return "kde-wayland-window";
    }
-   ```
-   - Primary: Uses KWin D-Bus scripting API for accurate window titles on Wayland
-   - Fallback: xdotool (X11 specific)
-   - **Windows Equivalent Needed**: Windows API
+  ```
+  - Primary: Uses KWin D-Bus scripting API for accurate window titles on Wayland
+  - Fallback: xdotool (X11 specific)
+  - **Windows Equivalent Needed**: Windows API
 
 ---
 
@@ -150,6 +154,7 @@ static int GetFreedesktopIdleTime() {
 ```
 
 **Windows Impact**:
+
 - `qdbus`, `gdbus` don't exist on Windows
 - D-Bus is Linux/Unix specific
 - **Windows Equivalent Needed**: Windows API (GetLastInputInfo)
@@ -161,6 +166,7 @@ static int GetFreedesktopIdleTime() {
 **File**: nudge.cs (lines 722-754)
 
 **Commands that will fail on Windows**:
+
 - `which` (line 747) - Unix command to find executables
   - Windows Equivalent: `where` command or PATH searching
 - `swaymsg` - Sway-specific
@@ -190,6 +196,7 @@ static string _csvPath = "/tmp/HARVEST.CSV";
 ```
 
 **Windows Impact**:
+
 - `/tmp` doesn't exist on Windows
 - Should use `Path.GetTempPath()` or environment variables like `%TEMP%` or `%APPDATA%`
 
@@ -198,11 +205,13 @@ static string _csvPath = "/tmp/HARVEST.CSV";
 #### 2.6 Shell Script Usage (Unix-Specific Shebang)
 
 **Files**: 
+
 - nudge.cs (line 1): `#!/usr/bin/env dotnet run`
 - nudge-notify.cs (line 1): `#!/usr/bin/env dotnet run`
 - build.sh: Complex bash script with Linux-specific commands
 
 **Windows Impact**:
+
 - Shebang (#!) ignored on Windows
 - Build script uses bash syntax (not available on Windows without WSL/Git Bash)
 - Must be converted to PowerShell or batch files
@@ -234,6 +243,7 @@ Arguments = "-u critical -t 60000 \"Nudge - Productivity Check\" ..."
 ```
 
 **Windows Equivalent Needed**:
+
 - Windows 10+ has Toast Notifications API
 - Can fall back to message boxes (System.Windows.Forms.MessageBox)
 - Or use Windows Notifications library
@@ -247,6 +257,7 @@ Arguments = "-u critical -t 60000 \"Nudge - Productivity Check\" ..."
 **Path**: /home/user/Nudge/NudgeCrossPlatform/build.sh
 
 **Platform-Specific Elements**:
+
 - Bash syntax (not portable to Windows)
 - OS detection logic (lines 68-79):
   ```bash
@@ -263,6 +274,7 @@ Arguments = "-u critical -t 60000 \"Nudge - Productivity Check\" ..."
 - File operations with Unix paths
 
 **What's Missing**:
+
 - Windows detection
 - Windows package management (if applicable)
 - Windows-specific dependency installation
@@ -271,6 +283,7 @@ Arguments = "-u critical -t 60000 \"Nudge - Productivity Check\" ..."
 ### 3.2 Runtime Configuration Files
 
 **Files**:
+
 - nudge-tray.runtimeconfig.json
 - nudge.runtimeconfig.json
 - nudge-notify.runtimeconfig.json
@@ -280,11 +293,13 @@ These are standard .NET configuration files and ARE platform-independent.
 ### 3.3 Project Files (.csproj)
 
 **Files**:
+
 - nudge.csproj
 - nudge-notify.csproj
 - nudge-tray.csproj
 
 **Analysis**:
+
 - Target framework: `net9.0` (cross-platform)
 - NuGet packages ARE cross-platform:
   - Avalonia 11.2.2 (supports Windows via Avalonia.Win32)
@@ -302,6 +317,7 @@ These are standard .NET configuration files and ARE platform-independent.
 **File**: runtimes/ directory
 
 **Current Structure**:
+
 ```
 runtimes/
 ├── linux-arm/
@@ -312,6 +328,7 @@ runtimes/
 ```
 
 **Missing**:
+
 - `win-x64/` (64-bit Windows)
 - `win-x86/` (32-bit Windows)
 - `win-arm64/` (ARM Windows)
@@ -323,14 +340,17 @@ runtimes/
 ### 4.1 CRITICAL ISSUES (Must Fix)
 
 #### A. Window Detection System
+
 **Severity**: CRITICAL  
 **Files**: nudge.cs (lines 300-444)
 
 **Current Implementation**: 
+
 - Hard-coded for 3 specific Linux desktop environments
 - Uses external commands (swaymsg, gdbus, qdbus, xdotool)
 
 **Windows Solution**:
+
 ```csharp
 static string GetWindowsFocusedApp() {
     try {
@@ -354,14 +374,17 @@ static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint lpdwProcessId)
 ```
 
 #### B. Idle Time Detection
+
 **Severity**: CRITICAL  
 **Files**: nudge.cs (lines 446-541)
 
 **Current Implementation**:
+
 - Uses D-Bus services (org.freedesktop.ScreenSaver, org.gnome.Mutter.IdleMonitor)
 - Requires external commands
 
 **Windows Solution**:
+
 ```csharp
 static int GetWindowsIdleTime() {
     try {
@@ -390,15 +413,18 @@ static extern uint GetTickCount();
 ```
 
 #### C. File Path Handling
+
 **Severity**: HIGH  
 **Files**: nudge.cs (line 79)
 
 **Current**: 
+
 ```csharp
 static string _csvPath = "/tmp/HARVEST.CSV";
 ```
 
 **Windows Solution**:
+
 ```csharp
 static string _csvPath = Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -407,6 +433,7 @@ static string _csvPath = Path.Combine(
 ```
 
 Or for temporary files:
+
 ```csharp
 static string _csvPath = Path.Combine(
     Path.GetTempPath(),
@@ -418,10 +445,12 @@ static string _csvPath = Path.Combine(
 ### 4.2 HIGH PRIORITY ISSUES
 
 #### A. Command Detection
+
 **Severity**: HIGH  
 **Files**: nudge.cs (lines 743-754)
 
 **Current**:
+
 ```csharp
 static bool CommandExists(string cmd) {
     var output = RunCommand("which", cmd);
@@ -430,6 +459,7 @@ static bool CommandExists(string cmd) {
 ```
 
 **Windows Solution**:
+
 ```csharp
 static bool CommandExists(string cmd) {
     try {
@@ -452,10 +482,12 @@ static bool CommandExists(string cmd) {
 ```
 
 #### B. Environment Variable Validation
+
 **Severity**: HIGH  
 **Files**: nudge.cs (lines 163-234)
 
 **Current**:
+
 ```csharp
 var sessionType = Environment.GetEnvironmentVariable("XDG_SESSION_TYPE");
 if (sessionType != "wayland") {
@@ -464,6 +496,7 @@ if (sessionType != "wayland") {
 ```
 
 **Windows Solution**:
+
 ```csharp
 // Skip Wayland checks on Windows
 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
@@ -477,12 +510,14 @@ if (sessionType != "wayland") {
 ```
 
 #### C. Notification System
+
 **Severity**: HIGH  
 **Files**: nudge-tray.cs (lines 114-308)
 
 **Current**: Only D-Bus, kdialog, and notify-send
 
 **Windows Solution**:
+
 ```csharp
 // Use Windows Toast Notifications
 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
@@ -497,42 +532,50 @@ if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
 ### 4.3 MEDIUM PRIORITY ISSUES
 
 #### A. Build System
+
 **Severity**: MEDIUM  
 **Files**: build.sh (entire file)
 
 **Current**: Bash script with Linux-specific commands
 
 **Windows Solution Options**:
+
 1. Create build.ps1 (PowerShell script for Windows)
 2. Create build.bat (Batch file for Windows)
 3. Use .NET-only build approach (no shell dependencies)
 4. Use Python (cross-platform) as build system
 
 **Key Missing**:
+
 - Windows detection in OS detection function
 - Windows dependency installation (if needed)
 - PowerShell equivalents for all bash operations
 
 #### B. Shebang Handling
+
 **Severity**: MEDIUM  
 **Files**: nudge.cs (line 1), nudge-notify.cs (line 1)
 
 **Current**:
+
 ```csharp
 #!/usr/bin/env dotnet run
 ```
 
 **Windows Solution**:
+
 - Keep shebang (ignored on Windows)
 - Or remove and use separate wrapper scripts
 - Build system should already handle this
 
 #### C. Python Scripts (train_model.py, validate_data.py)
+
 **Severity**: MEDIUM
 
 **Current**: Pure Python, should work on Windows
 
 **Potential Issues**:
+
 - May depend on Linux command-line tools
 - File paths might be hardcoded
 
@@ -543,6 +586,7 @@ if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
 ### 4.4 LOW PRIORITY ISSUES
 
 #### A. Runtime Packages
+
 **Severity**: LOW
 
 **Status**: Can be generated by dotnet publish for Windows
@@ -550,10 +594,12 @@ if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
 The `.csproj` files will automatically pull Windows-specific native libraries from NuGet (Avalonia.Win32, etc.) during build.
 
 #### B. ANSI Color Codes
+
 **Severity**: LOW  
 **Files**: Multiple console output sections
 
 **Current**:
+
 ```csharp
 static class Color {
     public const string RESET = "\u001b[0m";
@@ -571,12 +617,14 @@ static class Color {
 
 ### NuGet Packages Status
 
-| Package | Version | Windows Support | Status |
-|---------|---------|-----------------|--------|
-| Avalonia | 11.2.2 | YES (Avalonia.Win32) | Ready |
-| Avalonia.Desktop | 11.2.2 | YES | Ready |
-| Avalonia.Themes.Fluent | 11.2.2 | YES | Ready |
-| Tmds.DBus.Protocol | 0.21.0 | NO (Linux-only) | ISSUE |
+
+| Package                | Version | Windows Support      | Status |
+| ---------------------- | ------- | -------------------- | ------ |
+| Avalonia               | 11.2.2  | YES (Avalonia.Win32) | Ready  |
+| Avalonia.Desktop       | 11.2.2  | YES                  | Ready  |
+| Avalonia.Themes.Fluent | 11.2.2  | YES                  | Ready  |
+| Tmds.DBus.Protocol     | 0.21.0  | NO (Linux-only)      | ISSUE  |
+
 
 **Issue**: Tmds.DBus.Protocol is imported in nudge-tray.csproj but only used for D-Bus notifications. Windows build would fail if this is required.
 
@@ -586,42 +634,41 @@ static class Color {
 
 ## 6. SUMMARY TABLE OF CHANGES NEEDED
 
-| Area | Component | Change | Difficulty | Priority |
-|------|-----------|--------|------------|----------|
-| Window Detection | nudge.cs | Replace Sway/GNOME/KDE detection with Windows API | HIGH | CRITICAL |
-| Idle Time | nudge.cs | Replace D-Bus with GetLastInputInfo | HIGH | CRITICAL |
-| File Paths | nudge.cs | Replace /tmp with Path.GetTempPath() | LOW | HIGH |
-| Command Detection | nudge.cs | Replace 'which' with 'where' | LOW | HIGH |
-| Environment Vars | nudge.cs | Add Windows detection logic | LOW | HIGH |
-| Notifications | nudge-tray.cs | Add Windows Toast Notifications | MEDIUM | HIGH |
-| Build System | build.sh | Create Windows build script | HIGH | MEDIUM |
-| D-Bus Dependency | nudge-tray.csproj | Make conditional or extract | LOW | MEDIUM |
-| Python Scripts | train_model.py | Test/verify on Windows | MEDIUM | MEDIUM |
-| | validate_data.py | Test/verify on Windows | MEDIUM | MEDIUM |
+
+| Area              | Component         | Change                                            | Difficulty | Priority |
+| ----------------- | ----------------- | ------------------------------------------------- | ---------- | -------- |
+| Window Detection  | nudge.cs          | Replace Sway/GNOME/KDE detection with Windows API | HIGH       | CRITICAL |
+| Idle Time         | nudge.cs          | Replace D-Bus with GetLastInputInfo               | HIGH       | CRITICAL |
+| File Paths        | nudge.cs          | Replace /tmp with Path.GetTempPath()              | LOW        | HIGH     |
+| Command Detection | nudge.cs          | Replace 'which' with 'where'                      | LOW        | HIGH     |
+| Environment Vars  | nudge.cs          | Add Windows detection logic                       | LOW        | HIGH     |
+| Notifications     | nudge-tray.cs     | Add Windows Toast Notifications                   | MEDIUM     | HIGH     |
+| Build System      | build.sh          | Create Windows build script                       | HIGH       | MEDIUM   |
+| D-Bus Dependency  | nudge-tray.csproj | Make conditional or extract                       | LOW        | MEDIUM   |
+| Python Scripts    | train_model.py    | Test/verify on Windows                            | MEDIUM     | MEDIUM   |
+|                   | validate_data.py  | Test/verify on Windows                            | MEDIUM     | MEDIUM   |
+
 
 ---
 
 ## 7. RECOMMENDED IMPLEMENTATION ORDER
 
 1. **Phase 1 (Core Functionality)**
-   - Add Windows window detection (Windows API)
-   - Add Windows idle time detection (Windows API)
-   - Fix file paths (use Path APIs)
-   - Add platform detection (RuntimeInformation)
-
+  - Add Windows window detection (Windows API)
+  - Add Windows idle time detection (Windows API)
+  - Fix file paths (use Path APIs)
+  - Add platform detection (RuntimeInformation)
 2. **Phase 2 (Build System)**
-   - Create build.ps1 for Windows
-   - Or refactor to .NET-only build (no shell dependency)
-   - Update OS detection in build script
-
+  - Create build.ps1 for Windows
+  - Or refactor to .NET-only build (no shell dependency)
+  - Update OS detection in build script
 3. **Phase 3 (User Interface)**
-   - Add Windows notification support (Toast or MessageBox)
-   - Update build.sh to handle Windows notifications properly
-
+  - Add Windows notification support (Toast or MessageBox)
+  - Update build.sh to handle Windows notifications properly
 4. **Phase 4 (Testing & Refinement)**
-   - Test Python scripts on Windows
-   - Verify all file paths work on Windows
-   - Test all notification methods
+  - Test Python scripts on Windows
+  - Verify all file paths work on Windows
+  - Test all notification methods
 
 ---
 
@@ -670,6 +717,7 @@ The Nudge project **was fundamentally a Linux/Wayland-specific application**. Ac
 ## POST-IMPLEMENTATION NOTES
 
 **What Worked Well:**
+
 - Conditional compilation (`#if WINDOWS`) kept code inline without abstractions
 - Runtime platform detection using `RuntimeInformation.IsOSPlatform()`
 - PowerShell + MessageBox approach for Windows notifications (simple and functional)
@@ -677,18 +725,20 @@ The Nudge project **was fundamentally a Linux/Wayland-specific application**. Ac
 - `Path.GetTempPath()` provided clean cross-platform file path handling
 
 **Key Challenges:**
+
 - Tmds.DBus.Protocol 0.21.0 API documentation was sparse - required fetching working code from master branch
 - Notification persistence required keeping DBus connection alive with `Task.Delay(-1, cancellationToken)`
 - Multiple API attempts failed before finding correct WriteDictionaryEntryStart() pattern
 
 **Code Philosophy Maintained:**
+
 - No interfaces or abstractions added
 - Direct platform-specific code with conditional compilation
 - Jon Blow-style: inline, specific, working code
 - Total implementation: ~2,150 lines of code (still minimal)
 
 **Tested Platforms:**
+
 - Linux: Native DBus notifications with action buttons
 - Windows: PowerShell MessageBox dialogs with UDP responses
 - Cross-platform: Avalonia system tray works on both
-

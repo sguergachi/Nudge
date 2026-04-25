@@ -79,6 +79,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Tasks;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // PLATFORM ABSTRACTION - Share code between Windows/Linux implementations
@@ -813,45 +814,27 @@ class Nudge
 
     static void Main(string[] args)
     {
-        // Parse arguments
-        for (int i = 0; i < args.Length; i++)
+        var parsed = NudgeCoreLogic.ParseNudgeArgs(args);
+        if (parsed.Action == NudgeStartupAction.ShowHelp)
         {
-            var arg = args[i];
-
-            if (arg == "--help" || arg == "-h")
-            {
-                ShowHelp();
-                return;
-            }
-            if (arg == "--version" || arg == "-v")
-            {
-                Console.WriteLine($"Nudge v{VERSION}");
-                return;
-            }
-            if (arg == "--interval" || arg == "-i")
-            {
-                if (i + 1 < args.Length && int.TryParse(args[i + 1], out int minutes))
-                {
-                    SNAPSHOT_INTERVAL_MS = minutes * 60 * 1000;
-                    _customInterval = true;
-                    i++; // Skip the interval value
-                }
-                continue;
-            }
-            if (arg == "--ml")
-            {
-                _mlEnabled = true;
-                continue;
-            }
-            if (arg == "--force-model")
-            {
-                _forceTrainedModel = true;
-                continue;
-            }
-            if (!arg.StartsWith("--") && !arg.StartsWith("-"))
-            {
-                _csvPath = arg;
-            }
+            ShowHelp();
+            return;
+        }
+        if (parsed.Action == NudgeStartupAction.ShowVersion)
+        {
+            Console.WriteLine($"Nudge v{VERSION}");
+            return;
+        }
+        if (parsed.IntervalMinutes is int minutes)
+        {
+            SNAPSHOT_INTERVAL_MS = minutes * 60 * 1000;
+            _customInterval = true;
+        }
+        _mlEnabled = parsed.MlEnabled;
+        _forceTrainedModel = parsed.ForceTrainedModel;
+        if (!string.IsNullOrWhiteSpace(parsed.CsvPath))
+        {
+            _csvPath = parsed.CsvPath;
         }
 
         // Welcome banner
@@ -1597,23 +1580,7 @@ class Nudge
 
     static string RunCommand(string cmd, string args)
     {
-        var psi = new ProcessStartInfo
-        {
-            FileName = cmd,
-            Arguments = args,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        using var process = Process.Start(psi);
-        if (process == null)
-            return "";
-
-        string output = process.StandardOutput.ReadToEnd();
-        process.WaitForExit();
-        return output;
+        return NudgeCoreLogic.RunCommand(cmd, args, timeoutMs: 5000);
     }
 
     static bool CommandExists(string cmd)

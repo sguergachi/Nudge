@@ -63,6 +63,7 @@ namespace NudgeTray
         public static string WhichCommand => IsWindows ? "where" : "which";
 
         public static string PythonCommand => IsWindows ? "python" : "python3";
+        public static string DotnetCommand => IsWindows ? "dotnet.exe" : "dotnet";
     }
 
     class Program
@@ -76,6 +77,10 @@ namespace NudgeTray
         static bool _forceTrainedModel = false;
         static DateTime? _nextSnapshotTime;
         static int _intervalMinutes;
+        static Mutex? _singleInstanceMutex;
+        internal const string SingleInstanceMutexName = NudgeCoreLogic.TraySingleInstanceMutexName;
+        static readonly string _baseDir = AppContext.BaseDirectory;
+        static readonly string _modelDirPath = Path.Combine(_baseDir, "model");
 
         // Common tray icon for all platforms
         static TrayIcon? _trayIcon;
@@ -94,6 +99,14 @@ namespace NudgeTray
         [STAThread]
         static void Main(string[] args)
         {
+            bool createdNew;
+            _singleInstanceMutex = new Mutex(true, SingleInstanceMutexName, out createdNew);
+            if (NudgeCoreLogic.ShouldExitForExistingTrayInstance(createdNew))
+            {
+                Console.WriteLine("[WARN] Another nudge-tray instance is already running. Exiting.");
+                return;
+            }
+
             // Add global exception handlers
             AppDomain.CurrentDomain.UnhandledException += (s, e) =>
             {
@@ -185,9 +198,6 @@ namespace NudgeTray
             }
             Console.WriteLine("╚═══════════════════════════════════════════════════════╝");
             Console.WriteLine();
-
-            // Clean up any old processes before starting new ones
-            CleanupOldProcesses();
 
             // Start ML services if enabled
             if (_mlEnabled)
@@ -584,7 +594,7 @@ namespace NudgeTray
                     StartInfo = new ProcessStartInfo
                     {
                         FileName = python,
-                        Arguments = "model_inference.py --host 127.0.0.1 --port 45002 --model-dir ./model",
+                        Arguments = $"\"{Path.Combine(_baseDir, "model_inference.py")}\" --host 127.0.0.1 --port 45002 --model-dir \"{_modelDirPath}\"",
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
                         UseShellExecute = false,
@@ -631,7 +641,7 @@ namespace NudgeTray
 
                 // Start background trainer
                 Console.WriteLine("  Starting background trainer...");
-                string trainerArgs = $"background_trainer.py --csv \"{csvPath}\" --model-dir ./model --check-interval 300";
+                string trainerArgs = $"\"{Path.Combine(_baseDir, "background_trainer.py")}\" --csv \"{csvPath}\" --model-dir \"{_modelDirPath}\" --check-interval 300";
                 if (_forceTrainedModel)
                 {
                     trainerArgs += " --min-total-samples 1";
@@ -688,8 +698,12 @@ namespace NudgeTray
 
             try
             {
-                // Determine nudge executable name based on platform
-                string nudgeExe = PlatformConfig.IsWindows ? "nudge.exe" : "./nudge";
+                string nudgeDllPath = Path.Combine(_baseDir, "nudge.dll");
+                if (!File.Exists(nudgeDllPath))
+                {
+                    Console.WriteLine($"✗ nudge assembly not found: {nudgeDllPath}");
+                    Environment.Exit(1);
+                }
 
                 // Build arguments
                 string args = $"--interval {interval}";
@@ -707,8 +721,8 @@ namespace NudgeTray
                 {
                     StartInfo = new ProcessStartInfo
                     {
-                        FileName = nudgeExe,
-                        Arguments = args,
+                        FileName = PlatformConfig.DotnetCommand,
+                        Arguments = $"\"{nudgeDllPath}\" {args}",
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
                         UseShellExecute = false,
@@ -788,23 +802,32 @@ namespace NudgeTray
                 // Create and show custom notification window on Avalonia UI thread (works on all platforms)
                 Dispatcher.UIThread.Post(() =>
                 {
-                    var notificationWindow = new CustomNotificationWindow();
-                    notificationWindow.ShowWithAnimation((productive) =>
+                    try
                     {
+                        var notificationWindow = new CustomNotificationWindow();
+                        notificationWindow.ShowWithAnimation((productive) =>
+                        {
+                            _waitingForResponse = false;
+
+                            // If productive is null, notification was auto-dismissed (no snapshot taken)
+                            if (productive.HasValue)
+                            {
+                                SendResponse(productive.Value);
+                            }
+                            else
+                            {
+                                Console.WriteLine("[DEBUG] Notification auto-dismissed - no response sent");
+                            }
+
+                            // Don't refresh menu after response - not necessary and can cause crashes on Linux
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        // Prevent stale waiting state if UI creation fails.
                         _waitingForResponse = false;
-
-                        // If productive is null, notification was auto-dismissed (no snapshot taken)
-                        if (productive.HasValue)
-                        {
-                            SendResponse(productive.Value);
-                        }
-                        else
-                        {
-                            Console.WriteLine("[DEBUG] Notification auto-dismissed - no response sent");
-                        }
-
-                        // Don't refresh menu after response - not necessary and can cause crashes on Linux
-                    });
+                        Console.WriteLine($"[ERROR] Failed to create custom notification window: {ex.Message}");
+                    }
                 });
 
                 Console.WriteLine("✓ Custom notification shown with animation");
@@ -814,6 +837,7 @@ namespace NudgeTray
             }
             catch (Exception ex)
             {
+                _waitingForResponse = false;
                 Console.WriteLine($"[ERROR] Failed to show custom notification: {ex.Message}");
                 Console.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
             }
@@ -873,7 +897,7 @@ namespace NudgeTray
 
                 try
                 {
-                    using var connection = new Connection(Address.Session!);
+                    using var connection = new DBusConnection(DBusAddress.Session!);
                     await connection.ConnectAsync().ConfigureAwait(false);
 
                     // Create and send Notify method call
@@ -1110,6 +1134,12 @@ namespace NudgeTray
 
             Console.WriteLine("✓ Shutdown complete");
             Console.WriteLine("[DEBUG] Exiting nudge-tray...");
+
+            if (_singleInstanceMutex != null)
+            {
+                try { _singleInstanceMutex.ReleaseMutex(); } catch { }
+                _singleInstanceMutex.Dispose();
+            }
 
             Environment.Exit(0);
         }

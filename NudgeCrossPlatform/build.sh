@@ -328,9 +328,15 @@ if [ "$COMPILER" = "dotnet" ]; then
     sed '1{/^#!/d;}' nudge.cs > nudge_build.cs
     sed '1{/^#!/d;}' nudge-notify.cs > nudge-notify_build.cs
 
-    # Detect installed .NET version
-    DOTNET_MAJOR_VERSION=$(dotnet --version | cut -d'.' -f1)
-    TARGET_FRAMEWORK="net${DOTNET_MAJOR_VERSION}.0"
+    # Pick a target framework that exists on the local SDK.
+    DOTNET_MAJOR="$(dotnet --version | cut -d. -f1)"
+    if [ "$DOTNET_MAJOR" -ge 10 ]; then
+        TARGET_FRAMEWORK="net10.0"
+    elif [ "$DOTNET_MAJOR" -ge 9 ]; then
+        TARGET_FRAMEWORK="net9.0"
+    else
+        TARGET_FRAMEWORK="net8.0"
+    fi
 
     dim "  Target framework: ${TARGET_FRAMEWORK}"
 
@@ -401,10 +407,10 @@ EOF
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="11.2.2" />
-    <PackageReference Include="Avalonia.Desktop" Version="11.2.2" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.2" />
-    <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.0" />
+    <PackageReference Include="Avalonia" Version="12.0.1" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.0.1" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.1" />
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.92.0" />
   </ItemGroup>
 
   <!-- Windows-specific packages -->

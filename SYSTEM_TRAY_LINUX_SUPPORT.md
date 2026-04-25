@@ -12,6 +12,7 @@ Re-enabled the system tray icon on Linux. The tray icon now works on both Window
 **Location:** `CreateTrayIcon()` method (lines 259-300)
 
 **Before:**
+
 ```csharp
 static void CreateTrayIcon()
 {
@@ -28,6 +29,7 @@ static void CreateTrayIcon()
 ```
 
 **After:**
+
 ```csharp
 static void CreateTrayIcon()
 {
@@ -61,6 +63,7 @@ static void CreateTrayIcon()
 ### 2. Tray Menu Design
 
 **Simple right-click menu with:**
+
 - Status line showing next snapshot time (e.g., "Next snapshot: 14:35:22")
 - Separator
 - Quit option
@@ -76,6 +79,7 @@ static void CreateTrayIcon()
 ### 3. What Was NOT Changed
 
 **Notifications remain unchanged:**
+
 - ✅ Windows: Native toast notifications with YES/NO buttons (using Microsoft.Toolkit.Uwp.Notifications)
 - ✅ Linux: Native DBus notifications with YES/NO buttons (using Tmds.DBus.Protocol)
 - ✅ Custom Avalonia notification window (CustomNotification.cs) still available as fallback
@@ -87,29 +91,29 @@ The notifications are **popup toasts**, not part of the tray menu.
 ### Components
 
 1. **Tray Icon (Cross-Platform)**
-   - Technology: Avalonia TrayIcon
-   - Platforms: Windows, Linux, macOS
-   - Features: Icon, tooltip, right-click menu
-
+  - Technology: Avalonia TrayIcon
+  - Platforms: Windows, Linux, macOS
+  - Features: Icon, tooltip, right-click menu
 2. **Tray Menu (Cross-Platform)**
-   - Technology: Avalonia NativeMenu
-   - Items: Status text + Quit
-   - Updates: Dynamic status showing next snapshot time
-
+  - Technology: Avalonia NativeMenu
+  - Items: Status text + Quit
+  - Updates: Dynamic status showing next snapshot time
 3. **Notifications (Platform-Specific)**
-   - **Windows:** Toast notifications via Microsoft.Toolkit.Uwp.Notifications
-   - **Linux:** DBus notifications via Tmds.DBus.Protocol
-   - **Fallback:** Custom Avalonia window (CustomNotification.cs)
+  - **Windows:** Toast notifications via Microsoft.Toolkit.Uwp.Notifications
+  - **Linux:** DBus notifications via Tmds.DBus.Protocol
+  - **Fallback:** Custom Avalonia window (CustomNotification.cs)
 
 ### Key Methods
 
-| Method | Purpose |
-|--------|---------|
-| `CreateTrayIcon()` | Creates and registers the system tray icon on all platforms |
-| `CreateAvaloniaMenu()` | Creates the native right-click menu |
-| `CreateCommonIcon()` | Generates the blue circle icon programmatically |
-| `ShowCustomNotification()` | Shows platform-specific notification popup |
-| `GetMenuStatusText()` | Returns status text for menu (next snapshot time or waiting message) |
+
+| Method                     | Purpose                                                              |
+| -------------------------- | -------------------------------------------------------------------- |
+| `CreateTrayIcon()`         | Creates and registers the system tray icon on all platforms          |
+| `CreateAvaloniaMenu()`     | Creates the native right-click menu                                  |
+| `CreateCommonIcon()`       | Generates the blue circle icon programmatically                      |
+| `ShowCustomNotification()` | Shows platform-specific notification popup                           |
+| `GetMenuStatusText()`      | Returns status text for menu (next snapshot time or waiting message) |
+
 
 ## Benefits
 
@@ -120,12 +124,14 @@ The notifications are **popup toasts**, not part of the tray menu.
 
 ## Linux Desktop Environment Support
 
-| Desktop Environment | Status | Notes |
-|---------------------|--------|-------|
-| KDE Plasma | ✅ | Native support |
-| XFCE | ✅ | Native support |
-| Cinnamon | ✅ | Native support |
-| GNOME 3.26+ | ⚠️ | Requires extension |
+
+| Desktop Environment | Status | Notes              |
+| ------------------- | ------ | ------------------ |
+| KDE Plasma          | ✅      | Native support     |
+| XFCE                | ✅      | Native support     |
+| Cinnamon            | ✅      | Native support     |
+| GNOME 3.26+         | ⚠️     | Requires extension |
+
 
 ### GNOME Setup
 
@@ -136,6 +142,7 @@ sudo apt install gnome-shell-extension-appindicator
 ```
 
 Then enable in GNOME Tweaks:
+
 ```
 Extensions → Ubuntu AppIndicators → ON
 ```
@@ -143,19 +150,21 @@ Extensions → Ubuntu AppIndicators → ON
 ## Testing
 
 ### Windows
-- [x] Tray icon appears in system tray
-- [x] Right-click shows menu with status and quit
-- [x] Menu updates to show next snapshot time
-- [x] Quit option works correctly
-- [x] Notifications still popup with YES/NO buttons
+
+- Tray icon appears in system tray
+- Right-click shows menu with status and quit
+- Menu updates to show next snapshot time
+- Quit option works correctly
+- Notifications still popup with YES/NO buttons
 
 ### Linux
-- [ ] Tray icon appears in system tray (KDE/XFCE/Cinnamon/GNOME)
-- [ ] Right-click shows menu with status and quit
-- [ ] Menu updates to show next snapshot time
-- [ ] Quit option works correctly
-- [ ] Notifications still popup with YES/NO buttons
-- [ ] No crashes or DBus errors
+
+- Tray icon appears in system tray (KDE/XFCE/Cinnamon/GNOME)
+- Right-click shows menu with status and quit
+- Menu updates to show next snapshot time
+- Quit option works correctly
+- Notifications still popup with YES/NO buttons
+- No crashes or DBus errors
 
 ## Technical Details
 
@@ -207,10 +216,12 @@ static string GetMenuStatusText()
 
 ## Files Modified
 
-| File | Lines Changed | Description |
-|------|---------------|-------------|
-| `nudge-tray.cs` | ~10 lines removed | Removed Linux platform check |
+
+| File            | Lines Changed     | Description                              |
+| --------------- | ----------------- | ---------------------------------------- |
+| `nudge-tray.cs` | ~10 lines removed | Removed Linux platform check             |
 | `nudge-tray.cs` | ~40 lines removed | Removed commented-out menu refresh timer |
+
 
 ## Commit History
 
@@ -235,3 +246,4 @@ None currently. The implementation uses standard Avalonia TrayIcon which is stab
 - [Avalonia NativeMenu Documentation](https://docs.avaloniaui.net/docs/reference/controls/nativemenu)
 - Test application: `TrayIconTest/Program.cs`
 - Research document: `TRAY_ICON_RESEARCH.md`
+

@@ -69,7 +69,7 @@ namespace NudgeTray
             Height = 580;
             CanResize = false;
             ShowInTaskbar = false;
-            SystemDecorations = SystemDecorations.None;
+            WindowDecorations = WindowDecorations.None;
             Title = "Nudge Analytics";
             Background = Brushes.Transparent;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };

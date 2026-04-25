@@ -226,9 +226,17 @@ Write-Host "  Preparing source files..." -ForegroundColor Gray
 Get-Content nudge.cs | Where-Object { $_ -notmatch '^#!/' } | Set-Content nudge_build.cs -Encoding UTF8
 Get-Content nudge-notify.cs | Where-Object { $_ -notmatch '^#!/' } | Set-Content nudge-notify_build.cs -Encoding UTF8
 
-# Detect installed .NET version
-$dotnetMajorVersion = $dotnetVersion.Split('.')[0]
-$targetFramework = "net$dotnetMajorVersion.0"
+# Pick a target framework available on the local SDK.
+$dotnetMajor = [int]($dotnetVersion.Split('.')[0])
+if ($dotnetMajor -ge 10) {
+    $targetFramework = "net10.0"
+}
+elseif ($dotnetMajor -ge 9) {
+    $targetFramework = "net9.0"
+}
+else {
+    $targetFramework = "net8.0"
+}
 
 Write-Host "  Target framework: $targetFramework" -ForegroundColor Gray
 
@@ -283,10 +291,10 @@ $trayProject = @"
     <Compile Include="CustomNotification.cs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="11.2.2" />
-    <PackageReference Include="Avalonia.Desktop" Version="11.2.2" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.2" />
-    <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.0" />
+    <PackageReference Include="Avalonia" Version="12.0.1" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.0.1" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.1" />
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.92.0" />
     <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
   </ItemGroup>
 </Project>
