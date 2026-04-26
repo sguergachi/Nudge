@@ -459,10 +459,10 @@ namespace NudgeTray
             container.Children.Add(_aiEnableButton);
 
             // Set tooltip for the status dot
-            _aiStatusDot.ToolTipTip = new ToolTip
+            ToolTip.SetTip(_aiStatusDot, new ToolTip
             {
                 Content = "AI Model Status: Inactive\n\nThe ML model is not running.\nClick 'Enable' to start AI-powered productivity tracking."
-            };
+            });
 
             return container;
         }
@@ -514,7 +514,7 @@ namespace NudgeTray
                     _aiStatusText.Foreground = new SolidColorBrush(AIStatusActive);
                     _aiEnableButton.IsVisible = false;
 
-                    if (_aiStatusDot.ToolTipTip is ToolTip tip1)
+                    if (ToolTip.GetTip(_aiStatusDot) is ToolTip tip1)
                     {
                         tip1.Content = "AI Model Status: Active\n\nThe ML model is running and making predictions.";
                     }
@@ -526,7 +526,7 @@ namespace NudgeTray
                     _aiStatusText.Foreground = new SolidColorBrush(AIStatusLearning);
                     _aiEnableButton.IsVisible = false;
 
-                    if (_aiStatusDot.ToolTipTip is ToolTip tip2)
+                    if (ToolTip.GetTip(_aiStatusDot) is ToolTip tip2)
                     {
                         tip2.Content = "AI Model Status: Learning\n\nThe ML model is training. More responses will improve predictions.";
                     }
@@ -538,7 +538,7 @@ namespace NudgeTray
                     _aiStatusText.Foreground = new SolidColorBrush(AIStatusInactive);
                     _aiEnableButton.IsVisible = true;
 
-                    if (_aiStatusDot.ToolTipTip is ToolTip tip3)
+                    if (ToolTip.GetTip(_aiStatusDot) is ToolTip tip3)
                     {
                         tip3.Content = "AI Model Status: Inactive\n\nThe ML model is not running.\nClick 'Enable' to start AI-powered productivity tracking.";
                     }
