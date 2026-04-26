@@ -87,13 +87,12 @@ using System.Threading.Tasks;
 
 static class BrowserDetector
 {
-    // .NET 9: SearchValues for O(1) browser process name matching
-    private static readonly SearchValues<string> BrowserProcessNames = SearchValues.Create(
-        [
-            "chrome", "chromium", "firefox", "edge", "brave", "opera", "vivaldi",
-            "safari", "browser", "chromium-browser", "google-chrome", "mozilla"
-        ],
-        StringComparison.OrdinalIgnoreCase);
+    // Identifiers for browser process names
+    private static readonly string[] BrowserProcessNames =
+    [
+        "chrome", "chromium", "firefox", "edge", "brave", "opera", "vivaldi",
+        "safari", "browser", "chromium-browser", "google-chrome", "mozilla"
+    ];
 
     // Known browser suffixes that appear at the end of window titles
     private static readonly string[] BrowserSuffixes =
@@ -152,7 +151,12 @@ static class BrowserDetector
         if (string.IsNullOrEmpty(processName))
             return false;
 
-        return processName.AsSpan().ContainsAny(BrowserProcessNames);
+        foreach (var browser in BrowserProcessNames)
+        {
+            if (processName.Contains(browser, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 
     public static string? ExtractSite(string title)
@@ -530,22 +534,20 @@ class Nudge
         private int _cachedIdle = 0;
         private DateTime _idleCacheExpiry = DateTime.MinValue;
 
-        // .NET 9: SearchValues for fast string matching (significantly faster than LINQ Any/Contains)
-        private static readonly SearchValues<string> SystemProcessNames = SearchValues.Create(
-            [
-                "kwin_wayland", "kwin_x11", "plasmashell", "kded5", "kded6",
-                "kglobalaccel", "ksmserver", "systemd", "dbus-daemon",
-                "kwalletd5", "kwalletd6", "baloo_file", "agent", "polkit",
-                "xdg-desktop-portal", "xdg-document-portal", "xdg-permission-store"
-            ],
-            StringComparison.Ordinal);
+        // System process names to ignore
+        private static readonly string[] SystemProcessNames =
+        [
+            "kwin_wayland", "kwin_x11", "plasmashell", "kded5", "kded6",
+            "kglobalaccel", "ksmserver", "systemd", "dbus-daemon",
+            "kwalletd5", "kwalletd6", "baloo_file", "agent", "polkit",
+            "xdg-desktop-portal", "xdg-document-portal", "xdg-permission-store"
+        ];
 
-        private static readonly SearchValues<string> NudgeProcessNames = SearchValues.Create(
-            [
-                "background_trainer", "model_inference", "nudge-tray",
-                "/Nudge/", "NudgeCrossPlatform"
-            ],
-            StringComparison.Ordinal);
+        private static readonly string[] NudgeProcessNames =
+        [
+            "background_trainer", "model_inference", "nudge-tray",
+            "/Nudge/", "NudgeCrossPlatform"
+        ];
 
         public string PlatformName => _compositor;
 
@@ -897,20 +899,26 @@ class Nudge
                         if (string.IsNullOrWhiteSpace(cmdlineText))
                             continue;
 
-                        // .NET 9: Use Span for efficient string processing with SearchValues
-                        ReadOnlySpan<char> cmdline = cmdlineText.AsSpan().Trim();
-
-                        // .NET 9: SearchValues for fast Nudge process filtering (much faster than multiple Contains)
-                        if (cmdline.ContainsAny(NudgeProcessNames))
+                        // Use simple string filtering for Nudge processes
+                        bool isNudge = false;
+                        foreach (var nudgeProcess in NudgeProcessNames)
+                        {
+                            if (cmdlineText.Contains(nudgeProcess, StringComparison.Ordinal))
+                            {
+                                isNudge = true;
+                                break;
+                            }
+                        }
+                        if (isNudge)
                             continue;
 
-                        // Extract process name efficiently using Span
-                        int spaceIndex = cmdline.IndexOf(' ');
-                        ReadOnlySpan<char> processPath = spaceIndex >= 0 ? cmdline.Slice(0, spaceIndex) : cmdline;
-                        var processName = Path.GetFileName(processPath.ToString());
+                        // Extract process name efficiently
+                        int spaceIndex = cmdlineText.IndexOf(' ');
+                        string processPath = spaceIndex >= 0 ? cmdlineText.Substring(0, spaceIndex) : cmdlineText;
+                        var processName = Path.GetFileName(processPath.Trim());
 
-                        // .NET 9: SearchValues for system process filtering (replaces LINQ Any)
-                        if (processName.AsSpan().ContainsAny(SystemProcessNames))
+                        // System process filtering
+                        if (SystemProcessNames.Any(s => string.Equals(s, processName, StringComparison.Ordinal)))
                             continue;
 
                         // Score based on process stats
@@ -1009,15 +1017,12 @@ class Nudge
     static int _mlTriggeredSnapshots = 0;
     static int _mlSkippedAlerts = 0;
     static int _intervalTriggeredSnapshots = 0;
-    static List<double> _mlConfidenceScores = [];
+    static List<double> _mlConfidenceScores = new List<double>();
 
-    // .NET 9: CompositeFormat for repeated log messages (pre-compiled for better performance)
-    static readonly CompositeFormat LogPredictionFormat = CompositeFormat.Parse(
-        "📊 Request #{0}: {1} (confidence: {2:F1}%, {3:F1}ms)");
-    static readonly CompositeFormat LogIdleFormat = CompositeFormat.Parse(
-        "  {0} min until next snapshot{1}  ({2}{3}{4}, idle: {5}ms)");
-    static readonly CompositeFormat LogAppSwitchFormat = CompositeFormat.Parse(
-        "  Switched: {0} → {1}");
+    // Log message formats
+    private const string LogPredictionFormat = "📊 Request #{0}: {1} (confidence: {2:F1}%, {3:F1}ms)";
+    private const string LogIdleFormat = "  {0} min until next snapshot{1}  ({2}{3}{4}, idle: {5}ms)";
+    private const string LogAppSwitchFormat = "  Switched: {0} → {1}";
 
     // .NET 9: Optimized JSON serializer options (reuse for better performance)
     static readonly JsonSerializerOptions JsonOptions = new()

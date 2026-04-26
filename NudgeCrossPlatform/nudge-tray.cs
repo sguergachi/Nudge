@@ -1025,43 +1025,32 @@ namespace NudgeTray
                     // Create and send Notify method call
                     MessageBuffer message;
                     {
-                        using var writer = connection.GetMessageWriter();
+                        static void WriteNotify(DBusConnection conn, out MessageBuffer msg)
+                        {
+                            using var writer = conn.GetMessageWriter();
+                            writer.WriteMethodCallHeader(
+                                destination: "org.freedesktop.Notifications",
+                                path: "/org/freedesktop/Notifications",
+                                @interface: "org.freedesktop.Notifications",
+                                signature: "susssasa{sv}i",
+                                member: "Notify");
 
-                        writer.WriteMethodCallHeader(
-                            destination: "org.freedesktop.Notifications",
-                            path: "/org/freedesktop/Notifications",
-                            @interface: "org.freedesktop.Notifications",
-                            signature: "susssasa{sv}i",
-                            member: "Notify");
-
-                        writer.WriteString("Nudge");  // app_name
-                        writer.WriteUInt32(0);        // replaces_id
-                        writer.WriteString("");       // app_icon
-                        writer.WriteString("Nudge - Productivity Check"); // summary
-                        writer.WriteString("Were you productive during the last interval?"); // body
-
-                        // Write actions array
-                        writer.WriteArray(new string[] { "yes", "Yes - Productive", "no", "No - Not Productive" });
-
-                        // Write hints dictionary with RESIDENT:TRUE for persistent notifications
-                        var arrayStart = writer.WriteDictionaryStart();
-                        writer.WriteDictionaryEntryStart();
-                        writer.WriteString("urgency");
-                        writer.WriteVariant(VariantValue.Byte(2));
-                        writer.WriteDictionaryEntryStart();
-                        writer.WriteString("resident");
-                        writer.WriteVariant(VariantValue.Bool(true));
-                        writer.WriteDictionaryEntryStart();
-                        writer.WriteString("x-kde-appname");
-                        writer.WriteVariant(VariantValue.String("Nudge"));
-                        writer.WriteDictionaryEntryStart();
-                        writer.WriteString("x-kde-eventId");
-                        writer.WriteVariant(VariantValue.String("productivity-check"));
-                        writer.WriteDictionaryEnd(arrayStart);
-
-                        writer.WriteInt32(0);  // expire_timeout (0 = infinite)
-
-                        message = writer.CreateMessage();
+                            writer.WriteString("Nudge");
+                            writer.WriteUInt32(0);
+                            writer.WriteString("");
+                            writer.WriteString("Nudge - Productivity Check");
+                            writer.WriteString("Were you productive during the last interval?");
+                            writer.WriteArray(new string[] { "yes", "Yes - Productive", "no", "No - Not Productive" });
+                            var arrayStart = writer.WriteDictionaryStart();
+                            writer.WriteDictionaryEntryStart(); writer.WriteString("urgency"); writer.WriteVariant(VariantValue.Byte(2));
+                            writer.WriteDictionaryEntryStart(); writer.WriteString("resident"); writer.WriteVariant(VariantValue.Bool(true));
+                            writer.WriteDictionaryEntryStart(); writer.WriteString("x-kde-appname"); writer.WriteVariant(VariantValue.String("Nudge"));
+                            writer.WriteDictionaryEntryStart(); writer.WriteString("x-kde-eventId"); writer.WriteVariant(VariantValue.String("productivity-check"));
+                            writer.WriteDictionaryEnd(arrayStart);
+                            writer.WriteInt32(0);
+                            msg = writer.CreateMessage();
+                        }
+                        WriteNotify(connection, out message);
                     }
 
                     var notificationId = await connection.CallMethodAsync(

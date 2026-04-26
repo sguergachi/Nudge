@@ -61,35 +61,27 @@ class NudgeNotify
 
     static int Main(string[] args)
     {
-        // Handle special flags
-        if (args.Length > 0)
+        var parsed = NudgeCoreLogic.ParseNudgeNotifyArgs(args);
+        if (parsed.Action == NudgeNotifyAction.ShowHelp)
         {
-            if (args[0] == "--help" || args[0] == "-h")
-            {
-                ShowHelp();
-                return 0;
-            }
-            if (args[0] == "--version" || args[0] == "-v")
-            {
-                Console.WriteLine($"Nudge Notify v{VERSION}");
-                return 0;
-            }
+            ShowHelp();
+            return 0;
         }
-
-        // Validate arguments
-        if (args.Length == 0)
+        if (parsed.Action == NudgeNotifyAction.ShowVersion)
+        {
+            Console.WriteLine($"Nudge Notify v{VERSION}");
+            return 0;
+        }
+        if (parsed.Action == NudgeNotifyAction.MissingResponse)
         {
             Error("Missing response argument");
             Console.WriteLine();
             Console.WriteLine($"{Color.DIM}Run with {Color.BCYAN}--help{Color.DIM} for usage information{Color.RESET}");
             return 1;
         }
-
-        // Parse and validate response
-        string response = args[0].ToUpper();
-        if (response != "YES" && response != "NO")
+        if (parsed.Action == NudgeNotifyAction.InvalidResponse)
         {
-            Error($"Invalid response: '{args[0]}'");
+            Error($"Invalid response: '{parsed.RawInput}'");
             Error("Response must be YES or NO");
             Console.WriteLine();
             Console.WriteLine($"{Color.BOLD}Valid responses:{Color.RESET}");
@@ -99,7 +91,7 @@ class NudgeNotify
         }
 
         // Send response
-        return SendResponse(response);
+        return SendResponse(parsed.Response!);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
