@@ -74,32 +74,89 @@ internal static class PlatformConfig
 
 internal static class BrowserDetector
 {
-    private static readonly string[] BrowserProcessNames =
+    private static readonly (string Match, string DisplayName)[] BrowserProcessNames =
     [
-        "chrome", "chromium", "firefox", "edge", "brave", "opera", "vivaldi",
-        "safari", "browser", "chromium-browser", "google-chrome", "mozilla"
+        ("google-chrome", "Chrome"),
+        ("chrome", "Chrome"),
+        ("chromium-browser", "Chromium"),
+        ("chromium", "Chromium"),
+        ("msedge", "Edge"),
+        ("microsoft-edge", "Edge"),
+        ("edge", "Edge"),
+        ("firefox", "Firefox"),
+        ("navigator", "Firefox"),
+        ("librewolf", "LibreWolf"),
+        ("brave-browser", "Brave"),
+        ("brave", "Brave"),
+        ("opera", "Opera"),
+        ("vivaldi", "Vivaldi"),
+        ("safari", "Safari"),
+        ("browser", "Browser")
     ];
 
     private static readonly string[] BrowserSuffixes =
     [
-        " - Google Chrome", " - Chrome", " - Microsoft Edge",
-        " - Mozilla Firefox", " - Firefox", " - Brave",
-        " - Opera", " - Vivaldi", " - Chromium",
-        " : Google Chrome", " : Chrome", " : Microsoft Edge",
-        " : Mozilla Firefox", " : Firefox", " : Brave"
+        " - Google Chrome", " | Google Chrome", " — Google Chrome", " – Google Chrome", " · Google Chrome", " : Google Chrome",
+        " - Chrome", " | Chrome", " — Chrome", " – Chrome", " · Chrome", " : Chrome",
+        " - Chromium", " | Chromium", " — Chromium", " – Chromium", " · Chromium", " : Chromium",
+        " - Microsoft Edge", " | Microsoft Edge", " — Microsoft Edge", " – Microsoft Edge", " · Microsoft Edge", " : Microsoft Edge",
+        " - Edge", " | Edge", " — Edge", " – Edge", " · Edge", " : Edge",
+        " - Mozilla Firefox", " | Mozilla Firefox", " — Mozilla Firefox", " – Mozilla Firefox", " · Mozilla Firefox", " : Mozilla Firefox",
+        " - Firefox", " | Firefox", " — Firefox", " – Firefox", " · Firefox", " : Firefox",
+        " - Brave Browser", " | Brave Browser", " — Brave Browser", " – Brave Browser", " · Brave Browser", " : Brave Browser",
+        " - Brave", " | Brave", " — Brave", " – Brave", " · Brave", " : Brave",
+        " - Opera", " | Opera", " — Opera", " – Opera", " · Opera", " : Opera",
+        " - Vivaldi", " | Vivaldi", " — Vivaldi", " – Vivaldi", " · Vivaldi", " : Vivaldi",
+        " - Safari", " | Safari", " — Safari", " – Safari", " · Safari", " : Safari",
+        " - LibreWolf", " | LibreWolf", " — LibreWolf", " – LibreWolf", " · LibreWolf", " : LibreWolf"
     ];
 
     private static readonly FrozenSet<string> KnownSiteDomains = new[]
     {
-        "github.com", "stackoverflow.com", "stackexchange.com", "gitlab.com",
-        "bitbucket.org", "youtube.com", "reddit.com", "twitter.com", "x.com",
-        "linkedin.com", "docs.google.com", "drive.google.com", "notion.so",
-        "figma.com", "linear.app", "jira.atlassian.com", "confluence.atlassian.com",
-        "slack.com", "discord.com", "zoom.us", "meet.google.com", "office.com",
-        "outlook.office.com", "mail.google.com", "chat.openai.com", "claude.ai",
-        "copilot.microsoft.com", "news.ycombinator.com", "instagram.com",
-        "facebook.com", "tiktok.com", "netflix.com", "twitch.tv", "amazon.com", "ebay.com"
+        "amazon.com", "bitbucket.org", "chat.openai.com", "chatgpt.com", "claude.ai",
+        "confluence.atlassian.com", "copilot.microsoft.com", "discord.com", "docs.google.com",
+        "drive.google.com", "ebay.com", "facebook.com", "figma.com", "github.com",
+        "gitlab.com", "instagram.com", "jira.atlassian.com", "linear.app", "linkedin.com",
+        "localhost", "mail.google.com", "meet.google.com", "netflix.com", "news.ycombinator.com",
+        "notion.so", "office.com", "outlook.office.com", "reddit.com", "slack.com",
+        "stackoverflow.com", "stackexchange.com", "tiktok.com", "twitch.tv", "x.com",
+        "youtube.com", "zoom.us"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly (string Alias, string Domain)[] KnownSiteAliases =
+    [
+        ("Amazon", "amazon.com"),
+        ("Bitbucket", "bitbucket.org"),
+        ("ChatGPT", "chat.openai.com"),
+        ("Claude", "claude.ai"),
+        ("Confluence", "confluence.atlassian.com"),
+        ("Copilot", "copilot.microsoft.com"),
+        ("Discord", "discord.com"),
+        ("Figma", "figma.com"),
+        ("Facebook", "facebook.com"),
+        ("Gmail", "mail.google.com"),
+        ("GitHub", "github.com"),
+        ("GitLab", "gitlab.com"),
+        ("Google Docs", "docs.google.com"),
+        ("Google Drive", "drive.google.com"),
+        ("Google Meet", "meet.google.com"),
+        ("Hacker News", "news.ycombinator.com"),
+        ("Instagram", "instagram.com"),
+        ("Jira", "jira.atlassian.com"),
+        ("Linear", "linear.app"),
+        ("LinkedIn", "linkedin.com"),
+        ("Netflix", "netflix.com"),
+        ("Notion", "notion.so"),
+        ("Outlook", "outlook.office.com"),
+        ("Reddit", "reddit.com"),
+        ("Slack", "slack.com"),
+        ("Stack Exchange", "stackexchange.com"),
+        ("Stack Overflow", "stackoverflow.com"),
+        ("TikTok", "tiktok.com"),
+        ("Twitch", "twitch.tv"),
+        ("YouTube", "youtube.com"),
+        ("Zoom", "zoom.us")
+    ];
 
     private static readonly FrozenSet<string> CommonWords = new[]
     {
@@ -111,15 +168,21 @@ internal static class BrowserDetector
         "profile", "account", "dashboard", "overview"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
+    private static readonly FrozenSet<string> CommonFileExtensions = new[]
+    {
+        "7z", "avi", "bmp", "csv", "doc", "docx", "gif", "gz", "jpeg", "jpg",
+        "json", "md", "mov", "mp3", "mp4", "pdf", "png", "ppt", "pptx", "rar",
+        "svg", "tar", "txt", "wav", "webp", "xlsx", "xml", "yaml", "yml", "zip"
+    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     public static bool IsBrowser(string? processName)
     {
-        if (string.IsNullOrEmpty(processName))
+        if (string.IsNullOrWhiteSpace(processName))
             return false;
 
         foreach (var browser in BrowserProcessNames)
         {
-            if (processName.Contains(browser, StringComparison.OrdinalIgnoreCase))
+            if (processName.Contains(browser.Match, StringComparison.OrdinalIgnoreCase))
                 return true;
         }
 
@@ -131,23 +194,20 @@ internal static class BrowserDetector
         if (string.IsNullOrWhiteSpace(title))
             return null;
 
-        ReadOnlySpan<char> fullTitle = title.AsSpan().Trim();
-        ReadOnlySpan<char> cleanedTitle = TrimKnownBrowserSuffix(fullTitle);
+        ReadOnlySpan<char> cleanedTitle = TrimKnownBrowserSuffix(title.AsSpan().Trim());
+        if (cleanedTitle.IsEmpty)
+            return null;
 
-        if (TryExtractDomainFromTokens(cleanedTitle, out var domain))
-            return domain;
-
-        if (TryNormalizeDomain(cleanedTitle, out domain))
-            return domain;
-
-        foreach (var knownSite in KnownSiteDomains)
+        if (TryExtractKnownDomain(cleanedTitle, out var domain) ||
+            TryExtractKnownSiteFromSegments(cleanedTitle, out domain) ||
+            TryExtractDomainFromTokens(cleanedTitle, out domain) ||
+            TryNormalizeDomain(cleanedTitle, out domain))
         {
-            if (title.Contains(knownSite, StringComparison.OrdinalIgnoreCase))
-                return knownSite;
+            return domain;
         }
 
         if (TryExtractShortestMeaningfulToken(cleanedTitle, out var fallback) &&
-            TryNormalizeDomain(fallback, out domain))
+            (TryNormalizeDomain(fallback, out domain) || TryMatchKnownSiteAlias(fallback, out domain)))
         {
             return domain;
         }
@@ -157,17 +217,32 @@ internal static class BrowserDetector
 
     public static string GetAppAndSite(string? processName, string title)
     {
+        string fallbackApp = string.IsNullOrWhiteSpace(title)
+            ? processName?.Trim() ?? "unknown"
+            : title;
+
         if (!IsBrowser(processName))
-            return title;
+            return fallbackApp;
 
-        string browserName = string.IsNullOrEmpty(processName)
-            ? "Browser"
-            : char.ToUpperInvariant(processName[0]) + processName[1..];
-
+        string browserName = GetBrowserDisplayName(processName) ?? "Browser";
         var site = ExtractSite(title);
         return string.IsNullOrEmpty(site)
             ? browserName
             : $"{browserName} ({site})";
+    }
+
+    public static string? GetBrowserDisplayName(string? processName)
+    {
+        if (string.IsNullOrWhiteSpace(processName))
+            return null;
+
+        foreach (var browser in BrowserProcessNames)
+        {
+            if (processName.Contains(browser.Match, StringComparison.OrdinalIgnoreCase))
+                return browser.DisplayName;
+        }
+
+        return null;
     }
 
     private static ReadOnlySpan<char> TrimKnownBrowserSuffix(ReadOnlySpan<char> title)
@@ -179,6 +254,22 @@ internal static class BrowserDetector
         }
 
         return title;
+    }
+
+    private static bool TryExtractKnownDomain(ReadOnlySpan<char> title, out string? domain)
+    {
+        string? bestMatch = null;
+        foreach (var knownSite in KnownSiteDomains)
+        {
+            if (title.Contains(knownSite, StringComparison.OrdinalIgnoreCase) &&
+                (bestMatch == null || knownSite.Length > bestMatch.Length))
+            {
+                bestMatch = knownSite;
+            }
+        }
+
+        domain = bestMatch;
+        return bestMatch != null;
     }
 
     private static bool TryExtractDomainFromTokens(ReadOnlySpan<char> title, out string? domain)
@@ -200,6 +291,57 @@ internal static class BrowserDetector
                 return true;
 
             start = end + 1;
+        }
+
+        domain = null;
+        return false;
+    }
+
+    private static bool TryExtractKnownSiteFromSegments(ReadOnlySpan<char> title, out string? domain)
+    {
+        if (TryMatchKnownSiteAlias(title, out domain))
+            return true;
+
+        int start = 0;
+        while (start < title.Length)
+        {
+            while (start < title.Length && IsSegmentSeparator(title[start]))
+                start++;
+
+            if (start >= title.Length)
+                break;
+
+            int end = start;
+            while (end < title.Length && !IsSegmentSeparator(title[end]))
+                end++;
+
+            var candidate = TrimToken(title[start..end]);
+            if (TryMatchKnownSiteAlias(candidate, out domain) || TryNormalizeDomain(candidate, out domain))
+                return true;
+
+            start = end + 1;
+        }
+
+        domain = null;
+        return false;
+    }
+
+    private static bool TryMatchKnownSiteAlias(ReadOnlySpan<char> value, out string? domain)
+    {
+        value = TrimToken(value);
+        if (value.IsEmpty)
+        {
+            domain = null;
+            return false;
+        }
+
+        foreach (var site in KnownSiteAliases)
+        {
+            if (value.Equals(site.Alias, StringComparison.OrdinalIgnoreCase))
+            {
+                domain = site.Domain;
+                return true;
+            }
         }
 
         domain = null;
@@ -275,6 +417,9 @@ internal static class BrowserDetector
 
     private static bool IsLikelyDomain(ReadOnlySpan<char> value)
     {
+        if (value.Equals("localhost", StringComparison.OrdinalIgnoreCase))
+            return true;
+
         if (value.Length < 4 || value.Length > 100)
             return false;
 
@@ -297,6 +442,14 @@ internal static class BrowserDetector
                 return false;
         }
 
+        int lastDotIndex = value.LastIndexOf('.');
+        if (lastDotIndex == dotIndex && lastDotIndex > 0)
+        {
+            var trailingSegment = value[(lastDotIndex + 1)..];
+            if (CommonFileExtensions.Contains(trailingSegment.ToString()))
+                return false;
+        }
+
         return true;
     }
 
@@ -316,7 +469,9 @@ internal static class BrowserDetector
         return start <= end ? value[start..(end + 1)] : ReadOnlySpan<char>.Empty;
     }
 
-    private static bool IsTokenSeparator(char c) => c is ' ' or '\t' or '-' or '—' or '–' or '|' or '\\';
+    private static bool IsSegmentSeparator(char c) => c is '|' or '-' or '—' or '–' or '·' or '•';
+
+    private static bool IsTokenSeparator(char c) => c is ' ' or '\t' or '-' or '—' or '–' or '|' or '\\' or '·' or '•';
 
     private static bool IsTrimCharacter(char c) => c is ' ' or '\t' or '-' or '—' or '–' or '|' or '/' or '\\' or '[' or ']' or '(' or ')' or '{' or '}' or '<' or '>' or ',' or ';' or ':' or '!' or '?' or '"' or '\'' or '`';
 }
@@ -567,6 +722,12 @@ internal static class NudgeCoreLogic
         return "unknown";
     }
 
+    internal static bool IsNudgeForegroundWindow(string appName, string title)
+    {
+        return MatchesNudgeWindowMarker(appName) ||
+               title.Contains("Were you productive?", StringComparison.OrdinalIgnoreCase);
+    }
+
     internal static bool ShouldIgnoreAnalyticsApp(string appName) =>
         appName.Contains("nudge", StringComparison.OrdinalIgnoreCase);
 
@@ -607,6 +768,19 @@ internal static class NudgeCoreLogic
 
         entry = new HarvestEntry(timestamp, hour, appName, productiveField.Length == 1 && productiveField[0] == '1');
         return true;
+    }
+
+    private static bool MatchesNudgeWindowMarker(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        return value.Equals("Window", StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("CustomNotification", StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("nudge-tray", StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("NudgeTray", StringComparison.OrdinalIgnoreCase) ||
+               value.Equals("Nudge Analytics", StringComparison.OrdinalIgnoreCase) ||
+               value.Equals("Productivity Check", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool TryGetCsvField(ReadOnlySpan<char> line, int fieldIndex, out ReadOnlySpan<char> field)

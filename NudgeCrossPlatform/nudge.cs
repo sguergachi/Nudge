@@ -166,18 +166,16 @@ class Nudge
                 if (hwnd == IntPtr.Zero)
                     return ("unknown", "");
 
-                // Get the process ID for browser detection
                 GetWindowThreadProcessId(hwnd, out uint processId);
                 string? processName = null;
                 try
                 {
-                    var process = Process.GetProcessById((int)processId);
-                    processName = process.ProcessName.ToLowerInvariant();
+                    using var process = Process.GetProcessById((int)processId);
+                    processName = process.ProcessName;
                 }
                 catch { }
 
-                // Get window title
-                const int nChars = 256;
+                const int nChars = 1024;
                 var buff = new System.Text.StringBuilder(nChars);
                 string title = "";
                 if (GetWindowText(hwnd, buff, nChars) > 0)
@@ -185,8 +183,12 @@ class Nudge
                     title = buff.ToString();
                 }
 
-                // Use BrowserDetector to format the app name with site if applicable
-                string app = BrowserDetector.GetAppAndSite(processName, title);
+                string fallbackApp = !string.IsNullOrWhiteSpace(title)
+                    ? title
+                    : processName?.Trim() ?? "unknown";
+                string app = BrowserDetector.IsBrowser(processName)
+                    ? BrowserDetector.GetAppAndSite(processName, title)
+                    : fallbackApp;
 
                 _cachedApp = app;
                 _cachedTitle = title;
@@ -321,8 +323,14 @@ class Nudge
                 _ => ("unknown", "")
             };
 
-            // Apply browser detection to format app name with site
-            string app = BrowserDetector.GetAppAndSite(result.app, result.title);
+            string fallbackApp = !string.IsNullOrWhiteSpace(result.app)
+                ? result.app
+                : !string.IsNullOrWhiteSpace(result.title)
+                    ? result.title
+                    : "unknown";
+            string app = BrowserDetector.IsBrowser(result.app)
+                ? BrowserDetector.GetAppAndSite(result.app, result.title)
+                : fallbackApp;
 
             _cachedApp = app;
             _cachedTitle = result.title;
@@ -396,11 +404,13 @@ class Nudge
                     "\"global.display.focus_window.get_title()\"");
 
                 string title = ExtractQuotedString(titleOutput);
+                if (title == "unknown")
+                    title = "";
 
                 if (string.IsNullOrEmpty(appClass) || appClass == "unknown")
                     return ("unknown", "");
 
-                return (appClass, title ?? "");
+                return (appClass, title);
             }
             catch
             {
@@ -973,15 +983,12 @@ class Nudge
         while (true)
         {
             // Get current activity
-            string app = _platformService?.GetForegroundApp() ?? "unknown";
+            var (app, title) = _platformService?.GetForegroundAppWithTitle() ?? ("unknown", "");
             int idle = _platformService?.GetIdleTime() ?? 0;
 
             // Ignore Nudge notification window in app tracking
             // This prevents the notification from polluting analytics data
-            bool isNudgeWindow = app == "Window" ||
-                                 app.Contains("Notification", StringComparison.OrdinalIgnoreCase) ||
-                                 app.Contains("CustomNotification", StringComparison.OrdinalIgnoreCase) ||
-                                 app.Contains("Nudge", StringComparison.OrdinalIgnoreCase);
+            bool isNudgeWindow = NudgeCoreLogic.IsNudgeForegroundWindow(app, title);
 
             // Track attention span (skip if it's our notification window)
             if (!isNudgeWindow && app != _currentApp)
