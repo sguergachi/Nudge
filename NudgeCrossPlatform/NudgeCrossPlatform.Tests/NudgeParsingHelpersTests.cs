@@ -223,4 +223,13 @@ public class NudgeParsingHelpersTests
         // Input has both; double-quote content should win
         Assert.Equal("double", NudgeCoreLogic.ExtractQuotedString("\"double\" and 'single'"));
     }
+
+    [Fact]
+    public void IsNudgeForegroundWindow_KnowsTrayAndAnalyticsWindows()
+    {
+        Assert.True(NudgeCoreLogic.IsNudgeForegroundWindow("nudge-tray", ""));
+        Assert.True(NudgeCoreLogic.IsNudgeForegroundWindow("Window", ""));
+        Assert.True(NudgeCoreLogic.IsNudgeForegroundWindow("Nudge Analytics", ""));
+        Assert.False(NudgeCoreLogic.IsNudgeForegroundWindow("Chrome (github.com)", "openai/nudge repo"));
+    }
 }
