@@ -45,14 +45,6 @@ namespace NudgeTray
         private bool _responseSent = false;
         private Arc? _progressArc;
 
-        // Notification configuration
-        private class NotificationConfig
-        {
-            public double X { get; set; }
-            public double Y { get; set; }
-            public bool HasSavedPosition { get; set; }
-        }
-
         public CustomNotificationWindow()
         {
             InitializeWindow();
@@ -460,7 +452,7 @@ namespace NudgeTray
                 if (File.Exists(configPath))
                 {
                     string json = File.ReadAllText(configPath);
-                    var config = JsonSerializer.Deserialize<NotificationConfig>(json);
+                    var config = JsonSerializer.Deserialize(json, NudgeJsonContext.Default.NotificationPositionConfig);
 
                     if (config != null && config.HasSavedPosition)
                     {
@@ -490,7 +482,7 @@ namespace NudgeTray
         {
             try
             {
-                var config = new NotificationConfig
+                var config = new NotificationPositionConfig
                 {
                     X = Position.X,
                     Y = Position.Y,
@@ -502,7 +494,7 @@ namespace NudgeTray
                     CONFIG_FILE
                 );
 
-                string json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
+                string json = JsonSerializer.Serialize(config, NudgeJsonContext.Default.NotificationPositionConfig);
                 File.WriteAllText(configPath, json);
 
                 Console.WriteLine($"[CustomNotification] Saved position: ({config.X}, {config.Y})");

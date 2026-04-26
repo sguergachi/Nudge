@@ -1,32 +1,23 @@
 # Nudge
 
-Using ML to nudge you back into productivity. For RU Hack 2017 hackathon.
-
-> Sara Lazar, a neuroscientist at Harvard Medical School, says "Better control over th PCC can help you catch your mind in the act of wandering and nudge it gently back on task."
+Nudge is a local, cross-platform productivity tracker that watches your foreground app, asks whether you were productive, and can train a small ML model on your responses.
 
 ## Platform Support
 
-Nudge now supports multiple platforms with native system integration:
+- **Linux**: Wayland (Sway, GNOME, KDE Plasma) and X11 environments such as Cinnamon/XFCE
+- **Windows 10/11**: native foreground-window and idle-time detection
+- **macOS**: experimental
 
-- **Linux** (Wayland: Sway, GNOME, KDE Plasma; X11: Cinnamon) - Full support
-  - Native DBus notifications with action buttons
-  - Direct Wayland compositor integration
-  - X11 desktop environment support (Cinnamon, XFCE, etc.)
-  - Tmds.DBus.Protocol for notification handling
+## Requirements
 
-- **Windows 10/11** - Full support ✨ **NEW!** ✨
-  - Native Windows API integration (P/Invoke)
-  - Window detection via GetForegroundWindow
-  - Idle tracking via GetLastInputInfo
-  - PowerShell-based notification dialogs
+- **.NET 10 SDK**
+- **Python 3.x** for ML features
 
-- **macOS** - Experimental support
-  - Basic functionality available
-  - Notification support in development
+A repo-level `global.json` now pins the SDK to .NET 10 so builds, tests, and scripts stay aligned.
 
 ## Quick Start
 
-### Linux
+### Linux / macOS
 
 ```bash
 cd NudgeCrossPlatform
@@ -42,22 +33,9 @@ cd NudgeCrossPlatform
 .\nudge.exe
 ```
 
-See [WINDOWS_README.md](WINDOWS_README.md) for detailed Windows instructions.
-
-## Requirements
-
-- **.NET SDK 8.0 or later** - Required for building and running
-- **Python 3.x** - Required for ML functionality
-
-### Platform-Specific Requirements
-
-- **Linux**: Wayland compositor (Sway, GNOME, KDE Plasma) or X11 desktop (Cinnamon, XFCE, etc.)
-  - For X11 environments: Install `xdotool` and optionally `xprintidle` for idle detection
-- **Windows**: Windows 10 or later
-- **macOS**: macOS 10.15 or later (experimental)
+Both build scripts use the checked-in project files, strip the shebang line from the script-style entry points, and run `dotnet test` by default.
 
 ## Documentation
 
-- [NudgeCrossPlatform/README.md](NudgeCrossPlatform/README.md) - Main project documentation
-- [WINDOWS_README.md](WINDOWS_README.md) - Windows-specific setup and usage guide
-- [WINDOWS_COMPATIBILITY_ANALYSIS.md](WINDOWS_COMPATIBILITY_ANALYSIS.md) - Implementation analysis (historical reference)
+- [NudgeCrossPlatform/README.md](NudgeCrossPlatform/README.md) - project-specific build and runtime details
+- [WINDOWS_README.md](WINDOWS_README.md) - Windows-specific setup and usage notes

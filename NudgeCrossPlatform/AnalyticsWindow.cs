@@ -1739,52 +1739,43 @@ namespace NudgeTray
         public static AnalyticsData LoadFromCSV(AnalyticsWindow.TimeFilter filter)
         {
             var data = new AnalyticsData();
-
-            string homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            string nudgeDir = Path.Combine(homeDir, ".nudge");
-            string activityLogPath = Path.Combine(nudgeDir, "ACTIVITY_LOG.CSV");
-            string harvestPath = Path.Combine(nudgeDir, "HARVEST.CSV");
-
+            string activityLogPath = PlatformConfig.ActivityLogPath;
+            string harvestPath = PlatformConfig.CsvPath;
             DateTime filterStartDate = AnalyticsWindow.GetFilterStartDate(filter);
 
             Console.WriteLine($"[Analytics] Loading data for {filter} (from {filterStartDate:yyyy-MM-dd HH:mm})");
             Console.WriteLine($"[Analytics] Activity log: {activityLogPath}");
             Console.WriteLine($"[Analytics] Harvest data: {harvestPath}");
 
-            // Load activity log for app usage (minute-by-minute data)
             if (File.Exists(activityLogPath))
             {
                 try
                 {
-                    var lines = File.ReadAllLines(activityLogPath);
-                    Console.WriteLine($"[Analytics] Found {lines.Length} lines in ACTIVITY_LOG.CSV");
+                    Console.WriteLine("[Analytics] Streaming ACTIVITY_LOG.CSV...");
                     int processedLines = 0;
-                    for (int i = 1; i < lines.Length; i++) // Skip header
+                    bool skippedHeader = false;
+
+                    foreach (var line in File.ReadLines(activityLogPath))
                     {
-                        var parts = lines[i].Split(',');
-                        if (parts.Length >= 4)
+                        if (!skippedHeader)
                         {
-                            // Format: timestamp,hour_of_day,day_of_week,app_name,foreground_app,idle_time
-                            if (DateTime.TryParse(parts[0], out DateTime timestamp))
-                            {
-                                if (timestamp >= filterStartDate)
-                                {
-                                    string appName = parts[3];
-
-                                    // Exclude Nudge itself from analytics
-                                    if (appName.ToLower().Contains("nudge"))
-                                        continue;
-
-                                    if (!data.AppUsage.ContainsKey(appName))
-                                        data.AppUsage[appName] = 0;
-
-                                    data.AppUsage[appName] += 1; // 1 minute per entry
-                                    data.TotalActivityMinutes += 1;
-                                    processedLines++;
-                                }
-                            }
+                            skippedHeader = true;
+                            continue;
                         }
+
+                        if (!NudgeCoreLogic.TryParseActivityLogLine(line, out var entry) ||
+                            entry.Timestamp < filterStartDate ||
+                            NudgeCoreLogic.ShouldIgnoreAnalyticsApp(entry.AppName))
+                        {
+                            continue;
+                        }
+
+                        ref int minutes = ref CollectionsMarshal.GetValueRefOrAddDefault(data.AppUsage, entry.AppName, out _);
+                        minutes += 1;
+                        data.TotalActivityMinutes += 1;
+                        processedLines++;
                     }
+
                     Console.WriteLine($"[Analytics] Processed {processedLines} activity log entries after filtering");
                 }
                 catch (Exception ex)
@@ -1797,53 +1788,49 @@ namespace NudgeTray
                 Console.WriteLine("[Analytics] ACTIVITY_LOG.CSV not found");
             }
 
-            // Load harvest data for productivity stats
             if (File.Exists(harvestPath))
             {
                 try
                 {
-                    var lines = File.ReadAllLines(harvestPath);
-                    Console.WriteLine($"[Analytics] Found {lines.Length} lines in HARVEST.CSV");
+                    Console.WriteLine("[Analytics] Streaming HARVEST.CSV...");
                     int processedHarvest = 0;
-                    for (int i = 1; i < lines.Length; i++) // Skip header
+                    bool skippedHeader = false;
+
+                    foreach (var line in File.ReadLines(harvestPath))
                     {
-                        var parts = lines[i].Split(',');
-                        if (parts.Length >= 8)
+                        if (!skippedHeader)
                         {
-                            // Format: timestamp,hour_of_day,day_of_week,app_name,foreground_app,idle_time,time_last_request,productive
-                            if (DateTime.TryParse(parts[0], out DateTime timestamp))
-                            {
-                                if (timestamp >= filterStartDate)
-                                {
-                                    string appName = parts[3];
-
-                                    // Exclude Nudge itself from productivity stats
-                                    if (appName.ToLower().Contains("nudge"))
-                                        continue;
-
-                                    if (int.TryParse(parts[1], out int hour))
-                                    {
-                                        if (!data.HourlyProductivity.ContainsKey(hour))
-                                            data.HourlyProductivity[hour] = new ProductivityStats();
-
-                                        bool productive = parts[7] == "1";
-
-                                        if (productive)
-                                        {
-                                            data.HourlyProductivity[hour].ProductiveCount++;
-                                            data.ProductiveMinutes += 1;
-                                        }
-                                        else
-                                        {
-                                            data.HourlyProductivity[hour].UnproductiveCount++;
-                                            data.UnproductiveMinutes += 1;
-                                        }
-                                        processedHarvest++;
-                                    }
-                                }
-                            }
+                            skippedHeader = true;
+                            continue;
                         }
+
+                        if (!NudgeCoreLogic.TryParseHarvestLine(line, out var entry) ||
+                            entry.Timestamp < filterStartDate ||
+                            NudgeCoreLogic.ShouldIgnoreAnalyticsApp(entry.AppName))
+                        {
+                            continue;
+                        }
+
+                        if (!data.HourlyProductivity.TryGetValue(entry.HourOfDay, out var stats))
+                        {
+                            stats = new ProductivityStats();
+                            data.HourlyProductivity[entry.HourOfDay] = stats;
+                        }
+
+                        if (entry.Productive)
+                        {
+                            stats.ProductiveCount++;
+                            data.ProductiveMinutes += 1;
+                        }
+                        else
+                        {
+                            stats.UnproductiveCount++;
+                            data.UnproductiveMinutes += 1;
+                        }
+
+                        processedHarvest++;
                     }
+
                     Console.WriteLine($"[Analytics] Processed {processedHarvest} harvest entries after filtering");
                 }
                 catch (Exception ex)

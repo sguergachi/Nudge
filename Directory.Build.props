@@ -1,0 +1,8 @@
+<Project>
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <LangVersion>latestMajor</LangVersion>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+  </PropertyGroup>
+</Project>

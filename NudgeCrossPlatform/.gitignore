@@ -1,44 +1,38 @@
-# .NET Build outputs
+# .NET build outputs
 bin/
 obj/
-*.user
-*.suo
-*.cache
+[Dd]ebug/
+[Rr]elease/
+
+# Published / copied app outputs
+dist/
 *.dll
 *.exe
 *.pdb
+*.deps.json
+*.runtimeconfig.json
+nudge
+nudge-notify
+nudge-tray
+runtimes/
 
-# Visual Studio / Rider
+# Generated shebang-stripped sources
+*_build.cs
+
+# IDE files
 .vs/
 .idea/
-*.sln.docstates
+*.user
+*.suo
+*.cache
 *.userprefs
+*.sln.docstates
 
-# Build results
-[Dd]ebug/
-[Rr]elease/
-x64/
-x86/
-[Aa][Rr][Mm]/
-[Aa][Rr][Mm]64/
-bld/
-[Bb]in/
-[Oo]bj/
-[Ll]og/
-
-# NuGet Packages
-*.nupkg
-*.snupkg
-.nuget/
-packages/
-
-# Test Results
+# Test results
 TestResults/
 
-# CSV data files
+# Local data / logs
 *.csv
 *.CSV
-
-# Temporary files
-*.tmp
 *.log
+*.tmp

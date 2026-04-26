@@ -3,575 +3,381 @@
 # Nudge Build Script
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #
-# Compiles Nudge productivity tracker with obsessive attention to detail.
-# Jon Blow style: No projects, no ceremony, just compile the code.
-#
 # Usage:
-#   ./build.sh              # Build with auto-detected compiler (installs dependencies)
-#   ./build.sh --clean      # Clean before building
-#   ./build.sh --skip-deps  # Skip automatic dependency installation
-#   ./build.sh --no-run     # Skip auto-launch after build
+#   ./build.sh               Build with dependency checks
+#   ./build.sh --clean       Remove generated build artifacts first
+#   ./build.sh --skip-deps   Skip dependency installation/check helpers
+#   ./build.sh --skip-tests  Skip dotnet test
+#   ./build.sh --no-run      Do not auto-launch nudge-tray after build
 #
+# Checked-in project files are the source of truth. The only generated source
+# files are nudge_build.cs and nudge-notify_build.cs, produced by stripping the
+# shebang line before build.
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-set -e
+set -euo pipefail
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# ANSI COLORS
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+DOTNET_MAJOR_REQUIRED=10
+MAIN_TFM="net10.0"
+WINDOWS_TFM="net10.0-windows10.0.17763.0"
 
 RESET='\033[0m'
 BOLD='\033[1m'
 DIM='\033[2m'
-
 RED='\033[31m'
 GREEN='\033[32m'
 YELLOW='\033[33m'
 CYAN='\033[36m'
-
 BRED='\033[1;31m'
 BGREEN='\033[1;32m'
 BYELLOW='\033[1;33m'
 BCYAN='\033[1;36m'
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# HELPER FUNCTIONS
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+success() { echo -e "${BGREEN}$1${RESET}"; }
+info() { echo -e "${CYAN}$1${RESET}"; }
+warning() { echo -e "${BYELLOW}$1${RESET}"; }
+error() { echo -e "${BRED}$1${RESET}"; }
+dim() { echo -e "${DIM}$1${RESET}"; }
+separator() { echo -e "${BCYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"; }
 
-success() {
-    echo -e "${BGREEN}$1${RESET}"
-}
+CLEAN=false
+SKIP_DEPS=false
+SKIP_TESTS=false
+NO_RUN=false
 
-info() {
-    echo -e "${CYAN}$1${RESET}"
-}
-
-warning() {
-    echo -e "${BYELLOW}$1${RESET}"
-}
-
-error() {
-    echo -e "${BRED}$1${RESET}"
-}
-
-dim() {
-    echo -e "${DIM}$1${RESET}"
-}
-
-separator() {
-    echo -e "${BCYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-}
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# OS DETECTION
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+for arg in "$@"; do
+    case "$arg" in
+        --clean|-c) CLEAN=true ;;
+        --skip-deps) SKIP_DEPS=true ;;
+        --skip-tests) SKIP_TESTS=true ;;
+        --no-run) NO_RUN=true ;;
+        *)
+            error "Unknown argument: $arg"
+            exit 1
+            ;;
+    esac
+done
 
 detect_os() {
-    if [ -f /etc/arch-release ]; then
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        echo "macos"
+    elif [ -f /etc/arch-release ]; then
         echo "arch"
     elif [ -f /etc/debian_version ]; then
         echo "debian"
     elif [ -f /etc/fedora-release ]; then
         echo "fedora"
-    elif [[ "$OSTYPE" == "darwin"* ]]; then
-        echo "macos"
     else
         echo "unknown"
     fi
 }
 
-install_dotnet() {
-    local os_type=$(detect_os)
+is_tracked() {
+    git ls-files --error-unmatch "$1" >/dev/null 2>&1
+}
 
-    info "Installing .NET SDK..."
+remove_if_untracked() {
+    local path="$1"
+    [ -e "$path" ] || [ -L "$path" ] || return 0
+    if is_tracked "$path"; then
+        dim "  keeping tracked file: $path"
+    else
+        rm -rf "$path"
+    fi
+}
+
+clean_artifacts() {
+    info "Cleaning generated build artifacts..."
+    rm -rf \
+        bin obj dist \
+        NudgeCrossPlatform.Tests/bin NudgeCrossPlatform.Tests/obj \
+        ../TrayIconTest/bin ../TrayIconTest/obj
+
+    remove_if_untracked nudge_build.cs
+    remove_if_untracked nudge-notify_build.cs
+
+    for path in \
+        nudge nudge.dll nudge.runtimeconfig.json nudge.deps.json \
+        nudge-notify nudge-notify.dll nudge-notify.runtimeconfig.json nudge-notify.deps.json \
+        nudge-tray nudge-tray.dll nudge-tray.runtimeconfig.json nudge-tray.deps.json; do
+        remove_if_untracked "$path"
+    done
+
+    if [ -d runtimes ] && ! is_tracked runtimes/osx/native/libAvaloniaNative.dylib; then
+        rm -rf runtimes
+    fi
+
+    success "✓ Clean complete"
+    echo
+}
+
+install_dotnet() {
+    local os_type
+    os_type=$(detect_os)
+
+    info "Installing .NET SDK ${DOTNET_MAJOR_REQUIRED}.0..."
     echo
 
     case "$os_type" in
         arch)
-            info "Detected Arch Linux"
-            echo
-            # Use pacman directly
             sudo -S pacman -S --noconfirm dotnet-sdk
             ;;
         debian)
-            info "Detected Debian/Ubuntu"
-            echo
             sudo -S apt update
-            sudo -S apt install -y dotnet-sdk-8.0
+            sudo -S apt install -y dotnet-sdk-10.0
             ;;
         fedora)
-            info "Detected Fedora"
-            echo
-            sudo -S dnf install -y dotnet-sdk-8.0
+            sudo -S dnf install -y dotnet-sdk-10.0
             ;;
         macos)
-            info "Detected macOS"
-            echo
-            if command -v brew &> /dev/null; then
-                brew install dotnet
+            if command -v brew >/dev/null 2>&1; then
+                brew install dotnet@10
             else
-                error "Homebrew not found. Please install from https://brew.sh"
+                error "Homebrew not found. Install .NET 10 manually from dotnet.microsoft.com."
                 exit 1
             fi
             ;;
         *)
-            error "Unsupported OS. Please install .NET SDK manually:"
-            error "  https://dotnet.microsoft.com/download"
+            error "Unsupported OS. Install .NET 10 manually from dotnet.microsoft.com."
             exit 1
             ;;
     esac
 
-    echo
-    success "✓ .NET SDK installed"
+    success "✓ .NET SDK install step completed"
+}
+
+ensure_dotnet_10() {
+    if ! command -v dotnet >/dev/null 2>&1; then
+        if [ "$SKIP_DEPS" = true ]; then
+            error ".NET SDK ${DOTNET_MAJOR_REQUIRED}.0+ is required but dotnet is not installed."
+            exit 1
+        fi
+
+        warning "✗ .NET SDK not found"
+        install_dotnet
+    fi
+
+    local version major
+    version=$(dotnet --version)
+    major=${version%%.*}
+
+    if [ "$major" -lt "$DOTNET_MAJOR_REQUIRED" ]; then
+        error "Found .NET SDK $version, but Nudge now requires .NET SDK ${DOTNET_MAJOR_REQUIRED}.0+."
+        error "Install .NET ${DOTNET_MAJOR_REQUIRED} and try again."
+        exit 1
+    fi
+
+    success "✓ .NET SDK ready"
+    dim "  Version: $version"
 }
 
 install_python_deps() {
-    local os_type=$(detect_os)
+    local os_type
+    os_type=$(detect_os)
 
     info "Installing Python dependencies..."
     echo
 
-    # Install pip if not available
-    if ! python3 -m pip --version &> /dev/null; then
+    if ! python3 -m pip --version >/dev/null 2>&1; then
         warning "⚠ pip not installed, installing..."
         case "$os_type" in
-            arch)
-                if ! pacman -Q python-pip &> /dev/null; then
-                    sudo -S pacman -S --noconfirm python-pip
-                fi
-                ;;
-            debian)
-                sudo -S apt install -y python3-pip
-                ;;
-            fedora)
-                sudo -S dnf install -y python3-pip
-                ;;
-            macos)
-                python3 -m ensurepip --upgrade
-                ;;
+            arch) sudo -S pacman -S --noconfirm python-pip ;;
+            debian) sudo -S apt install -y python3-pip ;;
+            fedora) sudo -S dnf install -y python3-pip ;;
+            macos) python3 -m ensurepip --upgrade ;;
         esac
     fi
 
-    # Install Python packages
-    if python3 -m pip --version &> /dev/null; then
-        if [ -f "requirements-cpu.txt" ]; then
-            dim "  Installing TensorFlow, pandas, numpy, scikit-learn..."
-            # Use --break-system-packages for externally-managed Python environments
-            # This is safe when combined with --user (installs to ~/.local)
-            python3 -m pip install --user --break-system-packages -q -r requirements-cpu.txt 2>&1 | grep -v "externally-managed" || true
-            if python3 -m pip list --user 2>/dev/null | grep -q tensorflow; then
-                success "✓ Python dependencies installed"
-            else
-                warning "⚠ Python package installation may have failed"
-            fi
-        else
-            warning "⚠ requirements-cpu.txt not found, skipping Python packages"
-        fi
+    if [ -f requirements-cpu.txt ]; then
+        python3 -m pip install --user --break-system-packages -q -r requirements-cpu.txt 2>&1 | grep -v "externally-managed" || true
+        success "✓ Python dependencies checked"
     else
-        warning "⚠ Failed to install pip"
+        warning "⚠ requirements-cpu.txt not found, skipping Python package install"
     fi
 }
 
 install_runtime_deps() {
-    local os_type=$(detect_os)
+    local os_type
+    os_type=$(detect_os)
 
     info "Installing runtime dependencies..."
     echo
 
     case "$os_type" in
         arch)
-            dim "  Checking qt6-tools for KDE/Wayland support..."
-            if ! pacman -Q qt6-tools &> /dev/null; then
-                sudo -S pacman -S --noconfirm qt6-tools
-            fi
-            # Create qdbus symlink if needed
+            sudo -S pacman -S --noconfirm qt6-tools
             if [ ! -e /usr/local/bin/qdbus ] && [ -e /usr/bin/qdbus6 ]; then
                 sudo -S ln -sf /usr/bin/qdbus6 /usr/local/bin/qdbus
             fi
             ;;
         debian)
-            dim "  Installing qdbus and Qt tools..."
             sudo -S apt install -y qdbus-qt5 qt6-tools-dev-tools
             ;;
         fedora)
-            dim "  Installing Qt D-Bus tools..."
             sudo -S dnf install -y qt6-qttools
             ;;
         macos)
-            dim "  Installing Qt via Homebrew..."
-            if command -v brew &> /dev/null; then
+            if command -v brew >/dev/null 2>&1; then
                 brew install qt6
             fi
             ;;
     esac
 
-    success "✓ Runtime dependencies installed"
+    success "✓ Runtime dependencies checked"
 }
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# BANNER
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+prepare_build_sources() {
+    dim "  Preparing shebang-stripped sources..."
+    tail -n +2 nudge.cs > nudge_build.cs
+    tail -n +2 nudge-notify.cs > nudge-notify_build.cs
+}
+
+verify_file() {
+    local path="$1"
+    if [ -f "$path" ]; then
+        local size
+        size=$(du -h "$path" | cut -f1)
+        success "✓ $path ($size)"
+    else
+        error "✗ Missing expected output: $path"
+        exit 1
+    fi
+}
+
+publish_dist_binary() {
+    local framework="$1"
+    local rid="$2"
+    local output_dir="$3"
+    local expected_file="$4"
+
+    mkdir -p "$output_dir"
+    if dotnet publish nudge-tray.csproj -c Release -f "$framework" -r "$rid" -o "$output_dir" --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true --nologo -v quiet; then
+        if [ -f "$expected_file" ]; then
+            success "  ✓ $expected_file"
+        else
+            warning "  ⚠ Publish completed but $expected_file was not produced"
+        fi
+    else
+        warning "  ⚠ Failed to publish $rid"
+    fi
+}
 
 echo
 separator
 echo -e "  ${BOLD}Nudge Build System${RESET}"
-echo -e "  ${DIM}Building productivity tracker...${RESET}"
+echo -e "  ${DIM}Pinned to .NET 10${RESET}"
 separator
 echo
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# PARSE ARGUMENTS
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-CLEAN=false
-SKIP_DEPS=false
-NO_RUN=false
-
-for arg in "$@"; do
-    case "$arg" in
-        --clean|-c)
-            CLEAN=true
-            ;;
-        --skip-deps)
-            SKIP_DEPS=true
-            ;;
-        --no-run)
-            NO_RUN=true
-            ;;
-    esac
-done
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# CLEAN (if requested)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 if [ "$CLEAN" = true ]; then
-    info "Cleaning build artifacts..."
-    rm -rf bin obj dist *.csproj *.exe *.dll *.runtimeconfig.json *.so* runtimes nudge nudge-notify nudge-tray *_build.cs assets/windows 2>/dev/null || true
-    success "✓ Clean complete"
-    echo
+    clean_artifacts
 fi
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# INSTALL DEPENDENCIES
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 if [ "$SKIP_DEPS" = false ]; then
     separator
     info "Checking dependencies..."
     echo
-
-    # Check and install .NET SDK
-    if ! command -v dotnet &> /dev/null; then
-        warning "✗ .NET SDK not found"
-        echo
-        install_dotnet
-        echo
-    else
-        VERSION=$(dotnet --version)
-        success "✓ .NET SDK already installed"
-        dim "  Version: ${VERSION}"
-        echo
-    fi
-
-    # Install runtime dependencies (Qt, qdbus for Wayland/KDE)
+    ensure_dotnet_10
+    echo
     install_runtime_deps
     echo
-
-    # Install Python dependencies
-    if command -v python3 &> /dev/null; then
+    if command -v python3 >/dev/null 2>&1; then
         install_python_deps
         echo
     else
         warning "⚠ Python 3 not found. Skipping Python dependencies."
-        warning "  Install Python 3 to train ML models."
         echo
     fi
 else
     info "Skipping dependency installation (--skip-deps)"
     echo
+    ensure_dotnet_10
+    echo
 fi
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# DETECT COMPILER
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-info "Detecting C# compiler..."
+separator
+info "Building projects..."
 echo
 
-if command -v dotnet &> /dev/null; then
-    COMPILER="dotnet"
-    VERSION=$(dotnet --version)
-    success "✓ Using .NET SDK"
-    dim "  Version: ${VERSION}"
-elif command -v csc &> /dev/null; then
-    COMPILER="mono"
-    success "✓ Using Mono C# Compiler"
+prepare_build_sources
+
+dim "  Restoring projects..."
+dotnet restore nudge.csproj --nologo >/dev/null
+dotnet restore nudge-notify.csproj --nologo >/dev/null
+dotnet restore nudge-tray.csproj --nologo >/dev/null
+dotnet restore NudgeCrossPlatform.Tests/NudgeCrossPlatform.Tests.csproj --nologo >/dev/null
+dotnet restore ../TrayIconTest/TrayIconTest.csproj --nologo >/dev/null
+
+dim "  Building nudge..."
+dotnet build nudge.csproj -c Release -f "$MAIN_TFM" --no-restore --nologo -v quiet
+success "  ✓ nudge"
+
+dim "  Building nudge-notify..."
+dotnet build nudge-notify.csproj -c Release -f "$MAIN_TFM" --no-restore --nologo -v quiet
+success "  ✓ nudge-notify"
+
+LOCAL_TRAY_TFM="$MAIN_TFM"
+dim "  Building nudge-tray ($LOCAL_TRAY_TFM)..."
+dotnet build nudge-tray.csproj -c Release -f "$LOCAL_TRAY_TFM" --no-restore --nologo -v quiet
+success "  ✓ nudge-tray"
+
+dim "  Building TrayIconTest..."
+dotnet build ../TrayIconTest/TrayIconTest.csproj -c Release --no-restore --nologo -v quiet
+success "  ✓ TrayIconTest"
+
+if [ "$SKIP_TESTS" = false ]; then
+    dim "  Running tests..."
+    dotnet test NudgeCrossPlatform.Tests/NudgeCrossPlatform.Tests.csproj -c Release --no-restore --nologo -v quiet
+    success "  ✓ tests"
 else
-    error "✗ No C# compiler found"
-    error ""
-    error "Automatic installation may have failed. Please install manually:"
-    error "  - .NET SDK 8.0+:  https://dot.net"
-    error "  - Mono:           https://www.mono-project.com"
-    error ""
-    error "Or try running: ./build.sh (without --skip-deps)"
-    exit 1
+    warning "  ⚠ Skipping tests (--skip-tests)"
+fi
+
+dim "  Publishing nudge-tray runtime output..."
+dotnet publish nudge-tray.csproj -c Release -f "$LOCAL_TRAY_TFM" --no-self-contained --no-restore --nologo -v quiet
+success "  ✓ nudge-tray publish"
+
+info "Stopping running processes..."
+for _ in 1 2 3; do
+    pkill -9 -f "nudge-tray" 2>/dev/null || true
+    pkill -9 -f "./nudge" 2>/dev/null || true
+    pkill -9 -f "/nudge " 2>/dev/null || true
+    pkill -9 -f "model_inference" 2>/dev/null || true
+    pkill -9 -f "background_trainer" 2>/dev/null || true
+    sleep 0.5
+done
+success "✓ Processes stopped"
+echo
+
+cp "bin/Release/$MAIN_TFM/nudge" ./
+cp "bin/Release/$MAIN_TFM/nudge.dll" ./
+cp "bin/Release/$MAIN_TFM/nudge.runtimeconfig.json" ./
+cp "bin/Release/$MAIN_TFM/nudge-notify" ./
+cp "bin/Release/$MAIN_TFM/nudge-notify.dll" ./
+cp "bin/Release/$MAIN_TFM/nudge-notify.runtimeconfig.json" ./
+cp "bin/Release/$LOCAL_TRAY_TFM/publish/nudge-tray" ./
+cp "bin/Release/$LOCAL_TRAY_TFM/publish"/*.dll ./
+cp "bin/Release/$LOCAL_TRAY_TFM/publish"/*.json ./
+cp "bin/Release/$LOCAL_TRAY_TFM/publish"/*.so* ./ 2>/dev/null || true
+if [ -d "bin/Release/$LOCAL_TRAY_TFM/publish/runtimes" ]; then
+    cp -r "bin/Release/$LOCAL_TRAY_TFM/publish/runtimes" ./
 fi
 
 echo
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# BUILD
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-if [ "$COMPILER" = "dotnet" ]; then
-    info "Building with .NET..."
-    echo
-
-    # Strip shebang lines for compilation (Jon Blow style: make it work)
-    dim "  Preparing source files..."
-    sed '1{/^#!/d;}' nudge.cs > nudge_build.cs
-    sed '1{/^#!/d;}' nudge-notify.cs > nudge-notify_build.cs
-
-    # Pick a target framework that exists on the local SDK.
-    DOTNET_MAJOR="$(dotnet --version | cut -d. -f1)"
-    if [ "$DOTNET_MAJOR" -ge 9 ]; then
-        TARGET_FRAMEWORK="net9.0"
-    else
-        TARGET_FRAMEWORK="net8.0"
-    fi
-
-    dim "  Target framework: ${TARGET_FRAMEWORK}"
-
-    # Create minimal project files on the fly
-    cat > nudge.csproj << EOF
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>${TARGET_FRAMEWORK}</TargetFramework>
-    <RootNamespace>Nudge</RootNamespace>
-    <Nullable>enable</Nullable>
-    <LangVersion>latest</LangVersion>
-    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-  </PropertyGroup>
-  <ItemGroup>
-    <Compile Include="nudge_build.cs" />
-    <Compile Include="NudgeCore.TestableLogic.cs" />
-  </ItemGroup>
-</Project>
-EOF
-
-    cat > nudge-notify.csproj << EOF
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>${TARGET_FRAMEWORK}</TargetFramework>
-    <RootNamespace>NudgeNotify</RootNamespace>
-    <Nullable>enable</Nullable>
-    <LangVersion>latest</LangVersion>
-    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-  </PropertyGroup>
-  <ItemGroup>
-    <Compile Include="nudge-notify_build.cs" />
-    <Compile Include="NudgeCore.TestableLogic.cs" />
-  </ItemGroup>
-</Project>
-EOF
-
-    dim "  Building nudge..."
-    dotnet build nudge.csproj -c Release -v quiet --nologo
-    success "  ✓ nudge"
-
-    dim "  Building nudge-notify..."
-    dotnet build nudge-notify.csproj -c Release -v quiet --nologo
-    success "  ✓ nudge-notify"
-
-    # Generate Windows .ico from SVG (16/32/48/256 px layers)
-    dim "  Generating Windows icon..."
-    mkdir -p assets/windows
-    ICO_OK=false
-    if command -v rsvg-convert &>/dev/null && command -v convert &>/dev/null; then
-        for SIZE in 16 32 48 256; do
-            rsvg-convert -w $SIZE -h $SIZE assets/linux/nudge.svg \
-                -o "assets/windows/nudge_${SIZE}.png" 2>/dev/null
-        done
-        convert assets/windows/nudge_16.png assets/windows/nudge_32.png \
-                assets/windows/nudge_48.png assets/windows/nudge_256.png \
-                assets/windows/nudge.ico 2>/dev/null && ICO_OK=true
-        rm -f assets/windows/nudge_{16,32,48,256}.png
-    fi
-    if [ "$ICO_OK" = true ]; then
-        success "  ✓ assets/windows/nudge.ico"
-    else
-        warning "  ⚠ Icon generation failed — rsvg-convert/convert not found"
-    fi
-
-    # Create nudge-tray project with Avalonia
-    cat > nudge-tray.csproj << EOF
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>${TARGET_FRAMEWORK}</TargetFramework>
-    <RootNamespace>NudgeTray</RootNamespace>
-    <Nullable>enable</Nullable>
-    <LangVersion>latest</LangVersion>
-    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <ApplicationIcon>assets/windows/nudge.ico</ApplicationIcon>
-  </PropertyGroup>
-
-  <!-- Windows-specific settings -->
-  <PropertyGroup Condition="'\$(OS)' == 'Windows_NT'">
-    <UseWindowsForms>true</UseWindowsForms>
-    <DefineConstants>\$(DefineConstants);WINDOWS</DefineConstants>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <Compile Include="nudge-tray.cs" />
-    <Compile Include="CustomNotification.cs" />
-    <Compile Include="AnalyticsWindow.cs" />
-    <Compile Include="NudgeCore.TestableLogic.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Avalonia" Version="12.0.1" />
-    <PackageReference Include="Avalonia.Desktop" Version="12.0.1" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.1" />
-    <PackageReference Include="Tmds.DBus.Protocol" Version="0.92.0" />
-  </ItemGroup>
-
-  <!-- Windows-specific packages -->
-  <ItemGroup Condition="'\$(OS)' == 'Windows_NT'">
-    <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
-  </ItemGroup>
-</Project>
-EOF
-
-    dim "  Building nudge-tray (with Avalonia UI)..."
-    dotnet publish nudge-tray.csproj -c Release --nologo --no-self-contained
-
-    if [ ! -f "bin/Release/${TARGET_FRAMEWORK}/publish/nudge-tray.dll" ]; then
-        error "✗ nudge-tray.dll not found after build"
-        exit 1
-    fi
-
-    success "  ✓ nudge-tray"
-
-    # Stop any running processes before copying (prevents "Text file busy" error)
-    info "Stopping running processes..."
-    # Kill processes multiple times to ensure they're dead
-    for i in {1..3}; do
-        pkill -9 -f "nudge-tray" 2>/dev/null || true
-        pkill -9 -f "./nudge" 2>/dev/null || true
-        pkill -9 -f "/nudge " 2>/dev/null || true
-        pkill -9 -f "model_inference" 2>/dev/null || true
-        pkill -9 -f "background_trainer" 2>/dev/null || true
-        sleep 0.5
-    done
-    sleep 1
-    success "  ✓ Processes stopped"
-    echo
-
-    # Copy binaries and dependencies to root for easy access
-    cp bin/Release/${TARGET_FRAMEWORK}/nudge ./
-    cp bin/Release/${TARGET_FRAMEWORK}/nudge.dll ./
-    cp bin/Release/${TARGET_FRAMEWORK}/nudge.runtimeconfig.json ./
-    cp bin/Release/${TARGET_FRAMEWORK}/nudge-notify ./
-    cp bin/Release/${TARGET_FRAMEWORK}/nudge-notify.dll ./
-    cp bin/Release/${TARGET_FRAMEWORK}/nudge-notify.runtimeconfig.json ./
-
-    # Copy nudge-tray with all Avalonia dependencies from publish folder
-    cp bin/Release/${TARGET_FRAMEWORK}/publish/nudge-tray ./
-    cp bin/Release/${TARGET_FRAMEWORK}/publish/*.dll ./
-    cp bin/Release/${TARGET_FRAMEWORK}/publish/*.json ./
-    cp bin/Release/${TARGET_FRAMEWORK}/publish/*.so* ./ 2>/dev/null || true
-    # Copy native libraries with proper directory structure
-    if [ -d "bin/Release/${TARGET_FRAMEWORK}/publish/runtimes" ]; then
-        cp -r bin/Release/${TARGET_FRAMEWORK}/publish/runtimes ./
-    fi
-
-    rm -f nudge_build.cs nudge-notify_build.cs
-
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # PLATFORM BINARIES  (self-contained single-file for linux-x64 + win-x64)
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    echo
-    separator
-    info "Building platform binaries..."
-    echo
-    mkdir -p dist/linux-x64 dist/win-x64
-
-    PUBLISH_FLAGS="-c Release --self-contained -p:PublishSingleFile=true \
-        -p:IncludeNativeLibrariesForSelfExtract=true --nologo -v quiet"
-
-    dim "  Publishing linux-x64..."
-    dotnet publish nudge-tray.csproj -r linux-x64 -o dist/linux-x64 $PUBLISH_FLAGS \
-        2>&1 | grep -v "^$" | grep -v "^Build succeeded" || true
-    if [ -f "dist/linux-x64/nudge-tray" ]; then
-        chmod +x dist/linux-x64/nudge-tray
-        LINUX_SIZE=$(du -h dist/linux-x64/nudge-tray | cut -f1)
-        success "  ✓ dist/linux-x64/nudge-tray (${LINUX_SIZE})"
-    else
-        warning "  ⚠ linux-x64 binary not produced"
-    fi
-
-    dim "  Publishing win-x64..."
-    dotnet publish nudge-tray.csproj -r win-x64 -o dist/win-x64 $PUBLISH_FLAGS \
-        2>&1 | grep -v "^$" | grep -v "^Build succeeded" || true
-    if [ -f "dist/win-x64/nudge-tray.exe" ]; then
-        WIN_SIZE=$(du -h dist/win-x64/nudge-tray.exe | cut -f1)
-        success "  ✓ dist/win-x64/nudge-tray.exe (${WIN_SIZE})"
-    else
-        warning "  ⚠ win-x64 binary not produced"
-    fi
-
-elif [ "$COMPILER" = "mono" ]; then
-    info "Building with Mono..."
-    echo
-
-    dim "  Compiling nudge.cs..."
-    csc -out:nudge nudge.cs -r:System.Net.Sockets.dll > /dev/null
-    success "  ✓ nudge"
-
-    dim "  Compiling nudge-notify.cs..."
-    csc -out:nudge-notify nudge-notify.cs > /dev/null
-    success "  ✓ nudge-notify"
-fi
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# VERIFY BINARIES
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+separator
+info "Building platform binaries..."
+echo
+publish_dist_binary "$MAIN_TFM" linux-x64 dist/linux-x64 dist/linux-x64/nudge-tray
+publish_dist_binary "$WINDOWS_TFM" win-x64 dist/win-x64 dist/win-x64/nudge-tray.exe
 
 echo
 info "Verifying binaries..."
-
-if [ -f "nudge" ] && [ -x "nudge" ] || [ -f "nudge.exe" ]; then
-    NUDGE_SIZE=$(du -h nudge 2>/dev/null | cut -f1 || du -h nudge.exe | cut -f1)
-    success "✓ nudge (${NUDGE_SIZE})"
-else
-    error "✗ nudge binary not found"
-    exit 1
-fi
-
-if [ -f "nudge-notify" ] && [ -x "nudge-notify" ] || [ -f "nudge-notify.exe" ]; then
-    NOTIFY_SIZE=$(du -h nudge-notify 2>/dev/null | cut -f1 || du -h nudge-notify.exe | cut -f1)
-    success "✓ nudge-notify (${NOTIFY_SIZE})"
-else
-    error "✗ nudge-notify binary not found"
-    exit 1
-fi
-
-if [ -f "nudge-tray" ] && [ -x "nudge-tray" ] || [ -f "nudge-tray.exe" ]; then
-    TRAY_SIZE=$(du -h nudge-tray 2>/dev/null | cut -f1 || du -h nudge-tray.exe | cut -f1)
-    success "✓ nudge-tray (${TRAY_SIZE})"
-else
-    warning "⚠ nudge-tray not built (Avalonia UI may not be supported on this system)"
-fi
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# SUCCESS BANNER
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+verify_file nudge
+verify_file nudge-notify
+verify_file nudge-tray
 
 echo
 separator
@@ -592,16 +398,11 @@ echo -e "  ${BGREEN}./nudge-notify YES${RESET}         # I was productive"
 echo -e "  ${BYELLOW}./nudge-notify NO${RESET}          # I was not productive"
 echo
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# LAUNCH
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-if [ "$NO_RUN" = false ] && [ -f "./nudge-tray" ] && [ -x "./nudge-tray" ]; then
+if [ "$NO_RUN" = false ] && [ -f ./nudge-tray ] && [ -x ./nudge-tray ]; then
     separator
     info "Launching Nudge..."
     ./nudge-tray &
-    LAUNCH_PID=$!
-    success "  ✓ nudge-tray launched (PID ${LAUNCH_PID})"
+    success "  ✓ nudge-tray launched (PID $!)"
     separator
     echo
 fi

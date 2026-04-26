@@ -1,482 +1,345 @@
 # Build Script for Nudge (PowerShell/Windows)
 #
-# Compiles Nudge productivity tracker for Windows.
-# Automatically installs dependencies via winget if not found.
-#
 # Usage:
-#   .\build.ps1              # Build with auto-installation of dependencies
-#   .\build.ps1 -Clean       # Clean before building
-#
-# Requirements:
-#   - Windows 10/11 with winget (Windows Package Manager)
-#   - Or .NET SDK 8.0+ and Python 3.x installed manually
-#
+#   .\build.ps1               Build with dependency checks
+#   .\build.ps1 -Clean        Remove generated build artifacts first
+#   .\build.ps1 -SkipDeps     Skip dependency installation helpers
+#   .\build.ps1 -SkipTests    Skip dotnet test
+#   .\build.ps1 -NoRun        Do not auto-launch nudge-tray after build
 
 param(
-    [switch]$Clean
+    [switch]$Clean,
+    [switch]$SkipDeps,
+    [switch]$SkipTests,
+    [switch]$NoRun
 )
 
-# Stop on errors
 $ErrorActionPreference = "Stop"
+Set-Location $PSScriptRoot
 
-# Helper Functions
-function Write-Success {
-    param([string]$Message)
-    Write-Host $Message -ForegroundColor Green
+$DotnetMajorRequired = 10
+$MainTfm = "net10.0"
+$WindowsTfm = "net10.0-windows10.0.17763.0"
+
+function Write-Success { param([string]$Message) Write-Host $Message -ForegroundColor Green }
+function Write-Info { param([string]$Message) Write-Host $Message -ForegroundColor Cyan }
+function Write-Warn { param([string]$Message) Write-Host $Message -ForegroundColor Yellow }
+function Write-Err { param([string]$Message) Write-Host $Message -ForegroundColor Red }
+
+function Test-IsTracked {
+    param([string]$Path)
+
+    git ls-files --error-unmatch -- $Path *> $null
+    return $LASTEXITCODE -eq 0
 }
 
-function Write-Info {
-    param([string]$Message)
-    Write-Host $Message -ForegroundColor Cyan
+function Remove-IfUntracked {
+    param([string]$Path)
+
+    if (-not (Test-Path $Path)) {
+        return
+    }
+
+    if (Test-IsTracked $Path) {
+        Write-Host "  keeping tracked file: $Path" -ForegroundColor DarkGray
+    }
+    else {
+        Remove-Item -Path $Path -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
-function Write-Warn {
-    param([string]$Message)
-    Write-Host $Message -ForegroundColor Yellow
-}
+function Clean-Artifacts {
+    Write-Info "Cleaning generated build artifacts..."
+    Remove-Item -Path "bin", "obj", "dist", "NudgeCrossPlatform.Tests/bin", "NudgeCrossPlatform.Tests/obj", "../TrayIconTest/bin", "../TrayIconTest/obj" -Recurse -Force -ErrorAction SilentlyContinue
 
-function Write-Err {
-    param([string]$Message)
-    Write-Host $Message -ForegroundColor Red
-}
+    Remove-IfUntracked "nudge_build.cs"
+    Remove-IfUntracked "nudge-notify_build.cs"
 
-# Banner
-Write-Host ""
-Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "  Nudge Build System (Windows)" -ForegroundColor White
-Write-Host "  Building productivity tracker..." -ForegroundColor Gray
-Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host ""
+    foreach ($path in @(
+        "nudge.exe", "nudge.dll", "nudge.runtimeconfig.json", "nudge.deps.json",
+        "nudge-notify.exe", "nudge-notify.dll", "nudge-notify.runtimeconfig.json", "nudge-notify.deps.json",
+        "nudge-tray.exe", "nudge-tray.dll", "nudge-tray.runtimeconfig.json", "nudge-tray.deps.json")) {
+        Remove-IfUntracked $path
+    }
 
-# Clean (if requested)
-if ($Clean) {
-    Write-Info "Cleaning build artifacts..."
-    Remove-Item -Path "bin", "obj", "*.csproj", "*.exe", "*.dll", "*.runtimeconfig.json", "runtimes", "nudge", "nudge-notify", "nudge-tray", "*_build.cs" -Recurse -Force -ErrorAction SilentlyContinue
+    if ((Test-Path "runtimes") -and -not (Test-IsTracked "runtimes/osx/native/libAvaloniaNative.dylib")) {
+        Remove-Item -Path "runtimes" -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
     Write-Success "[OK] Clean complete"
     Write-Host ""
 }
 
-# Check Dependencies
+function Refresh-Path {
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+}
+
+function Install-Dotnet10 {
+    Write-Info "Installing .NET SDK 10..."
+    winget install Microsoft.DotNet.SDK.10 --silent --accept-package-agreements --accept-source-agreements
+    Refresh-Path
+}
+
+function Ensure-Dotnet10 {
+    $dotnetVersion = ""
+
+    if (Get-Command dotnet -ErrorAction SilentlyContinue) {
+        $dotnetVersion = (dotnet --version 2>&1 | Out-String).Trim()
+    }
+
+    if (-not $dotnetVersion) {
+        if ($SkipDeps) {
+            Write-Err ".NET SDK 10.0+ is required but dotnet is not installed."
+            exit 1
+        }
+
+        Write-Warn "[WARN] .NET SDK not found"
+        Install-Dotnet10
+        $dotnetVersion = (dotnet --version 2>&1 | Out-String).Trim()
+    }
+
+    $major = [int]($dotnetVersion.Split('.')[0])
+    if ($major -lt $DotnetMajorRequired) {
+        Write-Err "Found .NET SDK $dotnetVersion, but Nudge now requires .NET SDK 10.0+."
+        exit 1
+    }
+
+    Write-Success "[OK] .NET SDK ready"
+    Write-Host "  Version: $dotnetVersion" -ForegroundColor DarkGray
+}
+
+function Ensure-Python {
+    $pythonCommand = $null
+
+    foreach ($candidate in @("python", "py")) {
+        if (Get-Command $candidate -ErrorAction SilentlyContinue) {
+            try {
+                $version = (& $candidate --version 2>&1 | Out-String).Trim()
+                if ($version) {
+                    $script:PythonCommand = $candidate
+                    Write-Success "[OK] Python ready"
+                    Write-Host "  Version: $version" -ForegroundColor DarkGray
+                    return
+                }
+            }
+            catch { }
+        }
+    }
+
+    if ($SkipDeps) {
+        Write-Warn "[WARN] Python not found. Skipping Python dependency install because -SkipDeps was used."
+        return
+    }
+
+    Write-Warn "[WARN] Python not found"
+    winget install Python.Python.3.12 --silent --accept-package-agreements --accept-source-agreements
+    Refresh-Path
+
+    foreach ($candidate in @("python", "py")) {
+        if (Get-Command $candidate -ErrorAction SilentlyContinue) {
+            $script:PythonCommand = $candidate
+            Write-Success "[OK] Python ready"
+            return
+        }
+    }
+
+    Write-Err "[ERROR] Python installation failed"
+    exit 1
+}
+
+function Install-PythonDeps {
+    if (-not $script:PythonCommand) {
+        return
+    }
+
+    if (-not (Test-Path "requirements-cpu.txt")) {
+        Write-Warn "[WARN] requirements-cpu.txt not found, skipping Python package install"
+        return
+    }
+
+    Write-Info "Installing Python dependencies..."
+    & $script:PythonCommand -m pip install --user --disable-pip-version-check -r requirements-cpu.txt
+    if ($LASTEXITCODE -ne 0) {
+        Write-Err "[ERROR] Failed to install Python dependencies"
+        exit 1
+    }
+
+    Write-Success "[OK] Python dependencies checked"
+}
+
+function Prepare-BuildSources {
+    Write-Host "  Preparing shebang-stripped sources..." -ForegroundColor DarkGray
+    Get-Content -LiteralPath "nudge.cs" | Select-Object -Skip 1 | Set-Content -LiteralPath "nudge_build.cs" -Encoding utf8
+    Get-Content -LiteralPath "nudge-notify.cs" | Select-Object -Skip 1 | Set-Content -LiteralPath "nudge-notify_build.cs" -Encoding utf8
+}
+
+function Invoke-Dotnet {
+    param([string[]]$Arguments)
+
+    & dotnet @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "dotnet $($Arguments -join ' ') failed"
+    }
+}
+
+function Publish-DistBinary {
+    param(
+        [string]$Framework,
+        [string]$Rid,
+        [string]$OutputDir,
+        [string]$ExpectedFile
+    )
+
+    New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
+
+    try {
+        Invoke-Dotnet @(
+            "publish", "nudge-tray.csproj",
+            "-c", "Release",
+            "-f", $Framework,
+            "-r", $Rid,
+            "-o", $OutputDir,
+            "--self-contained",
+            "-p:PublishSingleFile=true",
+            "-p:IncludeNativeLibrariesForSelfExtract=true",
+            "--nologo",
+            "-v", "quiet"
+        )
+
+        if (Test-Path $ExpectedFile) {
+            Write-Success "  [OK] $ExpectedFile"
+        }
+        else {
+            Write-Warn "  [WARN] Publish completed but $ExpectedFile was not produced"
+        }
+    }
+    catch {
+        Write-Warn "  [WARN] Failed to publish $Rid"
+    }
+}
+
+function Verify-Output {
+    param([string]$Path)
+
+    if (-not (Test-Path $Path)) {
+        Write-Err "[ERROR] Missing expected output: $Path"
+        exit 1
+    }
+
+    $sizeKb = [math]::Round((Get-Item $Path).Length / 1KB, 1)
+    Write-Success "[OK] $Path ($sizeKb KB)"
+}
+
+Write-Host ""
 Write-Host "==========================================" -ForegroundColor Cyan
-Write-Info "Checking dependencies..."
+Write-Host "  Nudge Build System (Windows /.NET 10)" -ForegroundColor White
+Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Check winget availability
-$hasWinget = Get-Command winget -ErrorAction SilentlyContinue
-
-# Check .NET SDK (test if it actually works, not just if command exists)
-$dotnetWorks = $false
-$dotnetVersion = ""
-
-if (Get-Command dotnet -ErrorAction SilentlyContinue) {
-    try {
-        $dotnetVersion = dotnet --version 2>&1 | Out-String
-        $dotnetVersion = $dotnetVersion.Trim()
-        if ($dotnetVersion -and $LASTEXITCODE -eq 0) {
-            $dotnetWorks = $true
-        }
-    }
-    catch {
-        $dotnetWorks = $false
-    }
+if ($Clean) {
+    Clean-Artifacts
 }
 
-if (-not $dotnetWorks) {
-    Write-Warn "[WARN] .NET SDK not found or not working"
+if (-not $SkipDeps) {
+    Write-Host "==========================================" -ForegroundColor Cyan
+    Write-Info "Checking dependencies..."
     Write-Host ""
-
-    if ($hasWinget) {
-        Write-Info "Installing .NET SDK via winget..."
-        winget install Microsoft.DotNet.SDK.9 --silent --accept-package-agreements --accept-source-agreements
-
-        # Refresh PATH
-        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-
-        # Test if dotnet works now
-        try {
-            $dotnetVersion = dotnet --version 2>&1 | Out-String
-            $dotnetVersion = $dotnetVersion.Trim()
-            if ($dotnetVersion -and $LASTEXITCODE -eq 0) {
-                Write-Success "[OK] .NET SDK installed successfully"
-            }
-            else {
-                Write-Err "[ERROR] .NET SDK installation failed - dotnet command not working"
-                Write-Err "Please install manually from: https://dotnet.microsoft.com/download"
-                exit 1
-            }
-        }
-        catch {
-            Write-Err "[ERROR] .NET SDK installation failed"
-            Write-Err "Please install manually from: https://dotnet.microsoft.com/download"
-            exit 1
-        }
-    }
-    else {
-        Write-Err "[ERROR] winget not available"
-        Write-Err "Please install .NET SDK manually from: https://dotnet.microsoft.com/download"
-        Write-Err "Or install winget: https://aka.ms/getwinget"
-        exit 1
-    }
-}
-
-Write-Success "[OK] .NET SDK ready"
-Write-Host "  Version: $dotnetVersion" -ForegroundColor Gray
-Write-Host ""
-
-# Check Python (required for ML)
-$pythonWorks = $false
-$pythonVersion = ""
-$pythonCmd = "python"
-
-# First try 'python' command
-if (Get-Command python -ErrorAction SilentlyContinue) {
-    try {
-        $pythonVersion = python --version 2>&1 | Out-String
-        $pythonVersion = $pythonVersion.Trim()
-        if ($pythonVersion -and $LASTEXITCODE -eq 0) {
-            $pythonWorks = $true
-            $pythonCmd = "python"
-        }
-    }
-    catch {
-        $pythonWorks = $false
-    }
-}
-
-# If 'python' doesn't work, try 'py' (Windows Python Launcher)
-if (-not $pythonWorks -and (Get-Command py -ErrorAction SilentlyContinue)) {
-    try {
-        $pythonVersion = py --version 2>&1 | Out-String
-        $pythonVersion = $pythonVersion.Trim()
-        if ($pythonVersion -and $LASTEXITCODE -eq 0) {
-            $pythonWorks = $true
-            $pythonCmd = "py"
-            Write-Info "Using Python launcher (py) instead of python command"
-        }
-    }
-    catch {
-        $pythonWorks = $false
-    }
-}
-
-if (-not $pythonWorks) {
-    Write-Warn "[WARN] Python not found or not working"
+    Ensure-Dotnet10
     Write-Host ""
-
-    if ($hasWinget) {
-        # Check if Python is already installed via winget
-        $wingetList = winget list --id Python.Python.3.12 2>&1 | Out-String
-        $pythonAlreadyInstalled = $wingetList -match "Python\.Python\.3\.12"
-
-        if ($pythonAlreadyInstalled) {
-            Write-Warn "Python appears to be installed but not in PATH"
-            Write-Host ""
-            Write-Info "Attempting to repair/reinstall Python with PATH enabled..."
-
-            # Uninstall and reinstall to fix PATH
-            winget uninstall Python.Python.3.12 --silent 2>&1 | Out-Null
-            Start-Sleep -Seconds 2
-        }
-        else {
-            Write-Info "Installing Python via winget..."
-        }
-
-        winget install Python.Python.3.12 --silent --accept-package-agreements --accept-source-agreements
-
-        # Refresh PATH from registry
-        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-
-        # Test if python works now
-        Start-Sleep -Seconds 1
-        $pythonWorksNow = $false
-
-        # Try 'python' first
-        if (Get-Command python -ErrorAction SilentlyContinue) {
-            try {
-                $pythonVersion = python --version 2>&1 | Out-String
-                $pythonVersion = $pythonVersion.Trim()
-                if ($pythonVersion -and $LASTEXITCODE -eq 0) {
-                    $pythonWorksNow = $true
-                    $pythonCmd = "python"
-                }
-            }
-            catch { }
-        }
-
-        # Try 'py' as fallback
-        if (-not $pythonWorksNow -and (Get-Command py -ErrorAction SilentlyContinue)) {
-            try {
-                $pythonVersion = py --version 2>&1 | Out-String
-                $pythonVersion = $pythonVersion.Trim()
-                if ($pythonVersion -and $LASTEXITCODE -eq 0) {
-                    $pythonWorksNow = $true
-                    $pythonCmd = "py"
-                }
-            }
-            catch { }
-        }
-
-        if ($pythonWorksNow) {
-            Write-Success "[OK] Python installed successfully"
-        }
-        else {
-            Write-Err "[ERROR] Python installation failed - python command not working"
-            Write-Host ""
-            Write-Warn "Python may be installed but not in your PATH. Try one of these:"
-            Write-Host "  1. Close and reopen PowerShell, then run build.ps1 again" -ForegroundColor Yellow
-            Write-Host "  2. Reinstall Python from https://www.python.org/downloads/" -ForegroundColor Yellow
-            Write-Host "     Make sure to check 'Add Python to PATH' during installation" -ForegroundColor Yellow
-            Write-Host "  3. Add Python manually to your PATH environment variable" -ForegroundColor Yellow
-            exit 1
-        }
-    }
-    else {
-        Write-Err "[ERROR] winget not available"
-        Write-Err "Please install Python manually from: https://www.python.org/downloads/"
-        Write-Err "Make sure to check 'Add Python to PATH' during installation"
-        Write-Err "Or install winget: https://aka.ms/getwinget"
-        exit 1
-    }
-}
-
-Write-Success "[OK] Python ready"
-Write-Host "  Version: $pythonVersion" -ForegroundColor Gray
-Write-Host ""
-
-# Install Python dependencies (required)
-if (Test-Path "requirements-cpu.txt") {
-    Write-Info "Installing Python ML dependencies (this may take 5-10 minutes)..."
-    Write-Host "  Downloading TensorFlow (~400MB) and other ML packages..." -ForegroundColor Gray
+    Ensure-Python
     Write-Host ""
-
-    # Temporarily allow errors for pip install (pip writes progress to stderr)
-    $previousErrorAction = $ErrorActionPreference
-    $ErrorActionPreference = "Continue"
-
-    # Run pip install with real-time output so user sees progress
-    # Use the detected Python command (either 'python' or 'py')
-    & $pythonCmd -m pip install --user --disable-pip-version-check -r requirements-cpu.txt
-    $pipExitCode = $LASTEXITCODE
-
-    # Restore error action preference
-    $ErrorActionPreference = $previousErrorAction
-
+    Install-PythonDeps
     Write-Host ""
-
-    if ($pipExitCode -eq 0) {
-        Write-Success "[OK] Python ML dependencies installed"
-    }
-    else {
-        Write-Err "[ERROR] Failed to install Python dependencies (exit code: $pipExitCode)"
-        Write-Err "Please check the pip output above for details"
-        exit 1
-    }
 }
 else {
-    Write-Err "[ERROR] requirements-cpu.txt not found"
-    Write-Err "ML dependencies are required for Nudge to function"
-    exit 1
+    Write-Info "Skipping dependency installation (-SkipDeps)"
+    Write-Host ""
+    Ensure-Dotnet10
+    Write-Host ""
 }
+
+Write-Host "==========================================" -ForegroundColor Cyan
+Write-Info "Building projects..."
 Write-Host ""
 
-# Build
-Write-Info "Building with .NET..."
-Write-Host ""
+Prepare-BuildSources
 
-# Strip shebang lines for compilation
-Write-Host "  Preparing source files..." -ForegroundColor Gray
-Get-Content nudge.cs | Where-Object { $_ -notmatch '^#!/' } | Set-Content nudge_build.cs -Encoding UTF8
-Get-Content nudge-notify.cs | Where-Object { $_ -notmatch '^#!/' } | Set-Content nudge-notify_build.cs -Encoding UTF8
+Write-Host "  Restoring projects..." -ForegroundColor DarkGray
+Invoke-Dotnet @("restore", "nudge.csproj", "--nologo")
+Invoke-Dotnet @("restore", "nudge-notify.csproj", "--nologo")
+Invoke-Dotnet @("restore", "nudge-tray.csproj", "--nologo")
+Invoke-Dotnet @("restore", "NudgeCrossPlatform.Tests/NudgeCrossPlatform.Tests.csproj", "--nologo")
+Invoke-Dotnet @("restore", "../TrayIconTest/TrayIconTest.csproj", "--nologo")
 
-# Pick a target framework available on the local SDK.
-$dotnetMajor = [int]($dotnetVersion.Split('.')[0])
-if ($dotnetMajor -ge 9) {
-    $targetFramework = "net9.0"
-}
-else {
-    $targetFramework = "net8.0"
-}
-
-Write-Host "  Target framework: $targetFramework" -ForegroundColor Gray
-
-# Create minimal project files on the fly
-$nudgeProject = @"
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>$targetFramework</TargetFramework>
-    <RootNamespace>Nudge</RootNamespace>
-    <Nullable>enable</Nullable>
-    <LangVersion>latest</LangVersion>
-    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-  </PropertyGroup>
-  <ItemGroup>
-    <Compile Include="nudge_build.cs" />
-    <Compile Include="NudgeCore.TestableLogic.cs" />
-  </ItemGroup>
-</Project>
-"@
-
-$notifyProject = @"
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>$targetFramework</TargetFramework>
-    <RootNamespace>NudgeNotify</RootNamespace>
-    <Nullable>enable</Nullable>
-    <LangVersion>latest</LangVersion>
-    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-  </PropertyGroup>
-  <ItemGroup>
-    <Compile Include="nudge-notify_build.cs" />
-    <Compile Include="NudgeCore.TestableLogic.cs" />
-  </ItemGroup>
-</Project>
-"@
-
-$trayProject = @"
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>${targetFramework}-windows10.0.17763.0</TargetFramework>
-    <RootNamespace>NudgeTray</RootNamespace>
-    <Nullable>enable</Nullable>
-    <LangVersion>latest</LangVersion>
-    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <DefineConstants>WINDOWS</DefineConstants>
-    <UseWindowsForms>true</UseWindowsForms>
-  </PropertyGroup>
-  <ItemGroup>
-    <Compile Include="nudge-tray.cs" />
-    <Compile Include="CustomNotification.cs" />
-    <Compile Include="AnalyticsWindow.cs" />
-    <Compile Include="NudgeCore.TestableLogic.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="Avalonia" Version="12.0.1" />
-    <PackageReference Include="Avalonia.Desktop" Version="12.0.1" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.1" />
-    <PackageReference Include="Tmds.DBus.Protocol" Version="0.92.0" />
-    <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
-  </ItemGroup>
-</Project>
-"@
-
-$nudgeProject | Set-Content nudge.csproj -Encoding UTF8
-$notifyProject | Set-Content nudge-notify.csproj -Encoding UTF8
-$trayProject | Set-Content nudge-tray.csproj -Encoding UTF8
-
-# Build nudge
-Write-Host "  Building nudge..." -ForegroundColor Gray
-$result = dotnet build nudge.csproj -c Release -v quiet --nologo 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Err "[FAILED] nudge build failed"
-    Write-Host $result
-    exit 1
-}
+Write-Host "  Building nudge..." -ForegroundColor DarkGray
+Invoke-Dotnet @("build", "nudge.csproj", "-c", "Release", "-f", $MainTfm, "--no-restore", "--nologo", "-v", "quiet")
 Write-Success "  [OK] nudge"
 
-# Build nudge-notify
-Write-Host "  Building nudge-notify..." -ForegroundColor Gray
-$result = dotnet build nudge-notify.csproj -c Release -v quiet --nologo 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Err "[FAILED] nudge-notify build failed"
-    Write-Host $result
-    exit 1
-}
+Write-Host "  Building nudge-notify..." -ForegroundColor DarkGray
+Invoke-Dotnet @("build", "nudge-notify.csproj", "-c", "Release", "-f", $MainTfm, "--no-restore", "--nologo", "-v", "quiet")
 Write-Success "  [OK] nudge-notify"
 
-# Build nudge-tray with Avalonia + WinForms
-Write-Host "  Building nudge-tray (with Avalonia UI + WinForms)..." -ForegroundColor Gray
-Write-Host "Restore complete (0.7s)" -ForegroundColor Gray
-
-$trayTargetFramework = "${targetFramework}-windows10.0.17763.0"
-$result = dotnet publish nudge-tray.csproj -c Release --nologo --no-self-contained 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Err "[FAILED] nudge-tray build failed"
-    Write-Host $result
-    exit 1
-}
-
-if (!(Test-Path "bin/Release/$trayTargetFramework/publish/nudge-tray.dll")) {
-    Write-Err "[FAILED] nudge-tray.dll not found after build"
-    exit 1
-}
-
+Write-Host "  Building nudge-tray..." -ForegroundColor DarkGray
+Invoke-Dotnet @("build", "nudge-tray.csproj", "-c", "Release", "-f", $WindowsTfm, "--no-restore", "--nologo", "-v", "quiet")
 Write-Success "  [OK] nudge-tray"
 
-# Check if any Nudge processes are running and kill them
+Write-Host "  Building TrayIconTest..." -ForegroundColor DarkGray
+Invoke-Dotnet @("build", "../TrayIconTest/TrayIconTest.csproj", "-c", "Release", "--no-restore", "--nologo", "-v", "quiet")
+Write-Success "  [OK] TrayIconTest"
+
+if (-not $SkipTests) {
+    Write-Host "  Running tests..." -ForegroundColor DarkGray
+    Invoke-Dotnet @("test", "NudgeCrossPlatform.Tests/NudgeCrossPlatform.Tests.csproj", "-c", "Release", "--no-restore", "--nologo", "-v", "quiet")
+    Write-Success "  [OK] tests"
+}
+else {
+    Write-Warn "  [WARN] Skipping tests (-SkipTests)"
+}
+
+Write-Host "  Publishing nudge-tray runtime output..." -ForegroundColor DarkGray
+Invoke-Dotnet @("publish", "nudge-tray.csproj", "-c", "Release", "-f", $WindowsTfm, "--no-self-contained", "--no-restore", "--nologo", "-v", "quiet")
+Write-Success "  [OK] nudge-tray publish"
+
 $runningProcesses = Get-Process -Name "nudge", "nudge-notify", "nudge-tray" -ErrorAction SilentlyContinue
 if ($runningProcesses) {
-    Write-Host ""
-    Write-Warn "[WARN] Nudge processes are running - killing them..."
-    Write-Host ""
+    Write-Info "Stopping running processes..."
     foreach ($proc in $runningProcesses) {
-        Write-Host "  Killing $($proc.ProcessName).exe (PID: $($proc.Id))..." -ForegroundColor Yellow
         try {
             Stop-Process -Id $proc.Id -Force -ErrorAction Stop
-            Write-Host "  [OK] Killed $($proc.ProcessName).exe" -ForegroundColor Green
         }
-        catch {
-            Write-Err "  [ERROR] Failed to kill $($proc.ProcessName).exe: $_"
-        }
+        catch { }
     }
+    Start-Sleep -Milliseconds 500
+    Write-Success "[OK] Processes stopped"
     Write-Host ""
-    Start-Sleep -Milliseconds 500  # Give processes time to fully terminate
 }
 
-# Copy binaries and dependencies to root for easy access
+Copy-Item "bin/Release/$MainTfm/nudge.exe" -Destination "." -Force
+Copy-Item "bin/Release/$MainTfm/nudge.dll" -Destination "." -Force
+Copy-Item "bin/Release/$MainTfm/nudge.runtimeconfig.json" -Destination "." -Force
+Copy-Item "bin/Release/$MainTfm/nudge-notify.exe" -Destination "." -Force
+Copy-Item "bin/Release/$MainTfm/nudge-notify.dll" -Destination "." -Force
+Copy-Item "bin/Release/$MainTfm/nudge-notify.runtimeconfig.json" -Destination "." -Force
+Copy-Item "bin/Release/$WindowsTfm/publish/nudge-tray.exe" -Destination "." -Force
+Copy-Item "bin/Release/$WindowsTfm/publish/*.dll" -Destination "." -Force
+Copy-Item "bin/Release/$WindowsTfm/publish/*.json" -Destination "." -Force
+if (Test-Path "bin/Release/$WindowsTfm/publish/runtimes") {
+    Copy-Item "bin/Release/$WindowsTfm/publish/runtimes" -Destination "." -Recurse -Force
+}
+
 Write-Host ""
-Write-Host "  Copying binaries..." -ForegroundColor Gray
-Copy-Item "bin/Release/$targetFramework/nudge.exe" -Destination "." -Force
-Copy-Item "bin/Release/$targetFramework/nudge.dll" -Destination "." -Force
-Copy-Item "bin/Release/$targetFramework/nudge.runtimeconfig.json" -Destination "." -Force
-Copy-Item "bin/Release/$targetFramework/nudge-notify.exe" -Destination "." -Force
-Copy-Item "bin/Release/$targetFramework/nudge-notify.dll" -Destination "." -Force
-Copy-Item "bin/Release/$targetFramework/nudge-notify.runtimeconfig.json" -Destination "." -Force
+Write-Host "==========================================" -ForegroundColor Cyan
+Write-Info "Building platform binaries..."
+Write-Host ""
+Publish-DistBinary -Framework $WindowsTfm -Rid "win-x64" -OutputDir "dist/win-x64" -ExpectedFile "dist/win-x64/nudge-tray.exe"
+Publish-DistBinary -Framework $MainTfm -Rid "linux-x64" -OutputDir "dist/linux-x64" -ExpectedFile "dist/linux-x64/nudge-tray"
 
-# Copy nudge-tray with all Avalonia + WinForms dependencies from publish folder
-Copy-Item "bin/Release/$trayTargetFramework/publish/nudge-tray.exe" -Destination "." -Force
-Copy-Item "bin/Release/$trayTargetFramework/publish/*.dll" -Destination "." -Force
-Copy-Item "bin/Release/$trayTargetFramework/publish/*.json" -Destination "." -Force
-if (Test-Path "bin/Release/$trayTargetFramework/publish/runtimes") {
-    Copy-Item "bin/Release/$trayTargetFramework/publish/runtimes" -Destination "." -Recurse -Force
-}
-
-Remove-Item "nudge_build.cs", "nudge-notify_build.cs" -Force -ErrorAction SilentlyContinue
-
-# Verify Binaries
 Write-Host ""
 Write-Info "Verifying binaries..."
+Verify-Output "nudge.exe"
+Verify-Output "nudge-notify.exe"
+Verify-Output "nudge-tray.exe"
 
-if (Test-Path "nudge.exe") {
-    $nudgeSize = [math]::Round((Get-Item "nudge.exe").Length / 1KB, 1)
-    Write-Success "[OK] nudge.exe ($nudgeSize KB)"
-}
-else {
-    Write-Err "[ERROR] nudge.exe not found"
-    exit 1
-}
-
-if (Test-Path "nudge-notify.exe") {
-    $notifySize = [math]::Round((Get-Item "nudge-notify.exe").Length / 1KB, 1)
-    Write-Success "[OK] nudge-notify.exe ($notifySize KB)"
-}
-else {
-    Write-Err "[ERROR] nudge-notify.exe not found"
-    exit 1
-}
-
-if (Test-Path "nudge-tray.exe") {
-    $traySize = [math]::Round((Get-Item "nudge-tray.exe").Length / 1KB, 1)
-    Write-Success "[OK] nudge-tray.exe ($traySize KB)"
-}
-else {
-    Write-Warn "[WARN] nudge-tray.exe not built (Avalonia UI may not be supported)"
-}
-
-# Success Banner
 Write-Host ""
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Success "  [OK] Build successful"
@@ -495,3 +358,9 @@ Write-Info "Respond to snapshots (CLI mode):"
 Write-Host "  .\nudge-notify.exe YES         # I was productive" -ForegroundColor Green
 Write-Host "  .\nudge-notify.exe NO          # I was not productive" -ForegroundColor Yellow
 Write-Host ""
+
+if (-not $NoRun -and (Test-Path "./nudge-tray.exe")) {
+    Write-Info "Launching Nudge..."
+    Start-Process -FilePath "./nudge-tray.exe"
+    Write-Success "[OK] nudge-tray launched"
+}

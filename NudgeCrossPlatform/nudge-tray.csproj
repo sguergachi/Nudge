@@ -1,19 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>net10.0;net10.0-windows10.0.17763.0</TargetFrameworks>
     <RootNamespace>NudgeTray</RootNamespace>
-    <Nullable>enable</Nullable>
-    <LangVersion>latest</LangVersion>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <ApplicationIcon>assets/windows/nudge.ico</ApplicationIcon>
   </PropertyGroup>
 
-  <!-- Windows-specific settings -->
-  <PropertyGroup Condition="'$(OS)' == 'Windows_NT'">
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.17763.0'">
+    <OutputType>WinExe</OutputType>
     <UseWindowsForms>true</UseWindowsForms>
     <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
+    <ApplicationIcon>assets/windows/nudge.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,6 +19,7 @@
     <Compile Include="CustomNotification.cs" />
     <Compile Include="AnalyticsWindow.cs" />
     <Compile Include="NudgeCore.TestableLogic.cs" />
+    <Compile Include="NudgeJsonContext.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -30,8 +29,7 @@
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.92.0" />
   </ItemGroup>
 
-  <!-- Windows-specific packages -->
-  <ItemGroup Condition="'$(OS)' == 'Windows_NT'">
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.17763.0'">
     <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
   </ItemGroup>
 </Project>
