@@ -1279,5 +1279,27 @@ namespace NudgeTray
         {
             // No XAML needed for headless tray app
         }
+
+        public override void OnFrameworkInitializationCompleted()
+        {
+            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+            {
+                // Create an invisible main window to keep the app alive on Linux
+                // and ensure proper tray icon display
+                var mainWindow = new Window
+                {
+                    IsVisible = false,
+                    ShowInTaskbar = false,
+                    CanResize = false,
+                    Width = 1,
+                    Height = 1,
+                    Topmost = false
+                };
+
+                desktop.MainWindow = mainWindow;
+            }
+
+            base.OnFrameworkInitializationCompleted();
+        }
     }
 }
