@@ -65,20 +65,23 @@ public class NudgeParsingHelpersTests
     // ── ExtractFocusedAppFromSwayJson ─────────────────────────────────────────
 
     [Fact]
-    public void ExtractFocusedApp_WithFocusedNodeAtRoot_ReturnsAppId()
+    public void ExtractFocusedApp_WithFocusedNodeAtRoot_ReturnsAppAndTitle()
     {
         const string json = """
             {
               "focused": true,
               "app_id": "firefox",
+              "name": "Mozilla Firefox",
               "nodes": []
             }
             """;
-        Assert.Equal("firefox", NudgeCoreLogic.ExtractFocusedAppFromSwayJson(json));
+        var (app, title) = NudgeCoreLogic.ExtractFocusedAppFromSwayJson(json);
+        Assert.Equal("firefox", app);
+        Assert.Equal("Mozilla Firefox", title);
     }
 
     [Fact]
-    public void ExtractFocusedApp_WithFocusedNodeNested_ReturnsAppId()
+    public void ExtractFocusedApp_WithFocusedNodeNested_ReturnsAppAndTitle()
     {
         const string json = """
             {
@@ -87,28 +90,32 @@ public class NudgeParsingHelpersTests
                 {
                   "focused": false,
                   "nodes": [
-                    { "focused": true, "app_id": "kitty", "nodes": [] }
+                    { "focused": true, "app_id": "kitty", "name": "terminal", "nodes": [] }
                   ]
                 }
               ]
             }
             """;
-        Assert.Equal("kitty", NudgeCoreLogic.ExtractFocusedAppFromSwayJson(json));
+        var (app, title) = NudgeCoreLogic.ExtractFocusedAppFromSwayJson(json);
+        Assert.Equal("kitty", app);
+        Assert.Equal("terminal", title);
     }
 
     [Fact]
-    public void ExtractFocusedApp_WithFocusedInFloatingNodes_ReturnsAppId()
+    public void ExtractFocusedApp_WithFocusedInFloatingNodes_ReturnsAppAndTitle()
     {
         const string json = """
             {
               "focused": false,
               "nodes": [],
               "floating_nodes": [
-                { "focused": true, "app_id": "pavucontrol", "nodes": [] }
+                { "focused": true, "app_id": "pavucontrol", "name": "Volume Control", "nodes": [] }
               ]
             }
             """;
-        Assert.Equal("pavucontrol", NudgeCoreLogic.ExtractFocusedAppFromSwayJson(json));
+        var (app, title) = NudgeCoreLogic.ExtractFocusedAppFromSwayJson(json);
+        Assert.Equal("pavucontrol", app);
+        Assert.Equal("Volume Control", title);
     }
 
     [Fact]
@@ -122,41 +129,51 @@ public class NudgeParsingHelpersTests
               ]
             }
             """;
-        Assert.Equal("unknown", NudgeCoreLogic.ExtractFocusedAppFromSwayJson(json));
+        var (app, title) = NudgeCoreLogic.ExtractFocusedAppFromSwayJson(json);
+        Assert.Equal("unknown", app);
+        Assert.Equal("", title);
     }
 
     [Fact]
     public void ExtractFocusedApp_EmptyAppId_ReturnsUnknown()
     {
         const string json = """{ "focused": true, "app_id": "", "nodes": [] }""";
-        Assert.Equal("unknown", NudgeCoreLogic.ExtractFocusedAppFromSwayJson(json));
+        var (app, title) = NudgeCoreLogic.ExtractFocusedAppFromSwayJson(json);
+        Assert.Equal("unknown", app);
     }
 
     [Fact]
     public void ExtractFocusedApp_NullAppId_ReturnsUnknown()
     {
         const string json = """{ "focused": true, "app_id": null, "nodes": [] }""";
-        Assert.Equal("unknown", NudgeCoreLogic.ExtractFocusedAppFromSwayJson(json));
+        var (app, title) = NudgeCoreLogic.ExtractFocusedAppFromSwayJson(json);
+        Assert.Equal("unknown", app);
     }
 
     [Fact]
     public void ExtractFocusedApp_EmptyString_ReturnsUnknown()
     {
-        Assert.Equal("unknown", NudgeCoreLogic.ExtractFocusedAppFromSwayJson(""));
+        var (app, title) = NudgeCoreLogic.ExtractFocusedAppFromSwayJson("");
+        Assert.Equal("unknown", app);
+        Assert.Equal("", title);
     }
 
     [Fact]
     public void ExtractFocusedApp_MalformedJson_FallsBackToStringScan()
     {
         // Not valid JSON but contains the key markers
-        const string raw = """...,"focused":true,"app_id":"alacritty",...""";
-        Assert.Equal("alacritty", NudgeCoreLogic.ExtractFocusedAppFromSwayJson(raw));
+        const string raw = """...,"focused":true,"app_id":"alacritty","name":"term",...""";
+        var (app, title) = NudgeCoreLogic.ExtractFocusedAppFromSwayJson(raw);
+        Assert.Equal("alacritty", app);
+        Assert.Equal("term", title);
     }
 
     [Fact]
     public void ExtractFocusedApp_MalformedJsonNoMarkers_ReturnsUnknown()
     {
-        Assert.Equal("unknown", NudgeCoreLogic.ExtractFocusedAppFromSwayJson("not json at all"));
+        var (app, title) = NudgeCoreLogic.ExtractFocusedAppFromSwayJson("not json at all");
+        Assert.Equal("unknown", app);
+        Assert.Equal("", title);
     }
 
     // ── ExtractQuotedString ───────────────────────────────────────────────────

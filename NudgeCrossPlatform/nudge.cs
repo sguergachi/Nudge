@@ -975,7 +975,7 @@ class Nudge
             return activityScore;
         }
 
-        private string ExtractFocusedAppFromSwayTree(string json) =>
+        private (string app, string title) ExtractFocusedAppFromSwayTree(string json) =>
             NudgeCoreLogic.ExtractFocusedAppFromSwayJson(json);
 
         private string ExtractQuotedString(string input) =>

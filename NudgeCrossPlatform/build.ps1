@@ -246,7 +246,7 @@ Write-Host ""
 # Install Python dependencies (required)
 if (Test-Path "requirements-cpu.txt") {
     Write-Info "Installing Python ML dependencies (this may take 5-10 minutes)..."
-    Write-Host "  Downloading TensorFlow-CPU (~400MB) and other ML packages..." -ForegroundColor Gray
+    Write-Host "  Downloading TensorFlow (~400MB) and other ML packages..." -ForegroundColor Gray
     Write-Host ""
 
     # Temporarily allow errors for pip install (pip writes progress to stderr)
@@ -290,10 +290,7 @@ Get-Content nudge-notify.cs | Where-Object { $_ -notmatch '^#!/' } | Set-Content
 
 # Pick a target framework available on the local SDK.
 $dotnetMajor = [int]($dotnetVersion.Split('.')[0])
-if ($dotnetMajor -ge 10) {
-    $targetFramework = "net10.0"
-}
-elseif ($dotnetMajor -ge 9) {
+if ($dotnetMajor -ge 9) {
     $targetFramework = "net9.0"
 }
 else {
@@ -315,6 +312,7 @@ $nudgeProject = @"
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="nudge_build.cs" />
+    <Compile Include="NudgeCore.TestableLogic.cs" />
   </ItemGroup>
 </Project>
 "@
@@ -331,6 +329,7 @@ $notifyProject = @"
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="nudge-notify_build.cs" />
+    <Compile Include="NudgeCore.TestableLogic.cs" />
   </ItemGroup>
 </Project>
 "@
@@ -351,6 +350,8 @@ $trayProject = @"
   <ItemGroup>
     <Compile Include="nudge-tray.cs" />
     <Compile Include="CustomNotification.cs" />
+    <Compile Include="AnalyticsWindow.cs" />
+    <Compile Include="NudgeCore.TestableLogic.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.0.1" />

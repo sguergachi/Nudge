@@ -335,9 +335,7 @@ if [ "$COMPILER" = "dotnet" ]; then
 
     # Pick a target framework that exists on the local SDK.
     DOTNET_MAJOR="$(dotnet --version | cut -d. -f1)"
-    if [ "$DOTNET_MAJOR" -ge 10 ]; then
-        TARGET_FRAMEWORK="net10.0"
-    elif [ "$DOTNET_MAJOR" -ge 9 ]; then
+    if [ "$DOTNET_MAJOR" -ge 9 ]; then
         TARGET_FRAMEWORK="net9.0"
     else
         TARGET_FRAMEWORK="net8.0"

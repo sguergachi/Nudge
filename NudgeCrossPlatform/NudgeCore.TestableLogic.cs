@@ -189,13 +189,13 @@ internal static class NudgeCoreLogic
     // ─── Sway JSON parsing ────────────────────────────────────────────────────
 
     /// <summary>
-    /// Extracts the focused app's <c>app_id</c> from a <c>swaymsg -t get_tree</c>
+    /// Extracts the focused app's <c>app_id</c> and window title from a <c>swaymsg -t get_tree</c>
     /// JSON response.  Falls back to simple string scanning if JSON is malformed.
     /// </summary>
-    internal static string ExtractFocusedAppFromSwayJson(string json)
+    internal static (string app, string title) ExtractFocusedAppFromSwayJson(string json)
     {
         if (string.IsNullOrEmpty(json))
-            return "unknown";
+            return ("unknown", "");
 
         try
         {
@@ -207,32 +207,64 @@ internal static class NudgeCoreLogic
             // Fallback: cheap string scan (handles truncated / non-UTF8 output)
             if (json.Contains("\"focused\":true"))
             {
+                string app = "unknown";
+                string title = "";
+
+                // Try to find app_id (Wayland) or window_properties.class (XWayland)
                 int idx = json.IndexOf("\"app_id\":\"");
+                if (idx == -1) idx = json.IndexOf("\"class\":\"");
+
                 if (idx != -1)
                 {
-                    idx += 10;
-                    int end = json.IndexOf('"', idx);
-                    if (end > idx)
-                        return json.Substring(idx, end - idx);
+                    int start = json.IndexOf('"', idx + 9) + 1;
+                    int end = json.IndexOf('"', start);
+                    if (end > start)
+                        app = json.Substring(start, end - start);
                 }
+
+                // Try to find window name (title)
+                int nameIdx = json.IndexOf("\"name\":\"");
+                if (nameIdx != -1)
+                {
+                    int start = nameIdx + 8;
+                    int end = json.IndexOf('"', start);
+                    if (end > start)
+                        title = json.Substring(start, end - start);
+                }
+
+                return (app, title);
             }
-            return "unknown";
+            return ("unknown", "");
         }
     }
 
     /// <summary>
     /// Recursively searches a Sway tree node for the focused leaf and returns its
-    /// <c>app_id</c>.  Searches <c>nodes</c> and <c>floating_nodes</c>.
+    /// <c>app_id</c> and title.  Searches <c>nodes</c> and <c>floating_nodes</c>.
     /// </summary>
-    internal static string FindFocusedNodeInSwayJson(JsonElement node)
+    internal static (string app, string title) FindFocusedNodeInSwayJson(JsonElement node)
     {
         if (node.TryGetProperty("focused", out var focused) && focused.GetBoolean())
         {
-            if (node.TryGetProperty("app_id", out var appId))
+            string app = "unknown";
+            string title = "";
+
+            if (node.TryGetProperty("app_id", out var appId) && appId.ValueKind == JsonValueKind.String)
             {
-                var id = appId.GetString();
-                return string.IsNullOrEmpty(id) ? "unknown" : id;
+                app = appId.GetString() ?? "unknown";
             }
+            else if (node.TryGetProperty("window_properties", out var props) &&
+                     props.TryGetProperty("class", out var className))
+            {
+                app = className.GetString() ?? "unknown";
+            }
+
+            if (node.TryGetProperty("name", out var name))
+            {
+                title = name.GetString() ?? "";
+            }
+
+            return (app == "" ? "unknown" : app, title);
         }
 
         foreach (string arrayProp in new[] { "nodes", "floating_nodes" })
@@ -242,13 +274,13 @@ internal static class NudgeCoreLogic
                 foreach (var child in children.EnumerateArray())
                 {
                     var result = FindFocusedNodeInSwayJson(child);
-                    if (result != "unknown")
+                    if (result.app != "unknown")
                         return result;
                 }
             }
         }
 
-        return "unknown";
+        return ("unknown", "");
     }
 
     // ─── Quoted-string extraction (used for gdbus / GNOME output) ────────────
