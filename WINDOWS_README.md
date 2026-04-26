@@ -9,12 +9,12 @@ Nudge now supports Windows! This guide explains how to build and run Nudge on Wi
 The build script automatically installs dependencies using **winget** (Windows Package Manager):
 
 1. **winget** - Pre-installed on Windows 10 (version 1809+) and Windows 11
-   - If not available, install from: https://aka.ms/getwinget
-
+  - If not available, install from: [https://aka.ms/getwinget](https://aka.ms/getwinget)
 2. **PowerShell** - Pre-installed on Windows
-   - Used for running the build script
+  - Used for running the build script
 
 When you run `.\build.ps1`, it will automatically:
+
 - Install .NET SDK 9 if not found
 - Install Python 3.12 if not found (required for ML functionality)
 - Install all required Python ML dependencies
@@ -24,14 +24,13 @@ When you run `.\build.ps1`, it will automatically:
 If you prefer manual installation or don't have winget:
 
 1. **.NET SDK 8.0 or later** (required)
-   - Download from: https://dotnet.microsoft.com/download
-   - Or install via winget: `winget install Microsoft.DotNet.SDK.9`
-
+  - Download from: [https://dotnet.microsoft.com/download](https://dotnet.microsoft.com/download)
+  - Or install via winget: `winget install Microsoft.DotNet.SDK.9`
 2. **Python 3.x** (required)
-   - Required for ML functionality
-   - Download from: https://www.python.org/downloads/
-   - Or install via winget: `winget install Python.Python.3.12`
-   - After installing, run: `python -m pip install -r requirements-cpu.txt`
+  - Required for ML functionality
+  - Download from: [https://www.python.org/downloads/](https://www.python.org/downloads/)
+  - Or install via winget: `winget install Python.Python.3.12`
+  - After installing, run: `python -m pip install -r requirements-cpu.txt`
 
 ## Building on Windows
 
@@ -54,16 +53,19 @@ To clean before building:
 ### CLI Mode
 
 Start the tracker:
+
 ```powershell
 .\nudge.exe
 ```
 
 View help:
+
 ```powershell
 .\nudge.exe --help
 ```
 
 Custom snapshot interval (every 2 minutes):
+
 ```powershell
 .\nudge.exe --interval 2
 ```
@@ -71,11 +73,13 @@ Custom snapshot interval (every 2 minutes):
 ### System Tray Mode
 
 Start with system tray icon:
+
 ```powershell
 .\nudge-tray.exe
 ```
 
 With custom interval:
+
 ```powershell
 .\nudge-tray.exe --interval 2
 ```
@@ -96,35 +100,44 @@ Alternatively, in tray mode, a dialog will pop up asking for your response.
 Nudge uses Windows-specific APIs to integrate with the operating system:
 
 ### Window Detection
+
 Uses native Windows API via P/Invoke:
+
 - `GetForegroundWindow()` - Gets the currently active window handle
 - `GetWindowText()` - Retrieves the window title text
 - Implemented in `nudge.cs` with conditional compilation (`#if WINDOWS`)
 
 ### Idle Time Detection
+
 Uses native Windows API:
+
 - `GetLastInputInfo()` - Returns time since last user input (keyboard/mouse)
 - `GetTickCount()` - System uptime for calculating idle duration
 - Returns idle time in milliseconds
 
 ### Notifications
+
 **In Tray Mode (`nudge-tray.exe`):**
+
 - Uses PowerShell scripts to display MessageBox dialogs with Yes/No buttons
 - Runs PowerShell in background to avoid blocking the main UI
 - Sends responses back to main process via UDP (port 45001)
 - Fallback: System tray menu for manual responses
 
 **Implementation Details:**
+
 - Creates temporary PowerShell script with embedded MessageBox code
 - Uses `System.Windows.Forms.MessageBox` for native Windows dialogs
 - Automatically handles button clicks and sends YES/NO responses
 
 ### Data Storage
+
 - Saves activity data to `%TEMP%\HARVEST.CSV`
 - Uses `Path.GetTempPath()` for cross-platform compatibility
 - Same CSV format as Linux version
 
 ### Build System
+
 - `build.ps1` - Native PowerShell build script with automatic dependency installation
 - Uses **winget** to install .NET SDK if not found
 - Auto-detects installed .NET version and uses appropriate target framework
@@ -134,16 +147,19 @@ Uses native Windows API:
 
 ## Differences from Linux Version
 
-| Feature | Linux (Wayland) | Windows 10/11 |
-|---------|----------------|---------------|
-| **Window Detection** | `swaymsg`, `gdbus`, `qdbus` | `GetForegroundWindow()` API |
-| **Idle Time** | D-Bus services | `GetLastInputInfo()` API |
-| **Notifications** | Native DBus with action buttons | PowerShell MessageBox dialogs |
-| **File Paths** | `/tmp/HARVEST.CSV` | `%TEMP%\HARVEST.CSV` |
-| **Build Script** | `build.sh` (Bash) | `build.ps1` (PowerShell) |
-| **Platform Detection** | XDG environment variables | `RuntimeInformation.IsOSPlatform()` |
+
+| Feature                | Linux (Wayland)                 | Windows 10/11                       |
+| ---------------------- | ------------------------------- | ----------------------------------- |
+| **Window Detection**   | `swaymsg`, `gdbus`, `qdbus`     | `GetForegroundWindow()` API         |
+| **Idle Time**          | D-Bus services                  | `GetLastInputInfo()` API            |
+| **Notifications**      | Native DBus with action buttons | PowerShell MessageBox dialogs       |
+| **File Paths**         | `/tmp/HARVEST.CSV`              | `%TEMP%\HARVEST.CSV`                |
+| **Build Script**       | `build.sh` (Bash)               | `build.ps1` (PowerShell)            |
+| **Platform Detection** | XDG environment variables       | `RuntimeInformation.IsOSPlatform()` |
+
 
 ### Implementation Approach
+
 - Uses conditional compilation (`#if WINDOWS`) for platform-specific code
 - No abstractions - direct API calls following Jon Blow's philosophy
 - Platform detection at runtime using `RuntimeInformation.IsOSPlatform(OSPlatform.Windows)`
@@ -169,6 +185,7 @@ If the application crashes:
 ### Notifications Not Showing
 
 If notifications don't appear:
+
 - Tray mode uses MessageBox dialogs which should always work
 - Make sure Windows focus assist isn't blocking dialogs
 - Use the tray menu to manually respond
@@ -179,12 +196,14 @@ If you want to train custom productivity models:
 
 1. Install Python and pip
 2. Install dependencies:
+
 ```powershell
 python -m pip install -r requirements-cpu.txt
 ```
 
-3. Collect data by running Nudge for a few days
-4. Train the model:
+1. Collect data by running Nudge for a few days
+2. Train the model:
+
 ```powershell
 python train_model.py
 ```
@@ -192,6 +211,7 @@ python train_model.py
 ## Technical Implementation Details
 
 ### Platform Detection
+
 ```csharp
 using System.Runtime.InteropServices;
 
@@ -208,6 +228,7 @@ else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
 ### Windows API P/Invoke Declarations
 
 **Window Detection (nudge.cs):**
+
 ```csharp
 [DllImport("user32.dll", SetLastError = true)]
 static extern IntPtr GetForegroundWindow();
@@ -217,6 +238,7 @@ static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder text, int
 ```
 
 **Idle Time Detection (nudge.cs):**
+
 ```csharp
 [StructLayout(LayoutKind.Sequential)]
 struct LASTINPUTINFO
@@ -233,7 +255,9 @@ static extern uint GetTickCount();
 ```
 
 ### Conditional Compilation
+
 Windows-specific code is wrapped with `#if WINDOWS` preprocessor directives:
+
 ```csharp
 #if WINDOWS
     // Windows API calls
@@ -243,6 +267,7 @@ Windows-specific code is wrapped with `#if WINDOWS` preprocessor directives:
 ```
 
 The `WINDOWS` symbol is defined in build.ps1 when creating the project file:
+
 ```xml
 <DefineConstants>WINDOWS</DefineConstants>
 ```
@@ -252,6 +277,7 @@ The `WINDOWS` symbol is defined in build.ps1 when creating the project file:
 Native DBus notifications using Tmds.DBus.Protocol 0.21.0:
 
 **Key Implementation Details (nudge-tray.cs):**
+
 ```csharp
 private static async void ShowDbusNotification()
 {
@@ -284,6 +310,7 @@ private static async void ShowDbusNotification()
 ```
 
 **Why Connection Keep-Alive Matters:**
+
 - Without keeping the connection alive, notifications expire after ~1 second
 - `Task.Delay(-1, cancellationToken)` keeps the DBus connection open
 - The `resident:true` hint only works while the connection is active
@@ -305,12 +332,14 @@ If you encounter issues or have suggestions for improving Windows support, pleas
 
 ## Platform Comparison
 
-| Feature | Linux (Wayland) | Windows 10/11 | macOS |
-|---------|----------------|---------------|-------|
-| Window Detection | ✓ Full support | ✓ Full support | ⚠ Experimental |
-| Idle Time Detection | ✓ Full support | ✓ Full support | ⚠ Experimental |
-| Notifications | ✓ Desktop notifications | ✓ MessageBox dialogs | ⚠ Experimental |
-| Tray Icon | ✓ Supported | ✓ Supported | ✓ Supported |
-| Build System | build.sh | build.ps1 | build.sh |
+
+| Feature             | Linux (Wayland)         | Windows 10/11        | macOS          |
+| ------------------- | ----------------------- | -------------------- | -------------- |
+| Window Detection    | ✓ Full support          | ✓ Full support       | ⚠ Experimental |
+| Idle Time Detection | ✓ Full support          | ✓ Full support       | ⚠ Experimental |
+| Notifications       | ✓ Desktop notifications | ✓ MessageBox dialogs | ⚠ Experimental |
+| Tray Icon           | ✓ Supported             | ✓ Supported          | ✓ Supported    |
+| Build System        | build.sh                | build.ps1            | build.sh       |
+
 
 Legend: ✓ = Fully supported, ⚠ = Experimental/Limited support

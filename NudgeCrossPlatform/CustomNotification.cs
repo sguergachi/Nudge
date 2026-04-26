@@ -32,7 +32,7 @@ namespace NudgeTray
     public class CustomNotificationWindow : Window
     {
         private const string CONFIG_FILE = "nudge-notification-config.json";
-        private const int AUTO_DISMISS_SECONDS = 5;
+        private const int AUTO_DISMISS_SECONDS = 10;
         private Point? _dragStartPosition;
         private bool _isDragging = false;
         private Action<bool?>? _onResponse; // Nullable bool: true=YES, false=NO, null=auto-dismissed
@@ -68,7 +68,7 @@ namespace NudgeTray
             CanResize = false;
             ShowInTaskbar = false;
             WindowStartupLocation = WindowStartupLocation.Manual;
-            SystemDecorations = SystemDecorations.None;
+            WindowDecorations = WindowDecorations.None;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.AcrylicBlur };
             Background = Brushes.Transparent;
             Topmost = true;

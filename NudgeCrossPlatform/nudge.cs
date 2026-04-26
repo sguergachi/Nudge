@@ -79,6 +79,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Tasks;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // BROWSER DETECTION & SITE EXTRACTION - Identify browsers and extract domains
@@ -974,101 +975,11 @@ class Nudge
             return activityScore;
         }
 
-        private (string app, string title) ExtractFocusedAppFromSwayTree(string json)
-        {
-            try
-            {
-                using var doc = JsonDocument.Parse(json);
-                return FindFocusedNode(doc.RootElement);
-            }
-            catch
-            {
-                // Fallback to simple string parsing
-                if (json.Contains("\"focused\":true"))
-                {
-                    int idx = json.IndexOf("\"app_id\":\"");
-                    string app = "unknown";
-                    if (idx != -1)
-                    {
-                        idx += 10;
-                        int end = json.IndexOf("\"", idx);
-                        if (end > idx)
-                            app = json.Substring(idx, end - idx);
-                    }
+        private string ExtractFocusedAppFromSwayTree(string json) =>
+            NudgeCoreLogic.ExtractFocusedAppFromSwayJson(json);
 
-                    // Also try to extract window title
-                    int titleIdx = json.IndexOf("\"name\":\"");
-                    string title = "";
-                    if (titleIdx != -1)
-                    {
-                        titleIdx += 8;
-                        int titleEnd = json.IndexOf("\"", titleIdx);
-                        if (titleEnd > titleIdx)
-                            title = json.Substring(titleIdx, titleEnd - titleIdx);
-                    }
-
-                    return (app, title);
-                }
-                return ("unknown", "");
-            }
-        }
-
-        private (string app, string title) FindFocusedNode(JsonElement node)
-        {
-            if (node.TryGetProperty("focused", out var focused) && focused.GetBoolean())
-            {
-                string? appId = null;
-                string? name = null;
-
-                if (node.TryGetProperty("app_id", out var appIdElem))
-                {
-                    appId = appIdElem.GetString();
-                }
-
-                if (node.TryGetProperty("name", out var nameElem))
-                {
-                    name = nameElem.GetString();
-                }
-
-                if (appId != null)
-                {
-                    return (string.IsNullOrEmpty(appId) ? "unknown" : appId, name ?? "");
-                }
-            }
-
-            if (node.TryGetProperty("nodes", out var nodes))
-            {
-                foreach (var child in nodes.EnumerateArray())
-                {
-                    var result = FindFocusedNode(child);
-                    if (result.app != "unknown")
-                        return result;
-                }
-            }
-
-            if (node.TryGetProperty("floating_nodes", out var floatingNodes))
-            {
-                foreach (var child in floatingNodes.EnumerateArray())
-                {
-                    var result = FindFocusedNode(child);
-                    if (result.app != "unknown")
-                        return result;
-                }
-            }
-
-            return ("unknown", "");
-        }
-
-        private string ExtractQuotedString(string input)
-        {
-            if (string.IsNullOrEmpty(input) || !input.Contains("\""))
-                return "unknown";
-
-            int start = input.IndexOf("\"") + 1;
-            int end = input.IndexOf("\"", start);
-
-            return end > start ? input.Substring(start, end - start) : "unknown";
-        }
+        private string ExtractQuotedString(string input) =>
+            NudgeCoreLogic.ExtractQuotedString(input);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1137,45 +1048,27 @@ class Nudge
 
     static void Main(string[] args)
     {
-        // Parse arguments
-        for (int i = 0; i < args.Length; i++)
+        var parsed = NudgeCoreLogic.ParseNudgeArgs(args);
+        if (parsed.Action == NudgeStartupAction.ShowHelp)
         {
-            var arg = args[i];
-
-            if (arg == "--help" || arg == "-h")
-            {
-                ShowHelp();
-                return;
-            }
-            if (arg == "--version" || arg == "-v")
-            {
-                Console.WriteLine($"Nudge v{VERSION}");
-                return;
-            }
-            if (arg == "--interval" || arg == "-i")
-            {
-                if (i + 1 < args.Length && int.TryParse(args[i + 1], out int minutes))
-                {
-                    SNAPSHOT_INTERVAL_MS = minutes * 60 * 1000;
-                    _customInterval = true;
-                    i++; // Skip the interval value
-                }
-                continue;
-            }
-            if (arg == "--ml")
-            {
-                _mlEnabled = true;
-                continue;
-            }
-            if (arg == "--force-model")
-            {
-                _forceTrainedModel = true;
-                continue;
-            }
-            if (!arg.StartsWith("--") && !arg.StartsWith("-"))
-            {
-                _csvPath = arg;
-            }
+            ShowHelp();
+            return;
+        }
+        if (parsed.Action == NudgeStartupAction.ShowVersion)
+        {
+            Console.WriteLine($"Nudge v{VERSION}");
+            return;
+        }
+        if (parsed.IntervalMinutes is int minutes)
+        {
+            SNAPSHOT_INTERVAL_MS = minutes * 60 * 1000;
+            _customInterval = true;
+        }
+        _mlEnabled = parsed.MlEnabled;
+        _forceTrainedModel = parsed.ForceTrainedModel;
+        if (!string.IsNullOrWhiteSpace(parsed.CsvPath))
+        {
+            _csvPath = parsed.CsvPath;
         }
 
         // Welcome banner
@@ -1922,23 +1815,7 @@ class Nudge
 
     static string RunCommand(string cmd, string args)
     {
-        var psi = new ProcessStartInfo
-        {
-            FileName = cmd,
-            Arguments = args,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        using var process = Process.Start(psi);
-        if (process == null)
-            return "";
-
-        string output = process.StandardOutput.ReadToEnd();
-        process.WaitForExit();
-        return output;
+        return NudgeCoreLogic.RunCommand(cmd, args, timeoutMs: 5000);
     }
 
     static bool CommandExists(string cmd)

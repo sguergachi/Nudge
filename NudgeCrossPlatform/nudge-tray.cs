@@ -63,6 +63,7 @@ namespace NudgeTray
         public static string WhichCommand => IsWindows ? "where" : "which";
 
         public static string PythonCommand => IsWindows ? "python" : "python3";
+        public static string DotnetCommand => IsWindows ? "dotnet.exe" : "dotnet";
     }
 
     class Program
@@ -76,10 +77,18 @@ namespace NudgeTray
         static bool _forceTrainedModel = false;
         static DateTime? _nextSnapshotTime;
         static int _intervalMinutes;
+        static Mutex? _singleInstanceMutex;
+        internal const string SingleInstanceMutexName = NudgeCoreLogic.TraySingleInstanceMutexName;
+        static readonly string _baseDir = AppContext.BaseDirectory;
+        static readonly string _modelDirPath = Path.Combine(_baseDir, "model");
+        static bool _showAnalyticsOnStartup;
+        static bool _verifyAnalyticsScrollOnStartup;
+        static int _analyticsScrollVerificationAttempts;
 
         // Common tray icon for all platforms
         static TrayIcon? _trayIcon;
         static AnalyticsWindow? _analyticsWindow;
+        static NativeMenuItem? _statusItem;
 
 #if WINDOWS
         [DllImport("kernel32.dll")]
@@ -94,6 +103,14 @@ namespace NudgeTray
         [STAThread]
         static void Main(string[] args)
         {
+            bool createdNew;
+            _singleInstanceMutex = new Mutex(true, SingleInstanceMutexName, out createdNew);
+            if (NudgeCoreLogic.ShouldExitForExistingTrayInstance(createdNew))
+            {
+                Console.WriteLine("[WARN] Another nudge-tray instance is already running. Exiting.");
+                return;
+            }
+
             // Add global exception handlers
             AppDomain.CurrentDomain.UnhandledException += (s, e) =>
             {
@@ -173,6 +190,15 @@ namespace NudgeTray
                 {
                     _forceTrainedModel = true;
                 }
+                else if (args[i] == "--show-analytics")
+                {
+                    _showAnalyticsOnStartup = true;
+                }
+                else if (args[i] == "--verify-analytics-scroll")
+                {
+                    _showAnalyticsOnStartup = true;
+                    _verifyAnalyticsScrollOnStartup = true;
+                }
             }
 
             // Print banner
@@ -185,9 +211,6 @@ namespace NudgeTray
             }
             Console.WriteLine("╚═══════════════════════════════════════════════════════╝");
             Console.WriteLine();
-
-            // Clean up any old processes before starting new ones
-            CleanupOldProcesses();
 
             // Start ML services if enabled
             if (_mlEnabled)
@@ -227,7 +250,100 @@ namespace NudgeTray
                     InitializeNotifications();
 #endif
                     CreateTrayIcon();
+
+                    if (_showAnalyticsOnStartup)
+                    {
+                        Dispatcher.UIThread.Post(() =>
+                        {
+                            _analyticsWindow = _verifyAnalyticsScrollOnStartup
+                                ? new AnalyticsWindow(CreateAnalyticsScrollVerificationData())
+                                : new AnalyticsWindow();
+
+                            if (_verifyAnalyticsScrollOnStartup)
+                            {
+                                _analyticsWindow.Opened += (_, __) =>
+                                {
+                                    DispatcherTimer.RunOnce(VerifyAnalyticsScroll, TimeSpan.FromMilliseconds(500));
+                                };
+                            }
+
+                            _analyticsWindow.Show();
+                            _analyticsWindow.Activate();
+                        });
+                    }
                 });
+        }
+
+        static void VerifyAnalyticsScroll()
+        {
+            if (_analyticsWindow == null)
+            {
+                Console.WriteLine("[AnalyticsScrollTest] FAIL window was not created");
+                ShutdownApplication(1);
+                return;
+            }
+
+            double extentHeight = _analyticsWindow.GetScrollExtentHeight();
+            double viewportHeight = _analyticsWindow.GetScrollViewportHeight();
+            if ((extentHeight <= 0 || viewportHeight <= 0) && _analyticsScrollVerificationAttempts < 10)
+            {
+                _analyticsScrollVerificationAttempts++;
+                DispatcherTimer.RunOnce(VerifyAnalyticsScroll, TimeSpan.FromMilliseconds(250));
+                return;
+            }
+
+            bool hasOverflow = _analyticsWindow.HasScrollableOverflow();
+            double beforeOffset = _analyticsWindow.GetScrollOffsetY();
+            bool scrolled = _analyticsWindow.ApplyWheelScrollDelta(-1);
+            double afterOffset = _analyticsWindow.GetScrollOffsetY();
+            bool passed = hasOverflow && scrolled && afterOffset > beforeOffset;
+
+            Console.WriteLine(
+                $"[AnalyticsScrollTest] {(passed ? "PASS" : "FAIL")} " +
+                $"overflow={hasOverflow} extent={extentHeight:F1} viewport={viewportHeight:F1} " +
+                $"before={beforeOffset:F1} after={afterOffset:F1}"
+            );
+
+            ShutdownApplication(passed ? 0 : 1);
+        }
+
+        static void ShutdownApplication(int exitCode)
+        {
+            Environment.ExitCode = exitCode;
+
+            if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+            {
+                desktop.Shutdown(exitCode);
+                return;
+            }
+
+            Environment.Exit(exitCode);
+        }
+
+        static AnalyticsData CreateAnalyticsScrollVerificationData()
+        {
+            var data = new AnalyticsData();
+
+            for (int i = 1; i <= 12; i++)
+            {
+                data.AppUsage[$"app-{i:D2}"] = 15 + i;
+                data.TotalActivityMinutes += 15 + i;
+            }
+
+            for (int hour = 8; hour <= 20; hour++)
+            {
+                var stats = new ProductivityStats
+                {
+                    ProductiveCount = (hour % 3) + 2,
+                    UnproductiveCount = (hour % 2) + 1
+                };
+
+                data.HourlyProductivity[hour] = stats;
+                data.ProductiveMinutes += stats.ProductiveCount;
+                data.UnproductiveMinutes += stats.UnproductiveCount;
+            }
+
+            return data;
         }
 
 
@@ -244,9 +360,11 @@ namespace NudgeTray
             else
             {
                 var nextSnapshot = GetNextSnapshotTime();
-                return nextSnapshot.HasValue
-                    ? $"Next snapshot: {nextSnapshot.Value:HH:mm:ss}"
-                    : "Status: Running...";
+                if (!nextSnapshot.HasValue)
+                    return "Status: Running...";
+
+                var remaining = nextSnapshot.Value - DateTime.Now;
+                return NudgeCoreLogic.FormatCountdown(remaining);
             }
         }
 
@@ -382,13 +500,22 @@ namespace NudgeTray
                     Console.WriteLine($"[WARN] Failed to get status text: {ex.Message}");
                 }
 
-                var statusItem = new NativeMenuItem
+                _statusItem = new NativeMenuItem
                 {
                     Header = statusText,
                     IsEnabled = false
                 };
-                menu.Add(statusItem);
+                menu.Add(_statusItem);
                 Console.WriteLine("[DEBUG] Added status item");
+
+                // Tick every second to keep the countdown live
+                var countdownTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+                countdownTimer.Tick += (_, _) =>
+                {
+                    if (_statusItem != null)
+                        _statusItem.Header = GetMenuStatusText();
+                };
+                countdownTimer.Start();
 
                 // Separator before quit option
                 menu.Add(new NativeMenuItemSeparator());
@@ -485,21 +612,26 @@ namespace NudgeTray
 
         static WindowIcon CreateCommonIcon()
         {
-            // Create icon programmatically using Avalonia rendering
-            // This works on all platforms (Windows, Linux, macOS)
+            // Create a more descriptive "N" icon for Nudge
             var renderBitmap = new RenderTargetBitmap(new PixelSize(32, 32), new Vector(96, 96));
 
             using (var ctx = renderBitmap.CreateDrawingContext())
             {
-                // Clear with transparent background
                 ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, 32, 32));
 
-                // Draw blue circle (same color #5588FF)
+                // Draw a stylized N
+                var pen = new Pen(Brushes.White, 3);
                 var brush = new SolidColorBrush(Color.FromRgb(85, 136, 255));
-                ctx.DrawGeometry(brush, null, new EllipseGeometry(new Rect(2, 2, 28, 28)));
+
+                // Rounded background
+                ctx.DrawRectangle(brush, null, new RoundedRect(new Rect(2, 2, 28, 28), 8));
+
+                // Draw 'N'
+                ctx.DrawLine(pen, new Point(10, 22), new Point(10, 10));
+                ctx.DrawLine(pen, new Point(10, 10), new Point(22, 22));
+                ctx.DrawLine(pen, new Point(22, 22), new Point(22, 10));
             }
 
-            // Save to memory stream as PNG
             var stream = new MemoryStream();
             renderBitmap.Save(stream);
             stream.Position = 0;
@@ -584,7 +716,7 @@ namespace NudgeTray
                     StartInfo = new ProcessStartInfo
                     {
                         FileName = python,
-                        Arguments = "model_inference.py --host 127.0.0.1 --port 45002 --model-dir ./model",
+                        Arguments = $"\"{Path.Combine(_baseDir, "model_inference.py")}\" --host 127.0.0.1 --port 45002 --model-dir \"{_modelDirPath}\"",
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
                         UseShellExecute = false,
@@ -631,7 +763,7 @@ namespace NudgeTray
 
                 // Start background trainer
                 Console.WriteLine("  Starting background trainer...");
-                string trainerArgs = $"background_trainer.py --csv \"{csvPath}\" --model-dir ./model --check-interval 300";
+                string trainerArgs = $"\"{Path.Combine(_baseDir, "background_trainer.py")}\" --csv \"{csvPath}\" --model-dir \"{_modelDirPath}\" --check-interval 300";
                 if (_forceTrainedModel)
                 {
                     trainerArgs += " --min-total-samples 1";
@@ -688,8 +820,12 @@ namespace NudgeTray
 
             try
             {
-                // Determine nudge executable name based on platform
-                string nudgeExe = PlatformConfig.IsWindows ? "nudge.exe" : "./nudge";
+                string nudgeDllPath = Path.Combine(_baseDir, "nudge.dll");
+                if (!File.Exists(nudgeDllPath))
+                {
+                    Console.WriteLine($"✗ nudge assembly not found: {nudgeDllPath}");
+                    Environment.Exit(1);
+                }
 
                 // Build arguments
                 string args = $"--interval {interval}";
@@ -707,8 +843,8 @@ namespace NudgeTray
                 {
                     StartInfo = new ProcessStartInfo
                     {
-                        FileName = nudgeExe,
-                        Arguments = args,
+                        FileName = PlatformConfig.DotnetCommand,
+                        Arguments = $"\"{nudgeDllPath}\" {args}",
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
                         UseShellExecute = false,
@@ -788,23 +924,32 @@ namespace NudgeTray
                 // Create and show custom notification window on Avalonia UI thread (works on all platforms)
                 Dispatcher.UIThread.Post(() =>
                 {
-                    var notificationWindow = new CustomNotificationWindow();
-                    notificationWindow.ShowWithAnimation((productive) =>
+                    try
                     {
+                        var notificationWindow = new CustomNotificationWindow();
+                        notificationWindow.ShowWithAnimation((productive) =>
+                        {
+                            _waitingForResponse = false;
+
+                            // If productive is null, notification was auto-dismissed (no snapshot taken)
+                            if (productive.HasValue)
+                            {
+                                SendResponse(productive.Value);
+                            }
+                            else
+                            {
+                                Console.WriteLine("[DEBUG] Notification auto-dismissed - no response sent");
+                            }
+
+                            // Don't refresh menu after response - not necessary and can cause crashes on Linux
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        // Prevent stale waiting state if UI creation fails.
                         _waitingForResponse = false;
-
-                        // If productive is null, notification was auto-dismissed (no snapshot taken)
-                        if (productive.HasValue)
-                        {
-                            SendResponse(productive.Value);
-                        }
-                        else
-                        {
-                            Console.WriteLine("[DEBUG] Notification auto-dismissed - no response sent");
-                        }
-
-                        // Don't refresh menu after response - not necessary and can cause crashes on Linux
-                    });
+                        Console.WriteLine($"[ERROR] Failed to create custom notification window: {ex.Message}");
+                    }
                 });
 
                 Console.WriteLine("✓ Custom notification shown with animation");
@@ -814,6 +959,7 @@ namespace NudgeTray
             }
             catch (Exception ex)
             {
+                _waitingForResponse = false;
                 Console.WriteLine($"[ERROR] Failed to show custom notification: {ex.Message}");
                 Console.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
             }
@@ -873,7 +1019,7 @@ namespace NudgeTray
 
                 try
                 {
-                    using var connection = new Connection(Address.Session!);
+                    using var connection = new DBusConnection(DBusAddress.Session!);
                     await connection.ConnectAsync().ConfigureAwait(false);
 
                     // Create and send Notify method call
@@ -1111,6 +1257,12 @@ namespace NudgeTray
             Console.WriteLine("✓ Shutdown complete");
             Console.WriteLine("[DEBUG] Exiting nudge-tray...");
 
+            if (_singleInstanceMutex != null)
+            {
+                try { _singleInstanceMutex.ReleaseMutex(); } catch { }
+                _singleInstanceMutex.Dispose();
+            }
+
             Environment.Exit(0);
         }
 
@@ -1154,6 +1306,28 @@ namespace NudgeTray
         public override void Initialize()
         {
             // No XAML needed for headless tray app
+        }
+
+        public override void OnFrameworkInitializationCompleted()
+        {
+            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+            {
+                // Create an invisible main window to keep the app alive on Linux
+                // and ensure proper tray icon display
+                var mainWindow = new Window
+                {
+                    IsVisible = false,
+                    ShowInTaskbar = false,
+                    CanResize = false,
+                    Width = 1,
+                    Height = 1,
+                    Topmost = false
+                };
+
+                desktop.MainWindow = mainWindow;
+            }
+
+            base.OnFrameworkInitializationCompleted();
         }
     }
 }

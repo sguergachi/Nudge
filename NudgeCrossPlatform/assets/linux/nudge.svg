@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Nudge">
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="#5588ff"/>
+  <path d="M20 43V21h6l12 16V21h6v22h-6L26 27v16z" fill="#ffffff"/>
+</svg>

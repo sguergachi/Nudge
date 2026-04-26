@@ -10,6 +10,7 @@
 #   ./build.sh              # Build with auto-detected compiler (installs dependencies)
 #   ./build.sh --clean      # Clean before building
 #   ./build.sh --skip-deps  # Skip automatic dependency installation
+#   ./build.sh --no-run     # Skip auto-launch after build
 #
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -224,6 +225,7 @@ echo
 
 CLEAN=false
 SKIP_DEPS=false
+NO_RUN=false
 
 for arg in "$@"; do
     case "$arg" in
@@ -232,6 +234,9 @@ for arg in "$@"; do
             ;;
         --skip-deps)
             SKIP_DEPS=true
+            ;;
+        --no-run)
+            NO_RUN=true
             ;;
     esac
 done
@@ -242,7 +247,7 @@ done
 
 if [ "$CLEAN" = true ]; then
     info "Cleaning build artifacts..."
-    rm -rf bin obj *.csproj *.exe *.dll *.runtimeconfig.json *.so* runtimes nudge nudge-notify nudge-tray *_build.cs 2>/dev/null || true
+    rm -rf bin obj dist *.csproj *.exe *.dll *.runtimeconfig.json *.so* runtimes nudge nudge-notify nudge-tray *_build.cs assets/windows 2>/dev/null || true
     success "✓ Clean complete"
     echo
 fi
@@ -328,9 +333,15 @@ if [ "$COMPILER" = "dotnet" ]; then
     sed '1{/^#!/d;}' nudge.cs > nudge_build.cs
     sed '1{/^#!/d;}' nudge-notify.cs > nudge-notify_build.cs
 
-    # Detect installed .NET version
-    DOTNET_MAJOR_VERSION=$(dotnet --version | cut -d'.' -f1)
-    TARGET_FRAMEWORK="net${DOTNET_MAJOR_VERSION}.0"
+    # Pick a target framework that exists on the local SDK.
+    DOTNET_MAJOR="$(dotnet --version | cut -d. -f1)"
+    if [ "$DOTNET_MAJOR" -ge 10 ]; then
+        TARGET_FRAMEWORK="net10.0"
+    elif [ "$DOTNET_MAJOR" -ge 9 ]; then
+        TARGET_FRAMEWORK="net9.0"
+    else
+        TARGET_FRAMEWORK="net8.0"
+    fi
 
     dim "  Target framework: ${TARGET_FRAMEWORK}"
 
@@ -347,6 +358,7 @@ if [ "$COMPILER" = "dotnet" ]; then
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="nudge_build.cs" />
+    <Compile Include="NudgeCore.TestableLogic.cs" />
   </ItemGroup>
 </Project>
 EOF
@@ -363,6 +375,7 @@ EOF
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="nudge-notify_build.cs" />
+    <Compile Include="NudgeCore.TestableLogic.cs" />
   </ItemGroup>
 </Project>
 EOF
@@ -375,6 +388,26 @@ EOF
     dotnet build nudge-notify.csproj -c Release -v quiet --nologo
     success "  ✓ nudge-notify"
 
+    # Generate Windows .ico from SVG (16/32/48/256 px layers)
+    dim "  Generating Windows icon..."
+    mkdir -p assets/windows
+    ICO_OK=false
+    if command -v rsvg-convert &>/dev/null && command -v convert &>/dev/null; then
+        for SIZE in 16 32 48 256; do
+            rsvg-convert -w $SIZE -h $SIZE assets/linux/nudge.svg \
+                -o "assets/windows/nudge_${SIZE}.png" 2>/dev/null
+        done
+        convert assets/windows/nudge_16.png assets/windows/nudge_32.png \
+                assets/windows/nudge_48.png assets/windows/nudge_256.png \
+                assets/windows/nudge.ico 2>/dev/null && ICO_OK=true
+        rm -f assets/windows/nudge_{16,32,48,256}.png
+    fi
+    if [ "$ICO_OK" = true ]; then
+        success "  ✓ assets/windows/nudge.ico"
+    else
+        warning "  ⚠ Icon generation failed — rsvg-convert/convert not found"
+    fi
+
     # Create nudge-tray project with Avalonia
     cat > nudge-tray.csproj << EOF
 <Project Sdk="Microsoft.NET.Sdk">
@@ -386,6 +419,7 @@ EOF
     <LangVersion>latest</LangVersion>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationIcon>assets/windows/nudge.ico</ApplicationIcon>
   </PropertyGroup>
 
   <!-- Windows-specific settings -->
@@ -398,13 +432,14 @@ EOF
     <Compile Include="nudge-tray.cs" />
     <Compile Include="CustomNotification.cs" />
     <Compile Include="AnalyticsWindow.cs" />
+    <Compile Include="NudgeCore.TestableLogic.cs" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="11.2.2" />
-    <PackageReference Include="Avalonia.Desktop" Version="11.2.2" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.2" />
-    <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.0" />
+    <PackageReference Include="Avalonia" Version="12.0.1" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.0.1" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.1" />
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.92.0" />
   </ItemGroup>
 
   <!-- Windows-specific packages -->
@@ -458,6 +493,40 @@ EOF
     fi
 
     rm -f nudge_build.cs nudge-notify_build.cs
+
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # PLATFORM BINARIES  (self-contained single-file for linux-x64 + win-x64)
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    echo
+    separator
+    info "Building platform binaries..."
+    echo
+    mkdir -p dist/linux-x64 dist/win-x64
+
+    PUBLISH_FLAGS="-c Release --self-contained -p:PublishSingleFile=true \
+        -p:IncludeNativeLibrariesForSelfExtract=true --nologo -v quiet"
+
+    dim "  Publishing linux-x64..."
+    dotnet publish nudge-tray.csproj -r linux-x64 -o dist/linux-x64 $PUBLISH_FLAGS \
+        2>&1 | grep -v "^$" | grep -v "^Build succeeded" || true
+    if [ -f "dist/linux-x64/nudge-tray" ]; then
+        chmod +x dist/linux-x64/nudge-tray
+        LINUX_SIZE=$(du -h dist/linux-x64/nudge-tray | cut -f1)
+        success "  ✓ dist/linux-x64/nudge-tray (${LINUX_SIZE})"
+    else
+        warning "  ⚠ linux-x64 binary not produced"
+    fi
+
+    dim "  Publishing win-x64..."
+    dotnet publish nudge-tray.csproj -r win-x64 -o dist/win-x64 $PUBLISH_FLAGS \
+        2>&1 | grep -v "^$" | grep -v "^Build succeeded" || true
+    if [ -f "dist/win-x64/nudge-tray.exe" ]; then
+        WIN_SIZE=$(du -h dist/win-x64/nudge-tray.exe | cut -f1)
+        success "  ✓ dist/win-x64/nudge-tray.exe (${WIN_SIZE})"
+    else
+        warning "  ⚠ win-x64 binary not produced"
+    fi
 
 elif [ "$COMPILER" = "mono" ]; then
     info "Building with Mono..."
@@ -524,3 +593,17 @@ info "Respond to snapshots (CLI mode):"
 echo -e "  ${BGREEN}./nudge-notify YES${RESET}         # I was productive"
 echo -e "  ${BYELLOW}./nudge-notify NO${RESET}          # I was not productive"
 echo
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# LAUNCH
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+if [ "$NO_RUN" = false ] && [ -f "./nudge-tray" ] && [ -x "./nudge-tray" ]; then
+    separator
+    info "Launching Nudge..."
+    ./nudge-tray &
+    LAUNCH_PID=$!
+    success "  ✓ nudge-tray launched (PID ${LAUNCH_PID})"
+    separator
+    echo
+fi

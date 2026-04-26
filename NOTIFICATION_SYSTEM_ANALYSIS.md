@@ -9,17 +9,21 @@ The Nudge system is a cross-platform productivity tracker that sends periodic no
 ## 1. NOTIFICATION CREATION & DISPLAY
 
 ### Entry Point
+
 **File:** `/home/user/Nudge/NudgeCrossPlatform/nudge-tray.cs`
+
 - **Function:** `ShowSnapshotNotification()` (Line 580-612)
 - **Trigger:** When nudge.cs sends "SNAPSHOT" message on stdout
 
 ### Flow:
+
 1. nudge.cs detects snapshot interval reached or ML trigger
 2. nudge.cs prints "SNAPSHOT" to stdout (Line 1164)
 3. nudge-tray.cs captures stdout and calls ShowSnapshotNotification()
 4. ShowSnapshotNotification() dispatches to platform-specific implementation
 
 **Trigger Detection Code:**
+
 ```csharp
 // nudge-tray.cs, Lines 547-551
 if (e.Data.Trim() == "SNAPSHOT")
@@ -38,11 +42,13 @@ if (e.Data.Trim() == "SNAPSHOT")
 **Lines:** 620-658
 
 **Key Components:**
+
 - **Initialization:** Lines 229-243 (`InitializeNotifications()`)
 - **Display:** Lines 621-658 (`ShowWindowsNotification()`)
 - **Handler:** Lines 245-295 (`OnNotificationActivated()`)
 
 **Implementation Details:**
+
 ```csharp
 // Register notification handler
 ToastNotificationManagerCompat.OnActivated += OnNotificationActivated;
@@ -70,10 +76,12 @@ new ToastContentBuilder()
 **Lines:** 662-805
 
 **Key Components:**
+
 - **Primary Method:** Lines 665-781 (`ShowDbusNotification()`)
 - **Fallback Method:** Lines 783-805 (`ShowFallbackNotification()`)
 
 **Implementation Details:**
+
 ```csharp
 // Native DBus notification with resident:true hint
 // Lines 695-709: Sets up notification with hints dictionary
@@ -99,6 +107,7 @@ writer.WriteArray(new string[] { "yes", "Yes - Productive", "no", "No - Not Prod
 **Library Used:** `Tmds.DBus.Protocol`
 
 **Fallback Method:**
+
 ```csharp
 // Lines 787-799
 notify-send -u critical -t 60000 "Nudge - Productivity Check" \
@@ -114,6 +123,7 @@ notify-send -u critical -t 60000 "Nudge - Productivity Check" \
 **Response Port:** 45001 (constant defined in both files)
 
 **Files Involved:**
+
 1. **nudge-notify.cs** - Client that sends responses
 2. **nudge.cs** - Server that listens for responses
 3. **nudge-tray.cs** - Bridges notifications to response sending
@@ -149,6 +159,7 @@ static int SendResponse(string response)
 ```
 
 **Response Validation:** Lines 90-100
+
 - Accepts: "YES" or "NO" (case-insensitive)
 - Rejects: Any other input
 - Port: 45001
@@ -194,6 +205,7 @@ static void RunUDPListener()
 ```
 
 **Listener Startup:** Lines 1212-1219
+
 - Started on background thread during initialization
 - Listens continuously on port 45001
 - Port conflict detection with error handling (Lines 1264-1268)
@@ -203,6 +215,7 @@ static void RunUDPListener()
 **File:** `/home/user/Nudge/NudgeCrossPlatform/nudge-tray.cs`
 
 **Windows Bridge:** Lines 245-295 (`OnNotificationActivated()`)
+
 ```csharp
 static void OnNotificationActivated(ToastNotificationActivatedEventArgsCompat e)
 {
@@ -225,6 +238,7 @@ static void OnNotificationActivated(ToastNotificationActivatedEventArgsCompat e)
 ```
 
 **Linux Bridge:** Lines 740-765 (DBus listener)
+
 ```csharp
 (Exception? ex, (uint id, string actionKey) signal, object? readerState, object? handlerState) =>
 {
@@ -247,6 +261,7 @@ static void OnNotificationActivated(ToastNotificationActivatedEventArgsCompat e)
 ```
 
 **Send Response Function:** Lines 811-826
+
 ```csharp
 public static void SendResponse(bool productive)
 {
@@ -312,6 +327,7 @@ interface IPlatformService
 **Lines:** 185-248
 
 **Key Features:**
+
 - Uses Windows API P/Invoke calls
 - P/Invoke declarations: Lines 162-179
   - `GetForegroundWindow()` - Get active window handle
@@ -320,6 +336,7 @@ interface IPlatformService
   - `GetTickCount()` - System tick count
 
 **Methods:**
+
 - `GetForegroundApp()` (Lines 194-221) - Returns window title
 - `GetIdleTime()` (Lines 223-247) - Returns idle milliseconds
 - Includes 500ms caching for app changes, 100ms for idle time
@@ -330,11 +347,13 @@ interface IPlatformService
 **Lines:** 250-734
 
 **Key Features:**
+
 - Supports multiple compositors/desktop environments
-- Uses SearchValues<T> optimization for process detection (.NET 9)
-- Performance optimizations with Span<T> and CompositeFormat
+- Uses SearchValues optimization for process detection (.NET 9)
+- Performance optimizations with Span and CompositeFormat
 
 **Supported Desktop Environments:**
+
 ```csharp
 DetectCompositor() returns:
 - "sway"      - via swaymsg command
@@ -344,6 +363,7 @@ DetectCompositor() returns:
 ```
 
 **Methods by Desktop:**
+
 - **Sway:** `GetSwayFocusedApp()` (Lines 374-385)
 - **GNOME:** `GetGnomeFocusedApp()` (Lines 387-402)
 - **KDE:** `GetKDEFocusedApp()` (Lines 404-450)
@@ -351,6 +371,7 @@ DetectCompositor() returns:
 - **Process-based (KDE Wayland):** `DetectActiveProcessKDE()` (Lines 556-622)
 
 **Idle Time Methods:**
+
 - `GetFreedesktopIdleTime()` (Lines 471-511) - qdbus/gdbus
 - `GetGnomeIdleTime()` (Lines 513-536) - GNOME-specific
 - `GetX11IdleTime()` (Lines 538-554) - xprintidle utility
@@ -360,6 +381,7 @@ DetectCompositor() returns:
 **File:** `/home/user/Nudge/NudgeCrossPlatform/nudge-tray.cs`
 
 **Windows Tray Icon:** Lines 216-227
+
 ```csharp
 static void CreateTrayIcon()
 {
@@ -374,6 +396,7 @@ static void CreateTrayIcon()
 ```
 
 **Linux Tray Icon (Avalonia):** Lines 324-347
+
 ```csharp
 static void CreateTrayIcon()
 {
@@ -388,6 +411,7 @@ static void CreateTrayIcon()
 ```
 
 **Tray Icon Status Menu:** Lines 180-193
+
 ```csharp
 static string GetMenuStatusText()
 {
@@ -437,6 +461,7 @@ static class PlatformConfig
 **Lines:** 797-838
 
 **Available Options:**
+
 - `--help, -h` - Show help
 - `--version, -v` - Show version
 - `--interval N` - Snapshot interval in minutes (default: 5, random 5-10)
@@ -445,6 +470,7 @@ static class PlatformConfig
 - `[csv-path]` - Custom CSV output path
 
 **Example:**
+
 ```bash
 nudge --interval 2 --ml /data/harvest.csv
 ```
@@ -453,14 +479,16 @@ nudge --interval 2 --ml /data/harvest.csv
 
 **File:** `/home/user/Nudge/NudgeCrossPlatform/nudge.cs`
 
-| Parameter | Lines | Type | Default | Purpose |
-|-----------|-------|------|---------|---------|
-| `SNAPSHOT_INTERVAL_MS` | 120 | int | 5-10 min (random) | Time between snapshots |
-| `_customInterval` | 121 | bool | false | Track custom interval |
-| `RESPONSE_TIMEOUT_MS` | 118 | const | 60,000ms | Response wait time |
-| `UDP_PORT` | 117 | const | 45001 | Response listener port |
-| `ML_CONFIDENCE_THRESHOLD` | 125 | const | 0.98 | ML decision threshold |
-| `MIN_SAMPLES_THRESHOLD` | 126 | const | 100 | Min ML training samples |
+
+| Parameter                 | Lines | Type  | Default           | Purpose                 |
+| ------------------------- | ----- | ----- | ----------------- | ----------------------- |
+| `SNAPSHOT_INTERVAL_MS`    | 120   | int   | 5-10 min (random) | Time between snapshots  |
+| `_customInterval`         | 121   | bool  | false             | Track custom interval   |
+| `RESPONSE_TIMEOUT_MS`     | 118   | const | 60,000ms          | Response wait time      |
+| `UDP_PORT`                | 117   | const | 45001             | Response listener port  |
+| `ML_CONFIDENCE_THRESHOLD` | 125   | const | 0.98              | ML decision threshold   |
+| `MIN_SAMPLES_THRESHOLD`   | 126   | const | 100               | Min ML training samples |
+
 
 ### CSV Data Storage
 
@@ -468,16 +496,19 @@ nudge --interval 2 --ml /data/harvest.csv
 **Lines:** 1110-1140
 
 **CSV Header:** Line 1127
+
 ```csv
 foreground_app,idle_time,time_last_request,productive
 ```
 
 **CSV Row Format:** Line 1189
+
 ```csv
 <app_hash>,<idle_ms>,<attention_ms>,<productive_bool>
 ```
 
 **Path Configuration:**
+
 - **Windows:** `Path.Combine(Path.GetTempPath(), "HARVEST.CSV")`
 - **Linux:** `/tmp/HARVEST.CSV`
 - **Custom:** Via command-line argument
@@ -493,57 +524,55 @@ foreground_app,idle_time,time_last_request,productive
 ### Why Positions are Not Configurable Currently
 
 1. **Windows:** Uses native Windows Toast notifications (ToastContentBuilder)
-   - Position is controlled by Windows 10+ notification system
-   - Not customizable from application code
-   - Windows manages positioning automatically
-
+  - Position is controlled by Windows 10+ notification system
+  - Not customizable from application code
+  - Windows manages positioning automatically
 2. **Linux:** Uses native DBus notifications
-   - Position is controlled by the desktop environment's notification daemon
-   - Not customizable from application code
-   - Each DE (GNOME, KDE, Cinnamon) has its own position settings
-
+  - Position is controlled by the desktop environment's notification daemon
+  - Not customizable from application code
+  - Each DE (GNOME, KDE, Cinnamon) has its own position settings
 3. **Tray Icon Menu:** Has no position configuration
-   - Positioned relative to taskbar/system tray
-   - Controlled by OS
+  - Positioned relative to taskbar/system tray
+  - Controlled by OS
 
 ### Opportunity for Custom Implementation
 
 To add notification position configuration, you would need to:
 
 1. **Replace native notifications with custom windows**
-   - Windows: Create custom WinForms/WPF window instead of Toast
-   - Linux: Create custom Avalonia window instead of DBus notification
-
+  - Windows: Create custom WinForms/WPF window instead of Toast
+  - Linux: Create custom Avalonia window instead of DBus notification
 2. **Store position settings in configuration file**
-   - Suggested: JSON file in `%APPDATA%/Nudge/` (Windows) or `~/.config/nudge/` (Linux)
-   - Format:
-     ```json
-     {
-       "notification": {
-         "position": "top-right",
-         "x": 100,
-         "y": 100,
-         "width": 400,
-         "height": 150
-       }
-     }
-     ```
-
+  - Suggested: JSON file in `%APPDATA%/Nudge/` (Windows) or `~/.config/nudge/` (Linux)
+  - Format:
+    ```json
+    {
+      "notification": {
+        "position": "top-right",
+        "x": 100,
+        "y": 100,
+        "width": 400,
+        "height": 150
+      }
+    }
+    ```
 3. **Add configuration UI or CLI arguments**
-   - Command-line: `--notification-position top-right`
-   - Configuration file: Manual JSON editing
-   - GUI settings panel in tray icon menu
+  - Command-line: `--notification-position top-right`
+  - Configuration file: Manual JSON editing
+  - GUI settings panel in tray icon menu
 
 ---
 
 ## KEY FILES SUMMARY
 
-| File | Purpose | Key Lines |
-|------|---------|-----------|
-| **nudge.cs** | Core tracker: snapshot timing, response listening, data collection | 797-884 (config), 1212-1279 (UDP listener), 1142-1180 (snapshot) |
-| **nudge-notify.cs** | CLI tool to send YES/NO responses | 110-162 (send), 80-100 (validation) |
-| **nudge-tray.cs** | System tray GUI and notifications | 580-612 (display), 621-658 (Windows), 665-781 (Linux) |
-| **PlatformConfig** | Platform detection and paths | nudge.cs:94-107, nudge-tray.cs:41-54 |
+
+| File                | Purpose                                                            | Key Lines                                                        |
+| ------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| **nudge.cs**        | Core tracker: snapshot timing, response listening, data collection | 797-884 (config), 1212-1279 (UDP listener), 1142-1180 (snapshot) |
+| **nudge-notify.cs** | CLI tool to send YES/NO responses                                  | 110-162 (send), 80-100 (validation)                              |
+| **nudge-tray.cs**   | System tray GUI and notifications                                  | 580-612 (display), 621-658 (Windows), 665-781 (Linux)            |
+| **PlatformConfig**  | Platform detection and paths                                       | nudge.cs:94-107, nudge-tray.cs:41-54                             |
+
 
 ---
 
@@ -597,17 +626,19 @@ SaveSnapshot() [Line 1182]:
 
 ## CONSTANTS & MAGIC NUMBERS
 
-| Constant | File | Line | Value | Purpose |
-|----------|------|------|-------|---------|
-| `UDP_PORT` | nudge.cs | 117 | 45001 | Response listening port |
-| `RESPONSE_TIMEOUT_MS` | nudge.cs | 118 | 60000 | Response wait before timeout |
-| `SNAPSHOT_INTERVAL_MS` | nudge.cs | 120 | 5-10 min | Interval between snapshots |
-| `CYCLE_MS` | nudge.cs | 116 | 1000 | Main loop cycle time |
-| `ML_CONFIDENCE_THRESHOLD` | nudge.cs | 125 | 0.98 | 98% confidence required |
-| `MIN_SAMPLES_THRESHOLD` | nudge.cs | 126 | 100 | Min samples for ML model |
-| `ML_HOST` | nudge.cs | 127 | 127.0.0.1 | ML inference server |
-| `ML_PORT` | nudge.cs | 128 | 45002 | ML inference port |
-| `HOST` | nudge-notify.cs | 34 | 127.0.0.1 | UDP target host |
-| `PORT` | nudge-notify.cs | 35 | 45001 | UDP target port |
-| `TIMEOUT_MS` | nudge-notify.cs | 36 | 5000 | UDP timeout |
+
+| Constant                  | File            | Line | Value     | Purpose                      |
+| ------------------------- | --------------- | ---- | --------- | ---------------------------- |
+| `UDP_PORT`                | nudge.cs        | 117  | 45001     | Response listening port      |
+| `RESPONSE_TIMEOUT_MS`     | nudge.cs        | 118  | 60000     | Response wait before timeout |
+| `SNAPSHOT_INTERVAL_MS`    | nudge.cs        | 120  | 5-10 min  | Interval between snapshots   |
+| `CYCLE_MS`                | nudge.cs        | 116  | 1000      | Main loop cycle time         |
+| `ML_CONFIDENCE_THRESHOLD` | nudge.cs        | 125  | 0.98      | 98% confidence required      |
+| `MIN_SAMPLES_THRESHOLD`   | nudge.cs        | 126  | 100       | Min samples for ML model     |
+| `ML_HOST`                 | nudge.cs        | 127  | 127.0.0.1 | ML inference server          |
+| `ML_PORT`                 | nudge.cs        | 128  | 45002     | ML inference port            |
+| `HOST`                    | nudge-notify.cs | 34   | 127.0.0.1 | UDP target host              |
+| `PORT`                    | nudge-notify.cs | 35   | 45001     | UDP target port              |
+| `TIMEOUT_MS`              | nudge-notify.cs | 36   | 5000      | UDP timeout                  |
+
 
