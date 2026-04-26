@@ -359,6 +359,7 @@ cp "bin/Release/$MAIN_TFM/nudge-notify" ./
 cp "bin/Release/$MAIN_TFM/nudge-notify.dll" ./
 cp "bin/Release/$MAIN_TFM/nudge-notify.runtimeconfig.json" ./
 cp "bin/Release/$LOCAL_TRAY_TFM/publish/nudge-tray" ./
+chmod +x ./nudge ./nudge-notify ./nudge-tray
 cp "bin/Release/$LOCAL_TRAY_TFM/publish"/*.dll ./
 cp "bin/Release/$LOCAL_TRAY_TFM/publish"/*.json ./
 cp "bin/Release/$LOCAL_TRAY_TFM/publish"/*.so* ./ 2>/dev/null || true
