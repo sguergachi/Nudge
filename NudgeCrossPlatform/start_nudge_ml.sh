@@ -76,7 +76,7 @@ check_command dotnet || deps_ok=false
 if ! $deps_ok; then
     error "Missing dependencies. Please install:"
     echo "  - Python 3.8+"
-    echo "  - .NET 8.0+"
+    echo "  - .NET 10.0+"
     exit 1
 fi
 

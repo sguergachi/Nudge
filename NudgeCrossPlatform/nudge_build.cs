@@ -24,50 +24,17 @@
 //
 // Requirements:
 //   - Windows 10+, or Linux with Wayland/X11 (Sway, GNOME, KDE, Cinnamon)
-//   - .NET 9.0 or later
+//   - .NET 10.0 SDK/runtime
 //
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// .NET 9 OPTIMIZATIONS APPLIED:
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//
-// Performance improvements leveraging .NET 9 features:
-//
-// 1. SearchValues<T> (Lines 190-204, 590, 599)
-//    - Fast string matching for process filtering (O(1) vs O(n) LINQ)
-//    - Used for system process names and Nudge process detection
-//    - Up to 10x faster than traditional Contains/Any operations
-//    - Applied in hot path: KDE Wayland process detection loop
-//
-// 2. ReadOnlySpan<T> (Lines 587, 594-596)
-//    - Zero-allocation string processing in KDE process detection
-//    - Efficient parsing of /proc filesystem data
-//    - Reduces GC pressure in tight loops scanning processes
-//
-// 3. Collection Expressions (Lines 191-196, 200-203, 703)
-//    - Modern syntax: [] instead of new List<>()
-//    - Cleaner, more readable code with same performance
-//    - C# 13 feature fully supported in .NET 9
-//
-// 4. CompositeFormat (Lines 706-711)
-//    - Pre-compiled format strings for repeated log messages
-//    - Faster than string interpolation in hot paths
-//    - Used in app switching and ML prediction logs
-//
-// 5. Cached JsonSerializerOptions (Lines 714-719, 1258, 1270)
-//    - Reused JSON settings eliminate per-call overhead
-//    - ~35% faster JSON serialization in .NET 9
-//    - Configured for optimal performance (no indentation, snake_case)
-//
-// Expected performance gains:
-// - Process detection: 30-50% faster (SearchValues + Span)
-// - ML predictions: 20-35% faster (JSON + CompositeFormat)
-// - Memory allocations: 40-60% reduction (Span usage)
-// - Overall runtime: 15-25% improvement in typical scenarios
+// Hot paths keep the same direct architecture, but a few hot spots are tighter now:
+// - Browser title parsing uses cached lookup tables and span-based token scanning.
+// - KDE Wayland /proc scanning streams process directories and parses cmdline/stat data in place.
+// - ML JSON payloads use source-generated metadata instead of runtime reflection.
 //
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 using System;
-using System.Buffers;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -81,243 +48,6 @@ using System.Threading;
 using System.Threading.Tasks;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// BROWSER DETECTION & SITE EXTRACTION - Identify browsers and extract domains
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-static class BrowserDetector
-{
-    // Identifiers for browser process names
-    private static readonly string[] BrowserProcessNames =
-    [
-        "chrome", "chromium", "firefox", "edge", "brave", "opera", "vivaldi",
-        "safari", "browser", "chromium-browser", "google-chrome", "mozilla"
-    ];
-
-    // Known browser suffixes that appear at the end of window titles
-    private static readonly string[] BrowserSuffixes =
-    [
-        " - Google Chrome", " - Chrome", " - Microsoft Edge",
-        " - Mozilla Firefox", " - Firefox", " - Brave",
-        " - Opera", " - Vivaldi", " - Chromium",
-        " : Google Chrome", " : Chrome", " : Microsoft Edge",
-        " : Mozilla Firefox", " : Firefox", " : Brave"
-    ];
-
-    // Common site patterns for known sites that may appear in different formats
-    private static readonly Dictionary<string, string> KnownSites = new(StringComparer.OrdinalIgnoreCase)
-    {
-        // Productive sites
-        { "github.com", "GitHub" },
-        { "stackoverflow.com", "Stack Overflow" },
-        { "stackexchange.com", "Stack Exchange" },
-        { "gitlab.com", "GitLab" },
-        { "bitbucket.org", "Bitbucket" },
-        { "youtube.com", "YouTube" },
-        { "reddit.com", "Reddit" },
-        { "twitter.com", "Twitter" },
-        { "x.com", "X (Twitter)" },
-        { "linkedin.com", "LinkedIn" },
-        { "docs.google.com", "Google Docs" },
-        { "drive.google.com", "Google Drive" },
-        { "notion.so", "Notion" },
-        { "figma.com", "Figma" },
-        { "linear.app", "Linear" },
-        { "jira.atlassian.com", "Jira" },
-        { "confluence.atlassian.com", "Confluence" },
-        { "slack.com", "Slack" },
-        { "discord.com", "Discord" },
-        { "zoom.us", "Zoom" },
-        { "meet.google.com", "Google Meet" },
-        { "office.com", "Microsoft Office" },
-        { "outlook.office.com", "Outlook" },
-        { "mail.google.com", "Gmail" },
-        { "chat.openai.com", "ChatGPT" },
-        { "claude.ai", "Claude" },
-        { "copilot.microsoft.com", "GitHub Copilot" },
-        // Distracting sites
-        { "news.ycombinator.com", "Hacker News" },
-        { "instagram.com", "Instagram" },
-        { "facebook.com", "Facebook" },
-        { "tiktok.com", "TikTok" },
-        { "netflix.com", "Netflix" },
-        { "twitch.tv", "Twitch" },
-        { "amazon.com", "Amazon" },
-        { "ebay.com", "eBay" }
-    };
-
-    public static bool IsBrowser(string? processName)
-    {
-        if (string.IsNullOrEmpty(processName))
-            return false;
-
-        foreach (var browser in BrowserProcessNames)
-        {
-            if (processName.Contains(browser, StringComparison.OrdinalIgnoreCase))
-                return true;
-        }
-        return false;
-    }
-
-    public static string? ExtractSite(string title)
-    {
-        if (string.IsNullOrEmpty(title))
-            return null;
-
-        // Strategy 1: Remove known browser suffixes and check what's left
-        string cleanedTitle = title;
-        foreach (var suffix in BrowserSuffixes)
-        {
-            if (cleanedTitle.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-            {
-                cleanedTitle = cleanedTitle[..^suffix.Length];
-                break;
-            }
-        }
-
-        // Strategy 2: Look for domain-like patterns in the cleaned title
-        // Domains typically: contain dots, no spaces, reasonable length
-        var parts = cleanedTitle.Split(new[] { ' ', '-', '—', '–', '|', '/', '\\' },
-            StringSplitOptions.RemoveEmptyEntries);
-
-        foreach (var part in parts)
-        {
-            var trimmed = part.Trim();
-            // Check if it looks like a domain (has dots, reasonable length)
-            if (trimmed.Contains('.') && trimmed.Length >= 4 && trimmed.Length <= 100)
-            {
-                // Validate it looks like a real domain
-                if (IsLikelyDomain(trimmed))
-                {
-                    return NormalizeDomain(trimmed);
-                }
-            }
-        }
-
-        // Strategy 3: Check if cleaned title itself is a domain
-        if (cleanedTitle.Contains('.') && IsLikelyDomain(cleanedTitle))
-        {
-            return NormalizeDomain(cleanedTitle);
-        }
-
-        // Strategy 4: Match against known sites dictionary
-        foreach (var kvp in KnownSites)
-        {
-            if (title.Contains(kvp.Key, StringComparison.OrdinalIgnoreCase))
-            {
-                return kvp.Key;
-            }
-        }
-
-        // Strategy 5: Return shortest significant part (often the site name)
-        // This handles titles like "Issue #123 - repo-name - GitHub"
-        if (parts.Length > 0)
-        {
-            var significantParts = parts.Where(p => p.Length > 2 && !IsCommonWord(p)).ToList();
-            if (significantParts.Count > 0)
-            {
-                // Return the shortest meaningful part (often the domain or site name)
-                var sitePart = significantParts.OrderBy(p => p.Length).First();
-                if (sitePart.Length <= 50 && IsLikelyDomain(sitePart))
-                {
-                    return NormalizeDomain(sitePart);
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private static bool IsLikelyDomain(string text)
-    {
-        if (string.IsNullOrEmpty(text) || text.Length < 4 || text.Length > 100)
-            return false;
-
-        // Must have at least one dot
-        if (!text.Contains('.'))
-            return false;
-
-        // Should not have multiple consecutive dots
-        if (text.Contains(".."))
-            return false;
-
-        // Should not start or end with dots (after trim)
-        var trimmed = text.Trim();
-        if (trimmed.StartsWith('.') || trimmed.EndsWith('.'))
-            return false;
-
-        // Should not have spaces
-        if (trimmed.Contains(' '))
-            return false;
-
-        // Check for valid domain characters (alphanumeric, dots, hyphens)
-        foreach (char c in trimmed)
-        {
-            if (!char.IsLetterOrDigit(c) && c != '.' && c != '-' && c != '/' && c != ':')
-                return false;
-        }
-
-        return true;
-    }
-
-    private static string NormalizeDomain(string domain)
-    {
-        // Remove protocol if present
-        var normalized = domain.ToLowerInvariant().Trim();
-        if (normalized.StartsWith("https://"))
-            normalized = normalized[8..];
-        if (normalized.StartsWith("http://"))
-            normalized = normalized[7..];
-
-        // Remove trailing slashes and paths beyond root
-        int slashIndex = normalized.IndexOf('/');
-        if (slashIndex > 0)
-            normalized = normalized[..slashIndex];
-
-        // Remove port if present (usually :443 or :80)
-        int colonIndex = normalized.IndexOf(':');
-        if (colonIndex > 0)
-            normalized = normalized[..colonIndex];
-
-        // Remove www. prefix for cleaner display
-        if (normalized.StartsWith("www."))
-            normalized = normalized[4..];
-
-        return normalized;
-    }
-
-    private static bool IsCommonWord(string text)
-    {
-        // Words that are too generic to be useful as site names
-        var common = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "the", "and", "for", "are", "but", "not", "you", "all", "can",
-            "her", "was", "one", "our", "out", "new", "has", "his", "how",
-            "its", "may", "see", "now", "old", "see", "way", "who", "boy",
-            "did", "get", "let", "put", "say", "she", "too", "use", "tab",
-            "page", "new", "edit", "view", "file", "data", "home", "search",
-            "settings", "profile", "account", "dashboard", "overview"
-        };
-        return common.Contains(text);
-    }
-
-    public static string GetAppAndSite(string? processName, string title)
-    {
-        if (!IsBrowser(processName))
-            return title;
-
-        var site = ExtractSite(title);
-        if (!string.IsNullOrEmpty(site))
-        {
-            // Format: "Chrome (github.com)"
-            return $"{char.ToUpper(processName![0]) + processName[1..]} ({site})";
-        }
-
-        // Return browser name without site info if we couldn't extract one
-        return char.ToUpper(processName![0]) + processName[1..];
-    }
-}
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // PLATFORM SERVICE IMPLEMENTATIONS
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -327,34 +57,6 @@ interface IPlatformService
     (string app, string title) GetForegroundAppWithTitle();
     int GetIdleTime();
     string PlatformName { get; }
-}
-
-static class PlatformConfig
-{
-    public static bool IsWindows => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
-    public static bool IsLinux => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
-    public static bool IsMacOS => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
-
-    public static string CsvPath
-    {
-        get
-        {
-            string homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            string nudgeDir = Path.Combine(homeDir, ".nudge");
-
-            // Create directory if it doesn't exist
-            if (!Directory.Exists(nudgeDir))
-            {
-                Directory.CreateDirectory(nudgeDir);
-            }
-
-            return Path.Combine(nudgeDir, "HARVEST.CSV");
-        }
-    }
-
-    public static string WhichCommand => IsWindows ? "where" : "which";
-
-    public static string PythonCommand => IsWindows ? "python" : "python3";
 }
 
 class Nudge
@@ -371,7 +73,6 @@ class Nudge
 
     static int SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;  // Random 5-10 minutes (configurable)
     static bool _customInterval = false;  // Track if user specified custom interval
-    static Random _random = new Random();
 
     // ML-powered adaptive notifications
     const int ML_CHECK_INTERVAL_MS = 60 * 1000;  // Check ML every 1 minute
@@ -533,20 +234,25 @@ class Nudge
         private int _cachedIdle = 0;
         private DateTime _idleCacheExpiry = DateTime.MinValue;
 
-        // System process names to ignore
-        private static readonly string[] SystemProcessNames =
-        [
+        private static readonly FrozenSet<string> SystemProcessNames = new[]
+        {
             "kwin_wayland", "kwin_x11", "plasmashell", "kded5", "kded6",
             "kglobalaccel", "ksmserver", "systemd", "dbus-daemon",
             "kwalletd5", "kwalletd6", "baloo_file", "agent", "polkit",
             "xdg-desktop-portal", "xdg-document-portal", "xdg-permission-store"
+        }.ToFrozenSet(StringComparer.Ordinal);
+
+        private static readonly byte[][] NudgeProcessPatternBytes =
+        [
+            "background_trainer"u8.ToArray(),
+            "model_inference"u8.ToArray(),
+            "nudge-tray"u8.ToArray(),
+            "/Nudge/"u8.ToArray(),
+            "NudgeCrossPlatform"u8.ToArray()
         ];
 
-        private static readonly string[] NudgeProcessNames =
-        [
-            "background_trainer", "model_inference", "nudge-tray",
-            "/Nudge/", "NudgeCrossPlatform"
-        ];
+        private static readonly byte[] WaylandDisplayBytes = "WAYLAND_DISPLAY"u8.ToArray();
+        private static readonly byte[] DisplayBytes = "DISPLAY="u8.ToArray();
 
         public string PlatformName => _compositor;
 
@@ -869,60 +575,35 @@ class Nudge
 
         private string DetectActiveProcessKDE()
         {
-            // Process-based detection for KDE Wayland (simplified)
             try
             {
-                var candidates = new List<(string name, long cpuTime)>();
-                var procDirs = Directory.GetDirectories("/proc");
+                string bestProcessName = "";
+                long bestActivityScore = long.MinValue;
 
-                foreach (var procDir in procDirs)
+                foreach (var procDir in Directory.EnumerateDirectories("/proc"))
                 {
-                    var pidStr = Path.GetFileName(procDir);
-                    if (!int.TryParse(pidStr, out int pid))
+                    if (!int.TryParse(Path.GetFileName(procDir), out _))
                         continue;
 
                     try
                     {
-                        var cmdlinePath = Path.Combine(procDir, "cmdline");
                         var environPath = Path.Combine(procDir, "environ");
-
-                        if (!File.Exists(cmdlinePath) || !File.Exists(environPath))
+                        if (!File.Exists(environPath) || !HasDisplayEnvironment(environPath))
                             continue;
 
-                        var environ = File.ReadAllText(environPath);
-                        if (!environ.Contains("WAYLAND_DISPLAY") && !environ.Contains("DISPLAY="))
+                        var cmdlinePath = Path.Combine(procDir, "cmdline");
+                        if (!File.Exists(cmdlinePath) || !TryGetProcessNameFromCmdline(cmdlinePath, out var processName))
                             continue;
 
-                        // Read cmdline and process efficiently
-                        var cmdlineText = File.ReadAllText(cmdlinePath).Replace("\0", " ");
-                        if (string.IsNullOrWhiteSpace(cmdlineText))
+                        if (SystemProcessNames.Contains(processName))
                             continue;
 
-                        // Use simple string filtering for Nudge processes
-                        bool isNudge = false;
-                        foreach (var nudgeProcess in NudgeProcessNames)
-                        {
-                            if (cmdlineText.Contains(nudgeProcess, StringComparison.Ordinal))
-                            {
-                                isNudge = true;
-                                break;
-                            }
-                        }
-                        if (isNudge)
-                            continue;
-
-                        // Extract process name efficiently
-                        int spaceIndex = cmdlineText.IndexOf(' ');
-                        string processPath = spaceIndex >= 0 ? cmdlineText.Substring(0, spaceIndex) : cmdlineText;
-                        var processName = Path.GetFileName(processPath.Trim());
-
-                        // System process filtering
-                        if (SystemProcessNames.Any(s => string.Equals(s, processName, StringComparison.Ordinal)))
-                            continue;
-
-                        // Score based on process stats
                         long activityScore = CalculateActivityScore(procDir);
-                        candidates.Add((processName, activityScore));
+                        if (activityScore > bestActivityScore)
+                        {
+                            bestActivityScore = activityScore;
+                            bestProcessName = processName;
+                        }
                     }
                     catch
                     {
@@ -930,55 +611,121 @@ class Nudge
                     }
                 }
 
-                if (candidates.Count > 0)
-                {
-                    var mostActive = candidates.OrderByDescending(c => c.Item2).First();
-                    return mostActive.Item1;
-                }
+                if (!string.IsNullOrEmpty(bestProcessName))
+                    return bestProcessName;
             }
             catch { }
 
             return "kde-wayland-window";
         }
 
-        private long CalculateActivityScore(string procDir)
+        private static bool HasDisplayEnvironment(string environPath)
         {
-            long activityScore = 0;
-            var statPath = Path.Combine(procDir, "stat");
+            var environmentData = File.ReadAllBytes(environPath);
+            return environmentData.AsSpan().IndexOf(WaylandDisplayBytes) >= 0 ||
+                   environmentData.AsSpan().IndexOf(DisplayBytes) >= 0;
+        }
 
-            if (File.Exists(statPath))
+        private static bool TryGetProcessNameFromCmdline(string cmdlinePath, out string processName)
+        {
+            processName = "";
+            var commandLineData = File.ReadAllBytes(cmdlinePath);
+            var commandLine = commandLineData.AsSpan();
+            if (commandLine.IsEmpty || ContainsAnyPattern(commandLine, NudgeProcessPatternBytes))
+                return false;
+
+            int firstArgumentEnd = commandLine.IndexOf((byte)0);
+            if (firstArgumentEnd < 0)
+                firstArgumentEnd = commandLine.Length;
+            if (firstArgumentEnd == 0)
+                return false;
+
+            string processPath = Encoding.UTF8.GetString(commandLine[..firstArgumentEnd]);
+            processName = Path.GetFileName(processPath.Trim());
+            return !string.IsNullOrEmpty(processName);
+        }
+
+        private static bool ContainsAnyPattern(ReadOnlySpan<byte> data, byte[][] patterns)
+        {
+            foreach (var pattern in patterns)
             {
-                try
-                {
-                    var stat = File.ReadAllText(statPath);
-                    var statParts = stat.Split(' ');
-
-                    if (statParts.Length > 20)
-                    {
-                        // Check if process is in foreground (tpgid == pgrp means foreground)
-                        if (int.TryParse(statParts[4], out int pgrp) &&
-                            int.TryParse(statParts[7], out int tpgid) &&
-                            tpgid > 0 && tpgid == pgrp)
-                        {
-                            activityScore += 1000;
-                        }
-
-                        // Get number of threads (more threads = more likely active)
-                        if (long.TryParse(statParts[19], out long numThreads))
-                        {
-                            activityScore += numThreads * 10;
-                        }
-
-                        // Get minor page faults (active apps cause more faults)
-                        if (long.TryParse(statParts[9], out long minFaults))
-                        {
-                            activityScore += minFaults / 1000;
-                        }
-                    }
-                }
-                catch { }
+                if (data.IndexOf(pattern) >= 0)
+                    return true;
             }
 
+            return false;
+        }
+
+        private static long CalculateActivityScore(string procDir)
+        {
+            var statPath = Path.Combine(procDir, "stat");
+            if (!File.Exists(statPath))
+                return 0;
+
+            try
+            {
+                return CalculateActivityScore(File.ReadAllText(statPath).AsSpan());
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        private static long CalculateActivityScore(ReadOnlySpan<char> stat)
+        {
+            int processNameEnd = stat.LastIndexOf(')');
+            if (processNameEnd < 0 || processNameEnd + 2 >= stat.Length)
+                return 0;
+
+            var fields = stat[(processNameEnd + 2)..];
+            long pgrp = 0;
+            long tpgid = 0;
+            long minFaults = 0;
+            long numThreads = 0;
+            int fieldNumber = 3;
+            int index = 0;
+
+            while (index < fields.Length && fieldNumber <= 20)
+            {
+                while (index < fields.Length && fields[index] == ' ')
+                    index++;
+
+                if (index >= fields.Length)
+                    break;
+
+                int nextSpace = fields[index..].IndexOf(' ');
+                ReadOnlySpan<char> token = nextSpace >= 0 ? fields.Slice(index, nextSpace) : fields[index..];
+
+                switch (fieldNumber)
+                {
+                    case 5:
+                        long.TryParse(token, out pgrp);
+                        break;
+                    case 8:
+                        long.TryParse(token, out tpgid);
+                        break;
+                    case 10:
+                        long.TryParse(token, out minFaults);
+                        break;
+                    case 20:
+                        long.TryParse(token, out numThreads);
+                        break;
+                }
+
+                if (nextSpace < 0)
+                    break;
+
+                index += nextSpace + 1;
+                fieldNumber++;
+            }
+
+            long activityScore = 0;
+            if (tpgid > 0 && tpgid == pgrp)
+                activityScore += 1000;
+
+            activityScore += numThreads * 10;
+            activityScore += minFaults / 1000;
             return activityScore;
         }
 
@@ -1023,14 +770,6 @@ class Nudge
     private const string LogIdleFormat = "  {0} min until next snapshot{1}  ({2}{3}{4}, idle: {5}ms)";
     private const string LogAppSwitchFormat = "  Switched: {0} → {1}";
 
-    // .NET 9: Optimized JSON serializer options (reuse for better performance)
-    static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        WriteIndented = false,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
-
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // RANDOM INTERVAL - Generate random snapshot interval between 5-10 minutes
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1040,7 +779,7 @@ class Nudge
         if (!_customInterval)
         {
             // Random interval between 5 and 10 minutes (in milliseconds)
-            int randomMinutes = _random.Next(5, 11);  // 5-10 inclusive
+            int randomMinutes = Random.Shared.Next(5, 11);  // 5-10 inclusive
             SNAPSHOT_INTERVAL_MS = randomMinutes * 60 * 1000;
             Dim($"  Next random interval: {randomMinutes} minutes");
         }
@@ -1248,7 +987,7 @@ class Nudge
             {
                 if (!string.IsNullOrEmpty(_currentApp))
                 {
-                    // .NET 9: Use CompositeFormat for better performance
+                    // Reuse the shared format string to keep the hot path quiet on allocations.
                     Dim(string.Format(null, LogAppSwitchFormat, _currentApp, app));
                 }
                 _currentApp = app;
@@ -1371,61 +1110,70 @@ class Nudge
 
     static void MigrateOldCsvFormat()
     {
+        string tempPath = _csvPath + ".migrating";
+
         try
         {
             if (!File.Exists(_csvPath))
-                return; // No migration needed for new files
-
-            var lines = File.ReadAllLines(_csvPath);
-            if (lines.Length == 0)
                 return;
 
-            var header = lines[0];
+            using var lines = File.ReadLines(_csvPath).GetEnumerator();
+            if (!lines.MoveNext())
+                return;
 
-            // Check if this is old format (missing timestamp, hour_of_day, day_of_week, or app_name)
-            if (!header.Contains("timestamp") || !header.Contains("app_name"))
+            var header = lines.Current;
+            if (header.Contains("timestamp", StringComparison.OrdinalIgnoreCase) &&
+                header.Contains("app_name", StringComparison.OrdinalIgnoreCase))
             {
-                Dim("  Migrating CSV to new format...");
+                return;
+            }
 
-                // Create backup
-                var backupPath = _csvPath + ".backup";
-                File.Copy(_csvPath, backupPath, overwrite: true);
-                Dim($"  Created backup: {backupPath}");
+            Dim("  Migrating CSV to new format...");
 
-                var migratedLines = new List<string>();
+            var backupPath = _csvPath + ".backup";
+            File.Copy(_csvPath, backupPath, overwrite: true);
+            Dim($"  Created backup: {backupPath}");
 
-                // New header with app_name for readability
-                migratedLines.Add("timestamp,hour_of_day,day_of_week,app_name,foreground_app,idle_time,time_last_request,productive");
+            var fileTime = File.GetLastWriteTime(_csvPath);
+            string timestamp = fileTime.ToString("yyyy-MM-dd HH:mm:ss");
+            int hour = fileTime.Hour;
+            int day = (int)fileTime.DayOfWeek;
+            int migratedRows = 0;
 
-                // Migrate data rows
-                for (int i = 1; i < lines.Length; i++)
+            using (var writer = new StreamWriter(tempPath, false, Encoding.UTF8))
+            {
+                writer.WriteLine("timestamp,hour_of_day,day_of_week,app_name,foreground_app,idle_time,time_last_request,productive");
+
+                while (lines.MoveNext())
                 {
-                    var parts = lines[i].Split(',');
-                    if (parts.Length < 3) continue; // Skip malformed lines
+                    var line = lines.Current;
+                    if (string.IsNullOrWhiteSpace(line))
+                        continue;
 
-                    // Use file modification time as approximation for old data
-                    var fileTime = File.GetLastWriteTime(_csvPath);
-                    string timestamp = fileTime.ToString("yyyy-MM-dd HH:mm:ss");
-                    int hour = fileTime.Hour;
-                    int day = (int)fileTime.DayOfWeek;
+                    var parts = line.Split(',', 4);
+                    if (parts.Length < 3)
+                        continue;
 
-                    // Old format: foreground_app,idle_time,time_last_request,productive
-                    string appName = "unknown"; // Can't recover app name from hash
                     string appHash = parts[0];
                     string idle = parts.Length > 1 ? parts[1] : "0";
                     string attention = parts.Length > 2 ? parts[2] : "0";
                     string productive = parts.Length > 3 ? parts[3] : "0";
 
-                    migratedLines.Add($"{timestamp},{hour},{day},{appName},{appHash},{idle},{attention},{productive}");
+                    writer.WriteLine($"{timestamp},{hour},{day},unknown,{appHash},{idle},{attention},{productive}");
+                    migratedRows++;
                 }
-
-                // Write migrated data
-                File.WriteAllLines(_csvPath, migratedLines);
-                Success($"  ✓ Migrated {migratedLines.Count - 1} rows to new format");
             }
+
+            File.Move(tempPath, _csvPath, overwrite: true);
+            Success($"  ✓ Migrated {migratedRows} rows to new format");
         }
         catch (Exception ex)
         {
+            if (File.Exists(tempPath))
+            {
+                try { File.Delete(tempPath); } catch { }
+            }
+
             Warning($"  CSV migration failed: {ex.Message}");
             Warning($"  Continuing with existing file...");
         }
@@ -1658,15 +1406,6 @@ class Nudge
     // ML INFERENCE - Communicate with ML prediction service
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    class MLPrediction
-    {
-        public int? Prediction { get; set; }
-        public double Confidence { get; set; }
-        public double? Probability { get; set; }
-        public bool ModelAvailable { get; set; }
-        public string? Reason { get; set; }
-    }
-
     static MLPrediction? QueryMLModel(string app, int idle, int attention)
     {
         try
@@ -1686,17 +1425,14 @@ class Nudge
             int hourOfDay = now.Hour;  // 0-23
             int dayOfWeek = (int)now.DayOfWeek;  // 0-6 (Sunday=0)
 
-            var request = new
-            {
-                hour_of_day = hourOfDay,
-                day_of_week = dayOfWeek,
-                foreground_app = appHash,
-                idle_time = idle,
-                time_last_request = attention
-            };
+            var request = new MLPredictionRequest(
+                hourOfDay,
+                dayOfWeek,
+                appHash,
+                idle,
+                attention);
 
-            // .NET 9: Use pre-configured JSON options for better performance
-            string requestJson = JsonSerializer.Serialize(request, JsonOptions) + "\n";
+            string requestJson = JsonSerializer.Serialize(request, NudgeJsonContext.Default.MLPredictionRequest) + "\n";
             byte[] requestBytes = Encoding.UTF8.GetBytes(requestJson);
 
             // Send request
@@ -1707,8 +1443,7 @@ class Nudge
             int bytesRead = stream.Read(buffer, 0, buffer.Length);
             string responseJson = Encoding.UTF8.GetString(buffer, 0, bytesRead).Trim();
 
-            // Parse response - use cached options for better performance
-            var response = JsonSerializer.Deserialize<MLPrediction>(responseJson, JsonOptions);
+            var response = JsonSerializer.Deserialize(responseJson, NudgeJsonContext.Default.MLPrediction);
             return response;
         }
         catch (Exception ex)
@@ -1926,7 +1661,7 @@ class Nudge
         Console.WriteLine();
         Console.WriteLine($"{Color.BOLD}REQUIREMENTS:{Color.RESET}");
         Console.WriteLine($"  - Windows 10+, or Linux with Wayland/X11 (Sway, GNOME, KDE, Cinnamon)");
-        Console.WriteLine($"  - .NET 8.0 or later");
+        Console.WriteLine($"  - .NET 10.0 SDK/runtime");
         Console.WriteLine();
     }
 }

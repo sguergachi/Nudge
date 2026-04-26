@@ -1,0 +1,11 @@
+<Project>
+  <Target Name="GenerateShebangBuildSource"
+          BeforeTargets="BeforeBuild"
+          Condition="'$(ShebangSource)' != '' and '$(ShebangBuildSource)' != ''">
+    <Message Importance="Low" Text="Generating $(ShebangBuildSource) from $(ShebangSource)" />
+    <Exec Condition="'$(OS)' == 'Windows_NT'"
+          Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$content = Get-Content -LiteralPath '$(ShebangSource)'; $content | Select-Object -Skip 1 | Set-Content -LiteralPath '$(ShebangBuildSource)' -Encoding utf8&quot;" />
+    <Exec Condition="'$(OS)' != 'Windows_NT'"
+          Command="tail -n +2 '$(ShebangSource)' > '$(ShebangBuildSource)'" />
+  </Target>
+</Project>

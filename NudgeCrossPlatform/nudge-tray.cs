@@ -36,36 +36,6 @@ using Microsoft.Toolkit.Uwp.Notifications;
 
 namespace NudgeTray
 {
-    // Shared platform configuration (same as in nudge.cs)
-    static class PlatformConfig
-    {
-        public static bool IsWindows => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
-        public static bool IsLinux => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
-        public static bool IsMacOS => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
-
-        public static string CsvPath
-        {
-            get
-            {
-                string homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                string nudgeDir = Path.Combine(homeDir, ".nudge");
-
-                // Create directory if it doesn't exist
-                if (!Directory.Exists(nudgeDir))
-                {
-                    Directory.CreateDirectory(nudgeDir);
-                }
-
-                return Path.Combine(nudgeDir, "HARVEST.CSV");
-            }
-        }
-
-        public static string WhichCommand => IsWindows ? "where" : "which";
-
-        public static string PythonCommand => IsWindows ? "python" : "python3";
-        public static string DotnetCommand => IsWindows ? "dotnet.exe" : "dotnet";
-    }
-
     class Program
     {
         const int UDP_PORT = 45001;

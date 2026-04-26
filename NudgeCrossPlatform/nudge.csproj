@@ -1,14 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>Nudge</RootNamespace>
-    <Nullable>enable</Nullable>
-    <LangVersion>latest</LangVersion>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <ShebangSource>nudge.cs</ShebangSource>
+    <ShebangBuildSource>nudge_build.cs</ShebangBuildSource>
   </PropertyGroup>
+
   <ItemGroup>
     <Compile Include="nudge_build.cs" />
     <Compile Include="NudgeCore.TestableLogic.cs" />
+    <Compile Include="NudgeJsonContext.cs" />
   </ItemGroup>
 </Project>
