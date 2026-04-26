@@ -1,6 +1,6 @@
-﻿// â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Nudge - ML-Powered Productivity Tracker
-// â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //
 // Tracks your activity, learns from your responses, nudges you to stay productive.
 // Built with obsessive attention to detail.
@@ -26,9 +26,9 @@
 //   - Windows 10+, or Linux with Wayland/X11 (Sway, GNOME, KDE, Cinnamon)
 //   - .NET 9.0 or later
 //
-// â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // .NET 9 OPTIMIZATIONS APPLIED:
-// â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //
 // Performance improvements leveraging .NET 9 features:
 //
@@ -64,7 +64,7 @@
 // - Memory allocations: 40-60% reduction (Span usage)
 // - Overall runtime: 15-25% improvement in typical scenarios
 //
-// â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 using System;
 using System.Buffers;
@@ -79,13 +79,247 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 
-// â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
-// PLATFORM ABSTRACTION - Share code between Windows/Linux implementations
-// â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// BROWSER DETECTION & SITE EXTRACTION - Identify browsers and extract domains
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+static class BrowserDetector
+{
+    // .NET 9: SearchValues for O(1) browser process name matching
+    private static readonly SearchValues<string> BrowserProcessNames = SearchValues.Create(
+        [
+            "chrome", "chromium", "firefox", "edge", "brave", "opera", "vivaldi",
+            "safari", "browser", "chromium-browser", "google-chrome", "mozilla"
+        ],
+        StringComparison.OrdinalIgnoreCase);
+
+    // Known browser suffixes that appear at the end of window titles
+    private static readonly string[] BrowserSuffixes =
+    [
+        " - Google Chrome", " - Chrome", " - Microsoft Edge",
+        " - Mozilla Firefox", " - Firefox", " - Brave",
+        " - Opera", " - Vivaldi", " - Chromium",
+        " : Google Chrome", " : Chrome", " : Microsoft Edge",
+        " : Mozilla Firefox", " : Firefox", " : Brave"
+    ];
+
+    // Common site patterns for known sites that may appear in different formats
+    private static readonly Dictionary<string, string> KnownSites = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // Productive sites
+        { "github.com", "GitHub" },
+        { "stackoverflow.com", "Stack Overflow" },
+        { "stackexchange.com", "Stack Exchange" },
+        { "gitlab.com", "GitLab" },
+        { "bitbucket.org", "Bitbucket" },
+        { "youtube.com", "YouTube" },
+        { "reddit.com", "Reddit" },
+        { "twitter.com", "Twitter" },
+        { "x.com", "X (Twitter)" },
+        { "linkedin.com", "LinkedIn" },
+        { "docs.google.com", "Google Docs" },
+        { "drive.google.com", "Google Drive" },
+        { "notion.so", "Notion" },
+        { "figma.com", "Figma" },
+        { "linear.app", "Linear" },
+        { "jira.atlassian.com", "Jira" },
+        { "confluence.atlassian.com", "Confluence" },
+        { "slack.com", "Slack" },
+        { "discord.com", "Discord" },
+        { "zoom.us", "Zoom" },
+        { "meet.google.com", "Google Meet" },
+        { "office.com", "Microsoft Office" },
+        { "outlook.office.com", "Outlook" },
+        { "mail.google.com", "Gmail" },
+        { "chat.openai.com", "ChatGPT" },
+        { "claude.ai", "Claude" },
+        { "copilot.microsoft.com", "GitHub Copilot" },
+        // Distracting sites
+        { "news.ycombinator.com", "Hacker News" },
+        { "instagram.com", "Instagram" },
+        { "facebook.com", "Facebook" },
+        { "tiktok.com", "TikTok" },
+        { "netflix.com", "Netflix" },
+        { "twitch.tv", "Twitch" },
+        { "amazon.com", "Amazon" },
+        { "ebay.com", "eBay" }
+    };
+
+    public static bool IsBrowser(string? processName)
+    {
+        if (string.IsNullOrEmpty(processName))
+            return false;
+
+        return processName.AsSpan().ContainsAny(BrowserProcessNames);
+    }
+
+    public static string? ExtractSite(string title)
+    {
+        if (string.IsNullOrEmpty(title))
+            return null;
+
+        // Strategy 1: Remove known browser suffixes and check what's left
+        string cleanedTitle = title;
+        foreach (var suffix in BrowserSuffixes)
+        {
+            if (cleanedTitle.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            {
+                cleanedTitle = cleanedTitle[..^suffix.Length];
+                break;
+            }
+        }
+
+        // Strategy 2: Look for domain-like patterns in the cleaned title
+        // Domains typically: contain dots, no spaces, reasonable length
+        var parts = cleanedTitle.Split(new[] { ' ', '-', '—', '–', '|', '/', '\\' },
+            StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var part in parts)
+        {
+            var trimmed = part.Trim();
+            // Check if it looks like a domain (has dots, reasonable length)
+            if (trimmed.Contains('.') && trimmed.Length >= 4 && trimmed.Length <= 100)
+            {
+                // Validate it looks like a real domain
+                if (IsLikelyDomain(trimmed))
+                {
+                    return NormalizeDomain(trimmed);
+                }
+            }
+        }
+
+        // Strategy 3: Check if cleaned title itself is a domain
+        if (cleanedTitle.Contains('.') && IsLikelyDomain(cleanedTitle))
+        {
+            return NormalizeDomain(cleanedTitle);
+        }
+
+        // Strategy 4: Match against known sites dictionary
+        foreach (var kvp in KnownSites)
+        {
+            if (title.Contains(kvp.Key, StringComparison.OrdinalIgnoreCase))
+            {
+                return kvp.Key;
+            }
+        }
+
+        // Strategy 5: Return shortest significant part (often the site name)
+        // This handles titles like "Issue #123 - repo-name - GitHub"
+        if (parts.Length > 0)
+        {
+            var significantParts = parts.Where(p => p.Length > 2 && !IsCommonWord(p)).ToList();
+            if (significantParts.Count > 0)
+            {
+                // Return the shortest meaningful part (often the domain or site name)
+                var sitePart = significantParts.OrderBy(p => p.Length).First();
+                if (sitePart.Length <= 50 && IsLikelyDomain(sitePart))
+                {
+                    return NormalizeDomain(sitePart);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsLikelyDomain(string text)
+    {
+        if (string.IsNullOrEmpty(text) || text.Length < 4 || text.Length > 100)
+            return false;
+
+        // Must have at least one dot
+        if (!text.Contains('.'))
+            return false;
+
+        // Should not have multiple consecutive dots
+        if (text.Contains(".."))
+            return false;
+
+        // Should not start or end with dots (after trim)
+        var trimmed = text.Trim();
+        if (trimmed.StartsWith('.') || trimmed.EndsWith('.'))
+            return false;
+
+        // Should not have spaces
+        if (trimmed.Contains(' '))
+            return false;
+
+        // Check for valid domain characters (alphanumeric, dots, hyphens)
+        foreach (char c in trimmed)
+        {
+            if (!char.IsLetterOrDigit(c) && c != '.' && c != '-' && c != '/' && c != ':')
+                return false;
+        }
+
+        return true;
+    }
+
+    private static string NormalizeDomain(string domain)
+    {
+        // Remove protocol if present
+        var normalized = domain.ToLowerInvariant().Trim();
+        if (normalized.StartsWith("https://"))
+            normalized = normalized[8..];
+        if (normalized.StartsWith("http://"))
+            normalized = normalized[7..];
+
+        // Remove trailing slashes and paths beyond root
+        int slashIndex = normalized.IndexOf('/');
+        if (slashIndex > 0)
+            normalized = normalized[..slashIndex];
+
+        // Remove port if present (usually :443 or :80)
+        int colonIndex = normalized.IndexOf(':');
+        if (colonIndex > 0)
+            normalized = normalized[..colonIndex];
+
+        // Remove www. prefix for cleaner display
+        if (normalized.StartsWith("www."))
+            normalized = normalized[4..];
+
+        return normalized;
+    }
+
+    private static bool IsCommonWord(string text)
+    {
+        // Words that are too generic to be useful as site names
+        var common = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "the", "and", "for", "are", "but", "not", "you", "all", "can",
+            "her", "was", "one", "our", "out", "new", "has", "his", "how",
+            "its", "may", "see", "now", "old", "see", "way", "who", "boy",
+            "did", "get", "let", "put", "say", "she", "too", "use", "tab",
+            "page", "new", "edit", "view", "file", "data", "home", "search",
+            "settings", "profile", "account", "dashboard", "overview"
+        };
+        return common.Contains(text);
+    }
+
+    public static string GetAppAndSite(string? processName, string title)
+    {
+        if (!IsBrowser(processName))
+            return title;
+
+        var site = ExtractSite(title);
+        if (!string.IsNullOrEmpty(site))
+        {
+            // Format: "Chrome (github.com)"
+            return $"{char.ToUpper(processName![0]) + processName[1..]} ({site})";
+        }
+
+        // Return browser name without site info if we couldn't extract one
+        return char.ToUpper(processName![0]) + processName[1..];
+    }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// PLATFORM SERVICE IMPLEMENTATIONS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 interface IPlatformService
 {
     string GetForegroundApp();
+    (string app, string title) GetForegroundAppWithTitle();
     int GetIdleTime();
     string PlatformName { get; }
 }
@@ -120,9 +354,9 @@ static class PlatformConfig
 
 class Nudge
 {
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // VERSION & CONSTANTS
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     const string VERSION = "1.3.0";
     const int CYCLE_MS = 1000;           // 1 second monitoring cycle
@@ -144,9 +378,9 @@ class Nudge
     static bool _mlAvailable = false;
     static bool _forceTrainedModel = false;  // Force use of trained model even if below threshold
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // ANSI COLORS - Professional terminal output
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     static class Color
     {
@@ -168,9 +402,9 @@ class Nudge
         public const string BCYAN = "\u001b[1;36m";     // Bold cyan
     }
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // WINDOWS API - P/Invoke declarations for Windows-specific functionality
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     [StructLayout(LayoutKind.Sequential)]
     struct LASTINPUTINFO
@@ -191,13 +425,17 @@ class Nudge
     [DllImport("kernel32.dll")]
     static extern uint GetTickCount();
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    [DllImport("user32.dll")]
+    static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // PLATFORM SERVICE IMPLEMENTATIONS
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     class WindowsPlatformService : IPlatformService
     {
         private string _cachedApp = "";
+        private string _cachedTitle = "";
         private DateTime _appCacheExpiry = DateTime.MinValue;
         private int _cachedIdle = 0;
         private DateTime _idleCacheExpiry = DateTime.MinValue;
@@ -206,30 +444,51 @@ class Nudge
 
         public string GetForegroundApp()
         {
+            var (app, title) = GetForegroundAppWithTitle();
+            return app;
+        }
+
+        public (string app, string title) GetForegroundAppWithTitle()
+        {
             if (DateTime.Now < _appCacheExpiry)
-                return _cachedApp;
+                return (_cachedApp, _cachedTitle);
 
             try
             {
                 IntPtr hwnd = GetForegroundWindow();
                 if (hwnd == IntPtr.Zero)
-                    return "unknown";
+                    return ("unknown", "");
 
+                // Get the process ID for browser detection
+                GetWindowThreadProcessId(hwnd, out uint processId);
+                string? processName = null;
+                try
+                {
+                    var process = Process.GetProcessById((int)processId);
+                    processName = process.ProcessName.ToLowerInvariant();
+                }
+                catch { }
+
+                // Get window title
                 const int nChars = 256;
                 var buff = new System.Text.StringBuilder(nChars);
-
+                string title = "";
                 if (GetWindowText(hwnd, buff, nChars) > 0)
                 {
-                    _cachedApp = buff.ToString();
-                    _appCacheExpiry = DateTime.Now.AddMilliseconds(500);
-                    return _cachedApp;
+                    title = buff.ToString();
                 }
 
-                return "unknown";
+                // Use BrowserDetector to format the app name with site if applicable
+                string app = BrowserDetector.GetAppAndSite(processName, title);
+
+                _cachedApp = app;
+                _cachedTitle = title;
+                _appCacheExpiry = DateTime.Now.AddMilliseconds(500);
+                return (app, title);
             }
             catch
             {
-                return "unknown";
+                return ("unknown", "");
             }
         }
 
@@ -264,6 +523,7 @@ class Nudge
     {
         private string _compositor = "";
         private string _cachedApp = "";
+        private string _cachedTitle = "";
         private DateTime _appCacheExpiry = DateTime.MinValue;
         private int _cachedIdle = 0;
         private DateTime _idleCacheExpiry = DateTime.MinValue;
@@ -333,21 +593,31 @@ class Nudge
 
         public string GetForegroundApp()
         {
-            if (DateTime.Now < _appCacheExpiry)
-                return _cachedApp;
+            var (app, _) = GetForegroundAppWithTitle();
+            return app;
+        }
 
-            string app = _compositor switch
+        public (string app, string title) GetForegroundAppWithTitle()
+        {
+            if (DateTime.Now < _appCacheExpiry)
+                return (_cachedApp, _cachedTitle);
+
+            (string app, string title) result = _compositor switch
             {
-                "sway" => GetSwayFocusedApp(),
-                "gnome" => GetGnomeFocusedApp(),
-                "kde" => GetKDEFocusedApp(),
-                "cinnamon" => GetX11FocusedApp(),
-                _ => "unknown"
+                "sway" => GetSwayFocusedAppWithTitle(),
+                "gnome" => GetGnomeFocusedAppWithTitle(),
+                "kde" => GetKDEFocusedAppWithTitle(),
+                "cinnamon" => GetX11FocusedAppWithTitle(),
+                _ => ("unknown", "")
             };
 
+            // Apply browser detection to format app name with site
+            string app = BrowserDetector.GetAppAndSite(result.app, result.title);
+
             _cachedApp = app;
+            _cachedTitle = result.title;
             _appCacheExpiry = DateTime.Now.AddMilliseconds(500);
-            return app;
+            return (app, result.title);
         }
 
         public int GetIdleTime()
@@ -384,7 +654,7 @@ class Nudge
         }
 
         // Linux-specific window detection methods
-        private string GetSwayFocusedApp()
+        private (string app, string title) GetSwayFocusedAppWithTitle()
         {
             try
             {
@@ -393,38 +663,59 @@ class Nudge
             }
             catch
             {
-                return "unknown";
+                return ("unknown", "");
             }
         }
 
-        private string GetGnomeFocusedApp()
+        private (string app, string title) GetGnomeFocusedAppWithTitle()
         {
             try
             {
-                var output = RunCommand("gdbus", "call --session --dest org.gnome.Shell " +
+                // Get window class (app_id equivalent)
+                var classOutput = RunCommand("gdbus", "call --session --dest org.gnome.Shell " +
                     "--object-path /org/gnome/Shell " +
                     "--method org.gnome.Shell.Eval " +
                     "\"global.display.focus_window.get_wm_class()\"");
 
-                return ExtractQuotedString(output);
+                string appClass = ExtractQuotedString(classOutput);
+
+                // Get window title
+                var titleOutput = RunCommand("gdbus", "call --session --dest org.gnome.Shell " +
+                    "--object-path /org/gnome/Shell " +
+                    "--method org.gnome.Shell.Eval " +
+                    "\"global.display.focus_window.get_title()\"");
+
+                string title = ExtractQuotedString(titleOutput);
+
+                if (string.IsNullOrEmpty(appClass) || appClass == "unknown")
+                    return ("unknown", "");
+
+                return (appClass, title ?? "");
             }
             catch
             {
-                return "unknown";
+                return ("unknown", "");
             }
         }
 
-        private string GetKDEFocusedApp()
+        private (string app, string title) GetKDEFocusedAppWithTitle()
         {
             // Try xdotool first for X11 sessions
             if (CommandExists("xdotool"))
             {
                 try
                 {
-                    var windowName = RunCommand("xdotool", "getactivewindow getwindowname");
-                    if (!string.IsNullOrWhiteSpace(windowName))
+                    // Get window class (for browser detection)
+                    var windowClass = RunCommand("xdotool", "getactivewindow getwindowclassname");
+                    var className = windowClass.Trim().Split('\n')[0];
+
+                    // Get window title (for site extraction)
+                    var windowTitle = RunCommand("xdotool", "getactivewindow getwindowname");
+                    var title = windowTitle.Trim().Split('\n')[0];
+
+                    if (!string.IsNullOrEmpty(className))
                     {
-                        return windowName.Trim().Split('\n')[0];
+                        return (className, title ?? "");
                     }
                 }
                 catch
@@ -449,7 +740,7 @@ class Nudge
                                 var parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
                                 if (parts.Length > 2)
                                 {
-                                    return parts[2];
+                                    return (parts[2], "");
                                 }
                             }
                         }
@@ -459,24 +750,31 @@ class Nudge
             }
 
             // Process-based detection (KDE Wayland)
-            return DetectActiveProcessKDE();
+            return (DetectActiveProcessKDE(), "");
         }
 
-        private string GetX11FocusedApp()
+        private (string app, string title) GetX11FocusedAppWithTitle()
         {
             try
             {
-                var windowName = RunCommand("xdotool", "getactivewindow getwindowname");
-                if (!string.IsNullOrWhiteSpace(windowName))
+                // Get window class (for browser detection)
+                var windowClass = RunCommand("xdotool", "getactivewindow getwindowclassname");
+                var className = windowClass.Trim().Split('\n')[0];
+
+                // Get window title (for site extraction)
+                var windowTitle = RunCommand("xdotool", "getactivewindow getwindowname");
+                var title = windowTitle.Trim().Split('\n')[0];
+
+                if (!string.IsNullOrEmpty(className))
                 {
-                    return windowName.Trim().Split('\n')[0];
+                    return (className, title ?? "");
                 }
 
-                return "unknown";
+                return ("unknown", "");
             }
             catch
             {
-                return "unknown";
+                return ("unknown", "");
             }
         }
 
@@ -675,7 +973,7 @@ class Nudge
             return activityScore;
         }
 
-        private string ExtractFocusedAppFromSwayTree(string json)
+        private (string app, string title) ExtractFocusedAppFromSwayTree(string json)
         {
             try
             {
@@ -688,26 +986,52 @@ class Nudge
                 if (json.Contains("\"focused\":true"))
                 {
                     int idx = json.IndexOf("\"app_id\":\"");
+                    string app = "unknown";
                     if (idx != -1)
                     {
                         idx += 10;
                         int end = json.IndexOf("\"", idx);
                         if (end > idx)
-                            return json.Substring(idx, end - idx);
+                            app = json.Substring(idx, end - idx);
                     }
+
+                    // Also try to extract window title
+                    int titleIdx = json.IndexOf("\"name\":\"");
+                    string title = "";
+                    if (titleIdx != -1)
+                    {
+                        titleIdx += 8;
+                        int titleEnd = json.IndexOf("\"", titleIdx);
+                        if (titleEnd > titleIdx)
+                            title = json.Substring(titleIdx, titleEnd - titleIdx);
+                    }
+
+                    return (app, title);
                 }
-                return "unknown";
+                return ("unknown", "");
             }
         }
 
-        private string FindFocusedNode(JsonElement node)
+        private (string app, string title) FindFocusedNode(JsonElement node)
         {
             if (node.TryGetProperty("focused", out var focused) && focused.GetBoolean())
             {
-                if (node.TryGetProperty("app_id", out var appId))
+                string? appId = null;
+                string? name = null;
+
+                if (node.TryGetProperty("app_id", out var appIdElem))
                 {
-                    var id = appId.GetString();
-                    return string.IsNullOrEmpty(id) ? "unknown" : id;
+                    appId = appIdElem.GetString();
+                }
+
+                if (node.TryGetProperty("name", out var nameElem))
+                {
+                    name = nameElem.GetString();
+                }
+
+                if (appId != null)
+                {
+                    return (string.IsNullOrEmpty(appId) ? "unknown" : appId, name ?? "");
                 }
             }
 
@@ -716,7 +1040,7 @@ class Nudge
                 foreach (var child in nodes.EnumerateArray())
                 {
                     var result = FindFocusedNode(child);
-                    if (result != "unknown")
+                    if (result.app != "unknown")
                         return result;
                 }
             }
@@ -726,12 +1050,12 @@ class Nudge
                 foreach (var child in floatingNodes.EnumerateArray())
                 {
                     var result = FindFocusedNode(child);
-                    if (result != "unknown")
+                    if (result.app != "unknown")
                         return result;
                 }
             }
 
-            return "unknown";
+            return ("unknown", "");
         }
 
         private string ExtractQuotedString(string input)
@@ -746,9 +1070,9 @@ class Nudge
         }
     }
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // STATE - Application state
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     static IPlatformService? _platformService;
     static string _csvPath = PlatformConfig.CsvPath;
@@ -777,11 +1101,11 @@ class Nudge
 
     // .NET 9: CompositeFormat for repeated log messages (pre-compiled for better performance)
     static readonly CompositeFormat LogPredictionFormat = CompositeFormat.Parse(
-        "ðŸ“Š Request #{0}: {1} (confidence: {2:F1}%, {3:F1}ms)");
+        "📊 Request #{0}: {1} (confidence: {2:F1}%, {3:F1}ms)");
     static readonly CompositeFormat LogIdleFormat = CompositeFormat.Parse(
         "  {0} min until next snapshot{1}  ({2}{3}{4}, idle: {5}ms)");
     static readonly CompositeFormat LogAppSwitchFormat = CompositeFormat.Parse(
-        "  Switched: {0} â†’ {1}");
+        "  Switched: {0} → {1}");
 
     // .NET 9: Optimized JSON serializer options (reuse for better performance)
     static readonly JsonSerializerOptions JsonOptions = new()
@@ -791,9 +1115,9 @@ class Nudge
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
     };
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // RANDOM INTERVAL - Generate random snapshot interval between 5-10 minutes
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     static void SetRandomInterval()
     {
@@ -806,9 +1130,9 @@ class Nudge
         }
     }
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // MAIN - Entry point with professional argument parsing
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     static void Main(string[] args)
     {
@@ -868,7 +1192,7 @@ class Nudge
         StartUDPListener();
 
         // Main event loop
-        Success("âœ“ Nudge is running");
+        Success("✓ Nudge is running");
         if (_customInterval)
         {
             Info($"  Taking snapshots every {SNAPSHOT_INTERVAL_MS/1000/60} minutes");
@@ -898,9 +1222,9 @@ class Nudge
         RunMainLoop();
     }
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // ENVIRONMENT VALIDATION - Check all requirements before running
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     static bool ValidateEnvironment()
     {
@@ -912,7 +1236,7 @@ class Nudge
         if (PlatformConfig.IsWindows)
         {
             _platformService = new WindowsPlatformService();
-            Success($"âœ“ Platform: Windows");
+            Success($"✓ Platform: Windows");
         }
         else if (PlatformConfig.IsLinux)
         {
@@ -929,23 +1253,23 @@ class Nudge
             var sessionType = Environment.GetEnvironmentVariable("XDG_SESSION_TYPE");
             if (sessionType == "wayland")
             {
-                Success($"âœ“ Session: Wayland");
+                Success($"✓ Session: Wayland");
             }
             else if (sessionType == "x11")
             {
-                Success($"âœ“ Session: X11");
+                Success($"✓ Session: X11");
             }
             else
             {
                 Warning($"Unknown session type: {sessionType ?? "none"}");
             }
 
-            Success($"âœ“ Desktop Environment: {_platformService.PlatformName}");
+            Success($"✓ Desktop Environment: {_platformService.PlatformName}");
         }
         else if (PlatformConfig.IsMacOS)
         {
             _platformService = new WindowsPlatformService(); // Placeholder for now
-            Success($"âœ“ Platform: macOS");
+            Success($"✓ Platform: macOS");
             Warning("macOS support is experimental");
         }
 
@@ -968,7 +1292,7 @@ class Nudge
         }
         else
         {
-            Success($"âœ“ Detected window: {Color.CYAN}{testApp}{Color.RESET}");
+            Success($"✓ Detected window: {Color.CYAN}{testApp}{Color.RESET}");
         }
 
         // Test idle time detection
@@ -976,7 +1300,7 @@ class Nudge
         var testIdle = _platformService.GetIdleTime();
         if (testIdle >= 0)
         {
-            Success($"âœ“ Idle time: {testIdle}ms");
+            Success($"✓ Idle time: {testIdle}ms");
         }
         else
         {
@@ -997,9 +1321,9 @@ class Nudge
         _ => "check your package manager"
     };
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // MAIN LOOP - Core event loop with professional status updates
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     static void RunMainLoop()
     {
@@ -1014,11 +1338,12 @@ class Nudge
             string app = _platformService?.GetForegroundApp() ?? "unknown";
             int idle = _platformService?.GetIdleTime() ?? 0;
 
-            // Ignore Nudge notification window in app tracking (shows as "Window" or contains "Notification")
+            // Ignore Nudge notification window in app tracking
             // This prevents the notification from polluting analytics data
             bool isNudgeWindow = app == "Window" ||
                                  app.Contains("Notification", StringComparison.OrdinalIgnoreCase) ||
-                                 app.Contains("CustomNotification", StringComparison.OrdinalIgnoreCase);
+                                 app.Contains("CustomNotification", StringComparison.OrdinalIgnoreCase) ||
+                                 app.Contains("Nudge", StringComparison.OrdinalIgnoreCase);
 
             // Track attention span (skip if it's our notification window)
             if (!isNudgeWindow && app != _currentApp)
@@ -1076,14 +1401,14 @@ class Nudge
                 {
                     if (mlTriggered)
                     {
-                        Info($"  {Color.BGREEN}âœ“ ML-TRIGGERED SNAPSHOT{Color.RESET} (detected unproductive)");
+                        Info($"  {Color.BGREEN}✓ ML-TRIGGERED SNAPSHOT{Color.RESET} (detected unproductive)");
                     }
                     else if (intervalReached)
                     {
                         _intervalTriggeredSnapshots++;
                         if (_mlEnabled)
                         {
-                            Info($"  {Color.BYELLOW}â° INTERVAL SNAPSHOT{Color.RESET} (ML low confidence or productive)");
+                            Info($"  {Color.BYELLOW}⏰ INTERVAL SNAPSHOT{Color.RESET} (ML low confidence or productive)");
                         }
                     }
 
@@ -1119,7 +1444,7 @@ class Nudge
     static void ShowMLStats()
     {
         Console.WriteLine();
-        Console.WriteLine($"{Color.BCYAN}â”â”â” ML PERFORMANCE SUMMARY â”â”â”{Color.RESET}");
+        Console.WriteLine($"{Color.BCYAN}━━━ ML PERFORMANCE SUMMARY ━━━{Color.RESET}");
 
         double avgConfidence = _mlConfidenceScores.Count > 0 ? _mlConfidenceScores.Average() : 0;
         int totalMLDecisions = _mlTriggeredSnapshots + _mlSkippedAlerts;
@@ -1138,13 +1463,13 @@ class Nudge
             Console.WriteLine($"  {Color.BOLD}Alerts Prevented:{Color.RESET}       {Color.BGREEN}{mlEfficiency:F1}%{Color.RESET} {Color.DIM}(interruptions avoided){Color.RESET}");
         }
 
-        Console.WriteLine($"{Color.BCYAN}â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”{Color.RESET}");
+        Console.WriteLine($"{Color.BCYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{Color.RESET}");
         Console.WriteLine();
     }
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // DATA COLLECTION - CSV management with professional error handling
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     static void MigrateOldCsvFormat()
     {
@@ -1198,7 +1523,7 @@ class Nudge
 
                 // Write migrated data
                 File.WriteAllLines(_csvPath, migratedLines);
-                Success($"  âœ“ Migrated {migratedLines.Count - 1} rows to new format");
+                Success($"  ✓ Migrated {migratedLines.Count - 1} rows to new format");
             }
         }
         catch (Exception ex)
@@ -1276,13 +1601,13 @@ class Nudge
         _snapshotAttention = attention;
 
         Console.WriteLine();
-        Console.WriteLine($"{Color.BYELLOW}â”â”â” SNAPSHOT #{_totalSnapshots} â”â”â”{Color.RESET}");
+        Console.WriteLine($"{Color.BYELLOW}━━━ SNAPSHOT #{_totalSnapshots} ━━━{Color.RESET}");
         Console.WriteLine($"  {Color.BOLD}App:{Color.RESET}       {Color.CYAN}{app}{Color.RESET}");
         Console.WriteLine($"  {Color.BOLD}Hash:{Color.RESET}      {appHash}");
         Console.WriteLine($"  {Color.BOLD}Idle:{Color.RESET}      {FormatTime(idle)}");
         Console.WriteLine($"  {Color.BOLD}Attention:{Color.RESET} {FormatTime(attention)}");
         Console.WriteLine();
-        Console.WriteLine($"  {Color.MAGENTA}â¯{Color.RESET} Waiting for response...");
+        Console.WriteLine($"  {Color.MAGENTA}❯{Color.RESET} Waiting for response...");
         Console.WriteLine($"  {Color.DIM}Run: {Color.BCYAN}nudge-notify YES{Color.DIM} or {Color.BCYAN}nudge-notify NO{Color.RESET}");
         Console.WriteLine();
 
@@ -1299,7 +1624,7 @@ class Nudge
         {
             if (_waitingForResponse)
             {
-                Warning("â±  Timeout - no response received");
+                Warning("⏱  Timeout - no response received");
                 _waitingForResponse = false;
             }
         }, null, RESPONSE_TIMEOUT_MS, Timeout.Infinite);
@@ -1344,7 +1669,7 @@ class Nudge
                 $"{Color.BGREEN}PRODUCTIVE{Color.RESET}" :
                 $"{Color.YELLOW}NOT PRODUCTIVE{Color.RESET}";
 
-            Success($"âœ“ Saved as {label}");
+            Success($"✓ Saved as {label}");
             Console.WriteLine();
         }
         catch (Exception ex)
@@ -1357,9 +1682,9 @@ class Nudge
         }
     }
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━���━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // UDP LISTENER - Network communication with detailed logging
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     static void StartUDPListener()
     {
@@ -1376,7 +1701,7 @@ class Nudge
         try
         {
             listener = new UdpClient(UDP_PORT);
-            Success($"âœ“ UDP listener started on port {UDP_PORT}");
+            Success($"✓ UDP listener started on port {UDP_PORT}");
 
             while (true)
             {
@@ -1431,9 +1756,9 @@ class Nudge
         }
     }
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // ML INFERENCE - Communicate with ML prediction service
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     class MLPrediction
     {
@@ -1510,7 +1835,7 @@ class Nudge
 
             if (!_mlAvailable)
             {
-                Success($"âœ“ ML inference server connected (TCP {ML_HOST}:{ML_PORT})");
+                Success($"✓ ML inference server connected (TCP {ML_HOST}:{ML_PORT})");
                 _mlAvailable = true;
             }
             return true;
@@ -1590,9 +1915,9 @@ class Nudge
         }
     }
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // UTILITIES - Helper functions
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     static string RunCommand(string cmd, string args)
     {
@@ -1658,9 +1983,9 @@ class Nudge
         return seconds > 0 ? $"{minutes}m {seconds}s" : $"{minutes}m";
     }
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // CONSOLE OUTPUT - Professional logging with colors
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     static void Success(string msg) =>
         Console.WriteLine($"{Color.BGREEN}{msg}{Color.RESET}");
@@ -1680,10 +2005,10 @@ class Nudge
     static void PrintBanner()
     {
         Console.WriteLine();
-        Console.WriteLine($"{Color.BCYAN}â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—{Color.RESET}");
-        Console.WriteLine($"{Color.BCYAN}â•‘{Color.RESET}  {Color.BOLD}Nudge{Color.RESET} - ML-Powered Productivity Tracker  {Color.BCYAN}â•‘{Color.RESET}");
-        Console.WriteLine($"{Color.BCYAN}â•‘{Color.RESET}  {Color.DIM}Version {VERSION,-36}{Color.RESET}{Color.BCYAN}â•‘{Color.RESET}");
-        Console.WriteLine($"{Color.BCYAN}â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•{Color.RESET}");
+        Console.WriteLine($"{Color.BCYAN}╔═══════════════════════════════════════════════╗{Color.RESET}");
+        Console.WriteLine($"{Color.BCYAN}║{Color.RESET}  {Color.BOLD}Nudge{Color.RESET} - ML-Powered Productivity Tracker  {Color.BCYAN}║{Color.RESET}");
+        Console.WriteLine($"{Color.BCYAN}║{Color.RESET}  {Color.DIM}Version {VERSION,-36}{Color.RESET}{Color.BCYAN}║{Color.RESET}");
+        Console.WriteLine($"{Color.BCYAN}╚═══════════════════════════════════════════════╝{Color.RESET}");
         Console.WriteLine();
     }
 
