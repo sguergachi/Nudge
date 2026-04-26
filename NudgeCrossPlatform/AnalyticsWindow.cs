@@ -30,10 +30,22 @@ namespace NudgeTray
 {
     public class AnalyticsWindow : Window
     {
+        private enum DetailViewType
+        {
+            None,
+            Activity,
+            Apps,
+            Productivity
+        }
+
         private TimeFilter _currentFilter = TimeFilter.Today;
         private AnalyticsData? _data;
-        private ScrollViewer? _scrollViewer;
+        private readonly AnalyticsData? _initialData;
+        private Border? _contentViewport;
         private StackPanel? _contentPanel;
+        private TranslateTransform? _contentTransform;
+        private double _contentScrollOffset;
+        private DetailViewType _activeDetailView;
         private Border? _todayTab;
         private Border? _weekTab;
 
@@ -57,10 +69,19 @@ namespace NudgeTray
             ThisWeek
         }
 
-        public AnalyticsWindow()
+        public AnalyticsWindow(AnalyticsData? initialData = null)
         {
+            _initialData = initialData;
             InitializeWindow();
-            LoadDataAndDisplay();
+            if (_initialData != null)
+            {
+                _data = _initialData;
+                BuildUI();
+            }
+            else
+            {
+                LoadDataAndDisplay();
+            }
         }
 
         private void InitializeWindow()
@@ -73,6 +94,7 @@ namespace NudgeTray
             Title = "Nudge Analytics";
             Background = Brushes.Transparent;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
+            Focusable = true;
 
             // Position near bottom-right (typical tray icon location)
             var screen = Screens.Primary;
@@ -124,47 +146,68 @@ namespace NudgeTray
                         OffsetY = 2,
                         Color = Color.FromArgb(25, 0, 0, 0)
                     }
-                )
+                ),
+                Width = 388,
+                Height = 548
             };
 
-            // Inner container to clip content while outer maintains shadow
-            var innerContainer = new Border
+            // Main layout grid (outer) - will contain header and content area
+            var outerGrid = new Grid
             {
-                CornerRadius = new CornerRadius(12),
-                ClipToBounds = true,
-                Height = 548 // Window (580) - margins (32) = available space for content
+                RowDefinitions = new RowDefinitions("Auto,*"),
+                Width = 388,
+                Height = 548,
+                VerticalAlignment = VerticalAlignment.Stretch,
+                HorizontalAlignment = HorizontalAlignment.Stretch
             };
 
-            // Use Grid instead of StackPanel to properly constrain ScrollViewer
-            var mainGrid = new Grid
-            {
-                RowDefinitions = new RowDefinitions("Auto,*") // Header is auto, content fills remaining
-            };
-
-            // Header Section with close button
+            // Header Section
             var header = CreateHeader();
             Grid.SetRow(header, 0);
-            mainGrid.Children.Add(header);
+            outerGrid.Children.Add(header);
+
+            // Content area with scrolling - this MUST have constrained height
+            // Use a border to constrain the scrollviewer area
+            var contentArea = new Border
+            {
+                CornerRadius = new CornerRadius(0, 0, 12, 12),
+                ClipToBounds = true,
+                VerticalAlignment = VerticalAlignment.Stretch
+            };
 
             // Scrollable Content
             _contentPanel = new StackPanel
             {
                 Spacing = 12,
-                Margin = new Thickness(16, 12, 16, 16)
+                Margin = new Thickness(16, 12, 16, 16),
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Top
             };
 
-            _scrollViewer = new ScrollViewer
+            _contentTransform = new TranslateTransform();
+            _contentPanel.RenderTransform = _contentTransform;
+
+            _contentViewport = new Border
             {
-                Content = _contentPanel,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+                Child = _contentPanel,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch,
+                Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0))
             };
 
-            Grid.SetRow(_scrollViewer, 1);
-            mainGrid.Children.Add(_scrollViewer);
+            _contentViewport.PointerWheelChanged += (s, e) =>
+            {
+                if (ApplyWheelScrollDelta(e.Delta.Y))
+                {
+                    e.Handled = true;
+                }
+            };
 
-            innerContainer.Child = mainGrid;
-            mainContainer.Child = innerContainer;
+            contentArea.Child = _contentViewport;
+            Grid.SetRow(contentArea, 1);
+            outerGrid.Children.Add(contentArea);
+
+            mainContainer.Child = outerGrid;
             Content = mainContainer;
 
             // Populate content
@@ -392,6 +435,13 @@ namespace NudgeTray
             // Summary Section
             _contentPanel.Children.Add(CreateSummarySection());
 
+            if (_activeDetailView != DetailViewType.None)
+            {
+                _contentPanel.Children.Add(CreateDetailSection());
+                Dispatcher.UIThread.Post(ClampContentScrollOffset, DispatcherPriority.Background);
+                return;
+            }
+
             // App Usage Section
             if (_data.AppUsage.Any())
             {
@@ -423,6 +473,121 @@ namespace NudgeTray
             {
                 _contentPanel.Children.Add(CreateEmptyState());
             }
+
+            Dispatcher.UIThread.Post(ClampContentScrollOffset, DispatcherPriority.Background);
+        }
+
+        internal bool HasScrollableOverflow()
+        {
+            return GetMaxContentScrollOffset() > 0;
+        }
+
+        internal double GetScrollOffsetY()
+        {
+            return _contentScrollOffset;
+        }
+
+        internal double GetScrollExtentHeight()
+        {
+            if (_contentPanel == null)
+            {
+                return 0;
+            }
+
+            return GetContentHeight();
+        }
+
+        internal double GetScrollViewportHeight()
+        {
+            return _contentViewport?.Bounds.Height ?? 0;
+        }
+
+        internal bool ApplyWheelScrollDelta(double deltaY)
+        {
+            if (_contentPanel == null || _contentTransform == null)
+            {
+                return false;
+            }
+
+            const double scrollStep = 96;
+            double maxOffsetY = GetMaxContentScrollOffset();
+            if (maxOffsetY <= 0)
+            {
+                return false;
+            }
+
+            double nextOffsetY = Math.Clamp(
+                _contentScrollOffset - (deltaY * scrollStep),
+                0,
+                maxOffsetY
+            );
+
+            if (Math.Abs(nextOffsetY - _contentScrollOffset) < 0.1)
+            {
+                return false;
+            }
+
+            _contentScrollOffset = nextOffsetY;
+            UpdateContentOffset();
+            return true;
+        }
+
+        private double GetMaxContentScrollOffset()
+        {
+            if (_contentPanel == null || _contentViewport == null)
+            {
+                return 0;
+            }
+
+            double contentHeight = GetContentHeight();
+            double viewportHeight = _contentViewport.Bounds.Height;
+            return Math.Max(0, contentHeight - viewportHeight);
+        }
+
+        private double GetContentHeight()
+        {
+            if (_contentPanel == null)
+            {
+                return 0;
+            }
+
+            double childHeights = 0;
+            for (int i = 0; i < _contentPanel.Children.Count; i++)
+            {
+                var child = _contentPanel.Children[i];
+                childHeights += Math.Max(child.DesiredSize.Height, child.Bounds.Height);
+
+                if (child is Control control)
+                {
+                    childHeights += control.Margin.Top + control.Margin.Bottom;
+                }
+            }
+
+            if (_contentPanel.Children.Count > 1)
+            {
+                childHeights += _contentPanel.Spacing * (_contentPanel.Children.Count - 1);
+            }
+
+            double intrinsicHeight = Math.Max(
+                Math.Max(_contentPanel.DesiredSize.Height, _contentPanel.Bounds.Height),
+                childHeights
+            );
+
+            return intrinsicHeight + _contentPanel.Margin.Top + _contentPanel.Margin.Bottom;
+        }
+
+        private void ClampContentScrollOffset()
+        {
+            _contentScrollOffset = Math.Clamp(_contentScrollOffset, 0, GetMaxContentScrollOffset());
+            UpdateContentOffset();
+        }
+
+        private void UpdateContentOffset()
+        {
+            if (_contentTransform != null)
+            {
+                _contentTransform.Y = -_contentScrollOffset;
+            }
         }
 
         private Border CreateSummarySection()
@@ -446,7 +611,8 @@ namespace NudgeTray
             var activityPanel = CreateStatCard(
                 "clock",
                 FormatDuration(_data?.TotalActivityMinutes ?? 0),
-                "Activity"
+                "Activity",
+                DetailViewType.Activity
             );
             Grid.SetColumn(activityPanel, 0);
 
@@ -454,7 +620,8 @@ namespace NudgeTray
             var productivePanel = CreateStatCard(
                 "star",
                 (_data?.ProductivePercentage ?? 0).ToString("F0") + "%",
-                "Productive"
+                "Productive",
+                DetailViewType.Productivity
             );
             Grid.SetColumn(productivePanel, 1);
 
@@ -462,7 +629,8 @@ namespace NudgeTray
             var appsPanel = CreateStatCard(
                 "apps",
                 (_data?.AppUsage.Count ?? 0).ToString(),
-                "Apps"
+                "Apps",
+                DetailViewType.Apps
             );
             Grid.SetColumn(appsPanel, 2);
 
@@ -474,7 +642,7 @@ namespace NudgeTray
             return border;
         }
 
-        private StackPanel CreateStatCard(string iconType, string value, string label)
+        private Border CreateStatCard(string iconType, string value, string label, DetailViewType detailView)
         {
             var panel = new StackPanel
             {
@@ -528,7 +696,30 @@ namespace NudgeTray
             panel.Children.Add(valueText);
             panel.Children.Add(labelText);
 
-            return panel;
+            var border = new Border
+            {
+                Child = panel,
+                Padding = new Thickness(8, 6, 8, 6),
+                CornerRadius = new CornerRadius(8),
+                Cursor = new Cursor(StandardCursorType.Hand)
+            };
+
+            border.PointerEntered += (s, e) =>
+            {
+                border.Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255));
+            };
+            border.PointerExited += (s, e) =>
+            {
+                border.Background = Brushes.Transparent;
+            };
+            border.PointerPressed += (s, e) =>
+            {
+                _activeDetailView = detailView;
+                _contentScrollOffset = 0;
+                RefreshContent();
+            };
+
+            return border;
         }
 
         private string GetIconPath(string iconType)
@@ -612,6 +803,227 @@ namespace NudgeTray
             border.Child = stack;
 
             return border;
+        }
+
+        private Border CreateDetailSection()
+        {
+            string title;
+            string iconType;
+            Control content;
+
+            switch (_activeDetailView)
+            {
+                case DetailViewType.Activity:
+                    title = "Activity Details";
+                    iconType = "clock";
+                    content = CreateActivityDetailView();
+                    break;
+                case DetailViewType.Apps:
+                    title = "App Usage Details";
+                    iconType = "apps";
+                    content = CreateAppsDetailView();
+                    break;
+                case DetailViewType.Productivity:
+                    title = "Productivity Details";
+                    iconType = "calendar";
+                    content = CreateProductivityDetailView();
+                    break;
+                default:
+                    title = "Details";
+                    iconType = "chart";
+                    content = new TextBlock { Text = "No detail selected." };
+                    break;
+            }
+
+            var section = CreateSection(iconType, title, content);
+            if (section.Child is StackPanel stack)
+            {
+                stack.Children.Insert(0, CreateDetailToolbar());
+            }
+
+            return section;
+        }
+
+        private Control CreateDetailToolbar()
+        {
+            var toolbar = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+                Margin = new Thickness(0, 0, 0, 4)
+            };
+
+            var backButton = new Button
+            {
+                Content = new TextBlock
+                {
+                    Text = "← Back to overview",
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(PrimaryBlue)
+                },
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(0),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Cursor = new Cursor(StandardCursorType.Hand)
+            };
+            backButton.Click += (s, e) =>
+            {
+                _activeDetailView = DetailViewType.None;
+                _contentScrollOffset = 0;
+                RefreshContent();
+            };
+
+            toolbar.Children.Add(backButton);
+            return toolbar;
+        }
+
+        private Control CreateActivityDetailView()
+        {
+            if (_data == null)
+            {
+                return new TextBlock { Text = "No activity data available." };
+            }
+
+            var rows = new List<(string, string)>
+            {
+                ("Filter", _currentFilter == TimeFilter.Today ? "Today" : "This Week"),
+                ("Total Activity", FormatDuration(_data.TotalActivityMinutes)),
+                ("Productive Time", FormatDuration(_data.ProductiveMinutes)),
+                ("Unproductive Time", FormatDuration(_data.UnproductiveMinutes)),
+                ("Productivity Rate", $"{_data.ProductivePercentage:F0}%"),
+                ("Tracked Apps", _data.AppUsage.Count.ToString()),
+                ("Tracked Hours", _data.HourlyProductivity.Count(h => h.Value.Total > 0).ToString())
+            };
+
+            return CreateTwoColumnTable("Metric", "Value", rows);
+        }
+
+        private Control CreateAppsDetailView()
+        {
+            if (_data == null || !_data.AppUsage.Any())
+            {
+                return new TextBlock
+                {
+                    Text = "No app usage data available.",
+                    Foreground = new SolidColorBrush(TextSecondary)
+                };
+            }
+
+            var rows = _data.AppUsage
+                .OrderByDescending(a => a.Value)
+                .Select(a =>
+                {
+                    double share = _data.TotalActivityMinutes > 0
+                        ? (double)a.Value / _data.TotalActivityMinutes * 100
+                        : 0;
+                    return (a.Key, $"{FormatDuration(a.Value)} ({share:F0}%)");
+                })
+                .ToList();
+
+            return CreateTwoColumnTable("App", "Time", rows);
+        }
+
+        private Control CreateProductivityDetailView()
+        {
+            if (_data == null || !_data.HourlyProductivity.Any(h => h.Value.Total > 0))
+            {
+                return new TextBlock
+                {
+                    Text = "No productivity data available.",
+                    Foreground = new SolidColorBrush(TextSecondary)
+                };
+            }
+
+            var table = new StackPanel { Spacing = 8 };
+            table.Children.Add(CreateTableHeader("Hour", "Productive", "Unproductive", "Rate"));
+
+            foreach (var entry in _data.HourlyProductivity
+                         .Where(h => h.Value.Total > 0)
+                         .OrderBy(h => h.Key))
+            {
+                table.Children.Add(CreateTableRow(
+                    $"{entry.Key:D2}:00",
+                    entry.Value.ProductiveCount.ToString(),
+                    entry.Value.UnproductiveCount.ToString(),
+                    $"{entry.Value.ProductivePercentage:F0}%"
+                ));
+            }
+
+            return table;
+        }
+
+        private Control CreateTwoColumnTable(string firstHeader, string secondHeader, IEnumerable<(string First, string Second)> rows)
+        {
+            var table = new StackPanel { Spacing = 8 };
+            table.Children.Add(CreateTableHeader(firstHeader, secondHeader));
+
+            foreach (var row in rows)
+            {
+                table.Children.Add(CreateTableRow(row.First, row.Second));
+            }
+
+            return table;
+        }
+
+        private Grid CreateTableHeader(params string[] titles)
+        {
+            var grid = CreateTableGrid(titles.Length, true);
+
+            for (int i = 0; i < titles.Length; i++)
+            {
+                var text = new TextBlock
+                {
+                    Text = titles[i],
+                    FontSize = 10,
+                    FontWeight = FontWeight.SemiBold,
+                    Foreground = new SolidColorBrush(TextSecondary)
+                };
+                Grid.SetColumn(text, i);
+                grid.Children.Add(text);
+            }
+
+            return grid;
+        }
+
+        private Border CreateTableRow(params string[] values)
+        {
+            var border = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255)),
+                BorderBrush = new SolidColorBrush(BorderColor),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(10, 8)
+            };
+
+            var grid = CreateTableGrid(values.Length, false);
+            for (int i = 0; i < values.Length; i++)
+            {
+                var text = new TextBlock
+                {
+                    Text = values[i],
+                    FontSize = 11,
+                    FontWeight = i == values.Length - 1 ? FontWeight.SemiBold : FontWeight.Medium,
+                    Foreground = new SolidColorBrush(TextPrimary),
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    HorizontalAlignment = i == 0 ? HorizontalAlignment.Left : HorizontalAlignment.Right
+                };
+                Grid.SetColumn(text, i);
+                grid.Children.Add(text);
+            }
+
+            border.Child = grid;
+            return border;
+        }
+
+        private Grid CreateTableGrid(int columnCount, bool isHeader)
+        {
+            string definitions = string.Join(",", Enumerable.Repeat("*", columnCount));
+            return new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions(definitions),
+                Margin = isHeader ? new Thickness(2, 0, 2, 2) : default
+            };
         }
 
         private StackPanel CreateAppUsageView()

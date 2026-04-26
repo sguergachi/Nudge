@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 internal enum NudgeStartupAction
@@ -59,9 +60,12 @@ internal static class NudgeCoreLogic
             }
             if (arg == "--interval" || arg == "-i")
             {
-                if (i + 1 < args.Length && int.TryParse(args[i + 1], out int minutes))
+                // Always consume the next token (whether it parses or not) so it is
+                // never mistakenly treated as a positional CSV-path argument.
+                if (i + 1 < args.Length)
                 {
-                    intervalMinutes = minutes;
+                    if (int.TryParse(args[i + 1], out int minutes))
+                        intervalMinutes = minutes;
                     i++;
                 }
                 continue;
@@ -164,5 +168,112 @@ internal static class NudgeCoreLogic
         {
             return "";
         }
+    }
+
+    // ─── Countdown formatting ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Formats a countdown TimeSpan into a short human-readable label used in
+    /// the tray menu status item.
+    /// </summary>
+    internal static string FormatCountdown(TimeSpan remaining)
+    {
+        if (remaining <= TimeSpan.Zero)
+            return "📸 Next snapshot: soon";
+
+        return remaining.TotalSeconds < 60
+            ? $"📸 Next snapshot in {(int)remaining.TotalSeconds}s"
+            : $"📸 Next snapshot in {(int)remaining.TotalMinutes}m {remaining.Seconds:D2}s";
+    }
+
+    // ─── Sway JSON parsing ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Extracts the focused app's <c>app_id</c> from a <c>swaymsg -t get_tree</c>
+    /// JSON response.  Falls back to simple string scanning if JSON is malformed.
+    /// </summary>
+    internal static string ExtractFocusedAppFromSwayJson(string json)
+    {
+        if (string.IsNullOrEmpty(json))
+            return "unknown";
+
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            return FindFocusedNodeInSwayJson(doc.RootElement);
+        }
+        catch
+        {
+            // Fallback: cheap string scan (handles truncated / non-UTF8 output)
+            if (json.Contains("\"focused\":true"))
+            {
+                int idx = json.IndexOf("\"app_id\":\"");
+                if (idx != -1)
+                {
+                    idx += 10;
+                    int end = json.IndexOf('"', idx);
+                    if (end > idx)
+                        return json.Substring(idx, end - idx);
+                }
+            }
+            return "unknown";
+        }
+    }
+
+    /// <summary>
+    /// Recursively searches a Sway tree node for the focused leaf and returns its
+    /// <c>app_id</c>.  Searches <c>nodes</c> and <c>floating_nodes</c>.
+    /// </summary>
+    internal static string FindFocusedNodeInSwayJson(JsonElement node)
+    {
+        if (node.TryGetProperty("focused", out var focused) && focused.GetBoolean())
+        {
+            if (node.TryGetProperty("app_id", out var appId))
+            {
+                var id = appId.GetString();
+                return string.IsNullOrEmpty(id) ? "unknown" : id;
+            }
+        }
+
+        foreach (string arrayProp in new[] { "nodes", "floating_nodes" })
+        {
+            if (node.TryGetProperty(arrayProp, out var children))
+            {
+                foreach (var child in children.EnumerateArray())
+                {
+                    var result = FindFocusedNodeInSwayJson(child);
+                    if (result != "unknown")
+                        return result;
+                }
+            }
+        }
+
+        return "unknown";
+    }
+
+    // ─── Quoted-string extraction (used for gdbus / GNOME output) ────────────
+
+    /// <summary>
+    /// Extracts the first quoted token from <paramref name="input"/>.
+    /// Tries double-quotes first, then single-quotes, to handle both JSON-style
+    /// (<c>"value"</c>) and gdbus-style (<c>'value'</c>) output.
+    /// </summary>
+    internal static string ExtractQuotedString(string input)
+    {
+        if (string.IsNullOrEmpty(input))
+            return "unknown";
+
+        foreach (char q in new[] { '"', '\'' })
+        {
+            int start = input.IndexOf(q) + 1;
+            if (start > 0)                          // found opening quote
+            {
+                int end = input.IndexOf(q, start);
+                if (end > start)
+                    return input.Substring(start, end - start);
+            }
+        }
+
+        return "unknown";
     }
 }

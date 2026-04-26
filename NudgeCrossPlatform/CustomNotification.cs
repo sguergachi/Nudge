@@ -32,7 +32,7 @@ namespace NudgeTray
     public class CustomNotificationWindow : Window
     {
         private const string CONFIG_FILE = "nudge-notification-config.json";
-        private const int AUTO_DISMISS_SECONDS = 5;
+        private const int AUTO_DISMISS_SECONDS = 10;
         private Point? _dragStartPosition;
         private bool _isDragging = false;
         private Action<bool?>? _onResponse; // Nullable bool: true=YES, false=NO, null=auto-dismissed

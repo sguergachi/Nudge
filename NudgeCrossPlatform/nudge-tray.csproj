@@ -7,6 +7,7 @@
     <LangVersion>latest</LangVersion>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationIcon>assets/windows/nudge.ico</ApplicationIcon>
   </PropertyGroup>
 
   <!-- Windows-specific settings -->
@@ -16,10 +17,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="NudgeCore.TestableLogic.cs" />
     <Compile Include="nudge-tray.cs" />
     <Compile Include="CustomNotification.cs" />
     <Compile Include="AnalyticsWindow.cs" />
+    <Compile Include="NudgeCore.TestableLogic.cs" />
   </ItemGroup>
 
   <ItemGroup>

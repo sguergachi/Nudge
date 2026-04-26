@@ -677,75 +677,11 @@ class Nudge
             return activityScore;
         }
 
-        private string ExtractFocusedAppFromSwayTree(string json)
-        {
-            try
-            {
-                using var doc = JsonDocument.Parse(json);
-                return FindFocusedNode(doc.RootElement);
-            }
-            catch
-            {
-                // Fallback to simple string parsing
-                if (json.Contains("\"focused\":true"))
-                {
-                    int idx = json.IndexOf("\"app_id\":\"");
-                    if (idx != -1)
-                    {
-                        idx += 10;
-                        int end = json.IndexOf("\"", idx);
-                        if (end > idx)
-                            return json.Substring(idx, end - idx);
-                    }
-                }
-                return "unknown";
-            }
-        }
+        private string ExtractFocusedAppFromSwayTree(string json) =>
+            NudgeCoreLogic.ExtractFocusedAppFromSwayJson(json);
 
-        private string FindFocusedNode(JsonElement node)
-        {
-            if (node.TryGetProperty("focused", out var focused) && focused.GetBoolean())
-            {
-                if (node.TryGetProperty("app_id", out var appId))
-                {
-                    var id = appId.GetString();
-                    return string.IsNullOrEmpty(id) ? "unknown" : id;
-                }
-            }
-
-            if (node.TryGetProperty("nodes", out var nodes))
-            {
-                foreach (var child in nodes.EnumerateArray())
-                {
-                    var result = FindFocusedNode(child);
-                    if (result != "unknown")
-                        return result;
-                }
-            }
-
-            if (node.TryGetProperty("floating_nodes", out var floatingNodes))
-            {
-                foreach (var child in floatingNodes.EnumerateArray())
-                {
-                    var result = FindFocusedNode(child);
-                    if (result != "unknown")
-                        return result;
-                }
-            }
-
-            return "unknown";
-        }
-
-        private string ExtractQuotedString(string input)
-        {
-            if (string.IsNullOrEmpty(input) || !input.Contains("\""))
-                return "unknown";
-
-            int start = input.IndexOf("\"") + 1;
-            int end = input.IndexOf("\"", start);
-
-            return end > start ? input.Substring(start, end - start) : "unknown";
-        }
+        private string ExtractQuotedString(string input) =>
+            NudgeCoreLogic.ExtractQuotedString(input);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

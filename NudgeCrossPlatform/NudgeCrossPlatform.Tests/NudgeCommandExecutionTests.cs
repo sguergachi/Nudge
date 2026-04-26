@@ -22,4 +22,27 @@ public class NudgeCommandExecutionTests
         var output = NudgeCoreLogic.RunCommand("definitely-not-a-real-command", "");
         Assert.Equal(string.Empty, output);
     }
+
+    [Fact]
+    public void RunCommand_ReturnsStdout_NotStderr()
+    {
+        // Command writes only to stderr; stdout should be empty
+        var output = NudgeCoreLogic.RunCommand("/bin/sh", "-c \"printf 'err' >&2\"", timeoutMs: 2000);
+        Assert.Equal(string.Empty, output);
+    }
+
+    [Fact]
+    public void RunCommand_ReturnsStdout_EvenOnNonZeroExitCode()
+    {
+        // Command emits stdout then exits with code 1
+        var output = NudgeCoreLogic.RunCommand("/bin/sh", "-c \"printf 'out'; exit 1\"", timeoutMs: 2000);
+        Assert.Equal("out", output);
+    }
+
+    [Fact]
+    public void RunCommand_ReturnsBothLines_WhenCommandOutputsMultipleLines()
+    {
+        var output = NudgeCoreLogic.RunCommand("/bin/sh", "-c \"printf 'a\\nb'\"", timeoutMs: 2000);
+        Assert.Equal("a\nb", output);
+    }
 }

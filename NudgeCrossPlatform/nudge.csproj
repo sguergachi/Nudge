@@ -8,7 +8,7 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="NudgeCore.TestableLogic.cs" />
     <Compile Include="nudge_build.cs" />
+    <Compile Include="NudgeCore.TestableLogic.cs" />
   </ItemGroup>
 </Project>
