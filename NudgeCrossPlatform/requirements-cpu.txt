@@ -3,7 +3,7 @@
 # Install with: pip install -r requirements-cpu.txt
 
 # CPU-only TensorFlow (smaller download, no CUDA dependencies)
-tensorflow-cpu>=2.13.0
+tensorflow>=2.13.0
 
 # Data processing
 pandas>=2.0.0

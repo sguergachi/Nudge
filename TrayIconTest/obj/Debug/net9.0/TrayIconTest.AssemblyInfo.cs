@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("TrayIconTest")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+27a31e36699956906c67a5d169b323464844fddd")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+fa2f7bb317b40ddb1a1cf8bd013e90f6d8a92309")]
 [assembly: System.Reflection.AssemblyProductAttribute("TrayIconTest")]
 [assembly: System.Reflection.AssemblyTitleAttribute("TrayIconTest")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
