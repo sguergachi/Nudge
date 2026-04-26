@@ -1270,6 +1270,34 @@ namespace NudgeTray
         {
             return _nextSnapshotTime;
         }
+
+        public static void RestartWithML()
+        {
+            Console.WriteLine("[INFO] Restarting with ML enabled...");
+
+            // Enable ML
+            _mlEnabled = true;
+
+            // Clean up existing processes
+            CleanupOldProcesses();
+
+            // Start ML services
+            StartMLServices();
+
+            // Restart nudge process with ML flag
+            if (_nudgeProcess != null && !_nudgeProcess.HasExited)
+            {
+                try
+                {
+                    _nudgeProcess.Kill(entireProcessTree: true);
+                    _nudgeProcess.WaitForExit(2000);
+                }
+                catch { }
+            }
+
+            StartNudge(_intervalMinutes);
+            Console.WriteLine("[INFO] ML mode enabled and nudge restarted");
+        }
     }
 
     // Avalonia application class - used on all platforms for custom notifications
