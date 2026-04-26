@@ -81,12 +81,246 @@ using System.Text.Json;
 using System.Threading;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// PLATFORM ABSTRACTION - Share code between Windows/Linux implementations
+// BROWSER DETECTION & SITE EXTRACTION - Identify browsers and extract domains
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+static class BrowserDetector
+{
+    // .NET 9: SearchValues for O(1) browser process name matching
+    private static readonly SearchValues<string> BrowserProcessNames = SearchValues.Create(
+        [
+            "chrome", "chromium", "firefox", "edge", "brave", "opera", "vivaldi",
+            "safari", "browser", "chromium-browser", "google-chrome", "mozilla"
+        ],
+        StringComparison.OrdinalIgnoreCase);
+
+    // Known browser suffixes that appear at the end of window titles
+    private static readonly string[] BrowserSuffixes =
+    [
+        " - Google Chrome", " - Chrome", " - Microsoft Edge",
+        " - Mozilla Firefox", " - Firefox", " - Brave",
+        " - Opera", " - Vivaldi", " - Chromium",
+        " : Google Chrome", " : Chrome", " : Microsoft Edge",
+        " : Mozilla Firefox", " : Firefox", " : Brave"
+    ];
+
+    // Common site patterns for known sites that may appear in different formats
+    private static readonly Dictionary<string, string> KnownSites = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // Productive sites
+        { "github.com", "GitHub" },
+        { "stackoverflow.com", "Stack Overflow" },
+        { "stackexchange.com", "Stack Exchange" },
+        { "gitlab.com", "GitLab" },
+        { "bitbucket.org", "Bitbucket" },
+        { "youtube.com", "YouTube" },
+        { "reddit.com", "Reddit" },
+        { "twitter.com", "Twitter" },
+        { "x.com", "X (Twitter)" },
+        { "linkedin.com", "LinkedIn" },
+        { "docs.google.com", "Google Docs" },
+        { "drive.google.com", "Google Drive" },
+        { "notion.so", "Notion" },
+        { "figma.com", "Figma" },
+        { "linear.app", "Linear" },
+        { "jira.atlassian.com", "Jira" },
+        { "confluence.atlassian.com", "Confluence" },
+        { "slack.com", "Slack" },
+        { "discord.com", "Discord" },
+        { "zoom.us", "Zoom" },
+        { "meet.google.com", "Google Meet" },
+        { "office.com", "Microsoft Office" },
+        { "outlook.office.com", "Outlook" },
+        { "mail.google.com", "Gmail" },
+        { "chat.openai.com", "ChatGPT" },
+        { "claude.ai", "Claude" },
+        { "copilot.microsoft.com", "GitHub Copilot" },
+        // Distracting sites
+        { "news.ycombinator.com", "Hacker News" },
+        { "instagram.com", "Instagram" },
+        { "facebook.com", "Facebook" },
+        { "tiktok.com", "TikTok" },
+        { "netflix.com", "Netflix" },
+        { "twitch.tv", "Twitch" },
+        { "amazon.com", "Amazon" },
+        { "ebay.com", "eBay" }
+    };
+
+    public static bool IsBrowser(string? processName)
+    {
+        if (string.IsNullOrEmpty(processName))
+            return false;
+
+        return processName.AsSpan().ContainsAny(BrowserProcessNames);
+    }
+
+    public static string? ExtractSite(string title)
+    {
+        if (string.IsNullOrEmpty(title))
+            return null;
+
+        // Strategy 1: Remove known browser suffixes and check what's left
+        string cleanedTitle = title;
+        foreach (var suffix in BrowserSuffixes)
+        {
+            if (cleanedTitle.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            {
+                cleanedTitle = cleanedTitle[..^suffix.Length];
+                break;
+            }
+        }
+
+        // Strategy 2: Look for domain-like patterns in the cleaned title
+        // Domains typically: contain dots, no spaces, reasonable length
+        var parts = cleanedTitle.Split(new[] { ' ', '-', '—', '–', '|', '/', '\\' },
+            StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var part in parts)
+        {
+            var trimmed = part.Trim();
+            // Check if it looks like a domain (has dots, reasonable length)
+            if (trimmed.Contains('.') && trimmed.Length >= 4 && trimmed.Length <= 100)
+            {
+                // Validate it looks like a real domain
+                if (IsLikelyDomain(trimmed))
+                {
+                    return NormalizeDomain(trimmed);
+                }
+            }
+        }
+
+        // Strategy 3: Check if cleaned title itself is a domain
+        if (cleanedTitle.Contains('.') && IsLikelyDomain(cleanedTitle))
+        {
+            return NormalizeDomain(cleanedTitle);
+        }
+
+        // Strategy 4: Match against known sites dictionary
+        foreach (var kvp in KnownSites)
+        {
+            if (title.Contains(kvp.Key, StringComparison.OrdinalIgnoreCase))
+            {
+                return kvp.Key;
+            }
+        }
+
+        // Strategy 5: Return shortest significant part (often the site name)
+        // This handles titles like "Issue #123 - repo-name - GitHub"
+        if (parts.Length > 0)
+        {
+            var significantParts = parts.Where(p => p.Length > 2 && !IsCommonWord(p)).ToList();
+            if (significantParts.Count > 0)
+            {
+                // Return the shortest meaningful part (often the domain or site name)
+                var sitePart = significantParts.OrderBy(p => p.Length).First();
+                if (sitePart.Length <= 50 && IsLikelyDomain(sitePart))
+                {
+                    return NormalizeDomain(sitePart);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsLikelyDomain(string text)
+    {
+        if (string.IsNullOrEmpty(text) || text.Length < 4 || text.Length > 100)
+            return false;
+
+        // Must have at least one dot
+        if (!text.Contains('.'))
+            return false;
+
+        // Should not have multiple consecutive dots
+        if (text.Contains(".."))
+            return false;
+
+        // Should not start or end with dots (after trim)
+        var trimmed = text.Trim();
+        if (trimmed.StartsWith('.') || trimmed.EndsWith('.'))
+            return false;
+
+        // Should not have spaces
+        if (trimmed.Contains(' '))
+            return false;
+
+        // Check for valid domain characters (alphanumeric, dots, hyphens)
+        foreach (char c in trimmed)
+        {
+            if (!char.IsLetterOrDigit(c) && c != '.' && c != '-' && c != '/' && c != ':')
+                return false;
+        }
+
+        return true;
+    }
+
+    private static string NormalizeDomain(string domain)
+    {
+        // Remove protocol if present
+        var normalized = domain.ToLowerInvariant().Trim();
+        if (normalized.StartsWith("https://"))
+            normalized = normalized[8..];
+        if (normalized.StartsWith("http://"))
+            normalized = normalized[7..];
+
+        // Remove trailing slashes and paths beyond root
+        int slashIndex = normalized.IndexOf('/');
+        if (slashIndex > 0)
+            normalized = normalized[..slashIndex];
+
+        // Remove port if present (usually :443 or :80)
+        int colonIndex = normalized.IndexOf(':');
+        if (colonIndex > 0)
+            normalized = normalized[..colonIndex];
+
+        // Remove www. prefix for cleaner display
+        if (normalized.StartsWith("www."))
+            normalized = normalized[4..];
+
+        return normalized;
+    }
+
+    private static bool IsCommonWord(string text)
+    {
+        // Words that are too generic to be useful as site names
+        var common = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "the", "and", "for", "are", "but", "not", "you", "all", "can",
+            "her", "was", "one", "our", "out", "new", "has", "his", "how",
+            "its", "may", "see", "now", "old", "see", "way", "who", "boy",
+            "did", "get", "let", "put", "say", "she", "too", "use", "tab",
+            "page", "new", "edit", "view", "file", "data", "home", "search",
+            "settings", "profile", "account", "dashboard", "overview"
+        };
+        return common.Contains(text);
+    }
+
+    public static string GetAppAndSite(string? processName, string title)
+    {
+        if (!IsBrowser(processName))
+            return title;
+
+        var site = ExtractSite(title);
+        if (!string.IsNullOrEmpty(site))
+        {
+            // Format: "Chrome (github.com)"
+            return $"{char.ToUpper(processName![0]) + processName[1..]} ({site})";
+        }
+
+        // Return browser name without site info if we couldn't extract one
+        return char.ToUpper(processName![0]) + processName[1..];
+    }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// PLATFORM SERVICE IMPLEMENTATIONS
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 interface IPlatformService
 {
     string GetForegroundApp();
+    (string app, string title) GetForegroundAppWithTitle();
     int GetIdleTime();
     string PlatformName { get; }
 }
@@ -192,6 +426,9 @@ class Nudge
     [DllImport("kernel32.dll")]
     static extern uint GetTickCount();
 
+    [DllImport("user32.dll")]
+    static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // PLATFORM SERVICE IMPLEMENTATIONS
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -199,6 +436,7 @@ class Nudge
     class WindowsPlatformService : IPlatformService
     {
         private string _cachedApp = "";
+        private string _cachedTitle = "";
         private DateTime _appCacheExpiry = DateTime.MinValue;
         private int _cachedIdle = 0;
         private DateTime _idleCacheExpiry = DateTime.MinValue;
@@ -207,30 +445,51 @@ class Nudge
 
         public string GetForegroundApp()
         {
+            var (app, title) = GetForegroundAppWithTitle();
+            return app;
+        }
+
+        public (string app, string title) GetForegroundAppWithTitle()
+        {
             if (DateTime.Now < _appCacheExpiry)
-                return _cachedApp;
+                return (_cachedApp, _cachedTitle);
 
             try
             {
                 IntPtr hwnd = GetForegroundWindow();
                 if (hwnd == IntPtr.Zero)
-                    return "unknown";
+                    return ("unknown", "");
 
+                // Get the process ID for browser detection
+                GetWindowThreadProcessId(hwnd, out uint processId);
+                string? processName = null;
+                try
+                {
+                    var process = Process.GetProcessById((int)processId);
+                    processName = process.ProcessName.ToLowerInvariant();
+                }
+                catch { }
+
+                // Get window title
                 const int nChars = 256;
                 var buff = new System.Text.StringBuilder(nChars);
-
+                string title = "";
                 if (GetWindowText(hwnd, buff, nChars) > 0)
                 {
-                    _cachedApp = buff.ToString();
-                    _appCacheExpiry = DateTime.Now.AddMilliseconds(500);
-                    return _cachedApp;
+                    title = buff.ToString();
                 }
 
-                return "unknown";
+                // Use BrowserDetector to format the app name with site if applicable
+                string app = BrowserDetector.GetAppAndSite(processName, title);
+
+                _cachedApp = app;
+                _cachedTitle = title;
+                _appCacheExpiry = DateTime.Now.AddMilliseconds(500);
+                return (app, title);
             }
             catch
             {
-                return "unknown";
+                return ("unknown", "");
             }
         }
 
@@ -265,6 +524,7 @@ class Nudge
     {
         private string _compositor = "";
         private string _cachedApp = "";
+        private string _cachedTitle = "";
         private DateTime _appCacheExpiry = DateTime.MinValue;
         private int _cachedIdle = 0;
         private DateTime _idleCacheExpiry = DateTime.MinValue;
@@ -334,21 +594,31 @@ class Nudge
 
         public string GetForegroundApp()
         {
-            if (DateTime.Now < _appCacheExpiry)
-                return _cachedApp;
+            var (app, _) = GetForegroundAppWithTitle();
+            return app;
+        }
 
-            string app = _compositor switch
+        public (string app, string title) GetForegroundAppWithTitle()
+        {
+            if (DateTime.Now < _appCacheExpiry)
+                return (_cachedApp, _cachedTitle);
+
+            (string app, string title) result = _compositor switch
             {
-                "sway" => GetSwayFocusedApp(),
-                "gnome" => GetGnomeFocusedApp(),
-                "kde" => GetKDEFocusedApp(),
-                "cinnamon" => GetX11FocusedApp(),
-                _ => "unknown"
+                "sway" => GetSwayFocusedAppWithTitle(),
+                "gnome" => GetGnomeFocusedAppWithTitle(),
+                "kde" => GetKDEFocusedAppWithTitle(),
+                "cinnamon" => GetX11FocusedAppWithTitle(),
+                _ => ("unknown", "")
             };
 
+            // Apply browser detection to format app name with site
+            string app = BrowserDetector.GetAppAndSite(result.app, result.title);
+
             _cachedApp = app;
+            _cachedTitle = result.title;
             _appCacheExpiry = DateTime.Now.AddMilliseconds(500);
-            return app;
+            return (app, result.title);
         }
 
         public int GetIdleTime()
@@ -385,7 +655,7 @@ class Nudge
         }
 
         // Linux-specific window detection methods
-        private string GetSwayFocusedApp()
+        private (string app, string title) GetSwayFocusedAppWithTitle()
         {
             try
             {
@@ -394,38 +664,59 @@ class Nudge
             }
             catch
             {
-                return "unknown";
+                return ("unknown", "");
             }
         }
 
-        private string GetGnomeFocusedApp()
+        private (string app, string title) GetGnomeFocusedAppWithTitle()
         {
             try
             {
-                var output = RunCommand("gdbus", "call --session --dest org.gnome.Shell " +
+                // Get window class (app_id equivalent)
+                var classOutput = RunCommand("gdbus", "call --session --dest org.gnome.Shell " +
                     "--object-path /org/gnome/Shell " +
                     "--method org.gnome.Shell.Eval " +
                     "\"global.display.focus_window.get_wm_class()\"");
 
-                return ExtractQuotedString(output);
+                string appClass = ExtractQuotedString(classOutput);
+
+                // Get window title
+                var titleOutput = RunCommand("gdbus", "call --session --dest org.gnome.Shell " +
+                    "--object-path /org/gnome/Shell " +
+                    "--method org.gnome.Shell.Eval " +
+                    "\"global.display.focus_window.get_title()\"");
+
+                string title = ExtractQuotedString(titleOutput);
+
+                if (string.IsNullOrEmpty(appClass) || appClass == "unknown")
+                    return ("unknown", "");
+
+                return (appClass, title ?? "");
             }
             catch
             {
-                return "unknown";
+                return ("unknown", "");
             }
         }
 
-        private string GetKDEFocusedApp()
+        private (string app, string title) GetKDEFocusedAppWithTitle()
         {
             // Try xdotool first for X11 sessions
             if (CommandExists("xdotool"))
             {
                 try
                 {
-                    var windowName = RunCommand("xdotool", "getactivewindow getwindowname");
-                    if (!string.IsNullOrWhiteSpace(windowName))
+                    // Get window class (for browser detection)
+                    var windowClass = RunCommand("xdotool", "getactivewindow getwindowclassname");
+                    var className = windowClass.Trim().Split('\n')[0];
+
+                    // Get window title (for site extraction)
+                    var windowTitle = RunCommand("xdotool", "getactivewindow getwindowname");
+                    var title = windowTitle.Trim().Split('\n')[0];
+
+                    if (!string.IsNullOrEmpty(className))
                     {
-                        return windowName.Trim().Split('\n')[0];
+                        return (className, title ?? "");
                     }
                 }
                 catch
@@ -450,7 +741,7 @@ class Nudge
                                 var parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
                                 if (parts.Length > 2)
                                 {
-                                    return parts[2];
+                                    return (parts[2], "");
                                 }
                             }
                         }
@@ -460,24 +751,31 @@ class Nudge
             }
 
             // Process-based detection (KDE Wayland)
-            return DetectActiveProcessKDE();
+            return (DetectActiveProcessKDE(), "");
         }
 
-        private string GetX11FocusedApp()
+        private (string app, string title) GetX11FocusedAppWithTitle()
         {
             try
             {
-                var windowName = RunCommand("xdotool", "getactivewindow getwindowname");
-                if (!string.IsNullOrWhiteSpace(windowName))
+                // Get window class (for browser detection)
+                var windowClass = RunCommand("xdotool", "getactivewindow getwindowclassname");
+                var className = windowClass.Trim().Split('\n')[0];
+
+                // Get window title (for site extraction)
+                var windowTitle = RunCommand("xdotool", "getactivewindow getwindowname");
+                var title = windowTitle.Trim().Split('\n')[0];
+
+                if (!string.IsNullOrEmpty(className))
                 {
-                    return windowName.Trim().Split('\n')[0];
+                    return (className, title ?? "");
                 }
 
-                return "unknown";
+                return ("unknown", "");
             }
             catch
             {
-                return "unknown";
+                return ("unknown", "");
             }
         }
 
@@ -676,7 +974,7 @@ class Nudge
             return activityScore;
         }
 
-        private string ExtractFocusedAppFromSwayTree(string json)
+        private (string app, string title) ExtractFocusedAppFromSwayTree(string json)
         {
             try
             {
@@ -689,26 +987,52 @@ class Nudge
                 if (json.Contains("\"focused\":true"))
                 {
                     int idx = json.IndexOf("\"app_id\":\"");
+                    string app = "unknown";
                     if (idx != -1)
                     {
                         idx += 10;
                         int end = json.IndexOf("\"", idx);
                         if (end > idx)
-                            return json.Substring(idx, end - idx);
+                            app = json.Substring(idx, end - idx);
                     }
+
+                    // Also try to extract window title
+                    int titleIdx = json.IndexOf("\"name\":\"");
+                    string title = "";
+                    if (titleIdx != -1)
+                    {
+                        titleIdx += 8;
+                        int titleEnd = json.IndexOf("\"", titleIdx);
+                        if (titleEnd > titleIdx)
+                            title = json.Substring(titleIdx, titleEnd - titleIdx);
+                    }
+
+                    return (app, title);
                 }
-                return "unknown";
+                return ("unknown", "");
             }
         }
 
-        private string FindFocusedNode(JsonElement node)
+        private (string app, string title) FindFocusedNode(JsonElement node)
         {
             if (node.TryGetProperty("focused", out var focused) && focused.GetBoolean())
             {
-                if (node.TryGetProperty("app_id", out var appId))
+                string? appId = null;
+                string? name = null;
+
+                if (node.TryGetProperty("app_id", out var appIdElem))
                 {
-                    var id = appId.GetString();
-                    return string.IsNullOrEmpty(id) ? "unknown" : id;
+                    appId = appIdElem.GetString();
+                }
+
+                if (node.TryGetProperty("name", out var nameElem))
+                {
+                    name = nameElem.GetString();
+                }
+
+                if (appId != null)
+                {
+                    return (string.IsNullOrEmpty(appId) ? "unknown" : appId, name ?? "");
                 }
             }
 
@@ -717,7 +1041,7 @@ class Nudge
                 foreach (var child in nodes.EnumerateArray())
                 {
                     var result = FindFocusedNode(child);
-                    if (result != "unknown")
+                    if (result.app != "unknown")
                         return result;
                 }
             }
@@ -727,12 +1051,12 @@ class Nudge
                 foreach (var child in floatingNodes.EnumerateArray())
                 {
                     var result = FindFocusedNode(child);
-                    if (result != "unknown")
+                    if (result.app != "unknown")
                         return result;
                 }
             }
 
-            return "unknown";
+            return ("unknown", "");
         }
 
         private string ExtractQuotedString(string input)
@@ -1015,11 +1339,12 @@ class Nudge
             string app = _platformService?.GetForegroundApp() ?? "unknown";
             int idle = _platformService?.GetIdleTime() ?? 0;
 
-            // Ignore Nudge notification window in app tracking (shows as "Window" or contains "Notification")
+            // Ignore Nudge notification window in app tracking
             // This prevents the notification from polluting analytics data
             bool isNudgeWindow = app == "Window" ||
                                  app.Contains("Notification", StringComparison.OrdinalIgnoreCase) ||
-                                 app.Contains("CustomNotification", StringComparison.OrdinalIgnoreCase);
+                                 app.Contains("CustomNotification", StringComparison.OrdinalIgnoreCase) ||
+                                 app.Contains("Nudge", StringComparison.OrdinalIgnoreCase);
 
             // Track attention span (skip if it's our notification window)
             if (!isNudgeWindow && app != _currentApp)
@@ -1358,7 +1683,7 @@ class Nudge
         }
     }
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━���━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // UDP LISTENER - Network communication with detailed logging
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
