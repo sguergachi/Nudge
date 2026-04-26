@@ -37,6 +37,20 @@ namespace NudgeTray
         private Border? _todayTab;
         private Border? _weekTab;
 
+        // AI Status indicator components
+        private Border? _aiStatusDot;
+        private TextBlock? _aiStatusText;
+        private Button? _aiEnableButton;
+        private DispatcherTimer? _aiStatusTimer;
+
+        // AI Status enum
+        public enum AIStatus
+        {
+            Active,
+            Learning,
+            Inactive
+        }
+
         // Fluent Design System Colors - matching CustomNotification
         private static readonly Color BackgroundColor = Color.FromRgb(18, 18, 20);
         private static readonly Color SurfaceColor = Color.FromArgb(245, 18, 18, 20);
@@ -50,6 +64,11 @@ namespace NudgeTray
         private static readonly Color ProgressBarBg = Color.FromRgb(35, 35, 40);
         private static readonly Color ProductiveGreen = Color.FromRgb(76, 175, 80);
         private static readonly Color UnproductiveRed = Color.FromRgb(244, 67, 54);
+
+        // AI Status Colors
+        private static readonly Color AIStatusActive = Color.FromRgb(76, 175, 80);  // Green
+        private static readonly Color AIStatusLearning = Color.FromRgb(255, 193, 7);  // Amber
+        private static readonly Color AIStatusInactive = Color.FromRgb(150, 150, 160);  // Gray
 
         public enum TimeFilter
         {
@@ -70,9 +89,17 @@ namespace NudgeTray
             CanResize = false;
             ShowInTaskbar = false;
             SystemDecorations = SystemDecorations.None;
-            Title = "Nudge Analytics";
+            Title = "Nudge";
             Background = Brushes.Transparent;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
+
+            // Set up AI status refresh timer
+            _aiStatusTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(5)
+            };
+            _aiStatusTimer.Tick += (s, e) => UpdateAIStatus();
+            _aiStatusTimer.Start();
 
             // Position near bottom-right (typical tray icon location)
             var screen = Screens.Primary;
@@ -168,6 +195,9 @@ namespace NudgeTray
             mainContainer.Child = innerContainer;
             Content = mainContainer;
 
+            // Initial AI status update (don't wait for timer)
+            UpdateAIStatus();
+
             // Populate content
             RefreshContent();
         }
@@ -176,7 +206,7 @@ namespace NudgeTray
         {
             var headerStack = new StackPanel { Spacing = 0 };
 
-            // Top bar with title and close button
+            // Top bar with title, AI status, and close button
             var topBar = new Border
             {
                 Background = new SolidColorBrush(SurfaceColor),
@@ -186,24 +216,30 @@ namespace NudgeTray
 
             var topGrid = new Grid
             {
-                ColumnDefinitions = new ColumnDefinitions("*,Auto")
+                ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto")
             };
 
+            // AI Status indicator
+            var aiStatusContainer = CreateAIStatusIndicator();
+            Grid.SetColumn(aiStatusContainer, 0);
+
+            // Title Text
             var titleText = new TextBlock
             {
-                Text = "Analytics",
+                Text = "Nudge",
                 FontSize = 15,
                 FontWeight = FontWeight.SemiBold,
                 Foreground = new SolidColorBrush(TextPrimary),
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(10, 0, 0, 0)
             };
-
-            Grid.SetColumn(titleText, 0);
+            Grid.SetColumn(titleText, 1);
 
             // Close Button
             var closeButton = CreateCloseButton();
-            Grid.SetColumn(closeButton, 1);
+            Grid.SetColumn(closeButton, 2);
 
+            topGrid.Children.Add(aiStatusContainer);
             topGrid.Children.Add(titleText);
             topGrid.Children.Add(closeButton);
             topBar.Child = topGrid;
@@ -324,6 +360,147 @@ namespace NudgeTray
                     weekTb.FontWeight = !todayActive ? FontWeight.SemiBold : FontWeight.Medium;
                     weekTb.Foreground = new SolidColorBrush(!todayActive ? PrimaryBlue : TextSecondary);
                 }
+            }
+        }
+
+        private StackPanel CreateAIStatusIndicator()
+        {
+            var container = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            // Status dot
+            _aiStatusDot = new Border
+            {
+                Width = 8,
+                Height = 8,
+                CornerRadius = new CornerRadius(4),
+                Background = new SolidColorBrush(AIStatusInactive),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            // Status text
+            _aiStatusText = new TextBlock
+            {
+                Text = "AI: Inactive",
+                FontSize = 11,
+                FontWeight = FontWeight.Medium,
+                Foreground = new SolidColorBrush(TextSecondary),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            // Enable AI button (only visible when inactive)
+            _aiEnableButton = new Button
+            {
+                Content = "Enable",
+                Background = new SolidColorBrush(PrimaryBlue),
+                Foreground = new SolidColorBrush(TextPrimary),
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(8, 4),
+                FontSize = 10,
+                FontWeight = FontWeight.Medium,
+                Cursor = new Cursor(StandardCursorType.Hand),
+                IsVisible = false
+            };
+
+            _aiEnableButton.Click += (s, e) =>
+            {
+                Console.WriteLine("[Analytics] Enable AI button clicked");
+                Program.RestartWithML();
+            };
+
+            container.Children.Add(_aiStatusDot);
+            container.Children.Add(_aiStatusText);
+            container.Children.Add(_aiEnableButton);
+
+            // Set tooltip for the status dot
+            _aiStatusDot.ToolTipTip = new ToolTip
+            {
+                Content = "AI Model Status: Inactive\n\nThe ML model is not running.\nClick 'Enable' to start AI-powered productivity tracking."
+            };
+
+            return container;
+        }
+
+        private AIStatus GetAIStatus()
+        {
+            // Check if ML is enabled
+            if (!Program._mlEnabled)
+            {
+                return AIStatus.Inactive;
+            }
+
+            // Check sample count in HARVEST.CSV
+            try
+            {
+                string homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                string harvestPath = Path.Combine(homeDir, ".nudge", "HARVEST.CSV");
+
+                if (File.Exists(harvestPath))
+                {
+                    int lineCount = File.ReadAllLines(harvestPath).Length;
+                    // Subtract 1 for header line
+                    int sampleCount = Math.Max(0, lineCount - 1);
+
+                    // Learning if fewer than 100 samples, Active if 100+
+                    return sampleCount >= 100 ? AIStatus.Active : AIStatus.Learning;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Analytics] Error checking AI status: {ex.Message}");
+            }
+
+            return AIStatus.Learning;
+        }
+
+        private void UpdateAIStatus()
+        {
+            if (_aiStatusDot == null || _aiStatusText == null || _aiEnableButton == null)
+                return;
+
+            var status = GetAIStatus();
+
+            switch (status)
+            {
+                case AIStatus.Active:
+                    _aiStatusDot.Background = new SolidColorBrush(AIStatusActive);
+                    _aiStatusText.Text = "AI: Active";
+                    _aiStatusText.Foreground = new SolidColorBrush(AIStatusActive);
+                    _aiEnableButton.IsVisible = false;
+
+                    if (_aiStatusDot.ToolTipTip is ToolTip tip1)
+                    {
+                        tip1.Content = "AI Model Status: Active\n\nThe ML model is running and making predictions.";
+                    }
+                    break;
+
+                case AIStatus.Learning:
+                    _aiStatusDot.Background = new SolidColorBrush(AIStatusLearning);
+                    _aiStatusText.Text = "AI: Learning";
+                    _aiStatusText.Foreground = new SolidColorBrush(AIStatusLearning);
+                    _aiEnableButton.IsVisible = false;
+
+                    if (_aiStatusDot.ToolTipTip is ToolTip tip2)
+                    {
+                        tip2.Content = "AI Model Status: Learning\n\nThe ML model is training. More responses will improve predictions.";
+                    }
+                    break;
+
+                case AIStatus.Inactive:
+                    _aiStatusDot.Background = new SolidColorBrush(AIStatusInactive);
+                    _aiStatusText.Text = "AI: Inactive";
+                    _aiStatusText.Foreground = new SolidColorBrush(AIStatusInactive);
+                    _aiEnableButton.IsVisible = true;
+
+                    if (_aiStatusDot.ToolTipTip is ToolTip tip3)
+                    {
+                        tip3.Content = "AI Model Status: Inactive\n\nThe ML model is not running.\nClick 'Enable' to start AI-powered productivity tracking.";
+                    }
+                    break;
             }
         }
 
