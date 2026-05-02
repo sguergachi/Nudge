@@ -48,10 +48,13 @@ namespace NudgeTray
         private DetailViewType _activeDetailView;
         private Border? _todayTab;
         private Border? _weekTab;
+        private Border? _monthTab;
+        private Border? _allTimeTab;
 
         // AI Status indicator components
         private Border? _aiStatusDot;
         private TextBlock? _aiStatusText;
+        private TextBlock? _aiInfoIcon;
         private Button? _aiEnableButton;
         private DispatcherTimer? _aiStatusTimer;
 
@@ -85,7 +88,9 @@ namespace NudgeTray
         public enum TimeFilter
         {
             Today,
-            ThisWeek
+            ThisWeek,
+            ThisMonth,
+            AllTime
         }
 
         public AnalyticsWindow(AnalyticsData? initialData = null)
@@ -106,11 +111,11 @@ namespace NudgeTray
         private void InitializeWindow()
         {
             Width = 420;
-            Height = 580;
+            Height = 640;
             CanResize = false;
             ShowInTaskbar = false;
             WindowDecorations = WindowDecorations.None;
-            Title = "Nudge Analytics";
+            Title = "Nudge";
             Background = Brushes.Transparent;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Focusable = true;
@@ -130,7 +135,7 @@ namespace NudgeTray
                 var workingArea = screen.WorkingArea;
                 Position = new PixelPoint(
                     workingArea.Right - 420 - 20,
-                    workingArea.Bottom - 580 - 20
+                    workingArea.Bottom - 640 - 20
                 );
             }
             else
@@ -175,7 +180,7 @@ namespace NudgeTray
                     }
                 ),
                 Width = 388,
-                Height = 548
+                Height = 608
             };
 
             // Main layout grid (outer) - will contain header and content area
@@ -183,7 +188,7 @@ namespace NudgeTray
             {
                 RowDefinitions = new RowDefinitions("Auto,*"),
                 Width = 388,
-                Height = 548,
+                Height = 608,
                 VerticalAlignment = VerticalAlignment.Stretch,
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
@@ -258,12 +263,8 @@ namespace NudgeTray
 
             var topGrid = new Grid
             {
-                ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto")
+                ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto")
             };
-
-            // AI Status indicator
-            var aiStatusContainer = CreateAIStatusIndicator();
-            Grid.SetColumn(aiStatusContainer, 0);
 
             // Title Text
             var titleText = new TextBlock
@@ -273,16 +274,20 @@ namespace NudgeTray
                 FontWeight = FontWeight.SemiBold,
                 Foreground = new SolidColorBrush(TextPrimary),
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(10, 0, 0, 0)
+                Margin = new Thickness(0, 0, 12, 0)
             };
-            Grid.SetColumn(titleText, 1);
+            Grid.SetColumn(titleText, 0);
+
+            // AI Status indicator
+            var aiStatusContainer = CreateAIStatusIndicator();
+            Grid.SetColumn(aiStatusContainer, 1);
 
             // Close Button
             var closeButton = CreateCloseButton();
-            Grid.SetColumn(closeButton, 2);
+            Grid.SetColumn(closeButton, 3);
 
-            topGrid.Children.Add(aiStatusContainer);
             topGrid.Children.Add(titleText);
+            topGrid.Children.Add(aiStatusContainer);
             topGrid.Children.Add(closeButton);
             topBar.Child = topGrid;
 
@@ -303,9 +308,13 @@ namespace NudgeTray
 
             _todayTab = CreateTab("Today", true);
             _weekTab = CreateTab("This Week", false);
+            _monthTab = CreateTab("This Month", false);
+            _allTimeTab = CreateTab("All Time", false);
 
             tabsStack.Children.Add(_todayTab);
             tabsStack.Children.Add(_weekTab);
+            tabsStack.Children.Add(_monthTab);
+            tabsStack.Children.Add(_allTimeTab);
             tabsBar.Child = tabsStack;
 
             headerStack.Children.Add(topBar);
@@ -346,7 +355,15 @@ namespace NudgeTray
 
             button.Click += (s, e) =>
             {
-                var newFilter = label == "Today" ? TimeFilter.Today : TimeFilter.ThisWeek;
+                TimeFilter newFilter = label switch
+                {
+                    "Today" => TimeFilter.Today,
+                    "This Week" => TimeFilter.ThisWeek,
+                    "This Month" => TimeFilter.ThisMonth,
+                    "All Time" => TimeFilter.AllTime,
+                    _ => TimeFilter.Today
+                };
+
                 if (newFilter != _currentFilter)
                 {
                     _currentFilter = newFilter;
@@ -383,24 +400,24 @@ namespace NudgeTray
 
         private void UpdateTabStyles()
         {
-            if (_todayTab != null && _weekTab != null)
+            if (_todayTab != null && _weekTab != null && _monthTab != null && _allTimeTab != null)
             {
-                bool todayActive = _currentFilter == TimeFilter.Today;
+                var tabs = new[] {
+                    (_todayTab, TimeFilter.Today),
+                    (_weekTab, TimeFilter.ThisWeek),
+                    (_monthTab, TimeFilter.ThisMonth),
+                    (_allTimeTab, TimeFilter.AllTime)
+                };
 
-                // Update Today tab
-                _todayTab.BorderBrush = todayActive ? new SolidColorBrush(PrimaryBlue) : Brushes.Transparent;
-                if (_todayTab.Child is Button todayBtn && todayBtn.Content is TextBlock todayTb)
+                foreach (var (tab, filter) in tabs)
                 {
-                    todayTb.FontWeight = todayActive ? FontWeight.SemiBold : FontWeight.Medium;
-                    todayTb.Foreground = new SolidColorBrush(todayActive ? PrimaryBlue : TextSecondary);
-                }
-
-                // Update Week tab
-                _weekTab.BorderBrush = !todayActive ? new SolidColorBrush(PrimaryBlue) : Brushes.Transparent;
-                if (_weekTab.Child is Button weekBtn && weekBtn.Content is TextBlock weekTb)
-                {
-                    weekTb.FontWeight = !todayActive ? FontWeight.SemiBold : FontWeight.Medium;
-                    weekTb.Foreground = new SolidColorBrush(!todayActive ? PrimaryBlue : TextSecondary);
+                    bool isActive = _currentFilter == filter;
+                    tab.BorderBrush = isActive ? new SolidColorBrush(PrimaryBlue) : Brushes.Transparent;
+                    if (tab.Child is Button btn && btn.Content is TextBlock tb)
+                    {
+                        tb.FontWeight = isActive ? FontWeight.SemiBold : FontWeight.Medium;
+                        tb.Foreground = new SolidColorBrush(isActive ? PrimaryBlue : TextSecondary);
+                    }
                 }
             }
         }
@@ -424,7 +441,8 @@ namespace NudgeTray
                 VerticalAlignment = VerticalAlignment.Center
             };
 
-            // Status text
+            // Status text container
+            var textStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
             _aiStatusText = new TextBlock
             {
                 Text = "AI: Inactive",
@@ -433,6 +451,18 @@ namespace NudgeTray
                 Foreground = new SolidColorBrush(TextSecondary),
                 VerticalAlignment = VerticalAlignment.Center
             };
+            textStack.Children.Add(_aiStatusText);
+
+            _aiInfoIcon = new TextBlock
+            {
+                Text = "ⓘ",
+                FontSize = 12,
+                Foreground = new SolidColorBrush(TextTertiary),
+                VerticalAlignment = VerticalAlignment.Center,
+                Cursor = new Cursor(StandardCursorType.Hand),
+                IsVisible = false
+            };
+            textStack.Children.Add(_aiInfoIcon);
 
             // Enable AI button (only visible when inactive)
             _aiEnableButton = new Button
@@ -450,12 +480,11 @@ namespace NudgeTray
 
             _aiEnableButton.Click += (s, e) =>
             {
-                Console.WriteLine("[Analytics] Enable AI button clicked");
                 Program.RestartWithML();
             };
 
             container.Children.Add(_aiStatusDot);
-            container.Children.Add(_aiStatusText);
+            container.Children.Add(textStack);
             container.Children.Add(_aiEnableButton);
 
             // Set tooltip for the status dot
@@ -501,7 +530,7 @@ namespace NudgeTray
 
         private void UpdateAIStatus()
         {
-            if (_aiStatusDot == null || _aiStatusText == null || _aiEnableButton == null)
+            if (_aiStatusDot == null || _aiStatusText == null || _aiEnableButton == null || _aiInfoIcon == null)
                 return;
 
             var status = GetAIStatus();
@@ -513,11 +542,9 @@ namespace NudgeTray
                     _aiStatusText.Text = "AI: Active";
                     _aiStatusText.Foreground = new SolidColorBrush(AIStatusActive);
                     _aiEnableButton.IsVisible = false;
+                    _aiInfoIcon.IsVisible = false;
 
-                    if (ToolTip.GetTip(_aiStatusDot) is ToolTip tip1)
-                    {
-                        tip1.Content = "AI Model Status: Active\n\nThe ML model is running and making predictions.";
-                    }
+                    ToolTip.SetTip(_aiStatusDot, new ToolTip { Content = "AI Model Status: Active\n\nThe ML model is running and making predictions." });
                     break;
 
                 case AIStatus.Learning:
@@ -525,11 +552,18 @@ namespace NudgeTray
                     _aiStatusText.Text = "AI: Learning";
                     _aiStatusText.Foreground = new SolidColorBrush(AIStatusLearning);
                     _aiEnableButton.IsVisible = false;
+                    _aiInfoIcon.IsVisible = true;
 
-                    if (ToolTip.GetTip(_aiStatusDot) is ToolTip tip2)
-                    {
-                        tip2.Content = "AI Model Status: Learning\n\nThe ML model is training. More responses will improve predictions.";
-                    }
+                    // Calculate training progress estimate
+                    int lineCount = 0;
+                    try {
+                        string homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                        string harvestPath = Path.Combine(homeDir, ".nudge", "HARVEST.CSV");
+                        lineCount = File.Exists(harvestPath) ? Math.Max(0, File.ReadAllLines(harvestPath).Length - 1) : 0;
+                    } catch { }
+                    
+                    int remaining = Math.Max(0, 100 - lineCount);
+                    ToolTip.SetTip(_aiInfoIcon, new ToolTip { Content = $"AI is learning...\n{remaining} more responses needed to unlock AI predictions." });
                     break;
 
                 case AIStatus.Inactive:
@@ -537,11 +571,9 @@ namespace NudgeTray
                     _aiStatusText.Text = "AI: Inactive";
                     _aiStatusText.Foreground = new SolidColorBrush(AIStatusInactive);
                     _aiEnableButton.IsVisible = true;
+                    _aiInfoIcon.IsVisible = false;
 
-                    if (ToolTip.GetTip(_aiStatusDot) is ToolTip tip3)
-                    {
-                        tip3.Content = "AI Model Status: Inactive\n\nThe ML model is not running.\nClick 'Enable' to start AI-powered productivity tracking.";
-                    }
+                    ToolTip.SetTip(_aiStatusDot, new ToolTip { Content = "AI Model Status: Inactive\n\nThe ML model is not running.\nClick 'Enable' to start AI-powered productivity tracking." });
                     break;
             }
         }
@@ -630,15 +662,13 @@ namespace NudgeTray
                 Console.WriteLine("[Analytics] Skipping 'Most Used Apps' section - no data");
             }
 
-            // Hourly Productivity Section
+            // Hourly Productivity Section — the bar chart already encodes all the same
+            // information as the old "Activity Timeline" canvas chart, with precise labels and
+            // counts, so we only render one section here.
             if (_data.HourlyProductivity.Any())
             {
                 Console.WriteLine($"[Analytics] Adding 'Productivity by Hour' section with {_data.HourlyProductivity.Count} hours");
                 _contentPanel.Children.Add(CreateSection("calendar", "Productivity by Hour", CreateHourlyProductivityView()));
-
-                // Add visual timeline chart
-                Console.WriteLine($"[Analytics] Adding 'Activity Timeline' chart");
-                _contentPanel.Children.Add(CreateSection("chart", "Activity Timeline", CreateTimelineChart()));
             }
             else
             {
@@ -1063,7 +1093,12 @@ namespace NudgeTray
 
             var rows = new List<(string, string)>
             {
-                ("Filter", _currentFilter == TimeFilter.Today ? "Today" : "This Week"),
+                ("Filter", _currentFilter switch {
+                    TimeFilter.Today => "Today",
+                    TimeFilter.ThisWeek => "This Week",
+                    TimeFilter.ThisMonth => "This Month",
+                    _ => "All Time"
+                }),
                 ("Total Activity", FormatDuration(_data.TotalActivityMinutes)),
                 ("Productive Time", FormatDuration(_data.ProductiveMinutes)),
                 ("Unproductive Time", FormatDuration(_data.UnproductiveMinutes)),
@@ -1244,7 +1279,7 @@ namespace NudgeTray
                 TextTrimming = TextTrimming.CharacterEllipsis
             };
 
-            // Progress bar
+            // Progress bar — proportional fill using Grid star columns
             double percentage = totalMinutes > 0 ? (double)minutes / totalMinutes * 100 : 0;
             var progressBorder = new Border
             {
@@ -1252,20 +1287,38 @@ namespace NudgeTray
                 Background = new SolidColorBrush(ProgressBarBg),
                 CornerRadius = new CornerRadius(2.5),
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 3, 0, 0)
+                Margin = new Thickness(0, 3, 0, 0),
+                ClipToBounds = true
             };
 
-            var progressFill = new Border
+            // Use a two-column grid (fill* + remainder*) so the fill is always proportional
+            // to the container width, regardless of window or column size.
+            var progressGrid = new Grid();
+            if (percentage >= 99.5)
             {
-                Width = Math.Max(percentage * 1.4, 0),
-                MaxWidth = 140,
-                Height = 5,
-                Background = new SolidColorBrush(PrimaryBlue),
-                CornerRadius = new CornerRadius(2.5),
-                HorizontalAlignment = HorizontalAlignment.Left
-            };
+                progressGrid.ColumnDefinitions = new ColumnDefinitions("*");
+                progressGrid.Children.Add(new Border
+                {
+                    Background = new SolidColorBrush(PrimaryBlue),
+                    CornerRadius = new CornerRadius(2.5),
+                    HorizontalAlignment = HorizontalAlignment.Stretch
+                });
+            }
+            else if (percentage > 0.5)
+            {
+                double remainder = 100.0 - percentage;
+                progressGrid.ColumnDefinitions = new ColumnDefinitions($"{percentage}*,{remainder}*");
+                var fill = new Border
+                {
+                    Background = new SolidColorBrush(PrimaryBlue),
+                    CornerRadius = new CornerRadius(2.5, 0, 0, 2.5),
+                    HorizontalAlignment = HorizontalAlignment.Stretch
+                };
+                Grid.SetColumn(fill, 0);
+                progressGrid.Children.Add(fill);
+            }
 
-            progressBorder.Child = progressFill;
+            progressBorder.Child = progressGrid;
 
             leftStack.Children.Add(nameText);
             leftStack.Children.Add(progressBorder);
@@ -1526,44 +1579,58 @@ namespace NudgeTray
                 ClipToBounds = true
             };
 
-            var barGrid = new Grid();
-
             // Calculate percentages
             double productivePercentage = stats.Total > 0 ? (double)stats.ProductiveCount / stats.Total * 100 : 0;
-            double unproductivePercentage = stats.Total > 0 ? (double)stats.UnproductiveCount / stats.Total * 100 : 0;
+            double unproductivePercentage = 100.0 - productivePercentage;
 
-            // Productive portion (green)
-            if (stats.ProductiveCount > 0)
+            // Proportional bar using Grid star columns — no pixel widths
+            var barGrid = new Grid();
+
+            bool hasProductive   = stats.ProductiveCount > 0;
+            bool hasUnproductive = stats.UnproductiveCount > 0;
+
+            if (hasProductive && hasUnproductive)
             {
+                barGrid.ColumnDefinitions = new ColumnDefinitions(
+                    $"{productivePercentage}*,{unproductivePercentage}*");
+
                 var productiveBar = new Border
                 {
-                    Width = productivePercentage,
-                    Height = 20,
                     Background = new SolidColorBrush(ProductiveGreen),
                     CornerRadius = new CornerRadius(3, 0, 0, 3),
-                    HorizontalAlignment = HorizontalAlignment.Left
+                    HorizontalAlignment = HorizontalAlignment.Stretch
                 };
+                Grid.SetColumn(productiveBar, 0);
                 barGrid.Children.Add(productiveBar);
-            }
 
-            // Unproductive portion (red)
-            if (stats.UnproductiveCount > 0)
-            {
                 var unproductiveBar = new Border
                 {
-                    Width = unproductivePercentage,
-                    Height = 20,
                     Background = new SolidColorBrush(UnproductiveRed),
-                    HorizontalAlignment = HorizontalAlignment.Left,
-                    Margin = new Thickness(productivePercentage, 0, 0, 0)
+                    CornerRadius = new CornerRadius(0, 3, 3, 0),
+                    HorizontalAlignment = HorizontalAlignment.Stretch
                 };
-
-                if (stats.ProductiveCount == 0)
-                {
-                    unproductiveBar.CornerRadius = new CornerRadius(4, 0, 0, 4);
-                }
-
+                Grid.SetColumn(unproductiveBar, 1);
                 barGrid.Children.Add(unproductiveBar);
+            }
+            else if (hasProductive)
+            {
+                barGrid.ColumnDefinitions = new ColumnDefinitions("*");
+                barGrid.Children.Add(new Border
+                {
+                    Background = new SolidColorBrush(ProductiveGreen),
+                    CornerRadius = new CornerRadius(3),
+                    HorizontalAlignment = HorizontalAlignment.Stretch
+                });
+            }
+            else if (hasUnproductive)
+            {
+                barGrid.ColumnDefinitions = new ColumnDefinitions("*");
+                barGrid.Children.Add(new Border
+                {
+                    Background = new SolidColorBrush(UnproductiveRed),
+                    CornerRadius = new CornerRadius(3),
+                    HorizontalAlignment = HorizontalAlignment.Stretch
+                });
             }
 
             barContainer.Child = barGrid;
@@ -1708,6 +1775,12 @@ namespace NudgeTray
                 case TimeFilter.ThisWeek:
                     int daysFromMonday = ((int)now.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
                     return now.Date.AddDays(-daysFromMonday);
+
+                case TimeFilter.ThisMonth:
+                    return new DateTime(now.Year, now.Month, 1);
+
+                case TimeFilter.AllTime:
+                    return DateTime.MinValue;
 
                 default:
                     return now.Date;

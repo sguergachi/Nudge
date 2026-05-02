@@ -6,7 +6,7 @@
 // - Smooth center zoom + fade animations
 // - Halo selection ring when active
 // - Modern, left-aligned UI
-// - Keyboard shortcuts: Ctrl+Shift+Y (YES), Ctrl+Shift+N (NO)
+// - Keyboard shortcuts: Y (YES), N (NO), Enter (YES), Escape (dismiss)
 // - Draggable window with position persistence
 // - Cross-platform support (Windows, Linux, macOS)
 //
@@ -32,7 +32,7 @@ namespace NudgeTray
     public class CustomNotificationWindow : Window
     {
         private const string CONFIG_FILE = "nudge-notification-config.json";
-        private const int AUTO_DISMISS_SECONDS = 10;
+        private const int AUTO_DISMISS_SECONDS = 30;
         private Point? _dragStartPosition;
         private bool _isDragging = false;
         private Action<bool?>? _onResponse; // Nullable bool: true=YES, false=NO, null=auto-dismissed
@@ -135,6 +135,20 @@ namespace NudgeTray
             _mainBorder.PointerPressed += OnBorderPointerPressed;
             _mainBorder.PointerMoved += OnBorderPointerMoved;
             _mainBorder.PointerReleased += OnBorderPointerReleased;
+            _mainBorder.PointerEntered += (s, e) =>
+            {
+                if (!_isDragging && _countdownTimer != null && _countdownTimer.IsEnabled)
+                {
+                    _countdownTimer.Stop();
+                }
+            };
+            _mainBorder.PointerExited += (s, e) =>
+            {
+                if (!_isDragging && !_responseSent && _remainingSeconds > 0)
+                {
+                    _countdownTimer?.Start();
+                }
+            };
             _mainBorder.Cursor = new Cursor(StandardCursorType.Hand);
 
             var stackPanel = new StackPanel
@@ -151,10 +165,10 @@ namespace NudgeTray
                 Margin = new Thickness(0, 0, 0, 4)
             };
 
-            // Title - clean and minimal, left-aligned
+            // Title - app brand, left-aligned
             var titleText = new TextBlock
             {
-                Text = "Productivity Check",
+                Text = "Nudge",
                 FontSize = 14,
                 FontWeight = FontWeight.SemiBold,
                 Foreground = new SolidColorBrush(Color.FromRgb(240, 240, 245)),
@@ -186,12 +200,12 @@ namespace NudgeTray
                 VerticalAlignment = VerticalAlignment.Center
             };
 
-            // Progress arc (animates from 360° to 0°)
+            // Progress arc (animates from 360° to 0°) — starts calm/neutral
             _progressArc = new Arc
             {
                 Width = 24,
                 Height = 24,
-                Stroke = new SolidColorBrush(Color.FromArgb(180, 255, 100, 100)),
+                Stroke = new SolidColorBrush(Color.FromArgb(120, 150, 150, 165)),
                 StrokeThickness = 2,
                 StartAngle = -90, // Start at top (12 o'clock)
                 SweepAngle = 360, // Full circle initially
@@ -200,13 +214,13 @@ namespace NudgeTray
                 StrokeLineCap = PenLineCap.Round
             };
 
-            // Countdown text (overlaid in center)
+            // Countdown text (overlaid in center) — starts calm/neutral
             _countdownText = new TextBlock
             {
                 Text = $"{AUTO_DISMISS_SECONDS}s",
-                FontSize = 10,
-                FontWeight = FontWeight.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromArgb(200, 255, 100, 100)),
+                FontSize = 9,
+                FontWeight = FontWeight.Normal,
+                Foreground = new SolidColorBrush(Color.FromArgb(140, 150, 150, 165)),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -241,7 +255,7 @@ namespace NudgeTray
             // YES Button - vibrant accent
             var yesButton = CreateStyledButton(
                 "Yes",
-                "Ctrl+Shift+Y",
+                "Y",
                 Color.FromRgb(88, 166, 255),
                 Color.FromRgb(108, 186, 255),
                 () => HandleResponse(true)
@@ -251,7 +265,7 @@ namespace NudgeTray
             // NO Button - subtle gray
             var noButton = CreateStyledButton(
                 "No",
-                "Ctrl+Shift+N",
+                "N",
                 Color.FromRgb(45, 45, 50),
                 Color.FromRgb(55, 55, 60),
                 () => HandleResponse(false),
@@ -318,19 +332,31 @@ namespace NudgeTray
                 VerticalAlignment = VerticalAlignment.Center
             };
 
-            var shortcutTextBlock = new TextBlock
+            // Keyboard key badge — styled like a keycap so it reads as "press this key"
+            var keyBadge = new Border
+            {
+                Background = new SolidColorBrush(
+                    isPrimary ? Color.FromArgb(30, 255, 255, 255) : Color.FromArgb(25, 255, 255, 255)),
+                BorderBrush = new SolidColorBrush(
+                    isPrimary ? Color.FromArgb(60, 255, 255, 255) : Color.FromArgb(45, 200, 200, 220)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(3),
+                Padding = new Thickness(6, 1, 6, 2),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            keyBadge.Child = new TextBlock
             {
                 Text = shortcutText,
-                FontSize = 10,
-                FontWeight = FontWeight.Normal,
-                Foreground = isPrimary
-                    ? new SolidColorBrush(Color.FromArgb(150, 255, 255, 255))
-                    : new SolidColorBrush(Color.FromRgb(130, 130, 140)),
+                FontSize = 9,
+                FontWeight = FontWeight.Medium,
+                Foreground = new SolidColorBrush(
+                    isPrimary ? Color.FromArgb(170, 255, 255, 255) : Color.FromArgb(160, 180, 180, 195)),
                 VerticalAlignment = VerticalAlignment.Center
             };
 
             buttonContent.Children.Add(mainTextBlock);
-            buttonContent.Children.Add(shortcutTextBlock);
+            buttonContent.Children.Add(keyBadge);
             button.Content = buttonContent;
             border.Child = button;
 
@@ -357,18 +383,31 @@ namespace NudgeTray
         {
             KeyDown += (s, e) =>
             {
-                // Check for Ctrl+Shift+Y (YES)
-                if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift) && e.Key == Key.Y)
+                // Y = Yes (productive), N = No (not productive) — no modifiers needed when window is focused
+                if (e.KeyModifiers == KeyModifiers.None && e.Key == Key.Y)
                 {
-                    Console.WriteLine("[CustomNotification] Keyboard shortcut: Ctrl+Shift+Y pressed");
+                    Console.WriteLine("[CustomNotification] Keyboard shortcut: Y pressed");
                     HandleResponse(true);
                     e.Handled = true;
                 }
-                // Check for Ctrl+Shift+N (NO)
-                else if (e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift) && e.Key == Key.N)
+                else if (e.KeyModifiers == KeyModifiers.None && e.Key == Key.N)
                 {
-                    Console.WriteLine("[CustomNotification] Keyboard shortcut: Ctrl+Shift+N pressed");
+                    Console.WriteLine("[CustomNotification] Keyboard shortcut: N pressed");
                     HandleResponse(false);
+                    e.Handled = true;
+                }
+                // Also support Enter = Yes (fast confirm for power users)
+                else if (e.KeyModifiers == KeyModifiers.None && e.Key == Key.Return)
+                {
+                    Console.WriteLine("[CustomNotification] Keyboard shortcut: Enter pressed (Yes)");
+                    HandleResponse(true);
+                    e.Handled = true;
+                }
+                // Escape = dismiss without recording
+                else if (e.KeyModifiers == KeyModifiers.None && e.Key == Key.Escape)
+                {
+                    Console.WriteLine("[CustomNotification] Keyboard shortcut: Escape pressed (dismiss)");
+                    AutoDismiss();
                     e.Handled = true;
                 }
             };
@@ -578,19 +617,22 @@ namespace NudgeTray
                 double progress = (double)_remainingSeconds / AUTO_DISMISS_SECONDS;
                 double sweepAngle = 360 * progress;
 
-                // Update progress arc
+                // Update progress arc — calm neutral until last 5 seconds
                 if (_progressArc != null)
                 {
                     _progressArc.SweepAngle = sweepAngle;
 
-                    // Change color to more urgent as time runs out
-                    if (_remainingSeconds <= 2)
+                    if (_remainingSeconds <= 3)
                     {
-                        _progressArc.Stroke = new SolidColorBrush(Color.FromArgb(220, 255, 50, 50)); // Bright red
+                        _progressArc.Stroke = new SolidColorBrush(Color.FromArgb(210, 255, 80, 80)); // Urgent red
                     }
-                    else if (_remainingSeconds <= 3)
+                    else if (_remainingSeconds <= 5)
                     {
-                        _progressArc.Stroke = new SolidColorBrush(Color.FromArgb(200, 255, 80, 80)); // Medium-bright red
+                        _progressArc.Stroke = new SolidColorBrush(Color.FromArgb(170, 255, 150, 80)); // Warm amber
+                    }
+                    else
+                    {
+                        _progressArc.Stroke = new SolidColorBrush(Color.FromArgb(120, 150, 150, 165)); // Calm neutral
                     }
                 }
 
@@ -599,14 +641,17 @@ namespace NudgeTray
                 {
                     _countdownText.Text = $"{_remainingSeconds}s";
 
-                    // Change text color to match arc
-                    if (_remainingSeconds <= 2)
+                    if (_remainingSeconds <= 3)
                     {
-                        _countdownText.Foreground = new SolidColorBrush(Color.FromArgb(220, 255, 50, 50)); // Bright red
+                        _countdownText.Foreground = new SolidColorBrush(Color.FromArgb(210, 255, 80, 80));
                     }
-                    else if (_remainingSeconds <= 3)
+                    else if (_remainingSeconds <= 5)
                     {
-                        _countdownText.Foreground = new SolidColorBrush(Color.FromArgb(200, 255, 80, 80)); // Medium-bright red
+                        _countdownText.Foreground = new SolidColorBrush(Color.FromArgb(170, 255, 150, 80));
+                    }
+                    else
+                    {
+                        _countdownText.Foreground = new SolidColorBrush(Color.FromArgb(140, 150, 150, 165));
                     }
                 }
 

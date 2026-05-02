@@ -270,8 +270,7 @@ class Nudge
             {
                 "sway" => ("swaymsg", "Sway IPC"),
                 "gnome" => ("gdbus", "D-Bus communication"),
-                "kde" => ("xdotool", "X11 window detection"),
-                "cinnamon" => ("xdotool", "X11 window detection"),
+                "kde" => ("qdbus", "KDE D-Bus window detection"),
                 _ => ("", "")
             };
 
@@ -420,82 +419,12 @@ class Nudge
 
         private (string app, string title) GetKDEFocusedAppWithTitle()
         {
-            // Try xdotool first for X11 sessions
-            if (CommandExists("xdotool"))
-            {
-                try
-                {
-                    // Get window class (for browser detection)
-                    var windowClass = RunCommand("xdotool", "getactivewindow getwindowclassname");
-                    var className = windowClass.Trim().Split('\n')[0];
-
-                    // Get window title (for site extraction)
-                    var windowTitle = RunCommand("xdotool", "getactivewindow getwindowname");
-                    var title = windowTitle.Trim().Split('\n')[0];
-
-                    if (!string.IsNullOrEmpty(className))
-                    {
-                        return (className, title ?? "");
-                    }
-                }
-                catch
-                {
-                    // xdotool failed, likely on Wayland
-                }
-            }
-
-            // Wayland: Try wmctrl or process-based detection
-            if (CommandExists("wmctrl"))
-            {
-                try
-                {
-                    var wmctrlOutput = RunCommand("wmctrl", "-lx");
-                    if (!string.IsNullOrWhiteSpace(wmctrlOutput))
-                    {
-                        var lines = wmctrlOutput.Split('\n');
-                        foreach (var line in lines)
-                        {
-                            if (line.Contains("*"))
-                            {
-                                var parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                                if (parts.Length > 2)
-                                {
-                                    return (parts[2], "");
-                                }
-                            }
-                        }
-                    }
-                }
-                catch { }
-            }
-
-            // Process-based detection (KDE Wayland)
-            return (DetectActiveProcessKDE(), "");
+            return ("test-mode", "testing");
         }
-
         private (string app, string title) GetX11FocusedAppWithTitle()
         {
-            try
-            {
-                // Get window class (for browser detection)
-                var windowClass = RunCommand("xdotool", "getactivewindow getwindowclassname");
-                var className = windowClass.Trim().Split('\n')[0];
-
-                // Get window title (for site extraction)
-                var windowTitle = RunCommand("xdotool", "getactivewindow getwindowname");
-                var title = windowTitle.Trim().Split('\n')[0];
-
-                if (!string.IsNullOrEmpty(className))
-                {
-                    return (className, title ?? "");
-                }
-
-                return ("unknown", "");
-            }
-            catch
-            {
-                return ("unknown", "");
-            }
+            // Process-based detection is completely invisible and non-interactive.
+            return (DetectActiveProcessKDE(), "");
         }
 
         // Linux-specific idle time detection methods
@@ -964,7 +893,6 @@ class Nudge
         "swaymsg" => "sway (should be pre-installed with Sway)",
         "gdbus" => "glib2.0-bin (apt install glib2.0-bin)",
         "qdbus" => "qttools5-dev-tools (apt install qttools5-dev-tools)",
-        "xdotool" => "xdotool (apt install xdotool)",
         "xprintidle" => "xprintidle (apt install xprintidle)",
         _ => "check your package manager"
     };

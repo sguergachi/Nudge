@@ -1,3 +1,10 @@
+# Virtual environments
+/venv/bin/
+/venv/bin/
+/venv/
+env/
+.env/
+
 # .NET build outputs
 bin/
 obj/
@@ -36,3 +43,8 @@ TestResults/
 *.CSV
 *.log
 *.tmp
+*.bak
+*.old
+nudge_*.log
+*.db
+.DS_Store

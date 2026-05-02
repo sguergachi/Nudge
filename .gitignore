@@ -231,3 +231,7 @@ ModelManifest.xml
 # Claude Code temporary analysis files
 CODEBASE_ANALYSIS.md
 QUICK_REFERENCE.md
+venv/bin/
+venv/
+TrayIconTest/
+TrayIconTest/

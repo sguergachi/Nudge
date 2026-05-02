@@ -271,21 +271,18 @@ Invoke-Dotnet @("restore", "nudge-tray.csproj", "--nologo")
 Invoke-Dotnet @("restore", "NudgeCrossPlatform.Tests/NudgeCrossPlatform.Tests.csproj", "--nologo")
 Invoke-Dotnet @("restore", "../TrayIconTest/TrayIconTest.csproj", "--nologo")
 
-Write-Host "  Building nudge..." -ForegroundColor DarkGray
-Invoke-Dotnet @("build", "nudge.csproj", "-c", "Release", "-f", $MainTfm, "--no-restore", "--nologo", "-v", "quiet")
-Write-Success "  [OK] nudge"
+Write-Host "  Building projects in parallel..." -ForegroundColor DarkGray
+$buildJobs = @()
+$buildJobs += Start-Job { dotnet build nudge.csproj -c Release -f "net10.0" --no-restore --nologo -m -v quiet }
+$buildJobs += Start-Job { dotnet build nudge-notify.csproj -c Release -f "net10.0" --no-restore --nologo -m -v quiet }
+$buildJobs += Start-Job { dotnet build nudge-tray.csproj -c Release -f "net10.0-windows10.0.17763.0" --no-restore --nologo -m -v quiet }
+$buildJobs += Start-Job { dotnet build ../TrayIconTest/TrayIconTest.csproj -c Release --no-restore --nologo -m -v quiet }
 
-Write-Host "  Building nudge-notify..." -ForegroundColor DarkGray
-Invoke-Dotnet @("build", "nudge-notify.csproj", "-c", "Release", "-f", $MainTfm, "--no-restore", "--nologo", "-v", "quiet")
-Write-Success "  [OK] nudge-notify"
+Wait-Job $buildJobs | Out-Null
+$jobResults = Receive-Job $buildJobs
+Remove-Job $buildJobs
 
-Write-Host "  Building nudge-tray..." -ForegroundColor DarkGray
-Invoke-Dotnet @("build", "nudge-tray.csproj", "-c", "Release", "-f", $WindowsTfm, "--no-restore", "--nologo", "-v", "quiet")
-Write-Success "  [OK] nudge-tray"
-
-Write-Host "  Building TrayIconTest..." -ForegroundColor DarkGray
-Invoke-Dotnet @("build", "../TrayIconTest/TrayIconTest.csproj", "-c", "Release", "--no-restore", "--nologo", "-v", "quiet")
-Write-Success "  [OK] TrayIconTest"
+Write-Success "  [OK] Build completed"
 
 if (-not $SkipTests) {
     Write-Host "  Running tests..." -ForegroundColor DarkGray

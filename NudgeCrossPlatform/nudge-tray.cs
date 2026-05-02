@@ -623,9 +623,6 @@ namespace NudgeTray
                         {
                             FileName = "taskkill",
                             Arguments = "/F /IM nudge.exe /T",
-                            RedirectStandardOutput = true,
-                            RedirectStandardError = true,
-                            UseShellExecute = false,
                             CreateNoWindow = true
                         };
                         Process.Start(psi)?.WaitForExit(2000);
@@ -669,11 +666,241 @@ namespace NudgeTray
             }
         }
 
+        static bool CheckPythonVersion()
+        {
+            try
+            {
+                string python = PlatformConfig.PythonCommand;
+                var versionProcess = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "/home/sammy/Dev/Nudge/NudgeCrossPlatform/venv/bin/python",
+                        Arguments = "-c \"import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')\"",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+
+                versionProcess.Start();
+                string versionOutput = versionProcess.StandardOutput.ReadToEnd();
+                versionProcess.WaitForExit(5000);
+
+                if (versionProcess.ExitCode == 0 && Version.TryParse(versionOutput.Trim(), out Version? pythonVersion))
+                {
+                    // TensorFlow 2.13+ requires Python 3.9-3.12, doesn't support 3.13+
+                    if (pythonVersion?.Major == 3 && pythonVersion?.Minor >= 13)
+                    {
+                        Console.WriteLine($"  ⚠ Python {pythonVersion} detected - TensorFlow doesn't support Python 3.13+");
+                        Console.WriteLine("  To use ML features, install Python 3.11 or 3.12");
+                        Console.WriteLine("  ML features will be skipped for now.");
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+            catch
+            {
+                return true; // Continue anyway
+            }
+        }
+
+        static bool EnsurePythonDependencies()
+        {
+            try
+            {
+                // First check Python version compatibility
+                if (!CheckPythonVersion())
+                {
+                    return false;
+                }
+
+                Console.WriteLine("  Checking Python dependencies...");
+
+                // Check if required packages are installed
+                string python = PlatformConfig.PythonCommand;
+                var requiredPackages = new[] { "tensorflow", "pandas", "numpy", "sklearn" };
+                bool allInstalled = true;
+
+                foreach (var package in requiredPackages)
+                {
+                    var checkProcess = new Process
+                    {
+                        StartInfo = new ProcessStartInfo
+                        {
+                            FileName = "/home/sammy/Dev/Nudge/NudgeCrossPlatform/venv/bin/python",
+                            Arguments = $"-c \"import {package}\"",
+                            RedirectStandardOutput = true,
+                            RedirectStandardError = true,
+                            UseShellExecute = false,
+                            CreateNoWindow = true
+                        }
+                    };
+
+                    checkProcess.Start();
+                    checkProcess.WaitForExit(5000);
+
+                    if (checkProcess.ExitCode != 0)
+                    {
+                        allInstalled = false;
+                        break;
+                    }
+                }
+
+                if (allInstalled)
+                {
+                    Console.WriteLine("  ✓ All Python dependencies are installed");
+                    return true;
+                }
+
+                Console.WriteLine("  Installing Python dependencies (this may take several minutes)...");
+
+                // Try different requirements files in order
+                var requirementsFiles = new[]
+                {
+                    Path.Combine(_baseDir, "requirements-cpu.txt"),
+                    Path.Combine(_baseDir, "requirements.txt"),
+                    Path.Combine(_baseDir, "requirements-minimal.txt")
+                };
+
+                string? selectedRequirementsPath = null;
+                foreach (var reqPath in requirementsFiles)
+                {
+                    if (File.Exists(reqPath))
+                    {
+                        selectedRequirementsPath = reqPath;
+                        break;
+                    }
+                }
+
+                if (selectedRequirementsPath == null)
+                {
+                    Console.WriteLine("  ✗ No requirements files found");
+                    return false;
+                }
+
+                // Try to install with --break-system-packages for system Python
+                var installProcess = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "/home/sammy/Dev/Nudge/NudgeCrossPlatform/venv/bin/python",
+                        Arguments = $"-m pip install --break-system-packages -r \"{selectedRequirementsPath}\"",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+
+                installProcess.OutputDataReceived += (s, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        Console.WriteLine($"    {e.Data}");
+                    }
+                };
+
+                installProcess.ErrorDataReceived += (s, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        Console.WriteLine($"    {e.Data}");
+                    }
+                };
+
+                installProcess.Start();
+                installProcess.BeginOutputReadLine();
+                installProcess.BeginErrorReadLine();
+                installProcess.WaitForExit(180000); // 3 minutes for installation
+
+                if (installProcess.ExitCode == 0)
+                {
+                    Console.WriteLine("  ✓ Python dependencies installed successfully");
+                    return true;
+                }
+                else
+                {
+                    // Try fallback to minimal requirements if full install failed
+                    if (selectedRequirementsPath != requirementsFiles[2])
+                    {
+                        Console.WriteLine("  ⚠ Full dependencies failed, trying minimal requirements...");
+                        string minimalPath = requirementsFiles[2];
+
+                        if (File.Exists(minimalPath))
+                        {
+                            var fallbackProcess = new Process
+                            {
+                                StartInfo = new ProcessStartInfo
+                                {
+                                    FileName = "/home/sammy/Dev/Nudge/NudgeCrossPlatform/venv/bin/python",
+                                    Arguments = $"-m pip install --break-system-packages -r \"{minimalPath}\"",
+                                    RedirectStandardOutput = true,
+                                    RedirectStandardError = true,
+                                    UseShellExecute = false,
+                                    CreateNoWindow = true
+                                }
+                            };
+
+                            fallbackProcess.OutputDataReceived += (s, e) =>
+                            {
+                                if (!string.IsNullOrEmpty(e.Data))
+                                {
+                                    Console.WriteLine($"    {e.Data}");
+                                }
+                            };
+
+                            fallbackProcess.ErrorDataReceived += (s, e) =>
+                            {
+                                if (!string.IsNullOrEmpty(e.Data))
+                                {
+                                    Console.WriteLine($"    {e.Data}");
+                                }
+                            };
+
+                            fallbackProcess.Start();
+                            fallbackProcess.BeginOutputReadLine();
+                            fallbackProcess.BeginErrorReadLine();
+                            fallbackProcess.WaitForExit(120000);
+
+                            if (fallbackProcess.ExitCode == 0)
+                            {
+                                Console.WriteLine("  ✓ Minimal dependencies installed (ML features limited)");
+                                return true;
+                            }
+                        }
+                    }
+
+                    Console.WriteLine("  ✗ Failed to install Python dependencies");
+                    Console.WriteLine("  Please try installing manually:");
+                    Console.WriteLine($"    python -m pip install --break-system-packages -r \"{selectedRequirementsPath}\"");
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"  ⚠ Error checking dependencies: {ex.Message}");
+                return false;
+            }
+        }
+
         static void StartMLServices()
         {
             try
             {
                 Console.WriteLine("🧠 Starting ML services...");
+
+                // Ensure Python dependencies are installed
+                if (!EnsurePythonDependencies())
+                {
+                    Console.WriteLine("⚠ Python dependencies not available. ML services will be disabled.");
+                    Console.WriteLine("  You can still use Nudge without ML by running without the --ml flag.");
+                    _mlEnabled = false;
+                    return;
+                }
 
                 // Use shared platform configuration
                 string python = PlatformConfig.PythonCommand;
@@ -685,7 +912,7 @@ namespace NudgeTray
                 {
                     StartInfo = new ProcessStartInfo
                     {
-                        FileName = python,
+                        FileName = "/home/sammy/Dev/Nudge/NudgeCrossPlatform/venv/bin/python",
                         Arguments = $"\"{Path.Combine(_baseDir, "model_inference.py")}\" --host 127.0.0.1 --port 45002 --model-dir \"{_modelDirPath}\"",
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
@@ -743,7 +970,7 @@ namespace NudgeTray
                 {
                     StartInfo = new ProcessStartInfo
                     {
-                        FileName = python,
+                        FileName = "/home/sammy/Dev/Nudge/NudgeCrossPlatform/venv/bin/python",
                         Arguments = trainerArgs,
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
