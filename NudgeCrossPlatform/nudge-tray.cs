@@ -11,12 +11,14 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Tmds.DBus.Protocol;
@@ -36,21 +38,22 @@ using Microsoft.Toolkit.Uwp.Notifications;
 
 namespace NudgeTray
 {
-    class Program
+    sealed class Program
     {
         const int UDP_PORT = 45001;
         const string VERSION = "1.3.0";
         static Process? _nudgeProcess;
         static Process? _mlInferenceProcess;
         static Process? _mlTrainerProcess;
-        internal static bool _mlEnabled = false;
-        static bool _forceTrainedModel = false;
+        internal static bool _mlEnabled;
+        static bool _forceTrainedModel;
         static DateTime? _nextSnapshotTime;
         static int _intervalMinutes;
         static Mutex? _singleInstanceMutex;
         internal const string SingleInstanceMutexName = NudgeCoreLogic.TraySingleInstanceMutexName;
         static readonly string _baseDir = AppContext.BaseDirectory;
         static readonly string _modelDirPath = Path.Combine(_baseDir, "model");
+        static readonly string[] _dbusNotificationActions = new[] { "yes", "Yes - Productive", "no", "No - Not Productive" };
         static bool _showAnalyticsOnStartup;
         static bool _verifyAnalyticsScrollOnStartup;
         static int _analyticsScrollVerificationAttempts;
@@ -149,7 +152,7 @@ namespace NudgeTray
             {
                 if (args[i] == "--interval" && i + 1 < args.Length)
                 {
-                    int.TryParse(args[i + 1], out interval);
+                    _ = int.TryParse(args[i + 1], out interval);
                     i++; // Skip the interval value
                 }
                 else if (args[i] == "--ml")
@@ -171,6 +174,22 @@ namespace NudgeTray
                 }
             }
 
+            // ── Load persisted settings (CLI args take precedence) ────────────────
+            var savedSettings = LoadSettings();
+            if (savedSettings != null)
+            {
+                // Restore ML preference unless the user explicitly passed --ml already
+                if (!_mlEnabled && savedSettings.MlEnabled)
+                {
+                    _mlEnabled = true;
+                    Console.WriteLine("[INFO] ML re-enabled from saved settings");
+                }
+            }
+
+            // Persist whatever state we ended up with
+            _intervalMinutes = interval; // ensure field is set before SaveSettings
+            SaveSettings();
+
             // Print banner
             Console.WriteLine("╔═══════════════════════════════════════════════════════╗");
             Console.WriteLine("║        Nudge Tray - Productivity Tracker          ║");
@@ -187,8 +206,6 @@ namespace NudgeTray
             {
                 StartMLServices();
             }
-
-            _intervalMinutes = interval;
 
             // Use Avalonia for cross-platform tray icon on all platforms
             BuildAvaloniaApp(interval).StartWithClassicDesktopLifetime(args);
@@ -1060,6 +1077,25 @@ namespace NudgeTray
                         {
                             ShowSnapshotNotification();
                         }
+                        // Live ML prediction data → feed AI Brain tab
+                        else if (e.Data.StartsWith("MLDATA:", StringComparison.Ordinal))
+                        {
+                            try
+                            {
+                                var evt = JsonSerializer.Deserialize(
+                                    e.Data.AsSpan(7),
+                                    NudgeJsonContext.Default.MLLiveEvent);
+                                if (evt != null)
+                                    LiveAIState.Add(evt);
+                            }
+                            catch { /* non-critical, silently ignore parse errors */ }
+                        }
+                        // Next scheduled ML check update
+                        else if (e.Data.StartsWith("MLNEXT:", StringComparison.Ordinal))
+                        {
+                            if (long.TryParse(e.Data.AsSpan(7), out long ts))
+                                LiveAIState.NextCheckAt = ts;
+                        }
                     }
                 };
 
@@ -1108,7 +1144,7 @@ namespace NudgeTray
         // CUSTOM CROSS-PLATFORM NOTIFICATION
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-        private static bool _waitingForResponse = false;
+        private static bool _waitingForResponse;
 
         private static void ShowCustomNotification()
         {
@@ -1237,7 +1273,7 @@ namespace NudgeTray
                             writer.WriteString("");
                             writer.WriteString("Nudge - Productivity Check");
                             writer.WriteString("Were you productive during the last interval?");
-                            writer.WriteArray(new string[] { "yes", "Yes - Productive", "no", "No - Not Productive" });
+                            writer.WriteArray(_dbusNotificationActions);
                             var arrayStart = writer.WriteDictionaryStart();
                             writer.WriteDictionaryEntryStart(); writer.WriteString("urgency"); writer.WriteVariant(VariantValue.Byte(2));
                             writer.WriteDictionaryEntryStart(); writer.WriteString("resident"); writer.WriteVariant(VariantValue.Bool(true));
@@ -1457,12 +1493,61 @@ namespace NudgeTray
             return _nextSnapshotTime;
         }
 
+        // ─── Settings persistence ──────────────────────────────────────────────────
+
+        private static string SettingsPath =>
+            Path.Combine(PlatformConfig.DataDirectory, "tray-settings.json");
+
+        /// <summary>
+        /// Write current preferences to ~/.nudge/tray-settings.json so they
+        /// survive process restarts.
+        /// </summary>
+        private static void SaveSettings()
+        {
+            try
+            {
+                var settings = new TraySettings
+                {
+                    MlEnabled       = _mlEnabled,
+                    IntervalMinutes = _intervalMinutes > 0 ? _intervalMinutes : 5
+                };
+                File.WriteAllText(
+                    SettingsPath,
+                    JsonSerializer.Serialize(settings, NudgeJsonContext.Default.TraySettings));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[WARN] Could not save settings: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Read persisted preferences.  Returns null if the file doesn't exist yet.
+        /// </summary>
+        private static TraySettings? LoadSettings()
+        {
+            try
+            {
+                if (File.Exists(SettingsPath))
+                {
+                    string json = File.ReadAllText(SettingsPath);
+                    return JsonSerializer.Deserialize(json, NudgeJsonContext.Default.TraySettings);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[WARN] Could not load settings: {ex.Message}");
+            }
+            return null;
+        }
+
         public static void RestartWithML()
         {
             Console.WriteLine("[INFO] Restarting with ML enabled...");
 
-            // Enable ML
+            // Enable ML and persist the choice immediately
             _mlEnabled = true;
+            SaveSettings();
 
             // Clean up existing processes
             CleanupOldProcesses();
@@ -1483,6 +1568,54 @@ namespace NudgeTray
 
             StartNudge(_intervalMinutes);
             Console.WriteLine("[INFO] ML mode enabled and nudge restarted");
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Live AI state store — fed by MLDATA stdout lines from nudge.cs,
+    // read by AnalyticsWindow AI Brain tab.
+    // ─────────────────────────────────────────────────────────────────────────────
+    internal static class LiveAIState
+    {
+        private static readonly object _lock = new();
+        // Ring buffer — keep the last 30 ML predictions in memory
+        private static readonly List<MLLiveEvent> _events = new(capacity: 32);
+
+        /// <summary>
+        /// Unix timestamp (seconds UTC) of the next scheduled ML check.
+        /// Emitted by nudge.cs as "MLNEXT:{ts}" at startup and after each cycle.
+        /// 0 = not yet received.
+        /// </summary>
+        public static long NextCheckAt;
+
+        public static void Add(MLLiveEvent evt)
+        {
+            lock (_lock)
+            {
+                _events.Add(evt);
+                if (_events.Count > 30)
+                    _events.RemoveAt(0);
+            }
+        }
+
+        /// <summary>Returns a snapshot of recent events, oldest first.</summary>
+        public static IReadOnlyList<MLLiveEvent> GetRecent()
+        {
+            lock (_lock)
+            {
+                return _events.ToArray();
+            }
+        }
+
+        public static MLLiveEvent? Latest
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _events.Count > 0 ? _events[_events.Count - 1] : null;
+                }
+            }
         }
     }
 

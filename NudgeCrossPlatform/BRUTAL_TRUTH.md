@@ -380,36 +380,33 @@ var pid = GetWindowPID(focusWindow.focus);  // Direct X11 call
 
 ### Mamba Mentality Demands:
 
-1. **STOP BUILDING FEATURES** ❌
+1. **STOP BUILDING DISTRACTIONS** ❌
    - No calendar integration
-   - No flow detection
-   - No analytics dashboard
+   - No fancy analytics dashboard
+   - No complex UI themes
 
-2. **START VALIDATING** ✅
-   - Find 5 real users
-   - Track for 1 week
-   - Measure actual behavior change
+2. **START VALIDATING THE CORE** ✅
+   - Does the ML actually catch you when you're drifting?
+   - Is the 1-minute check interval too frequent or just right?
+   - Does the adaptive timing reduce "notification fatigue"?
 
-3. **BE OBSESSIVE ABOUT THE RIGHT THING** ✅
-   - Obsess over: Does this help people?
-   - Not: Does the code look nice?
+3. **BE OBSESSIVE ABOUT THE NUDGE** ✅
+   - Obsess over: How accurately can we predict unproductivity?
+   - Not: Can we add more features?
 
 ### Elon's Algorithm Demands:
 
 1. **Make Requirements Less Dumb**
    ```
-   OLD: "Build ML-powered productivity tracker"
-   NEW: "Help 5 people focus better for 1 week"
+   OLD: "Build a tracker that nudges you sometimes."
+   NEW: "Use AI to eliminate 90% of unnecessary interruptions while catching 100% of drift."
    ```
 
-2. **Delete 70% of Current Code**
-   - ❌ Delete NudgeBackEnd/ (legacy TF 1.x)
-   - ❌ Delete NudgeFrontEnd/ (legacy Windows)
-   - ❌ Delete train_model.py (keep modern only)
-   - ❌ Delete StableHash (overkill)
-   - ❌ Delete CSV (use SQLite)
-   - ❌ Delete prediction mode (validate first)
-   - ✅ Keep: Data collection + basic ML training
+2. **Delete Redundant Code**
+   - ❌ Delete NudgeBackEnd/ & NudgeFrontEnd/ (Legacy)
+   - ❌ Delete background_trainer.py (Keep modern train_model.py only)
+   - ❌ Delete StableHash collision detection
+   - ✅ Keep: Core tracking + Modern ML training + Prediction
 
 3. **Simplify What's Left**
    - 3 projects → 1 project
@@ -459,74 +456,50 @@ var pid = GetWindowPID(focusWindow.focus);  // Direct X11 call
    - Remove locking overhead
    ```
 
-4. **PROFILE BEFORE OPTIMIZING**
-   ```bash
-   dotnet trace collect --process-id <pid>
-   PerfView analyze trace.nettrace
+---
 
-   # Find ACTUAL hotspots
-   # Optimize top 3 only
-   ```
+## ⚡ THE CORE PILLAR: Adaptive Timing via AI
+
+The whole idea of Nudge isn't just to track activity—it's to **notify at the right time**. 
+
+**The Vision:** Catch the user at the exact moment they are becoming unproductive, and *only* then. Traditional trackers interrupt you on a fixed schedule; Nudge uses AI to understand the *moment* of drift.
 
 ---
 
-## 💀 THE DEATH SENTENCE: What We Built That Shouldn't Exist
+## 💀 THE DEATH SENTENCE: What Actually Shouldn't Exist
 
-### 1. **Prediction Mode** (Delete)
-**REASON:** Never validated if people want automated nudges
-
-### 2. **Three Training Scripts** (Delete 2)
-**REASON:** Complexity for no benefit
-
-### 3. **Legacy Windows/Backend Code** (Delete All)
+### 1. **Legacy Windows/Backend Code** (Delete All)
 **REASON:** Doesn't work, won't work, why keep it?
 
-### 4. **App Hash Collision Detection** (Delete)
-**REASON:** Collision rate < 0.001%, over-engineering
+### 2. **Three Training Scripts** (Delete 2)
+**REASON:** Complexity for no benefit. Keep only `train_model.py` (the modern one).
 
-### 5. **Thread-Safe CSV Locking** (Delete)
-**REASON:** Shouldn't use threads or CSV in first place
+### 3. **App Hash Collision Detection** (Delete)
+**REASON:** Collision rate < 0.001%, over-engineering.
 
-### 6. **Separate Mouse/Keyboard Tracking** (Combine)
-**REASON:** Identical on Linux, wasteful
-
-### 7. **Configuration Complexity** (Not Built Yet - Good!)
-**REASON:** YAGNI - You Ain't Gonna Need It
-
-### 8. **Calendar Integration** (Not Built Yet - Good!)
-**REASON:** Validate core first
-
-### 9. **Analytics Dashboard** (Not Built Yet - Good!)
-**REASON:** No users = no analytics needed
+### 4. **Thread-Safe CSV Locking** (Delete)
+**REASON:** Over-engineered for a local single-user app.
 
 ---
 
 ## ⚡ THE MVP: What Actually Matters
 
-### Core Loop (The ONLY Thing That Matters):
+### Core Loop (The Nudge Vision):
 ```
-1. User opens app
-2. App tracks foreground window
-3. Every 30 minutes: "Were you productive?"
-4. User answers Yes/No
-5. After 1 week: Show simple report
-6. Did user improve? YES/NO
+1. App tracks foreground window & idle time.
+2. AI Model evaluates state every minute: "Is the user drifting?"
+3. IF high confidence of unproductivity: Nudge the user.
+4. User answers Yes/No to refine the model.
+5. Result: Zero unnecessary interruptions, maximum accountability.
 ```
 
-**IF YES:** Iterate and improve
-**IF NO:** Delete entire project
-
-### MVP Feature List (Everything Else is WASTE):
-1. ✅ Track foreground window
-2. ✅ Track idle time
-3. ✅ Periodic check-in (30 min)
-4. ✅ Store responses
-5. ✅ Weekly report
-6. ❌ ML (not needed for MVP)
-7. ❌ Real-time prediction (not needed)
-8. ❌ Calendar integration (not needed)
-9. ❌ Analytics (not needed)
-10. ❌ Flow detection (not needed)
+### MVP Feature List:
+1. ✅ Track foreground window & idle time (Low overhead)
+2. ✅ ML-powered adaptive checking (The "Nudge" core)
+3. ✅ Local model training (Privacy first)
+4. ✅ Periodic fallback check-in (When model is uncertain)
+5. ❌ Calendar integration (Waste for MVP)
+6. ❌ Analytics Dashboard (Waste for MVP)
 
 ### MVP Code Size: ~500 lines
 **CURRENT:** 3000+ lines
@@ -537,31 +510,30 @@ var pid = GetWindowPID(focusWindow.focus);  // Direct X11 call
 
 ## 🎯 THE ACTION PLAN: Next 48 Hours
 
-### Hour 0-2: DELETE
+### Hour 0-2: RUTHLESS DELETION
 - [ ] Delete NudgeBackEnd/
 - [ ] Delete NudgeFrontEnd/
-- [ ] Delete train_model.py
+- [ ] Delete background_trainer.py (redundant)
 - [ ] Delete StableHash collision detection
-- [ ] Delete prediction mode
 - [ ] Combine mouse/keyboard into idle_time
 
-**COMMITS DELETED:** 70% of codebase
+**RESULT:** 50% of codebase deleted, core value remains.
 
-### Hour 2-4: MEASURE
-- [ ] Add performance timing to every function
-- [ ] Profile with dotnet-trace
+### Hour 2-4: MEASURE & PROFILE
+- [ ] Add performance timing to monitoring cycle
+- [ ] Profile ML inference latency (must be <10ms)
 - [ ] Find actual hotspots
 - [ ] Document measurements
 
-### Hour 4-8: OPTIMIZE TOP 3
+### Hour 4-8: PERFORMANCE OPTIMIZATION
 - [x] Replace xdotool with KWin D-Bus scripting API for accurate KDE Wayland window titles
-- [ ] Remove threading/locking
-- [ ] Simplify data storage
+- [ ] Remove threading/locking complexity
+- [ ] Replace remaining process spawns (gdbus/swaymsg) with direct IPC
 
-### Hour 8-12: SIMPLIFY
-- [ ] Merge 3 projects into 1
+### Hour 8-12: ARCHITECTURAL SIMPLIFICATION
+- [ ] Merge 3 projects into 1 single executable
 - [ ] One file per concern
-- [ ] Remove abstractions
+- [ ] Remove unused abstractions (Interfaces with 1 implementation)
 
 ### Hour 12-24: MVP VALIDATION
 - [ ] Ship to 1 user (yourself)

@@ -46,6 +46,8 @@ class ProductivityPredictor:
         self.model = None
         self.scaler_mean = None
         self.scaler_scale = None
+        self.feature_order = None
+        self.schema_version = None
         self.model_loaded = False
         self.load_model()
 
@@ -74,6 +76,8 @@ class ProductivityPredictor:
                     scaler_params = json.load(f)
                 self.scaler_mean = np.array(scaler_params['mean'])
                 self.scaler_scale = np.array(scaler_params['scale'])
+                self.feature_order = scaler_params.get('feature_order')
+                self.schema_version = scaler_params.get('schema_version')
                 print(f"✅ Scaler loaded from {scaler_path}", file=sys.stderr)
             else:
                 print(f"⚠️  No scaler found - using raw features", file=sys.stderr)
@@ -85,16 +89,9 @@ class ProductivityPredictor:
             print(f"❌ Error loading model: {e}", file=sys.stderr)
             return False
 
-    def predict(self, hour_of_day, day_of_week, foreground_app, idle_time, time_last_request):
+    def predict(self, features_by_name, request_feature_order=None):
         """
         Make prediction with confidence score
-
-        Args:
-            hour_of_day: Hour of day (0-23)
-            day_of_week: Day of week (0-6, Sunday=0)
-            foreground_app: Hash of foreground application
-            idle_time: Idle time in milliseconds
-            time_last_request: Time in current app (ms)
 
         Returns:
             dict with:
@@ -113,8 +110,13 @@ class ProductivityPredictor:
             }
 
         try:
-            # Prepare features (order must match training data)
-            features = np.array([[hour_of_day, day_of_week, foreground_app, idle_time, time_last_request]], dtype=np.float32)
+            feature_order = self.feature_order or request_feature_order
+            if not feature_order:
+                raise ValueError('missing_feature_order')
+
+            features = np.array([
+                [float(features_by_name.get(name, 0.0)) for name in feature_order]
+            ], dtype=np.float32)
 
             # Scale features if scaler is available
             if self.scaler_mean is not None and self.scaler_scale is not None:
@@ -212,18 +214,23 @@ class InferenceServer:
             # Parse request
             request = json.loads(data.decode('utf-8'))
 
-            # Extract features (including time-based features)
-            hour_of_day = request.get('hour_of_day', 0)
-            day_of_week = request.get('day_of_week', 0)
-            foreground_app = request.get('foreground_app', 0)
-            idle_time = request.get('idle_time', 0)
-            time_last_request = request.get('time_last_request', 0)
+            if 'features' in request:
+                features_by_name = request.get('features', {})
+                request_feature_order = request.get('feature_order', [])
+            else:
+                features_by_name = {
+                    'hour_of_day': request.get('hour_of_day', 0),
+                    'day_of_week': request.get('day_of_week', 0),
+                    'foreground_app': request.get('foreground_app', 0),
+                    'idle_time': request.get('idle_time', 0),
+                    'time_last_request': request.get('time_last_request', 0),
+                }
+                request_feature_order = list(features_by_name.keys())
 
             # Time prediction
             start_time = time.time()
 
-            # Make prediction with all features
-            result = self.predictor.predict(hour_of_day, day_of_week, foreground_app, idle_time, time_last_request)
+            result = self.predictor.predict(features_by_name, request_feature_order)
 
             # Track performance
             prediction_time = (time.time() - start_time) * 1000  # ms

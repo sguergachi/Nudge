@@ -38,6 +38,7 @@ using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -47,6 +48,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Tmds.DBus.Protocol;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // PLATFORM SERVICE IMPLEMENTATIONS
@@ -60,7 +62,7 @@ interface IPlatformService
     string PlatformName { get; }
 }
 
-class Nudge
+sealed class Nudge
 {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // VERSION & CONSTANTS
@@ -73,7 +75,7 @@ class Nudge
     const int ACTIVITY_LOG_INTERVAL_MS = 60 * 1000;  // Log activity every 1 minute
 
     static int SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;  // Random 5-10 minutes (configurable)
-    static bool _customInterval = false;  // Track if user specified custom interval
+    static bool _customInterval;  // Track if user specified custom interval
 
     // ML-powered adaptive notifications
     const int ML_CHECK_INTERVAL_MS = 60 * 1000;  // Check ML every 1 minute
@@ -81,9 +83,9 @@ class Nudge
     const int MIN_SAMPLES_THRESHOLD = 100;  // Minimum samples before using trained model
     const string ML_HOST = "127.0.0.1";
     const int ML_PORT = 45002;
-    static bool _mlEnabled = false;
-    static bool _mlAvailable = false;
-    static bool _forceTrainedModel = false;  // Force use of trained model even if below threshold
+    static bool _mlEnabled;
+    static bool _mlAvailable;
+    static bool _forceTrainedModel;  // Force use of trained model even if below threshold
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // ANSI COLORS - Professional terminal output
@@ -124,7 +126,7 @@ class Nudge
     static extern IntPtr GetForegroundWindow();
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder text, int count);
+    static extern int GetWindowText(IntPtr hWnd, [Out] char[] text, int count);
 
     [DllImport("user32.dll")]
     static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
@@ -139,12 +141,12 @@ class Nudge
     // PLATFORM SERVICE IMPLEMENTATIONS
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    class WindowsPlatformService : IPlatformService
+    sealed class WindowsPlatformService : IPlatformService
     {
         private string _cachedApp = "";
         private string _cachedTitle = "";
         private DateTime _appCacheExpiry = DateTime.MinValue;
-        private int _cachedIdle = 0;
+        private int _cachedIdle;
         private DateTime _idleCacheExpiry = DateTime.MinValue;
 
         public string PlatformName => "Windows";
@@ -166,7 +168,7 @@ class Nudge
                 if (hwnd == IntPtr.Zero)
                     return ("unknown", "");
 
-                GetWindowThreadProcessId(hwnd, out uint processId);
+                _ = GetWindowThreadProcessId(hwnd, out uint processId);
                 string? processName = null;
                 try
                 {
@@ -176,11 +178,12 @@ class Nudge
                 catch { }
 
                 const int nChars = 1024;
-                var buff = new System.Text.StringBuilder(nChars);
+                var buff = new char[nChars];
                 string title = "";
-                if (GetWindowText(hwnd, buff, nChars) > 0)
+                int length = GetWindowText(hwnd, buff, nChars);
+                if (length > 0)
                 {
-                    title = buff.ToString();
+                    title = new string(buff, 0, length);
                 }
 
                 string fallbackApp = !string.IsNullOrWhiteSpace(title)
@@ -228,14 +231,207 @@ class Nudge
         }
     }
 
-    class LinuxPlatformService : IPlatformService
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // KWIN WINDOW TRACKER
+    //
+    // Invisible active-window detection for KDE Plasma 6 (X11 + Wayland).
+    //
+    // We auto-install a tiny KWin script under ~/.local/share/kwin/scripts/.
+    // The script subscribes to workspace.windowActivated and on every change
+    // calls (fire-and-forget) `org.nudge.WindowTracker.Update(app, title)` over
+    // the session bus. This Nudge process owns that bus name and caches the
+    // value, which GetKDEFocusedAppWithTitle reads.
+    //
+    // Crucially: NO interactive D-Bus calls. `org.kde.KWin.queryWindowInfo` is
+    // banned — it triggers a crosshair window-picker.
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    sealed class KWinWindowTracker : IPathMethodHandler, IDisposable
+    {
+        private const string DBusName       = "org.nudge.WindowTracker";
+        private const string DBusInterface  = "org.nudge.WindowTracker";
+        private const string DBusObjectPath = "/";
+        private const string PluginName     = "nudge-window-tracker";
+
+        private static readonly string ScriptDir = System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".local", "share", "kwin", "scripts", PluginName);
+        private static readonly string ScriptMainJsPath =
+            System.IO.Path.Combine(ScriptDir, "contents", "code", "main.js");
+        private static readonly string ScriptMetadataPath =
+            System.IO.Path.Combine(ScriptDir, "metadata.json");
+
+        private DBusConnection? _connection;
+        private readonly object _lock = new();
+        private string _cachedApp = "";
+        private string _cachedTitle = "";
+        private DateTime _lastUpdate = DateTime.MinValue;
+        private volatile bool _ready;
+
+        public string Path => DBusObjectPath;
+        public bool IsReady => _ready;
+        public bool HandlesChildPaths => false;
+
+        public void Dispose()
+        {
+            _connection?.Dispose();
+        }
+
+        public (string app, string title, DateTime updatedAt) Snapshot()
+        {
+            lock (_lock) return (_cachedApp, _cachedTitle, _lastUpdate);
+        }
+
+        public ValueTask HandleMethodAsync(MethodContext context)
+        {
+            var msg = context.Request;
+            if (msg.InterfaceAsString == DBusInterface && msg.MemberAsString == "Update")
+            {
+                try
+                {
+                    var reader = msg.GetBodyReader();
+                    var app = reader.ReadString().ToString();
+                    var title = reader.ReadString().ToString();
+                    lock (_lock)
+                    {
+                        _cachedApp = app;
+                        _cachedTitle = title;
+                        _lastUpdate = DateTime.UtcNow;
+                    }
+                }
+                catch { /* malformed payload; ignore */ }
+            }
+            // KWin's callDBus is fire-and-forget (NoReplyExpected). Skip the reply.
+            return ValueTask.CompletedTask;
+        }
+
+        public static bool RunMethodHandlerSynchronously(Message message) => true;
+
+        public async Task<bool> StartAsync()
+        {
+            try
+            {
+                EnsureScriptInstalled();
+
+                _connection = new DBusConnection(DBusAddress.Session!);
+                await _connection.ConnectAsync().ConfigureAwait(false);
+
+                bool got = await _connection.TryRequestNameAsync(DBusName, RequestNameOptions.None)
+                                            .ConfigureAwait(false);
+                if (!got)
+                {
+                    _connection.Dispose();
+                    _connection = null;
+                    Console.Error.WriteLine($"[kwin-tracker] could not own bus name {DBusName} (already taken)");
+                    return false;
+                }
+
+                _connection.AddMethodHandler(this);
+
+                LoadAndStartScript();
+                _ready = true;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[kwin-tracker] start failed: {ex.Message}");
+                return false;
+            }
+        }
+
+        private static void EnsureScriptInstalled()
+        {
+            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(ScriptMainJsPath)!);
+            if (!File.Exists(ScriptMetadataPath) ||
+                File.ReadAllText(ScriptMetadataPath) != MetadataJson)
+            {
+                File.WriteAllText(ScriptMetadataPath, MetadataJson);
+            }
+            if (!File.Exists(ScriptMainJsPath) ||
+                File.ReadAllText(ScriptMainJsPath) != MainJs)
+            {
+                File.WriteAllText(ScriptMainJsPath, MainJs);
+            }
+        }
+
+        private static string ResolveQdbus()
+        {
+            foreach (var candidate in new[] { "qdbus6", "qdbus-qt6", "qdbus" })
+            {
+                if (CommandExists(candidate)) return candidate;
+            }
+            return "";
+        }
+
+        private static void LoadAndStartScript()
+        {
+            var qdbus = ResolveQdbus();
+            if (string.IsNullOrEmpty(qdbus)) return;
+
+            // Reload to pick up any script content change. Unload errors are non-fatal.
+            RunCommand(qdbus,
+                $"org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript {PluginName}");
+            RunCommand(qdbus,
+                $"org.kde.KWin /Scripting org.kde.kwin.Scripting.loadScript " +
+                $"\"{ScriptMainJsPath}\" {PluginName}");
+            RunCommand(qdbus,
+                "org.kde.KWin /Scripting org.kde.kwin.Scripting.start");
+        }
+
+        private const string MetadataJson = @"{
+    ""KPlugin"": {
+        ""Id"": ""nudge-window-tracker"",
+        ""Name"": ""Nudge Window Tracker"",
+        ""Description"": ""Publishes the active window's app id and title to org.nudge.WindowTracker on the session bus, for the Nudge productivity tracker. Invisible: no UI."",
+        ""Version"": ""1.0"",
+        ""EnabledByDefault"": true,
+        ""ServiceTypes"": [""KWin/Script""]
+    },
+    ""X-Plasma-API"": ""javascript"",
+    ""X-Plasma-MainScript"": ""code/main.js""
+}
+";
+
+        private const string MainJs = @"// Auto-installed by Nudge. Publishes active window info via D-Bus.
+// Fully passive: just listens to KWin's windowActivated signal.
+function publish() {
+    try {
+        var w = workspace.activeWindow;
+        if (!w) {
+            callDBus(""org.nudge.WindowTracker"", ""/"", ""org.nudge.WindowTracker"", ""Update"", """", """");
+            return;
+        }
+        var cls = (w.resourceClass || """").toString();
+        var title = (w.caption || """").toString();
+        callDBus(""org.nudge.WindowTracker"", ""/"", ""org.nudge.WindowTracker"", ""Update"", cls, title);
+    } catch (e) {
+        print(""nudge-window-tracker error: "" + e);
+    }
+}
+
+if (typeof workspace.windowActivated !== ""undefined"") {
+    workspace.windowActivated.connect(publish);
+}
+publish();
+";
+    }
+
+    sealed class LinuxPlatformService : IPlatformService, IDisposable
     {
         private string _compositor = "";
         private string _cachedApp = "";
         private string _cachedTitle = "";
         private DateTime _appCacheExpiry = DateTime.MinValue;
-        private int _cachedIdle = 0;
+        private int _cachedIdle;
         private DateTime _idleCacheExpiry = DateTime.MinValue;
+        private KWinWindowTracker? _kwinTracker;
+
+        private static readonly char[] Separators = [' ', '\n', '\r', '\t'];
+
+        public void Dispose()
+        {
+            _kwinTracker?.Dispose();
+        }
 
         private static readonly FrozenSet<string> SystemProcessNames = new[]
         {
@@ -270,7 +466,7 @@ class Nudge
             {
                 "sway" => ("swaymsg", "Sway IPC"),
                 "gnome" => ("gdbus", "D-Bus communication"),
-                "kde" => ("qdbus", "KDE D-Bus window detection"),
+                "kde" => ("", ""),  // KDE: handled via KWin script + D-Bus listener (see KWinWindowTracker)
                 _ => ("", "")
             };
 
@@ -279,10 +475,20 @@ class Nudge
                 return false;
             }
 
+            if (_compositor == "kde")
+            {
+                // Spin up the KWin-script-driven tracker. Failure is non-fatal: we
+                // fall back to xprop on XWayland in GetKDEFocusedAppWithTitle.
+                _kwinTracker = new KWinWindowTracker();
+                // Block briefly so the first GetForegroundApp() call doesn't race
+                // ahead of the bus name being claimed and the script publishing.
+                try { _kwinTracker.StartAsync().Wait(TimeSpan.FromSeconds(2)); } catch { }
+            }
+
             return true;
         }
 
-        private string DetectCompositor()
+        private static string DetectCompositor()
         {
             if (CommandExists("swaymsg"))
                 return "sway";
@@ -371,7 +577,7 @@ class Nudge
         }
 
         // Linux-specific window detection methods
-        private (string app, string title) GetSwayFocusedAppWithTitle()
+        private static (string app, string title) GetSwayFocusedAppWithTitle()
         {
             try
             {
@@ -384,7 +590,7 @@ class Nudge
             }
         }
 
-        private (string app, string title) GetGnomeFocusedAppWithTitle()
+        private static (string app, string title) GetGnomeFocusedAppWithTitle()
         {
             try
             {
@@ -419,16 +625,100 @@ class Nudge
 
         private (string app, string title) GetKDEFocusedAppWithTitle()
         {
-            return ("test-mode", "testing");
+            // Primary: KWin-script-driven tracker (invisible, covers native Wayland too).
+            if (_kwinTracker != null && _kwinTracker.IsReady)
+            {
+                var (app, title, updatedAt) = _kwinTracker.Snapshot();
+                if (updatedAt != DateTime.MinValue && !string.IsNullOrEmpty(app))
+                    return (app, title);
+            }
+            // Fallback: xprop on XWayland (only sees X11 apps; misses Wayland-native).
+            // Strictly invisible — _NET_ACTIVE_WINDOW is just a property read.
+            var x = ReadActiveX11Window();
+            if (!string.IsNullOrEmpty(x.app))
+                return x;
+            return ("unknown", "");
         }
-        private (string app, string title) GetX11FocusedAppWithTitle()
+
+        private static (string app, string title) GetX11FocusedAppWithTitle()
         {
-            // Process-based detection is completely invisible and non-interactive.
+            // EWMH-based read of _NET_ACTIVE_WINDOW. Invisible and accurate.
+            var x = ReadActiveX11Window();
+            if (!string.IsNullOrEmpty(x.app))
+                return x;
+            // Last-resort: heuristic /proc scan (not focus-aware; better than nothing).
             return (DetectActiveProcessKDE(), "");
         }
 
+        private static (string app, string title) ReadActiveX11Window()
+        {
+            try
+            {
+                if (!CommandExists("xprop")) return ("", "");
+
+                var rootOut = RunCommand("xprop", "-root _NET_ACTIVE_WINDOW");
+                if (string.IsNullOrWhiteSpace(rootOut)) return ("", "");
+
+                // Format: "_NET_ACTIVE_WINDOW(WINDOW): window id # 0x3a00007"
+                int hashIdx = rootOut.IndexOf('#');
+                if (hashIdx < 0) return ("", "");
+                var idTok = rootOut[(hashIdx + 1)..].Trim().Split(Separators, 2)[0];
+                if (string.IsNullOrEmpty(idTok) || idTok == "0x0" || idTok == "0") return ("", "");
+
+                var winOut = RunCommand("xprop", $"-id {idTok} WM_CLASS _NET_WM_NAME WM_NAME");
+                if (string.IsNullOrWhiteSpace(winOut)) return ("", "");
+
+                string app = "", title = "";
+                foreach (var rawLine in winOut.Split('\n'))
+                {
+                    var line = rawLine.Trim();
+                    if (line.StartsWith("WM_CLASS", StringComparison.Ordinal))
+                    {
+                        // WM_CLASS(STRING) = "instance", "Class"
+                        var quotes = ExtractQuotedTokens(line);
+                        if (quotes.Count > 0)
+                            app = quotes[^1]; // Class (second) preferred; falls back to instance if only one
+                    }
+                    else if (string.IsNullOrEmpty(title) &&
+                             (line.StartsWith("_NET_WM_NAME", StringComparison.Ordinal) || line.StartsWith("WM_NAME", StringComparison.Ordinal)))
+                    {
+                        var quotes = ExtractQuotedTokens(line);
+                        if (quotes.Count > 0) title = quotes[0];
+                    }
+                }
+                return (app, title);
+            }
+            catch
+            {
+                return ("", "");
+            }
+        }
+
+        private static List<string> ExtractQuotedTokens(string line)
+        {
+            var result = new List<string>();
+            int i = 0;
+            while (i < line.Length)
+            {
+                int start = line.IndexOf('"', i);
+                if (start < 0) break;
+                int end = start + 1;
+                var sb = new StringBuilder();
+                while (end < line.Length)
+                {
+                    char c = line[end];
+                    if (c == '\\' && end + 1 < line.Length) { sb.Append(line[end + 1]); end += 2; continue; }
+                    if (c == '"') break;
+                    sb.Append(c); end++;
+                }
+                result.Add(sb.ToString());
+                i = end + 1;
+            }
+            return result;
+        }
+
         // Linux-specific idle time detection methods
-        private int GetFreedesktopIdleTime()
+        private static int GetFreedesktopIdleTime()
         {
             try
             {
@@ -470,7 +760,7 @@ class Nudge
             }
         }
 
-        private int GetGnomeIdleTime()
+        private static int GetGnomeIdleTime()
         {
             try
             {
@@ -495,7 +785,7 @@ class Nudge
             }
         }
 
-        private int GetX11IdleTime()
+        private static int GetX11IdleTime()
         {
             try
             {
@@ -513,7 +803,7 @@ class Nudge
             }
         }
 
-        private string DetectActiveProcessKDE()
+        private static string DetectActiveProcessKDE()
         {
             try
             {
@@ -640,16 +930,16 @@ class Nudge
                 switch (fieldNumber)
                 {
                     case 5:
-                        long.TryParse(token, out pgrp);
+                        _ = long.TryParse(token, out pgrp);
                         break;
                     case 8:
-                        long.TryParse(token, out tpgid);
+                        _ = long.TryParse(token, out tpgid);
                         break;
                     case 10:
-                        long.TryParse(token, out minFaults);
+                        _ = long.TryParse(token, out minFaults);
                         break;
                     case 20:
-                        long.TryParse(token, out numThreads);
+                        _ = long.TryParse(token, out numThreads);
                         break;
                 }
 
@@ -669,10 +959,10 @@ class Nudge
             return activityScore;
         }
 
-        private (string app, string title) ExtractFocusedAppFromSwayTree(string json) =>
+        private static (string app, string title) ExtractFocusedAppFromSwayTree(string json) =>
             NudgeCoreLogic.ExtractFocusedAppFromSwayJson(json);
 
-        private string ExtractQuotedString(string input) =>
+        private static string ExtractQuotedString(string input) =>
             NudgeCoreLogic.ExtractQuotedString(input);
     }
 
@@ -687,28 +977,30 @@ class Nudge
 
     // Activity tracking
     static string _currentApp = "";
-    static int _attentionSpanMs = 0;
-    static bool _waitingForResponse = false;
-    static int _totalSnapshots = 0;
-    static int _activityLogElapsed = 0;  // Track elapsed time for activity logging
+    static int _attentionSpanMs;
+    static bool _waitingForResponse;
+    static int _totalSnapshots;
+    static int _activityLogElapsed;  // Track elapsed time for activity logging
 
     // Snapshot state (captured when snapshot is taken)
     static string _snapshotApp = "";
-    static int _snapshotIdle = 0;
-    static int _snapshotAttention = 0;
+    static int _snapshotIdle;
+    static int _snapshotAttention;
     static System.Threading.Timer? _responseTimer;
 
     // ML statistics tracking
-    static int _mlPredictions = 0;
-    static int _mlTriggeredSnapshots = 0;
-    static int _mlSkippedAlerts = 0;
-    static int _intervalTriggeredSnapshots = 0;
+    static int _mlPredictions;
+    static int _mlTriggeredSnapshots;
+    static int _mlSkippedAlerts;
+    static int _intervalTriggeredSnapshots;
     static List<double> _mlConfidenceScores = new List<double>();
 
     // Log message formats
     private const string LogPredictionFormat = "📊 Request #{0}: {1} (confidence: {2:F1}%, {3:F1}ms)";
     private const string LogIdleFormat = "  {0} min until next snapshot{1}  ({2}{3}{4}, idle: {5}ms)";
     private const string LogAppSwitchFormat = "  Switched: {0} → {1}";
+
+    private static readonly CompositeFormat LogAppSwitchComposite = CompositeFormat.Parse(LogAppSwitchFormat);
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // RANDOM INTERVAL - Generate random snapshot interval between 5-10 minutes
@@ -795,6 +1087,12 @@ class Nudge
         }
         Info($"  Respond with: {Color.BCYAN}nudge-notify YES{Color.RESET} or {Color.BCYAN}nudge-notify NO{Color.RESET}");
         Console.WriteLine();
+
+        // Let the tray AI Brain tab show a countdown to the first ML check
+        if (_mlEnabled)
+        {
+            Console.WriteLine($"MLNEXT:{DateTimeOffset.UtcNow.ToUnixTimeSeconds() + ML_CHECK_INTERVAL_MS / 1000}");
+        }
 
         RunMainLoop();
     }
@@ -910,6 +1208,8 @@ class Nudge
 
         while (true)
         {
+            var sw = Stopwatch.StartNew();
+
             // Get current activity
             var (app, title) = _platformService?.GetForegroundAppWithTitle() ?? ("unknown", "");
             int idle = _platformService?.GetIdleTime() ?? 0;
@@ -924,7 +1224,7 @@ class Nudge
                 if (!string.IsNullOrEmpty(_currentApp))
                 {
                     // Reuse the shared format string to keep the hot path quiet on allocations.
-                    Dim(string.Format(null, LogAppSwitchFormat, _currentApp, app));
+                    Dim(string.Format(null, LogAppSwitchComposite, _currentApp, app));
                 }
                 _currentApp = app;
                 _attentionSpanMs = 0;
@@ -965,6 +1265,8 @@ class Nudge
                         mlTriggered = true;
                     }
                     mlElapsed = 0; // Reset ML check timer
+                    // Broadcast next scheduled check time to the AI Brain tab
+                    Console.WriteLine($"MLNEXT:{DateTimeOffset.UtcNow.ToUnixTimeSeconds() + ML_CHECK_INTERVAL_MS / 1000}");
                 }
 
                 // Trigger snapshot if:
@@ -1008,6 +1310,12 @@ class Nudge
                 int remaining = (SNAPSHOT_INTERVAL_MS - elapsed) / 60000;
                 string mlStatus = _mlEnabled ? (_mlAvailable ? " [ML: active]" : " [ML: fallback]") : "";
                 Dim($"  {remaining} min until next snapshot{mlStatus}  ({Color.CYAN}{app}{Color.RESET}, idle: {idle}ms)");
+            }
+
+            sw.Stop();
+            if (sw.ElapsedMilliseconds > 10)
+            {
+                Dim($"  PERF: Monitoring cycle took {sw.ElapsedMilliseconds}ms");
             }
 
             Thread.Sleep(CYCLE_MS);
@@ -1071,7 +1379,7 @@ class Nudge
             Dim($"  Created backup: {backupPath}");
 
             var fileTime = File.GetLastWriteTime(_csvPath);
-            string timestamp = fileTime.ToString("yyyy-MM-dd HH:mm:ss");
+            string timestamp = fileTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
             int hour = fileTime.Hour;
             int day = (int)fileTime.DayOfWeek;
             int migratedRows = 0;
@@ -1220,7 +1528,7 @@ class Nudge
             int appHash = GetHash(app);
             int hourOfDay = now.Hour;  // 0-23
             int dayOfWeek = (int)now.DayOfWeek;  // 0-6 (Sunday=0)
-            string timestamp = now.ToString("yyyy-MM-dd HH:mm:ss");
+            string timestamp = now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 
             // Include app_name for human readability, foreground_app (hash) for ML
             _activityLogFile?.WriteLine($"{timestamp},{hourOfDay},{dayOfWeek},{app},{appHash},{idle}");
@@ -1240,7 +1548,7 @@ class Nudge
         var now = DateTime.Now;
         int hourOfDay = now.Hour;  // 0-23
         int dayOfWeek = (int)now.DayOfWeek;  // 0-6 (Sunday=0)
-        string timestamp = now.ToString("yyyy-MM-dd HH:mm:ss");
+        string timestamp = now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 
         try
         {
@@ -1289,7 +1597,7 @@ class Nudge
             {
                 IPEndPoint remote = new IPEndPoint(IPAddress.Any, 0);
                 byte[] data = listener.Receive(ref remote);
-                string message = Encoding.UTF8.GetString(data).Trim().ToUpper();
+                string message = Encoding.UTF8.GetString(data).Trim().ToUpper(CultureInfo.InvariantCulture);
 
                 if (!_waitingForResponse)
                 {
@@ -1458,6 +1766,26 @@ class Nudge
 
         // Calculate average confidence
         double avgConfidence = _mlConfidenceScores.Average();
+
+        // ── Broadcast live state to nudge-tray AI Brain tab ──────────────────
+        {
+            bool willTrigger = prediction.Prediction == 0 && prediction.Confidence >= ML_CONFIDENCE_THRESHOLD;
+            bool isProductive = prediction.Prediction == 1;
+            // Score: 1.0 = AI very confident you ARE productive; 0.0 = very confident NOT productive
+            double productivityScore = isProductive
+                ? prediction.Confidence
+                : (1.0 - prediction.Confidence);
+            var liveEvt = new MLLiveEvent
+            {
+                T          = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                App        = app,
+                Score      = productivityScore,
+                Confidence = prediction.Confidence,
+                Productive = isProductive,
+                Triggered  = willTrigger
+            };
+            Console.WriteLine($"MLDATA:{JsonSerializer.Serialize(liveEvt, NudgeJsonContext.Default.MLLiveEvent)}");
+        }
 
         // Check confidence threshold
         if (prediction.Prediction == 0 && prediction.Confidence >= ML_CONFIDENCE_THRESHOLD)

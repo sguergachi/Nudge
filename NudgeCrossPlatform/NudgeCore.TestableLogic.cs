@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Frozen;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -42,6 +44,514 @@ internal sealed class NudgeNotifyParsedArgs
 internal readonly record struct ActivityLogEntry(DateTime Timestamp, string AppName);
 
 internal readonly record struct HarvestEntry(DateTime Timestamp, int HourOfDay, string AppName, bool Productive);
+
+internal enum FocusSource
+{
+    Unknown,
+    WindowsApi,
+    WaylandActivatedProtocol,
+    SwayIpc,
+    KWinScript,
+    GnomeShell,
+    X11Ewmh,
+    HeuristicProcessScan
+}
+
+internal enum IdleSource
+{
+    Unknown,
+    Win32LastInput,
+    WaylandExtIdleNotify,
+    FreedesktopScreenSaver,
+    GnomeIdleMonitor,
+    X11Xprintidle
+}
+
+internal enum SignalQuality
+{
+    Poor,
+    Usable,
+    Trusted
+}
+
+internal readonly record struct WindowObservation(
+    string AppId,
+    string Title,
+    string WindowId,
+    string WorkspaceId,
+    FocusSource FocusSource,
+    bool Fullscreen,
+    int MappedToplevelCount,
+    bool CatalogDisagrees = false);
+
+internal readonly record struct IdleObservation(int IdleMs, IdleSource IdleSource);
+
+internal readonly record struct ActivityContext(
+    string FocusedAppId,
+    string FocusedTitle,
+    string FocusedDomain,
+    string FocusedWindowId,
+    int IdleMs,
+    int IsIdleNow,
+    int FocusedSinceMs,
+    int TitleUnchangedForMs,
+    int MappedToplevelCount,
+    string ActiveWorkspaceId,
+    FocusSource FocusSource,
+    SignalQuality SignalQuality,
+    int FullscreenFlag);
+
+internal readonly record struct ActivityContextRecord(
+    DateTime Timestamp,
+    int HourOfDay,
+    int DayOfWeek,
+    string AppName,
+    int ForegroundApp,
+    int IdleTime,
+    string FocusedAppId,
+    string FocusedTitle,
+    string FocusedDomain,
+    string FocusedWindowId,
+    int IsIdleNow,
+    int FocusedSinceMs,
+    int TitleUnchangedForMs,
+    int MappedToplevelCount,
+    string ActiveWorkspaceId,
+    string FocusSource,
+    string SignalQuality,
+    int FullscreenFlag);
+
+internal readonly record struct FeatureVectorV2(
+    int HourOfDay,
+    int DayOfWeek,
+    int FocusedAppHash,
+    int FocusedDomainHash,
+    int IdleMs,
+    int FocusedSinceMs,
+    int TitleStabilityMs,
+    int SwitchCount60s,
+    int SwitchCount300s,
+    int DistinctApps300s,
+    int DistinctDomains300s,
+    int ReturnedToAnchorApp300s,
+    double CurrentAppShare300s,
+    double CurrentDomainShare300s,
+    int BrowserWindowFlag,
+    int CommunicationAppFlag,
+    int EntertainmentDomainFlag,
+    int WorkDomainFlag,
+    int AfkFlag,
+    int FullscreenFlag,
+    int WorkspaceSwitchCount300s);
+
+internal readonly record struct ActivityTickResult(
+    ActivityContext Context,
+    FeatureVectorV2 Features,
+    string DisplayAppName,
+    string LegacyAppName,
+    int LegacyForegroundAppHash,
+    int TimeLastRequestMs);
+
+internal sealed class ActivityFeatureTracker
+{
+    private const int IdleNowThresholdMs = 1000;
+    private const int AfkThresholdMs = 60 * 1000;
+    private const int WindowSeconds = 300;
+
+    private readonly Queue<ActivitySample> _samples = new();
+    private string _lastFocusKey = "";
+    private string _lastTitle = "";
+    private DateTime _focusedSince = DateTime.MinValue;
+    private DateTime _titleSince = DateTime.MinValue;
+
+    public ActivityTickResult Capture(DateTime now, WindowObservation window, IdleObservation idle)
+    {
+        string appId = NormalizeRawValue(window.AppId, "unknown");
+        string title = NormalizeRawValue(window.Title, "");
+        string domain = BrowserDetector.IsBrowser(appId) ? BrowserDetector.ExtractSite(title) ?? "" : "";
+        string windowId = NormalizeRawValue(window.WindowId, "");
+        string workspaceId = NormalizeRawValue(window.WorkspaceId, "");
+        string focusKey = !string.IsNullOrEmpty(windowId) ? windowId : $"{appId}\n{title}";
+
+        if (_focusedSince == DateTime.MinValue || !string.Equals(focusKey, _lastFocusKey, StringComparison.Ordinal))
+            _focusedSince = now;
+
+        if (_titleSince == DateTime.MinValue || !string.Equals(title, _lastTitle, StringComparison.Ordinal))
+            _titleSince = now;
+
+        var context = new ActivityContext(
+            FocusedAppId: appId,
+            FocusedTitle: title,
+            FocusedDomain: domain,
+            FocusedWindowId: windowId,
+            IdleMs: Math.Max(0, idle.IdleMs),
+            IsIdleNow: idle.IdleMs >= IdleNowThresholdMs ? 1 : 0,
+            FocusedSinceMs: ClampMilliseconds(now - _focusedSince),
+            TitleUnchangedForMs: ClampMilliseconds(now - _titleSince),
+            MappedToplevelCount: Math.Max(0, window.MappedToplevelCount),
+            ActiveWorkspaceId: workspaceId,
+            FocusSource: window.FocusSource,
+            SignalQuality: DetermineSignalQuality(window, appId, title),
+            FullscreenFlag: window.Fullscreen ? 1 : 0);
+
+        _samples.Enqueue(new ActivitySample(now, focusKey, appId, domain, workspaceId));
+        TrimSamples(now);
+
+        var featureVector = BuildFeatureVector(now, context);
+        string legacyAppName = BuildLegacyAppName(appId, title);
+        string displayAppName = BuildDisplayAppName(appId, title, domain);
+
+        _lastFocusKey = focusKey;
+        _lastTitle = title;
+
+        return new ActivityTickResult(
+            Context: context,
+            Features: featureVector,
+            DisplayAppName: displayAppName,
+            LegacyAppName: legacyAppName,
+            LegacyForegroundAppHash: NudgeCoreLogic.GetStableHash(legacyAppName),
+            TimeLastRequestMs: context.FocusedSinceMs);
+    }
+
+    private FeatureVectorV2 BuildFeatureVector(DateTime now, ActivityContext context)
+    {
+        ActivitySample[] last300 = GetSamplesSince(now.AddSeconds(-299));
+        ActivitySample[] last60 = GetSamplesSince(now.AddSeconds(-59));
+
+        int total300 = Math.Max(1, last300.Length);
+        int currentAppCount = last300.Count(sample => string.Equals(sample.AppId, context.FocusedAppId, StringComparison.Ordinal));
+        int currentDomainCount = string.IsNullOrEmpty(context.FocusedDomain)
+            ? 0
+            : last300.Count(sample => string.Equals(sample.Domain, context.FocusedDomain, StringComparison.Ordinal));
+
+        string anchorApp = GetMostCommonApp(last300, context.FocusedAppId);
+        bool returnedToAnchorApp = !string.IsNullOrEmpty(anchorApp) &&
+                                   string.Equals(anchorApp, context.FocusedAppId, StringComparison.Ordinal) &&
+                                   HasInterveningSwitch(last300, context.FocusedAppId);
+
+        return new FeatureVectorV2(
+            HourOfDay: now.Hour,
+            DayOfWeek: (int)now.DayOfWeek,
+            FocusedAppHash: NudgeCoreLogic.GetStableHash(context.FocusedAppId),
+            FocusedDomainHash: NudgeCoreLogic.GetStableHash(context.FocusedDomain),
+            IdleMs: context.IdleMs,
+            FocusedSinceMs: context.FocusedSinceMs,
+            TitleStabilityMs: context.TitleUnchangedForMs,
+            SwitchCount60s: CountFocusSwitches(last60),
+            SwitchCount300s: CountFocusSwitches(last300),
+            DistinctApps300s: CountDistinct(last300.Select(sample => sample.AppId)),
+            DistinctDomains300s: CountDistinct(last300.Select(sample => sample.Domain)),
+            ReturnedToAnchorApp300s: returnedToAnchorApp ? 1 : 0,
+            CurrentAppShare300s: currentAppCount / (double)total300,
+            CurrentDomainShare300s: currentDomainCount / (double)total300,
+            BrowserWindowFlag: BrowserDetector.IsBrowser(context.FocusedAppId) ? 1 : 0,
+            CommunicationAppFlag: IsCommunicationContext(context) ? 1 : 0,
+            EntertainmentDomainFlag: IsEntertainmentDomain(context.FocusedDomain) ? 1 : 0,
+            WorkDomainFlag: IsWorkDomain(context.FocusedDomain) ? 1 : 0,
+            AfkFlag: context.IdleMs >= AfkThresholdMs ? 1 : 0,
+            FullscreenFlag: context.FullscreenFlag,
+            WorkspaceSwitchCount300s: CountWorkspaceSwitches(last300));
+    }
+
+    private ActivitySample[] GetSamplesSince(DateTime threshold) =>
+        _samples.Where(sample => sample.Timestamp >= threshold).ToArray();
+
+    private void TrimSamples(DateTime now)
+    {
+        var cutoff = now.AddSeconds(-WindowSeconds);
+        while (_samples.Count > 0 && _samples.Peek().Timestamp < cutoff)
+            _samples.Dequeue();
+    }
+
+    private static SignalQuality DetermineSignalQuality(WindowObservation window, string appId, string title)
+    {
+        if (string.IsNullOrWhiteSpace(appId) || string.Equals(appId, "unknown", StringComparison.OrdinalIgnoreCase))
+            return SignalQuality.Poor;
+
+        if (window.FocusSource is FocusSource.Unknown or FocusSource.HeuristicProcessScan)
+            return SignalQuality.Poor;
+
+        if (window.CatalogDisagrees || (BrowserDetector.IsBrowser(appId) && string.IsNullOrWhiteSpace(title)))
+            return SignalQuality.Usable;
+
+        return SignalQuality.Trusted;
+    }
+
+    private static int ClampMilliseconds(TimeSpan duration)
+    {
+        if (duration <= TimeSpan.Zero)
+            return 0;
+
+        double totalMs = duration.TotalMilliseconds;
+        return totalMs >= int.MaxValue ? int.MaxValue : (int)totalMs;
+    }
+
+    private static string NormalizeRawValue(string? value, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return fallback;
+
+        var trimmed = value.Trim().Replace('\r', ' ').Replace('\n', ' ');
+        return string.IsNullOrWhiteSpace(trimmed) ? fallback : trimmed;
+    }
+
+    private static string BuildLegacyAppName(string appId, string title)
+    {
+        if (BrowserDetector.IsBrowser(appId))
+            return BrowserDetector.GetAppAndSite(appId, title);
+
+        return !string.IsNullOrWhiteSpace(title) ? title : appId;
+    }
+
+    private static string BuildDisplayAppName(string appId, string title, string domain)
+    {
+        if (BrowserDetector.IsBrowser(appId))
+        {
+            string browserName = BrowserDetector.GetBrowserDisplayName(appId) ?? "Browser";
+            return string.IsNullOrEmpty(domain) ? browserName : $"{browserName} ({domain})";
+        }
+
+        return !string.IsNullOrWhiteSpace(title) ? $"{appId} [{title}]" : appId;
+    }
+
+    private static int CountFocusSwitches(IReadOnlyList<ActivitySample> samples)
+    {
+        if (samples.Count <= 1)
+            return 0;
+
+        int switches = 0;
+        string previousKey = samples[0].FocusKey;
+        for (int i = 1; i < samples.Count; i++)
+        {
+            if (!string.Equals(previousKey, samples[i].FocusKey, StringComparison.Ordinal))
+            {
+                switches++;
+                previousKey = samples[i].FocusKey;
+            }
+        }
+
+        return switches;
+    }
+
+    private static int CountWorkspaceSwitches(IReadOnlyList<ActivitySample> samples)
+    {
+        if (samples.Count <= 1)
+            return 0;
+
+        int switches = 0;
+        string previousWorkspace = samples[0].WorkspaceId;
+        for (int i = 1; i < samples.Count; i++)
+        {
+            string workspace = samples[i].WorkspaceId;
+            if (!string.IsNullOrEmpty(workspace) &&
+                !string.Equals(previousWorkspace, workspace, StringComparison.Ordinal))
+            {
+                switches++;
+            }
+
+            if (!string.IsNullOrEmpty(workspace))
+                previousWorkspace = workspace;
+        }
+
+        return switches;
+    }
+
+    private static int CountDistinct(IEnumerable<string> values) =>
+        values.Where(value => !string.IsNullOrWhiteSpace(value) && !string.Equals(value, "unknown", StringComparison.OrdinalIgnoreCase))
+              .Distinct(StringComparer.Ordinal)
+              .Count();
+
+    private static string GetMostCommonApp(IEnumerable<ActivitySample> samples, string currentApp)
+    {
+        return samples.Where(sample => !string.IsNullOrWhiteSpace(sample.AppId))
+                      .GroupBy(sample => sample.AppId, StringComparer.Ordinal)
+                      .OrderByDescending(group => group.Count())
+                      .ThenByDescending(group => string.Equals(group.Key, currentApp, StringComparison.Ordinal))
+                      .Select(group => group.Key)
+                      .FirstOrDefault() ?? "";
+    }
+
+    private static bool HasInterveningSwitch(IReadOnlyList<ActivitySample> samples, string currentApp)
+    {
+        if (samples.Count <= 1 || string.IsNullOrWhiteSpace(currentApp))
+            return false;
+
+        int currentSegmentStart = samples.Count - 1;
+        while (currentSegmentStart > 0 &&
+               string.Equals(samples[currentSegmentStart - 1].AppId, currentApp, StringComparison.Ordinal))
+        {
+            currentSegmentStart--;
+        }
+
+        return samples.Take(currentSegmentStart)
+                      .Any(sample => !string.Equals(sample.AppId, currentApp, StringComparison.Ordinal));
+    }
+
+    private static bool IsCommunicationContext(ActivityContext context)
+    {
+        if (CommunicationAppIds.Contains(context.FocusedAppId))
+            return true;
+
+        return !string.IsNullOrEmpty(context.FocusedDomain) && CommunicationDomains.Contains(context.FocusedDomain);
+    }
+
+    private static bool IsEntertainmentDomain(string domain) =>
+        !string.IsNullOrEmpty(domain) && EntertainmentDomains.Contains(domain);
+
+    private static bool IsWorkDomain(string domain) =>
+        !string.IsNullOrEmpty(domain) &&
+        (WorkDomains.Contains(domain) || domain.EndsWith(".internal", StringComparison.OrdinalIgnoreCase));
+
+    private readonly record struct ActivitySample(
+        DateTime Timestamp,
+        string FocusKey,
+        string AppId,
+        string Domain,
+        string WorkspaceId);
+
+    private static readonly FrozenSet<string> CommunicationAppIds = new[]
+    {
+        "discord", "microsoft teams", "outlook", "signal", "slack", "teams", "thunderbird", "zoom"
+    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly FrozenSet<string> CommunicationDomains = new[]
+    {
+        "calendar.google.com", "discord.com", "mail.google.com", "meet.google.com", "outlook.office.com", "slack.com", "zoom.us"
+    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly FrozenSet<string> EntertainmentDomains = new[]
+    {
+        "facebook.com", "instagram.com", "linkedin.com", "netflix.com", "reddit.com", "tiktok.com", "twitch.tv", "x.com", "youtube.com"
+    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly FrozenSet<string> WorkDomains = new[]
+    {
+        "bitbucket.org", "chat.openai.com", "chatgpt.com", "claude.ai", "confluence.atlassian.com",
+        "copilot.microsoft.com", "docs.google.com", "drive.google.com", "figma.com", "github.com",
+        "gitlab.com", "jira.atlassian.com", "linear.app", "localhost", "mail.google.com",
+        "meet.google.com", "notion.so", "outlook.office.com", "slack.com", "stackoverflow.com"
+    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+}
+
+internal static class FeatureSchemaV2
+{
+    public const int SchemaVersion = 2;
+
+    public static readonly string[] OrderedFeatureNames =
+    [
+        "hour_of_day",
+        "day_of_week",
+        "focused_app_hash",
+        "focused_domain_hash",
+        "idle_ms",
+        "focused_since_ms",
+        "title_stability_ms",
+        "switch_count_60s",
+        "switch_count_300s",
+        "distinct_apps_300s",
+        "distinct_domains_300s",
+        "returned_to_anchor_app_300s",
+        "current_app_share_300s",
+        "current_domain_share_300s",
+        "browser_window_flag",
+        "communication_app_flag",
+        "entertainment_domain_flag",
+        "work_domain_flag",
+        "afk_flag",
+        "fullscreen_flag",
+        "workspace_switch_count_300s"
+    ];
+
+    public static readonly string[] ActivityLogHeaders =
+    [
+        "timestamp",
+        "hour_of_day",
+        "day_of_week",
+        "app_name",
+        "foreground_app",
+        "idle_time",
+        "focused_app_id",
+        "focused_title",
+        "focused_domain",
+        "focused_window_id",
+        "is_idle_now",
+        "focused_since_ms",
+        "title_unchanged_for_ms",
+        "mapped_toplevel_count",
+        "active_workspace_id",
+        "focus_source",
+        "signal_quality",
+        "fullscreen_flag"
+    ];
+
+    public static readonly string[] HarvestHeaders =
+    [
+        "timestamp",
+        "hour_of_day",
+        "day_of_week",
+        "app_name",
+        "foreground_app",
+        "idle_time",
+        "time_last_request",
+        "productive",
+        "schema_version",
+        "focused_app_id",
+        "focused_title",
+        "focused_domain",
+        "focused_window_id",
+        "is_idle_now",
+        "focused_since_ms",
+        "title_unchanged_for_ms",
+        "mapped_toplevel_count",
+        "active_workspace_id",
+        "focus_source",
+        "signal_quality",
+        "fullscreen_flag",
+        "focused_app_hash",
+        "focused_domain_hash",
+        "idle_ms",
+        "title_stability_ms",
+        "switch_count_60s",
+        "switch_count_300s",
+        "distinct_apps_300s",
+        "distinct_domains_300s",
+        "returned_to_anchor_app_300s",
+        "current_app_share_300s",
+        "current_domain_share_300s",
+        "browser_window_flag",
+        "communication_app_flag",
+        "entertainment_domain_flag",
+        "work_domain_flag",
+        "afk_flag",
+        "workspace_switch_count_300s"
+    ];
+
+    public static IReadOnlyDictionary<string, double> ToFeatureDictionary(FeatureVectorV2 features) =>
+        new Dictionary<string, double>(OrderedFeatureNames.Length, StringComparer.Ordinal)
+        {
+            ["hour_of_day"] = features.HourOfDay,
+            ["day_of_week"] = features.DayOfWeek,
+            ["focused_app_hash"] = features.FocusedAppHash,
+            ["focused_domain_hash"] = features.FocusedDomainHash,
+            ["idle_ms"] = features.IdleMs,
+            ["focused_since_ms"] = features.FocusedSinceMs,
+            ["title_stability_ms"] = features.TitleStabilityMs,
+            ["switch_count_60s"] = features.SwitchCount60s,
+            ["switch_count_300s"] = features.SwitchCount300s,
+            ["distinct_apps_300s"] = features.DistinctApps300s,
+            ["distinct_domains_300s"] = features.DistinctDomains300s,
+            ["returned_to_anchor_app_300s"] = features.ReturnedToAnchorApp300s,
+            ["current_app_share_300s"] = features.CurrentAppShare300s,
+            ["current_domain_share_300s"] = features.CurrentDomainShare300s,
+            ["browser_window_flag"] = features.BrowserWindowFlag,
+            ["communication_app_flag"] = features.CommunicationAppFlag,
+            ["entertainment_domain_flag"] = features.EntertainmentDomainFlag,
+            ["work_domain_flag"] = features.WorkDomainFlag,
+            ["afk_flag"] = features.AfkFlag,
+            ["fullscreen_flag"] = features.FullscreenFlag,
+            ["workspace_switch_count_300s"] = features.WorkspaceSwitchCount300s
+        };
+}
 
 internal static class PlatformConfig
 {
@@ -519,7 +1029,7 @@ internal static class NudgeCoreLogic
                 forceModel = true;
                 continue;
             }
-            if (!arg.StartsWith("--", StringComparison.Ordinal) && !arg.StartsWith("-", StringComparison.Ordinal))
+            if (!arg.StartsWith("--", StringComparison.Ordinal) && !arg.StartsWith('-'))
             {
                 csvPath = arg;
             }
@@ -627,7 +1137,8 @@ internal static class NudgeCoreLogic
         try
         {
             using var doc = JsonDocument.Parse(json);
-            return FindFocusedNodeInSwayJson(doc.RootElement);
+            var snapshot = FindFocusedNodeInSwayJson(doc.RootElement);
+            return (snapshot.AppId, snapshot.Title);
         }
         catch
         {
@@ -636,8 +1147,8 @@ internal static class NudgeCoreLogic
                 string app = "unknown";
                 string title = "";
 
-                int idx = json.IndexOf("\"app_id\":\"");
-                if (idx == -1) idx = json.IndexOf("\"class\":\"");
+                int idx = json.IndexOf("\"app_id\":\"", StringComparison.Ordinal);
+                if (idx == -1) idx = json.IndexOf("\"class\":\"", StringComparison.Ordinal);
 
                 if (idx != -1)
                 {
@@ -647,7 +1158,7 @@ internal static class NudgeCoreLogic
                         app = json.Substring(start, end - start);
                 }
 
-                int nameIdx = json.IndexOf("\"name\":\"");
+                int nameIdx = json.IndexOf("\"name\":\"", StringComparison.Ordinal);
                 if (nameIdx != -1)
                 {
                     int start = nameIdx + 8;
@@ -662,12 +1173,26 @@ internal static class NudgeCoreLogic
         }
     }
 
-    internal static (string app, string title) FindFocusedNodeInSwayJson(JsonElement node)
+    internal static SwayFocusSnapshot FindFocusedNodeInSwayJson(JsonElement node) =>
+        FindFocusedNodeInSwayJson(node, currentWorkspace: "");
+
+    private static SwayFocusSnapshot FindFocusedNodeInSwayJson(JsonElement node, string currentWorkspace)
     {
+        if (node.TryGetProperty("type", out var nodeType) &&
+            nodeType.ValueKind == JsonValueKind.String &&
+            string.Equals(nodeType.GetString(), "workspace", StringComparison.OrdinalIgnoreCase) &&
+            node.TryGetProperty("name", out var workspaceName) &&
+            workspaceName.ValueKind == JsonValueKind.String)
+        {
+            currentWorkspace = workspaceName.GetString() ?? currentWorkspace;
+        }
+
         if (node.TryGetProperty("focused", out var focused) && focused.GetBoolean())
         {
             string app = "unknown";
             string title = "";
+            string windowId = "";
+            bool fullscreen = false;
 
             if (node.TryGetProperty("app_id", out var appId) && appId.ValueKind == JsonValueKind.String)
             {
@@ -684,7 +1209,23 @@ internal static class NudgeCoreLogic
                 title = name.GetString() ?? "";
             }
 
-            return (app == "" ? "unknown" : app, title);
+            if (node.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.Number)
+            {
+                windowId = id.GetRawText();
+            }
+
+            if (node.TryGetProperty("fullscreen_mode", out var fullscreenMode) &&
+                fullscreenMode.ValueKind == JsonValueKind.Number)
+            {
+                fullscreen = fullscreenMode.GetInt32() > 0;
+            }
+
+            return new SwayFocusSnapshot(
+                AppId: app == "" ? "unknown" : app,
+                Title: title,
+                WindowId: windowId,
+                WorkspaceId: currentWorkspace,
+                Fullscreen: fullscreen);
         }
 
         foreach (string arrayProp in new[] { "nodes", "floating_nodes" })
@@ -693,14 +1234,14 @@ internal static class NudgeCoreLogic
             {
                 foreach (var child in children.EnumerateArray())
                 {
-                    var result = FindFocusedNodeInSwayJson(child);
-                    if (result.app != "unknown")
+                    var result = FindFocusedNodeInSwayJson(child, currentWorkspace);
+                    if (result.AppId != "unknown")
                         return result;
                 }
             }
         }
 
-        return ("unknown", "");
+        return SwayFocusSnapshot.Empty;
     }
 
     internal static string ExtractQuotedString(string input)
@@ -727,6 +1268,64 @@ internal static class NudgeCoreLogic
         return MatchesNudgeWindowMarker(appName) ||
                title.Contains("Were you productive?", StringComparison.OrdinalIgnoreCase);
     }
+
+    internal static int GetStableHash(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return 0;
+
+        const uint fnvPrime = 16777619;
+        uint hash = 2166136261;
+
+        foreach (char c in text)
+        {
+            hash ^= c;
+            hash *= fnvPrime;
+        }
+
+        return unchecked((int)hash);
+    }
+
+    internal static string EscapeCsv(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return "";
+
+        string sanitized = value.Replace('\r', ' ').Replace('\n', ' ');
+        if (sanitized.IndexOfAny([',', '"']) >= 0)
+            return $"\"{sanitized.Replace("\"", "\"\"")}\"";
+
+        return sanitized;
+    }
+
+    internal static string GetFocusSourceName(FocusSource source) => source switch
+    {
+        FocusSource.WindowsApi => "windows_api",
+        FocusSource.WaylandActivatedProtocol => "wayland_activated_protocol",
+        FocusSource.SwayIpc => "sway_ipc",
+        FocusSource.KWinScript => "kwin_script",
+        FocusSource.GnomeShell => "gnome_shell",
+        FocusSource.X11Ewmh => "x11_ewmh",
+        FocusSource.HeuristicProcessScan => "heuristic_process_scan",
+        _ => "unknown"
+    };
+
+    internal static string GetIdleSourceName(IdleSource source) => source switch
+    {
+        IdleSource.Win32LastInput => "win32_last_input",
+        IdleSource.WaylandExtIdleNotify => "wayland_ext_idle_notify",
+        IdleSource.FreedesktopScreenSaver => "freedesktop_screensaver",
+        IdleSource.GnomeIdleMonitor => "gnome_idle_monitor",
+        IdleSource.X11Xprintidle => "x11_xprintidle",
+        _ => "unknown"
+    };
+
+    internal static string GetSignalQualityName(SignalQuality quality) => quality switch
+    {
+        SignalQuality.Trusted => "trusted",
+        SignalQuality.Usable => "usable",
+        _ => "poor"
+    };
 
     internal static bool ShouldIgnoreAnalyticsApp(string appName) =>
         appName.Contains("nudge", StringComparison.OrdinalIgnoreCase);
@@ -787,14 +1386,27 @@ internal static class NudgeCoreLogic
     {
         int currentField = 0;
         int start = 0;
+        bool inQuotes = false;
 
         for (int i = 0; i <= line.Length; i++)
         {
-            if (i == line.Length || line[i] == ',')
+            if (i < line.Length && line[i] == '"')
+            {
+                if (inQuotes && i + 1 < line.Length && line[i + 1] == '"')
+                {
+                    i++;
+                    continue;
+                }
+
+                inQuotes = !inQuotes;
+                continue;
+            }
+
+            if (i == line.Length || (!inQuotes && line[i] == ','))
             {
                 if (currentField == fieldIndex)
                 {
-                    field = line[start..i].Trim();
+                    field = TrimCsvField(line[start..i]);
                     return true;
                 }
 
@@ -805,5 +1417,24 @@ internal static class NudgeCoreLogic
 
         field = default;
         return false;
+    }
+
+    private static ReadOnlySpan<char> TrimCsvField(ReadOnlySpan<char> field)
+    {
+        field = field.Trim();
+        if (field.Length >= 2 && field[0] == '"' && field[^1] == '"')
+            field = field[1..^1];
+
+        return field;
+    }
+
+    internal readonly record struct SwayFocusSnapshot(
+        string AppId,
+        string Title,
+        string WindowId,
+        string WorkspaceId,
+        bool Fullscreen)
+    {
+        public static readonly SwayFocusSnapshot Empty = new("unknown", "", "", "", false);
     }
 }

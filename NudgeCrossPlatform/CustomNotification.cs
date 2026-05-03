@@ -34,16 +34,17 @@ namespace NudgeTray
         private const string CONFIG_FILE = "nudge-notification-config.json";
         private const int AUTO_DISMISS_SECONDS = 30;
         private Point? _dragStartPosition;
-        private bool _isDragging = false;
+        private bool _isDragging;
         private Action<bool?>? _onResponse; // Nullable bool: true=YES, false=NO, null=auto-dismissed
         private Border? _mainBorder;
-        private Border? _haloRing;
-        private bool _isActive = false;
+        private bool _isActive;
         private TextBlock? _countdownText;
         private DispatcherTimer? _countdownTimer;
         private int _remainingSeconds = AUTO_DISMISS_SECONDS;
-        private bool _responseSent = false;
+        private bool _responseSent;
         private Arc? _progressArc;
+        private Arc? _backgroundArc;
+        private StackPanel? _pauseIconView;
 
         public CustomNotificationWindow()
         {
@@ -55,8 +56,8 @@ namespace NudgeTray
 
         private void InitializeWindow()
         {
-            Width = 360;  // Increased to account for shadow space
-            Height = 160; // Increased to account for shadow space
+            Width = 340;
+            Height = 144; // header(20)+gap(8)+question(18)+gap(12)+buttons(32)+padding(32)+margins(20)=142 +2 buffer
             CanResize = false;
             ShowInTaskbar = false;
             WindowStartupLocation = WindowStartupLocation.Manual;
@@ -68,54 +69,23 @@ namespace NudgeTray
             // Enable keyboard focus
             Focusable = true;
 
-            // Setup focus tracking for halo ring (multiple handlers for Linux compatibility)
+            // Track focus to show/hide the card glow (signals keyboard shortcuts are active)
             GotFocus += (s, e) => SetActiveState(true);
             LostFocus += (s, e) => SetActiveState(false);
             Activated += (s, e) => SetActiveState(true);
             Deactivated += (s, e) => SetActiveState(false);
-
-            // Also hide halo when mouse leaves (additional fallback for Linux)
-            PointerExited += (s, e) =>
-            {
-                // Only hide halo if window is not focused
-                if (!IsFocused && !IsActive)
-                {
-                    SetActiveState(false);
-                }
-            };
         }
 
         private void InitializeContent()
         {
-            // Halo ring - outer glow effect when active
-            _haloRing = new Border
-            {
-                Background = Brushes.Transparent,
-                CornerRadius = new CornerRadius(12),
-                Padding = new Thickness(4),
-                Margin = new Thickness(10, 8, 10, 12), // Space for shadow (left, top, right, bottom)
-                BorderBrush = new SolidColorBrush(Color.FromArgb(0, 88, 166, 255)), // Initially transparent
-                BorderThickness = new Thickness(2),
-                ClipToBounds = false, // Allow shadows to render outside bounds
-                BoxShadow = new BoxShadows(
-                    new BoxShadow
-                    {
-                        Blur = 0,
-                        Spread = 0,
-                        OffsetX = 0,
-                        OffsetY = 0,
-                        Color = Color.FromArgb(0, 88, 166, 255) // Initially transparent
-                    }
-                )
-            };
-
-            // Main container - Fluent Design System specifications
+            // Main container — card owns its own margin for drop shadow bleed
             _mainBorder = new Border
             {
-                Background = new SolidColorBrush(Color.FromArgb(250, 18, 18, 20)), // Almost opaque black
-                CornerRadius = new CornerRadius(8), // Fluent: 8px for top-level containers
-                Padding = new Thickness(16), // Fluent: 16px standard spacing
-                ClipToBounds = false, // Allow shadows to render outside bounds
+                Background = new SolidColorBrush(Color.FromArgb(250, 18, 18, 20)),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(16),
+                Margin = new Thickness(10, 8, 10, 12), // Space for shadow bleed
+                ClipToBounds = false,
                 BoxShadow = new BoxShadows(
                     new BoxShadow
                     {
@@ -123,12 +93,12 @@ namespace NudgeTray
                         Spread = -2,
                         OffsetX = 0,
                         OffsetY = 4,
-                        Color = Color.FromArgb(50, 0, 0, 0) // Crisp shadow with negative spread
+                        Color = Color.FromArgb(50, 0, 0, 0)
                     }
                 ),
                 BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
                 BorderThickness = new Thickness(1),
-                RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative) // Center for scaling
+                RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative)
             };
 
             // Add drag functionality to the border
@@ -141,9 +111,14 @@ namespace NudgeTray
                 {
                     _countdownTimer.Stop();
                 }
+                if (!_responseSent && _remainingSeconds > 0)
+                {
+                    SetTimerPauseDisplay(true);
+                }
             };
             _mainBorder.PointerExited += (s, e) =>
             {
+                SetTimerPauseDisplay(false);
                 if (!_isDragging && !_responseSent && _remainingSeconds > 0)
                 {
                     _countdownTimer?.Start();
@@ -153,7 +128,7 @@ namespace NudgeTray
 
             var stackPanel = new StackPanel
             {
-                Spacing = 8, // Fluent: 8px spacing
+                Spacing = 0, // Gaps controlled explicitly per-element for hierarchy
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
 
@@ -161,38 +136,36 @@ namespace NudgeTray
             var headerPanel = new Grid
             {
                 ColumnDefinitions = new ColumnDefinitions("*,Auto"),
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                Margin = new Thickness(0, 0, 0, 4)
+                HorizontalAlignment = HorizontalAlignment.Stretch
             };
 
-            // Title - app brand, left-aligned
+            // Title - recedes so the question becomes the visual anchor
             var titleText = new TextBlock
             {
                 Text = "Nudge",
-                FontSize = 14,
-                FontWeight = FontWeight.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(240, 240, 245)),
+                FontSize = 11,
+                FontWeight = FontWeight.Normal,
+                Foreground = new SolidColorBrush(Color.FromRgb(120, 120, 130)),
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center
             };
             Grid.SetColumn(titleText, 0);
 
-            // Countdown timer with progress wheel - right-aligned (compact size)
+            // Countdown timer with progress wheel - right-aligned
             var timerContainer = new Grid
             {
-                Width = 28,
-                Height = 28,
+                Width = 20,
+                Height = 20,
                 HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, -2, 0, 0) // Slight upward adjustment to align with title
+                VerticalAlignment = VerticalAlignment.Center
             };
 
             // Background circle (track)
-            var backgroundCircle = new Arc
+            _backgroundArc = new Arc
             {
-                Width = 24,
-                Height = 24,
-                Stroke = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
+                Width = 18,
+                Height = 18,
+                Stroke = new SolidColorBrush(Color.FromArgb(65, 255, 255, 255)),
                 StrokeThickness = 1.5,
                 StartAngle = 0,
                 SweepAngle = 360,
@@ -203,10 +176,10 @@ namespace NudgeTray
             // Progress arc (animates from 360° to 0°) — starts calm/neutral
             _progressArc = new Arc
             {
-                Width = 24,
-                Height = 24,
-                Stroke = new SolidColorBrush(Color.FromArgb(120, 150, 150, 165)),
-                StrokeThickness = 2,
+                Width = 18,
+                Height = 18,
+                Stroke = new SolidColorBrush(Color.FromArgb(160, 150, 150, 165)),
+                StrokeThickness = 1.5,
                 StartAngle = -90, // Start at top (12 o'clock)
                 SweepAngle = 360, // Full circle initially
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -214,41 +187,65 @@ namespace NudgeTray
                 StrokeLineCap = PenLineCap.Round
             };
 
-            // Countdown text (overlaid in center) — starts calm/neutral
+            // Countdown text (overlaid in center)
             _countdownText = new TextBlock
             {
-                Text = $"{AUTO_DISMISS_SECONDS}s",
-                FontSize = 9,
+                Text = $"{AUTO_DISMISS_SECONDS}",
+                FontSize = 8,
                 FontWeight = FontWeight.Normal,
-                Foreground = new SolidColorBrush(Color.FromArgb(140, 150, 150, 165)),
+                Foreground = new SolidColorBrush(Color.FromArgb(170, 150, 150, 165)),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
 
-            timerContainer.Children.Add(backgroundCircle);
+            // Pause icon — two vertical bars, sits in the same grid cell as the arc/text,
+            // shown when the user hovers and the timer is paused.
+            _pauseIconView = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 3,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                IsVisible = false
+            };
+            _pauseIconView.Children.Add(new Border
+            {
+                Width = 2.5, Height = 8,
+                CornerRadius = new CornerRadius(1.25),
+                Background = new SolidColorBrush(Color.FromArgb(160, 150, 150, 165))
+            });
+            _pauseIconView.Children.Add(new Border
+            {
+                Width = 2.5, Height = 8,
+                CornerRadius = new CornerRadius(1.25),
+                Background = new SolidColorBrush(Color.FromArgb(160, 150, 150, 165))
+            });
+
+            timerContainer.Children.Add(_backgroundArc);
             timerContainer.Children.Add(_progressArc);
             timerContainer.Children.Add(_countdownText);
+            timerContainer.Children.Add(_pauseIconView);
             Grid.SetColumn(timerContainer, 1);
 
             headerPanel.Children.Add(titleText);
             headerPanel.Children.Add(timerContainer);
 
-            // Message - subtle, left-aligned
+            // Message - the visual anchor; user reads this first
             var messageText = new TextBlock
             {
                 Text = "Were you productive?",
-                FontSize = 12,
-                FontWeight = FontWeight.Normal,
-                Foreground = new SolidColorBrush(Color.FromRgb(150, 150, 160)),
+                FontSize = 14,
+                FontWeight = FontWeight.SemiBold,
+                Foreground = new SolidColorBrush(Color.FromRgb(232, 232, 238)),
                 TextAlignment = TextAlignment.Left,
                 HorizontalAlignment = HorizontalAlignment.Left,
-                Margin = new Thickness(0, 0, 0, 8) // Fluent: 8px spacing
+                Margin = new Thickness(0, 8, 0, 12) // 8px below title, 12px above buttons
             };
 
-            // Buttons Container - Grid for equal spacing
+            // Buttons Container - equal columns, wider gap for visual separation
             var buttonsPanel = new Grid
             {
-                ColumnDefinitions = new ColumnDefinitions("*,8,*"), // Equal columns with 8px gap
+                ColumnDefinitions = new ColumnDefinitions("*,12,*"),
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
 
@@ -262,12 +259,12 @@ namespace NudgeTray
             );
             Grid.SetColumn(yesButton, 0);
 
-            // NO Button - subtle gray
+            // NO Button - clearly distinct from card background
             var noButton = CreateStyledButton(
                 "No",
                 "N",
-                Color.FromRgb(45, 45, 50),
-                Color.FromRgb(55, 55, 60),
+                Color.FromRgb(52, 52, 58),
+                Color.FromRgb(64, 64, 70),
                 () => HandleResponse(false),
                 false
             );
@@ -282,11 +279,10 @@ namespace NudgeTray
             stackPanel.Children.Add(buttonsPanel);
 
             _mainBorder.Child = stackPanel;
-            _haloRing!.Child = _mainBorder;
-            Content = _haloRing;
+            Content = _mainBorder;
         }
 
-        private StackPanel CreateStyledButton(string mainText, string shortcutText, Color baseColor, Color hoverColor, Action onClick, bool isPrimary = true)
+        private static StackPanel CreateStyledButton(string mainText, string shortcutText, Color baseColor, Color hoverColor, Action onClick, bool isPrimary = true)
         {
             // Create border for rounded corners - Fluent Design System
             var border = new Border
@@ -318,7 +314,8 @@ namespace NudgeTray
             {
                 Orientation = Orientation.Horizontal,
                 Spacing = 8, // Fluent: 8px spacing between text elements
-                HorizontalAlignment = HorizontalAlignment.Center
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
             };
 
             var mainTextBlock = new TextBlock
@@ -332,16 +329,16 @@ namespace NudgeTray
                 VerticalAlignment = VerticalAlignment.Center
             };
 
-            // Keyboard key badge — styled like a keycap so it reads as "press this key"
+            // Keyboard key badge — dark overlay on primary (visible on blue), light overlay on secondary
             var keyBadge = new Border
             {
                 Background = new SolidColorBrush(
-                    isPrimary ? Color.FromArgb(30, 255, 255, 255) : Color.FromArgb(25, 255, 255, 255)),
+                    isPrimary ? Color.FromArgb(55, 0, 0, 0) : Color.FromArgb(25, 255, 255, 255)),
                 BorderBrush = new SolidColorBrush(
-                    isPrimary ? Color.FromArgb(60, 255, 255, 255) : Color.FromArgb(45, 200, 200, 220)),
+                    isPrimary ? Color.FromArgb(70, 0, 0, 0) : Color.FromArgb(45, 200, 200, 220)),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(3),
-                Padding = new Thickness(6, 1, 6, 2),
+                Padding = new Thickness(5, 2, 5, 2),
                 VerticalAlignment = VerticalAlignment.Center
             };
 
@@ -351,7 +348,7 @@ namespace NudgeTray
                 FontSize = 9,
                 FontWeight = FontWeight.Medium,
                 Foreground = new SolidColorBrush(
-                    isPrimary ? Color.FromArgb(170, 255, 255, 255) : Color.FromArgb(160, 180, 180, 195)),
+                    isPrimary ? Color.FromArgb(230, 255, 255, 255) : Color.FromArgb(160, 180, 180, 195)),
                 VerticalAlignment = VerticalAlignment.Center
             };
 
@@ -632,14 +629,14 @@ namespace NudgeTray
                     }
                     else
                     {
-                        _progressArc.Stroke = new SolidColorBrush(Color.FromArgb(120, 150, 150, 165)); // Calm neutral
+                        _progressArc.Stroke = new SolidColorBrush(Color.FromArgb(160, 150, 150, 165)); // Calm neutral
                     }
                 }
 
-                // Update countdown text
+                // Update countdown text — no "s" suffix
                 if (_countdownText != null)
                 {
-                    _countdownText.Text = $"{_remainingSeconds}s";
+                    _countdownText.Text = $"{_remainingSeconds}";
 
                     if (_remainingSeconds <= 3)
                     {
@@ -651,7 +648,7 @@ namespace NudgeTray
                     }
                     else
                     {
-                        _countdownText.Foreground = new SolidColorBrush(Color.FromArgb(140, 150, 150, 165));
+                        _countdownText.Foreground = new SolidColorBrush(Color.FromArgb(170, 150, 150, 165));
                     }
                 }
 
@@ -741,39 +738,33 @@ namespace NudgeTray
         {
             _isActive = active;
 
-            if (_haloRing != null)
+            if (_mainBorder == null) return;
+
+            if (active)
             {
-                if (active)
-                {
-                    // Show halo ring with minimal, tight glow
-                    _haloRing.BorderBrush = new SolidColorBrush(Color.FromArgb(60, 88, 166, 255));
-                    _haloRing.BoxShadow = new BoxShadows(
-                        new BoxShadow
-                        {
-                            Blur = 4,
-                            Spread = 0,
-                            OffsetX = 0,
-                            OffsetY = 0,
-                            Color = Color.FromArgb(40, 88, 166, 255)
-                        }
-                    );
-                }
-                else
-                {
-                    // Hide halo ring
-                    _haloRing.BorderBrush = new SolidColorBrush(Color.FromArgb(0, 88, 166, 255));
-                    _haloRing.BoxShadow = new BoxShadows(
-                        new BoxShadow
-                        {
-                            Blur = 0,
-                            Spread = 0,
-                            OffsetX = 0,
-                            OffsetY = 0,
-                            Color = Color.FromArgb(0, 88, 166, 255)
-                        }
-                    );
-                }
+                // Focused: drop shadow + subtle blue glow on the card border — signals keyboard is active
+                _mainBorder.BorderBrush = new SolidColorBrush(Color.FromArgb(70, 88, 166, 255));
+                _mainBorder.BoxShadow = new BoxShadows(
+                    new BoxShadow { Blur = 12, Spread = -2, OffsetX = 0, OffsetY = 4, Color = Color.FromArgb(50, 0, 0, 0) },
+                    new[] { new BoxShadow { Blur = 10, Spread = 0, OffsetX = 0, OffsetY = 0, Color = Color.FromArgb(45, 88, 166, 255) } }
+                );
             }
+            else
+            {
+                // Unfocused: restore default border and drop shadow only
+                _mainBorder.BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255));
+                _mainBorder.BoxShadow = new BoxShadows(
+                    new BoxShadow { Blur = 12, Spread = -2, OffsetX = 0, OffsetY = 4, Color = Color.FromArgb(50, 0, 0, 0) }
+                );
+            }
+        }
+
+        private void SetTimerPauseDisplay(bool paused)
+        {
+            if (_backgroundArc != null)  _backgroundArc.IsVisible  = !paused;
+            if (_progressArc != null)    _progressArc.IsVisible     = !paused;
+            if (_countdownText != null)  _countdownText.IsVisible   = !paused;
+            if (_pauseIconView != null)  _pauseIconView.IsVisible   = paused;
         }
 
         protected override void OnClosed(EventArgs e)

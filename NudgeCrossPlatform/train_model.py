@@ -29,6 +29,44 @@ import tensorflow as tf
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
+FEATURE_COLUMNS_V2 = [
+    'hour_of_day',
+    'day_of_week',
+    'focused_app_hash',
+    'focused_domain_hash',
+    'idle_ms',
+    'focused_since_ms',
+    'title_stability_ms',
+    'switch_count_60s',
+    'switch_count_300s',
+    'distinct_apps_300s',
+    'distinct_domains_300s',
+    'returned_to_anchor_app_300s',
+    'current_app_share_300s',
+    'current_domain_share_300s',
+    'browser_window_flag',
+    'communication_app_flag',
+    'entertainment_domain_flag',
+    'work_domain_flag',
+    'afk_flag',
+    'fullscreen_flag',
+    'workspace_switch_count_300s',
+]
+
+LEGACY_FEATURE_COLUMNS_V1 = [
+    'hour_of_day',
+    'day_of_week',
+    'foreground_app',
+    'idle_time',
+    'time_last_request',
+]
+
+LEGACY_FEATURE_COLUMNS_V0 = [
+    'foreground_app',
+    'idle_time',
+    'time_last_request',
+]
+
 def configure_tensorflow_modern(mixed_precision=True, cpu_only=False):
     """Configure TensorFlow with modern optimizations"""
 
@@ -61,17 +99,33 @@ def load_and_prepare_data(csv_file):
 
     df = pd.read_csv(csv_file)
 
-    # Check for both old and new format
-    if 'hour_of_day' in df.columns and 'day_of_week' in df.columns:
-        # New format with time features
-        required_cols = ['hour_of_day', 'day_of_week', 'foreground_app', 'idle_time', 'time_last_request', 'productive']
-        feature_cols = ['hour_of_day', 'day_of_week', 'foreground_app', 'idle_time', 'time_last_request']
-        print("   Using new format with time-based features")
+    if all(column in df.columns for column in FEATURE_COLUMNS_V2):
+        feature_cols = FEATURE_COLUMNS_V2
+        required_cols = feature_cols + ['productive']
+        print("   Using schema v2 fused activity features")
+
+        if 'afk_flag' in df.columns:
+            before = len(df)
+            df = df[df['afk_flag'].fillna(0).astype(int) == 0]
+            print(f"   Filtered AFK rows: {before - len(df)}")
+
+        if 'signal_quality' in df.columns:
+            before = len(df)
+            quality = df['signal_quality'].fillna('poor').astype(str).str.lower()
+            df = df[quality != 'poor']
+            print(f"   Filtered poor-signal rows: {before - len(df)}")
+
+        schema_version = 2
+    elif all(column in df.columns for column in LEGACY_FEATURE_COLUMNS_V1 + ['productive']):
+        required_cols = LEGACY_FEATURE_COLUMNS_V1 + ['productive']
+        feature_cols = LEGACY_FEATURE_COLUMNS_V1
+        schema_version = 1
+        print("   Using legacy v1 time-based features")
     else:
-        # Old format (backward compatibility)
-        required_cols = ['foreground_app', 'idle_time', 'time_last_request', 'productive']
-        feature_cols = ['foreground_app', 'idle_time', 'time_last_request']
-        print("   Using legacy format (no time features)")
+        required_cols = LEGACY_FEATURE_COLUMNS_V0 + ['productive']
+        feature_cols = LEGACY_FEATURE_COLUMNS_V0
+        schema_version = 0
+        print("   Using legacy v0 features")
 
     missing = [col for col in required_cols if col not in df.columns]
     if missing:
@@ -79,18 +133,19 @@ def load_and_prepare_data(csv_file):
 
     print(f"   Loaded {len(df)} rows")
 
-    df = df.dropna()
+    df = df.replace([np.inf, -np.inf], np.nan).dropna(subset=required_cols)
     print(f"   After cleaning: {len(df)} rows")
 
     if len(df) < 20:
         raise ValueError("Need at least 20 examples!")
 
     # Separate features and labels
-    X = df[feature_cols].values.astype(np.float32)
+    X = df[feature_cols].astype(np.float32).values
     y = df['productive'].values.astype(np.int32)
 
     print(f"   Features: {feature_cols}")
     print(f"   Feature shape: {X.shape}")
+    print(f"   Schema version: {schema_version}")
 
     # Report class distribution
     prod = np.sum(y == 1)
@@ -102,7 +157,7 @@ def load_and_prepare_data(csv_file):
     if prod == 0 or unprod == 0:
         raise ValueError("Need both productive AND unproductive examples!")
 
-    return X, y
+    return X, y, feature_cols, schema_version
 
 def build_modern_model(input_dim=5, architecture='standard', use_dropout=True, use_batchnorm=True):
     """
@@ -234,7 +289,7 @@ def train_modern(csv_file, model_dir='./model', architecture='standard',
     configure_tensorflow_modern(mixed_precision=mixed_precision, cpu_only=cpu_only)
 
     # Load data
-    X, y = load_and_prepare_data(csv_file)
+    X, y, feature_cols, schema_version = load_and_prepare_data(csv_file)
 
     # Normalize
     scaler = StandardScaler()
@@ -298,7 +353,9 @@ def train_modern(csv_file, model_dir='./model', architecture='standard',
     import json
     scaler_params = {
         'mean': scaler.mean_.tolist(),
-        'scale': scaler.scale_.tolist()
+        'scale': scaler.scale_.tolist(),
+        'feature_order': feature_cols,
+        'schema_version': schema_version
     }
     with open(os.path.join(model_dir, 'scaler.json'), 'w') as f:
         json.dump(scaler_params, f)
