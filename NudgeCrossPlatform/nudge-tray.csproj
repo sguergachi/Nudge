@@ -19,6 +19,7 @@
     <Compile Include="nudge-tray.cs" />
     <Compile Include="CustomNotification.cs" />
     <Compile Include="AnalyticsWindow.cs" />
+    <Compile Include="SettingsWindow.cs" />
     <Compile Include="NudgeCore.TestableLogic.cs" />
     <Compile Include="NudgeJsonContext.cs" />
   </ItemGroup>

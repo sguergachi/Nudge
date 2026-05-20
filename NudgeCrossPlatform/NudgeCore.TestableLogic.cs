@@ -16,12 +16,19 @@ internal enum NudgeStartupAction
     ShowVersion
 }
 
+internal enum HarvestEngineMode
+{
+    V1,
+    V2
+}
+
 internal sealed class NudgeParsedArgs
 {
     public NudgeStartupAction Action { get; init; } = NudgeStartupAction.Run;
     public int? IntervalMinutes { get; init; }
     public bool MlEnabled { get; init; }
     public bool ForceTrainedModel { get; init; }
+    public HarvestEngineMode HarvestEngine { get; init; } = HarvestEngineMode.V2;
     public string? CsvPath { get; init; }
 }
 
@@ -995,6 +1002,7 @@ internal static class NudgeCoreLogic
         int? intervalMinutes = null;
         bool mlEnabled = false;
         bool forceModel = false;
+        HarvestEngineMode harvestEngine = HarvestEngineMode.V2;
         string? csvPath = null;
 
         for (int i = 0; i < args.Length; i++)
@@ -1029,6 +1037,13 @@ internal static class NudgeCoreLogic
                 forceModel = true;
                 continue;
             }
+            if (arg == "--harvest-engine" && i + 1 < args.Length)
+            {
+                if (TryParseHarvestEngine(args[i + 1], out var parsedEngine))
+                    harvestEngine = parsedEngine;
+                i++;
+                continue;
+            }
             if (!arg.StartsWith("--", StringComparison.Ordinal) && !arg.StartsWith('-'))
             {
                 csvPath = arg;
@@ -1041,9 +1056,36 @@ internal static class NudgeCoreLogic
             IntervalMinutes = intervalMinutes,
             MlEnabled = mlEnabled,
             ForceTrainedModel = forceModel,
+            HarvestEngine = harvestEngine,
             CsvPath = csvPath
         };
     }
+
+    internal static bool TryParseHarvestEngine(string? value, out HarvestEngineMode engine)
+    {
+        if (string.Equals(value, "v1", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(value, "legacy", StringComparison.OrdinalIgnoreCase))
+        {
+            engine = HarvestEngineMode.V1;
+            return true;
+        }
+
+        if (string.Equals(value, "v2", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(value, "wayland-first", StringComparison.OrdinalIgnoreCase))
+        {
+            engine = HarvestEngineMode.V2;
+            return true;
+        }
+
+        engine = HarvestEngineMode.V2;
+        return false;
+    }
+
+    internal static string GetHarvestEngineName(HarvestEngineMode engine) => engine switch
+    {
+        HarvestEngineMode.V1 => "v1",
+        _ => "v2"
+    };
 
     internal static NudgeNotifyParsedArgs ParseNudgeNotifyArgs(string[] args)
     {

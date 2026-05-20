@@ -64,6 +64,8 @@ namespace NudgeTray
         public bool MlEnabled { get; set; }
         /// <summary>Last-used snapshot interval in minutes.</summary>
         public int IntervalMinutes { get; set; } = 5;
+        /// <summary>Active harvest engine mode, persisted as "v1" or "v2".</summary>
+        public string HarvestEngine { get; set; } = "v2";
     }
 }
 

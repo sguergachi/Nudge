@@ -46,6 +46,7 @@ namespace NudgeTray
         static Process? _mlInferenceProcess;
         static Process? _mlTrainerProcess;
         internal static bool _mlEnabled;
+        internal static HarvestEngineMode _harvestEngine = HarvestEngineMode.V2;
         static bool _forceTrainedModel;
         static DateTime? _nextSnapshotTime;
         static int _intervalMinutes;
@@ -61,6 +62,7 @@ namespace NudgeTray
         // Common tray icon for all platforms
         static TrayIcon? _trayIcon;
         static AnalyticsWindow? _analyticsWindow;
+        static SettingsWindow? _settingsWindow;
         static NativeMenuItem? _statusItem;
 
 #if WINDOWS
@@ -163,6 +165,14 @@ namespace NudgeTray
                 {
                     _forceTrainedModel = true;
                 }
+                else if (args[i] == "--harvest-engine" && i + 1 < args.Length)
+                {
+                    if (NudgeCoreLogic.TryParseHarvestEngine(args[i + 1], out var parsedEngine))
+                    {
+                        _harvestEngine = parsedEngine;
+                    }
+                    i++;
+                }
                 else if (args[i] == "--show-analytics")
                 {
                     _showAnalyticsOnStartup = true;
@@ -184,6 +194,12 @@ namespace NudgeTray
                     _mlEnabled = true;
                     Console.WriteLine("[INFO] ML re-enabled from saved settings");
                 }
+
+                if (NudgeCoreLogic.TryParseHarvestEngine(savedSettings.HarvestEngine, out var savedEngine) &&
+                    !_HasExplicitHarvestEngineArg(args))
+                {
+                    _harvestEngine = savedEngine;
+                }
             }
 
             // Persist whatever state we ended up with
@@ -194,6 +210,7 @@ namespace NudgeTray
             Console.WriteLine("╔═══════════════════════════════════════════════════════╗");
             Console.WriteLine("║        Nudge Tray - Productivity Tracker          ║");
             Console.WriteLine($"║        Version {VERSION}                                   ║");
+            Console.WriteLine($"║        Harvest Engine: {NudgeCoreLogic.GetHarvestEngineName(_harvestEngine).ToUpperInvariant(),-26}║");
             if (_mlEnabled)
             {
                 Console.WriteLine("║        🧠 ML MODE ENABLED                         ║");
@@ -259,6 +276,17 @@ namespace NudgeTray
                         });
                     }
                 });
+        }
+
+        static bool _HasExplicitHarvestEngineArg(string[] args)
+        {
+            foreach (string arg in args)
+            {
+                if (string.Equals(arg, "--harvest-engine", StringComparison.Ordinal))
+                    return true;
+            }
+
+            return false;
         }
 
         static void VerifyAnalyticsScroll()
@@ -528,6 +556,22 @@ namespace NudgeTray
                 // Separator
                 menu.Add(new NativeMenuItemSeparator());
 
+                var settingsItem = new NativeMenuItem { Header = "Settings" };
+                settingsItem.Click += (s, e) =>
+                {
+                    try
+                    {
+                        ShowSettingsWindow();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[ERROR] Settings handler failed: {ex.Message}");
+                    }
+                };
+                menu.Add(settingsItem);
+
+                menu.Add(new NativeMenuItemSeparator());
+
                 // Quit option
                 var quitItem = new NativeMenuItem { Header = "Quit" };
                 quitItem.Click += (s, e) =>
@@ -595,6 +639,24 @@ namespace NudgeTray
             {
                 Console.WriteLine($"[ERROR] Failed to show analytics window: {ex.Message}");
             }
+        }
+
+        static void ShowSettingsWindow()
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_settingsWindow != null && _settingsWindow.IsVisible)
+                {
+                    _settingsWindow.Activate();
+                    _settingsWindow.Focus();
+                    return;
+                }
+
+                _settingsWindow = new SettingsWindow();
+                _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+                _settingsWindow.Show();
+                _settingsWindow.Activate();
+            });
         }
 
         static WindowIcon CreateCommonIcon()
@@ -1051,8 +1113,9 @@ namespace NudgeTray
                 {
                     args += " --force-model";
                 }
+                args += $" --harvest-engine {NudgeCoreLogic.GetHarvestEngineName(_harvestEngine)}";
 
-                // Start the main nudge process
+                // Start the Nudge Harvest process
                 _nudgeProcess = new Process
                 {
                     StartInfo = new ProcessStartInfo
@@ -1070,7 +1133,7 @@ namespace NudgeTray
                 {
                     if (!string.IsNullOrEmpty(e.Data))
                     {
-                        Console.WriteLine($"[Nudge] {e.Data}");
+                        Console.WriteLine($"[Nudge Harvest] {e.Data}");
 
                         // Detect snapshot requests (exact match only)
                         if (e.Data.Trim() == "SNAPSHOT")
@@ -1103,7 +1166,7 @@ namespace NudgeTray
                 {
                     if (!string.IsNullOrEmpty(e.Data))
                     {
-                        Console.WriteLine($"[Nudge] {e.Data}");
+                        Console.WriteLine($"[Nudge Harvest] {e.Data}");
                     }
                 };
 
@@ -1111,7 +1174,7 @@ namespace NudgeTray
                 _nudgeProcess.BeginOutputReadLine();
                 _nudgeProcess.BeginErrorReadLine();
 
-                Console.WriteLine("✓ Nudge process started");
+                Console.WriteLine($"✓ Nudge Harvest started ({NudgeCoreLogic.GetHarvestEngineName(_harvestEngine).ToUpperInvariant()})");
                 if (_mlEnabled)
                 {
                     Console.WriteLine("  ML mode enabled - waiting for inference server connection...");
@@ -1119,7 +1182,7 @@ namespace NudgeTray
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"✗ Failed to start nudge: {ex.Message}");
+                Console.WriteLine($"✗ Failed to start Nudge Harvest: {ex.Message}");
                 Environment.Exit(1);
             }
         }
@@ -1509,7 +1572,8 @@ namespace NudgeTray
                 var settings = new TraySettings
                 {
                     MlEnabled       = _mlEnabled,
-                    IntervalMinutes = _intervalMinutes > 0 ? _intervalMinutes : 5
+                    IntervalMinutes = _intervalMinutes > 0 ? _intervalMinutes : 5,
+                    HarvestEngine   = NudgeCoreLogic.GetHarvestEngineName(_harvestEngine)
                 };
                 File.WriteAllText(
                     SettingsPath,
@@ -1568,6 +1632,36 @@ namespace NudgeTray
 
             StartNudge(_intervalMinutes);
             Console.WriteLine("[INFO] ML mode enabled and nudge restarted");
+        }
+
+        internal static string CurrentVersion => VERSION;
+
+        internal static HarvestEngineMode CurrentHarvestEngine => _harvestEngine;
+
+        internal static void SetHarvestEngine(HarvestEngineMode engine)
+        {
+            if (_harvestEngine == engine)
+                return;
+
+            Console.WriteLine($"[INFO] Switching Nudge Harvest engine to {NudgeCoreLogic.GetHarvestEngineName(engine).ToUpperInvariant()}...");
+            _harvestEngine = engine;
+            SaveSettings();
+            RestartHarvestProcess();
+        }
+
+        internal static void RestartHarvestProcess()
+        {
+            if (_nudgeProcess != null && !_nudgeProcess.HasExited)
+            {
+                try
+                {
+                    _nudgeProcess.Kill(entireProcessTree: true);
+                    _nudgeProcess.WaitForExit(2000);
+                }
+                catch { }
+            }
+
+            StartNudge(_intervalMinutes > 0 ? _intervalMinutes : 5);
         }
     }
 

@@ -314,7 +314,7 @@ namespace NudgeTray
                 Background = new SolidColorBrush(SurfaceColor),
                 BorderBrush = new SolidColorBrush(BorderColor),
                 BorderThickness = new Thickness(0, 0, 0, 1),
-                Padding = new Thickness(16, 0, 4, 0)   // less right-pad; AI tab provides its own
+                Padding = new Thickness(16, 0, 16, 0)
             };
 
             var tabsGrid = new Grid

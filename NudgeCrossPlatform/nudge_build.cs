@@ -14,6 +14,7 @@
 //   --interval N        Snapshot interval in minutes (default: 5)
 //   --ml                Enable ML-powered adaptive notifications
 //   --force-model       Force use of trained model even if below 100 sample threshold
+//   --harvest-engine    Select v1 (legacy) or v2 (fused) collector mode
 //
 // Example:
 //   nudge                    # Use defaults
@@ -85,6 +86,7 @@ sealed class Nudge
     static bool _mlEnabled;
     static bool _mlAvailable;
     static bool _forceTrainedModel;  // Force use of trained model even if below threshold
+    static HarvestEngineMode _harvestEngine = HarvestEngineMode.V2;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // ANSI COLORS - Professional terminal output
@@ -973,9 +975,31 @@ publish();
     static string _csvPath = PlatformConfig.CsvPath;
     static StreamWriter? _csvFile;
     static StreamWriter? _activityLogFile;
+    static readonly ActivityFeatureTracker V2FeatureTracker = new();
+    static readonly string[] LegacyHarvestHeaders =
+    [
+        "timestamp",
+        "hour_of_day",
+        "day_of_week",
+        "app_name",
+        "foreground_app",
+        "idle_time",
+        "time_last_request",
+        "productive"
+    ];
+    static readonly string[] LegacyActivityLogHeaders =
+    [
+        "timestamp",
+        "hour_of_day",
+        "day_of_week",
+        "app_name",
+        "foreground_app",
+        "idle_time"
+    ];
 
     // Activity tracking
     static string _currentApp = "";
+    static string _currentTitle = "";
     static int _attentionSpanMs;
     static bool _waitingForResponse;
     static int _totalSnapshots;
@@ -983,8 +1007,10 @@ publish();
 
     // Snapshot state (captured when snapshot is taken)
     static string _snapshotApp = "";
+    static string _snapshotTitle = "";
     static int _snapshotIdle;
     static int _snapshotAttention;
+    static ActivityTickResult _snapshotTick;
     static System.Threading.Timer? _responseTimer;
 
     // ML statistics tracking
@@ -1030,7 +1056,7 @@ publish();
         }
         if (parsed.Action == NudgeStartupAction.ShowVersion)
         {
-            Console.WriteLine($"Nudge v{VERSION}");
+            Console.WriteLine($"Nudge Harvest v{VERSION}");
             return;
         }
         if (parsed.IntervalMinutes is int minutes)
@@ -1038,6 +1064,7 @@ publish();
             SNAPSHOT_INTERVAL_MS = minutes * 60 * 1000;
             _customInterval = true;
         }
+        _harvestEngine = parsed.HarvestEngine;
         _mlEnabled = parsed.MlEnabled;
         _forceTrainedModel = parsed.ForceTrainedModel;
         if (!string.IsNullOrWhiteSpace(parsed.CsvPath))
@@ -1084,6 +1111,7 @@ publish();
                 Info($"  Minimum samples required: {MIN_SAMPLES_THRESHOLD}");
             }
         }
+        Info($"  Harvest engine: {NudgeCoreLogic.GetHarvestEngineName(_harvestEngine).ToUpperInvariant()}");
         Info($"  Respond with: {Color.BCYAN}nudge-notify YES{Color.RESET} or {Color.BCYAN}nudge-notify NO{Color.RESET}");
         Console.WriteLine();
 
@@ -1194,6 +1222,52 @@ publish();
         _ => "check your package manager"
     };
 
+    static FocusSource GetFocusSource()
+    {
+        if (PlatformConfig.IsWindows)
+            return FocusSource.WindowsApi;
+
+        string platformName = _platformService?.PlatformName ?? "";
+        if (platformName.Contains("sway", StringComparison.OrdinalIgnoreCase))
+            return FocusSource.SwayIpc;
+        if (platformName.Contains("kde", StringComparison.OrdinalIgnoreCase) ||
+            platformName.Contains("plasma", StringComparison.OrdinalIgnoreCase))
+            return FocusSource.KWinScript;
+        if (platformName.Contains("gnome", StringComparison.OrdinalIgnoreCase))
+            return FocusSource.GnomeShell;
+        if (string.Equals(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"), "x11", StringComparison.OrdinalIgnoreCase))
+            return FocusSource.X11Ewmh;
+
+        return FocusSource.Unknown;
+    }
+
+    static IdleSource GetIdleSource()
+    {
+        if (PlatformConfig.IsWindows)
+            return IdleSource.Win32LastInput;
+
+        string platformName = _platformService?.PlatformName ?? "";
+        if (platformName.Contains("gnome", StringComparison.OrdinalIgnoreCase))
+            return IdleSource.GnomeIdleMonitor;
+        if (string.Equals(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"), "x11", StringComparison.OrdinalIgnoreCase))
+            return IdleSource.X11Xprintidle;
+
+        return IdleSource.Unknown;
+    }
+
+    static ActivityTickResult CaptureActivityTick(DateTime now, string app, string title, int idle) =>
+        V2FeatureTracker.Capture(
+            now,
+            new WindowObservation(
+                AppId: app,
+                Title: title,
+                WindowId: "",
+                WorkspaceId: "",
+                FocusSource: GetFocusSource(),
+                Fullscreen: false,
+                MappedToplevelCount: 0),
+            new IdleObservation(idle, GetIdleSource()));
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // MAIN LOOP - Core event loop with professional status updates
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1210,6 +1284,7 @@ publish();
             var sw = Stopwatch.StartNew();
 
             // Get current activity
+            var now = DateTime.Now;
             var (app, title) = _platformService?.GetForegroundAppWithTitle() ?? ("unknown", "");
             int idle = _platformService?.GetIdleTime() ?? 0;
 
@@ -1226,10 +1301,12 @@ publish();
                     Dim(string.Format(null, LogAppSwitchComposite, _currentApp, app));
                 }
                 _currentApp = app;
+                _currentTitle = title;
                 _attentionSpanMs = 0;
             }
             else if (!isNudgeWindow)
             {
+                _currentTitle = title;
                 _attentionSpanMs += CYCLE_MS;
             }
 
@@ -1237,7 +1314,12 @@ publish();
             if (isNudgeWindow && !string.IsNullOrEmpty(_currentApp))
             {
                 app = _currentApp; // Use previous app instead of notification window
+                title = _currentTitle;
             }
+
+            ActivityTickResult? tick = _harvestEngine == HarvestEngineMode.V2
+                ? CaptureActivityTick(now, app, title, idle)
+                : null;
 
             // Check for snapshot triggers
             elapsed += CYCLE_MS;
@@ -1249,7 +1331,7 @@ publish();
             // Log activity every minute
             if (_activityLogElapsed >= ACTIVITY_LOG_INTERVAL_MS)
             {
-                LogActivity(app, idle);
+                LogActivity(app, idle, tick);
                 _activityLogElapsed = 0;
             }
 
@@ -1259,7 +1341,7 @@ publish();
                 if (_mlEnabled && _mlAvailable && mlElapsed >= ML_CHECK_INTERVAL_MS)
                 {
                     // Check ML predictions every minute when ML is enabled
-                    if (ShouldTriggerSnapshot(app, idle, _attentionSpanMs))
+                    if (ShouldTriggerSnapshot(app, idle, _attentionSpanMs, tick))
                     {
                         mlTriggered = true;
                     }
@@ -1286,7 +1368,7 @@ publish();
                         }
                     }
 
-                    TakeSnapshot(app, idle, _attentionSpanMs);
+                    TakeSnapshot(app, title, idle, _attentionSpanMs, tick);
                     elapsed = 0;
                     mlElapsed = 0;
                     SetRandomInterval();  // Set new random interval for next snapshot
@@ -1426,7 +1508,6 @@ publish();
     {
         try
         {
-            bool exists = File.Exists(_csvPath);
             var dir = Path.GetDirectoryName(_csvPath);
 
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
@@ -1434,43 +1515,29 @@ publish();
                 Directory.CreateDirectory(dir);
             }
 
-            // Migrate old format if needed
-            if (exists)
+            bool harvestExists = File.Exists(_csvPath);
+            if (_harvestEngine == HarvestEngineMode.V1 && harvestExists)
             {
                 MigrateOldCsvFormat();
             }
 
+            EnsureCsvSchema(
+                _csvPath,
+                _harvestEngine == HarvestEngineMode.V2 ? FeatureSchemaV2.HarvestHeaders : LegacyHarvestHeaders);
             _csvFile = new StreamWriter(_csvPath, append: true);
             _csvFile.AutoFlush = true; // Ensure data is written immediately
 
-            if (!exists)
-            {
-                // New format includes app_name for human readability
-                _csvFile.WriteLine("timestamp,hour_of_day,day_of_week,app_name,foreground_app,idle_time,time_last_request,productive");
-                Info($"Created new CSV: {_csvPath}");
-            }
-            else
-            {
-                Info($"Appending to: {_csvPath}");
-            }
+            Info($"{(harvestExists ? "Appending to" : "Created new CSV")}: {_csvPath}");
 
             // Initialize activity log
             var activityLogPath = Path.Combine(Path.GetDirectoryName(_csvPath) ?? "", "ACTIVITY_LOG.CSV");
             bool activityExists = File.Exists(activityLogPath);
-
+            EnsureCsvSchema(
+                activityLogPath,
+                _harvestEngine == HarvestEngineMode.V2 ? FeatureSchemaV2.ActivityLogHeaders : LegacyActivityLogHeaders);
             _activityLogFile = new StreamWriter(activityLogPath, append: true);
             _activityLogFile.AutoFlush = true;
-
-            if (!activityExists)
-            {
-                // Include app_name for human readability
-                _activityLogFile.WriteLine("timestamp,hour_of_day,day_of_week,app_name,foreground_app,idle_time");
-                Dim($"  Created activity log: {activityLogPath}");
-            }
-            else
-            {
-                Dim($"  Activity log: {activityLogPath}");
-            }
+            Dim($"  {(activityExists ? "Activity log" : "Created activity log")}: {activityLogPath}");
         }
         catch (Exception ex)
         {
@@ -1479,15 +1546,40 @@ publish();
         }
     }
 
-    static void TakeSnapshot(string app, int idle, int attention)
+    static void EnsureCsvSchema(string path, string[] expectedHeaders)
+    {
+        string expectedHeader = string.Join(',', expectedHeaders);
+        if (!File.Exists(path))
+        {
+            File.WriteAllText(path, expectedHeader + Environment.NewLine, Encoding.UTF8);
+            return;
+        }
+
+        string[] lines = File.ReadAllLines(path);
+        if (lines.Length == 0)
+        {
+            File.WriteAllText(path, expectedHeader + Environment.NewLine, Encoding.UTF8);
+            return;
+        }
+
+        if (string.Equals(lines[0], expectedHeader, StringComparison.Ordinal))
+            return;
+
+        lines[0] = expectedHeader;
+        File.WriteAllLines(path, lines, Encoding.UTF8);
+    }
+
+    static void TakeSnapshot(string app, string title, int idle, int attention, ActivityTickResult? tick)
     {
         int appHash = GetHash(app);
         _totalSnapshots++;
 
         // Capture snapshot state to avoid race conditions
         _snapshotApp = app;
+        _snapshotTitle = title;
         _snapshotIdle = idle;
         _snapshotAttention = attention;
+        _snapshotTick = tick ?? default;
 
         Console.WriteLine();
         Console.WriteLine($"{Color.BYELLOW}━━━ SNAPSHOT #{_totalSnapshots} ━━━{Color.RESET}");
@@ -1495,6 +1587,12 @@ publish();
         Console.WriteLine($"  {Color.BOLD}Hash:{Color.RESET}      {appHash}");
         Console.WriteLine($"  {Color.BOLD}Idle:{Color.RESET}      {FormatTime(idle)}");
         Console.WriteLine($"  {Color.BOLD}Attention:{Color.RESET} {FormatTime(attention)}");
+        if (tick is ActivityTickResult fusedTick)
+        {
+            Console.WriteLine($"  {Color.BOLD}Title:{Color.RESET}     {fusedTick.Context.FocusedTitle}");
+            Console.WriteLine($"  {Color.BOLD}Domain:{Color.RESET}    {fusedTick.Context.FocusedDomain}");
+            Console.WriteLine($"  {Color.BOLD}Signal:{Color.RESET}    {NudgeCoreLogic.GetSignalQualityName(fusedTick.Context.SignalQuality)}");
+        }
         Console.WriteLine();
         Console.WriteLine($"  {Color.MAGENTA}❯{Color.RESET} Waiting for response...");
         Console.WriteLine($"  {Color.DIM}Run: {Color.BCYAN}nudge-notify YES{Color.DIM} or {Color.BCYAN}nudge-notify NO{Color.RESET}");
@@ -1519,7 +1617,7 @@ publish();
         }, null, RESPONSE_TIMEOUT_MS, Timeout.Infinite);
     }
 
-    static void LogActivity(string app, int idle)
+    static void LogActivity(string app, int idle, ActivityTickResult? tick)
     {
         try
         {
@@ -1529,8 +1627,32 @@ publish();
             int dayOfWeek = (int)now.DayOfWeek;  // 0-6 (Sunday=0)
             string timestamp = now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 
-            // Include app_name for human readability, foreground_app (hash) for ML
-            _activityLogFile?.WriteLine($"{timestamp},{hourOfDay},{dayOfWeek},{app},{appHash},{idle}");
+            if (_harvestEngine == HarvestEngineMode.V2 && tick is ActivityTickResult fusedTick)
+            {
+                WriteCsvRow(
+                    _activityLogFile,
+                    timestamp,
+                    hourOfDay,
+                    dayOfWeek,
+                    fusedTick.DisplayAppName,
+                    fusedTick.LegacyForegroundAppHash,
+                    fusedTick.Context.IdleMs,
+                    fusedTick.Context.FocusedAppId,
+                    fusedTick.Context.FocusedTitle,
+                    fusedTick.Context.FocusedDomain,
+                    fusedTick.Context.FocusedWindowId,
+                    fusedTick.Context.IsIdleNow,
+                    fusedTick.Context.FocusedSinceMs,
+                    fusedTick.Context.TitleUnchangedForMs,
+                    fusedTick.Context.MappedToplevelCount,
+                    fusedTick.Context.ActiveWorkspaceId,
+                    NudgeCoreLogic.GetFocusSourceName(fusedTick.Context.FocusSource),
+                    NudgeCoreLogic.GetSignalQualityName(fusedTick.Context.SignalQuality),
+                    fusedTick.Context.FullscreenFlag);
+                return;
+            }
+
+            WriteCsvRow(_activityLogFile, timestamp, hourOfDay, dayOfWeek, app, appHash, idle);
         }
         catch (Exception ex)
         {
@@ -1539,10 +1661,11 @@ publish();
         }
     }
 
-    static void SaveSnapshot(string app, int idle, int attention, bool productive)
+    static void SaveSnapshot(string app, int idle, int attention, bool productive, ActivityTickResult? tick)
     {
         int appHash = GetHash(app);
         int productiveInt = productive ? 1 : 0;
+        bool wroteRow = false;
 
         var now = DateTime.Now;
         int hourOfDay = now.Hour;  // 0-23
@@ -1551,14 +1674,74 @@ publish();
 
         try
         {
-            // Include app_name for human readability, foreground_app (hash) for ML
-            _csvFile?.WriteLine($"{timestamp},{hourOfDay},{dayOfWeek},{app},{appHash},{idle},{attention},{productiveInt}");
+            if (_harvestEngine == HarvestEngineMode.V2 && tick is ActivityTickResult fusedTick)
+            {
+                if (fusedTick.Context.SignalQuality == SignalQuality.Poor)
+                {
+                    Warning("  Skipping labeled V2 row because signal quality is poor");
+                }
+                else
+                {
+                    WriteCsvRow(
+                        _csvFile,
+                        timestamp,
+                        hourOfDay,
+                        dayOfWeek,
+                        fusedTick.DisplayAppName,
+                        fusedTick.LegacyForegroundAppHash,
+                        fusedTick.Context.IdleMs,
+                        fusedTick.TimeLastRequestMs,
+                        productiveInt,
+                        FeatureSchemaV2.SchemaVersion,
+                        fusedTick.Context.FocusedAppId,
+                        fusedTick.Context.FocusedTitle,
+                        fusedTick.Context.FocusedDomain,
+                        fusedTick.Context.FocusedWindowId,
+                        fusedTick.Context.IsIdleNow,
+                        fusedTick.Context.FocusedSinceMs,
+                        fusedTick.Context.TitleUnchangedForMs,
+                        fusedTick.Context.MappedToplevelCount,
+                        fusedTick.Context.ActiveWorkspaceId,
+                        NudgeCoreLogic.GetFocusSourceName(fusedTick.Context.FocusSource),
+                        NudgeCoreLogic.GetSignalQualityName(fusedTick.Context.SignalQuality),
+                        fusedTick.Context.FullscreenFlag,
+                        fusedTick.Features.FocusedAppHash,
+                        fusedTick.Features.FocusedDomainHash,
+                        fusedTick.Features.IdleMs,
+                        fusedTick.Features.TitleStabilityMs,
+                        fusedTick.Features.SwitchCount60s,
+                        fusedTick.Features.SwitchCount300s,
+                        fusedTick.Features.DistinctApps300s,
+                        fusedTick.Features.DistinctDomains300s,
+                        fusedTick.Features.ReturnedToAnchorApp300s,
+                        fusedTick.Features.CurrentAppShare300s,
+                        fusedTick.Features.CurrentDomainShare300s,
+                        fusedTick.Features.BrowserWindowFlag,
+                        fusedTick.Features.CommunicationAppFlag,
+                        fusedTick.Features.EntertainmentDomainFlag,
+                        fusedTick.Features.WorkDomainFlag,
+                        fusedTick.Features.AfkFlag,
+                        fusedTick.Features.WorkspaceSwitchCount300s);
+                    wroteRow = true;
+                }
+            }
+            else
+            {
+                WriteCsvRow(_csvFile, timestamp, hourOfDay, dayOfWeek, app, appHash, idle, attention, productiveInt);
+                wroteRow = true;
+            }
 
-            var label = productive ?
-                $"{Color.BGREEN}PRODUCTIVE{Color.RESET}" :
-                $"{Color.YELLOW}NOT PRODUCTIVE{Color.RESET}";
-
-            Success($"✓ Saved as {label}");
+            if (wroteRow)
+            {
+                var label = productive ?
+                    $"{Color.BGREEN}PRODUCTIVE{Color.RESET}" :
+                    $"{Color.YELLOW}NOT PRODUCTIVE{Color.RESET}";
+                Success($"✓ Saved as {label}");
+            }
+            else
+            {
+                Warning("  Snapshot label recorded, but no training row was written");
+            }
             Console.WriteLine();
         }
         catch (Exception ex)
@@ -1569,6 +1752,37 @@ publish();
         {
             _waitingForResponse = false;
         }
+    }
+
+    static void WriteCsvRow(StreamWriter? writer, params object[] fields)
+    {
+        if (writer == null)
+            return;
+
+        for (int i = 0; i < fields.Length; i++)
+        {
+            if (i > 0)
+                writer.Write(',');
+
+            object field = fields[i];
+            if (field is null)
+                continue;
+
+            if (field is string text)
+            {
+                writer.Write(NudgeCoreLogic.EscapeCsv(text));
+            }
+            else if (field is IFormattable formattable)
+            {
+                writer.Write(formattable.ToString(null, CultureInfo.InvariantCulture));
+            }
+            else
+            {
+                writer.Write(NudgeCoreLogic.EscapeCsv(field.ToString()));
+            }
+        }
+
+        writer.WriteLine();
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━���━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1613,12 +1827,12 @@ publish();
                 {
                     case "YES":
                         Info($"  Received: {Color.BGREEN}YES{Color.RESET} (productive)");
-                        SaveSnapshot(app, idle, attention, productive: true);
+                        SaveSnapshot(app, idle, attention, productive: true, _snapshotTick);
                         break;
 
                     case "NO":
                         Info($"  Received: {Color.YELLOW}NO{Color.RESET} (not productive)");
-                        SaveSnapshot(app, idle, attention, productive: false);
+                        SaveSnapshot(app, idle, attention, productive: false, _snapshotTick);
                         break;
 
                     default:
@@ -1649,7 +1863,7 @@ publish();
     // ML INFERENCE - Communicate with ML prediction service
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    static MLPrediction? QueryMLModel(string app, int idle, int attention)
+    static MLPrediction? QueryMLModel(string app, int idle, int attention, ActivityTickResult? tick)
     {
         try
         {
@@ -1662,20 +1876,37 @@ publish();
             client.Connect(ML_HOST, ML_PORT);
             using var stream = client.GetStream();
 
-            // Prepare request with time-based features
-            var now = DateTime.Now;
-            int appHash = GetHash(app);
-            int hourOfDay = now.Hour;  // 0-23
-            int dayOfWeek = (int)now.DayOfWeek;  // 0-6 (Sunday=0)
+            string requestJson;
+            if (_harvestEngine == HarvestEngineMode.V2 && tick is ActivityTickResult fusedTick)
+            {
+                var request = new MLPredictionRequestV2
+                {
+                    SchemaVersion = FeatureSchemaV2.SchemaVersion,
+                    FeatureOrder = FeatureSchemaV2.OrderedFeatureNames,
+                    Features = FeatureSchemaV2.ToFeatureDictionary(fusedTick.Features),
+                    FocusSource = NudgeCoreLogic.GetFocusSourceName(fusedTick.Context.FocusSource),
+                    SignalQuality = NudgeCoreLogic.GetSignalQualityName(fusedTick.Context.SignalQuality)
+                };
+                requestJson = JsonSerializer.Serialize(request, NudgeJsonContext.Default.MLPredictionRequestV2) + "\n";
+            }
+            else
+            {
+                // Prepare request with time-based features
+                var now = DateTime.Now;
+                int appHash = GetHash(app);
+                int hourOfDay = now.Hour;  // 0-23
+                int dayOfWeek = (int)now.DayOfWeek;  // 0-6 (Sunday=0)
 
-            var request = new MLPredictionRequest(
-                hourOfDay,
-                dayOfWeek,
-                appHash,
-                idle,
-                attention);
+                var request = new MLPredictionRequest(
+                    hourOfDay,
+                    dayOfWeek,
+                    appHash,
+                    idle,
+                    attention);
 
-            string requestJson = JsonSerializer.Serialize(request, NudgeJsonContext.Default.MLPredictionRequest) + "\n";
+                requestJson = JsonSerializer.Serialize(request, NudgeJsonContext.Default.MLPredictionRequest) + "\n";
+            }
+
             byte[] requestBytes = Encoding.UTF8.GetBytes(requestJson);
 
             // Send request
@@ -1727,7 +1958,7 @@ publish();
         }
     }
 
-    static bool ShouldTriggerSnapshot(string app, int idle, int attention)
+    static bool ShouldTriggerSnapshot(string app, int idle, int attention, ActivityTickResult? tick)
     {
         // If ML not enabled, always use interval-based
         if (!_mlEnabled)
@@ -1744,8 +1975,23 @@ publish();
             return true;
         }
 
+        if (_harvestEngine == HarvestEngineMode.V2 && tick is ActivityTickResult fusedTick)
+        {
+            if (fusedTick.Context.SignalQuality == SignalQuality.Poor)
+            {
+                Dim("  ML: Skipping fused prediction because signal quality is poor");
+                return false;
+            }
+
+            if (fusedTick.Features.AfkFlag == 1)
+            {
+                Dim("  ML: Skipping fused prediction because user is AFK");
+                return false;
+            }
+        }
+
         // Query ML model
-        var prediction = QueryMLModel(app, idle, attention);
+        var prediction = QueryMLModel(app, idle, attention, tick);
 
         if (prediction == null || !prediction.ModelAvailable)
         {
@@ -1886,15 +2132,16 @@ publish();
     {
         Console.WriteLine();
         Console.WriteLine($"{Color.BCYAN}╔═══════════════════════════════════════════════╗{Color.RESET}");
-        Console.WriteLine($"{Color.BCYAN}║{Color.RESET}  {Color.BOLD}Nudge{Color.RESET} - ML-Powered Productivity Tracker  {Color.BCYAN}║{Color.RESET}");
+        Console.WriteLine($"{Color.BCYAN}║{Color.RESET}  {Color.BOLD}Nudge Harvest{Color.RESET} - Activity Collector     {Color.BCYAN}║{Color.RESET}");
         Console.WriteLine($"{Color.BCYAN}║{Color.RESET}  {Color.DIM}Version {VERSION,-36}{Color.RESET}{Color.BCYAN}║{Color.RESET}");
+        Console.WriteLine($"{Color.BCYAN}║{Color.RESET}  {Color.DIM}Engine: {NudgeCoreLogic.GetHarvestEngineName(_harvestEngine).ToUpperInvariant(),-35}{Color.RESET}{Color.BCYAN}║{Color.RESET}");
         Console.WriteLine($"{Color.BCYAN}╚═══════════════════════════════════════════════╝{Color.RESET}");
         Console.WriteLine();
     }
 
     static void ShowHelp()
     {
-        Console.WriteLine($"{Color.BOLD}Nudge{Color.RESET} - ML-Powered Productivity Tracker");
+        Console.WriteLine($"{Color.BOLD}Nudge Harvest{Color.RESET} - Activity Collector");
         Console.WriteLine($"Version {VERSION}");
         Console.WriteLine();
         Console.WriteLine($"{Color.BOLD}USAGE:{Color.RESET}");
@@ -1906,6 +2153,7 @@ publish();
         Console.WriteLine($"  {Color.CYAN}--interval, -i N{Color.RESET}    Snapshot interval in minutes (default: 5)");
         Console.WriteLine($"  {Color.CYAN}--ml{Color.RESET}                Enable ML-powered adaptive notifications");
         Console.WriteLine($"  {Color.CYAN}--force-model{Color.RESET}       Force use of trained model even if below 100 samples");
+        Console.WriteLine($"  {Color.CYAN}--harvest-engine{Color.RESET}    Select v1 or v2 collector mode");
         Console.WriteLine();
         Console.WriteLine($"{Color.BOLD}ARGUMENTS:{Color.RESET}");
         Console.WriteLine($"  {Color.CYAN}csv-path{Color.RESET}            Path to CSV file (default: {PlatformConfig.CsvPath})");
@@ -1916,6 +2164,7 @@ publish();
         Console.WriteLine($"  nudge --interval 2             # Snapshot every 2 minutes");
         Console.WriteLine($"  nudge --ml                     # Enable ML predictions");
         Console.WriteLine($"  nudge --ml --force-model       # Force trained model usage");
+        Console.WriteLine($"  nudge --harvest-engine v1      # Use the legacy harvest engine");
         Console.WriteLine();
         Console.WriteLine($"{Color.BOLD}RESPONDING TO SNAPSHOTS:{Color.RESET}");
         Console.WriteLine($"  In another terminal, run:");
