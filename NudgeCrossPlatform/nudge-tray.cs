@@ -96,6 +96,9 @@ namespace NudgeTray
         [DllImport("kernel32.dll")]
         static extern bool AllocConsole();
 
+        [DllImport("user32.dll")]
+        static extern bool SetForegroundWindow(IntPtr hWnd);
+
         const int ATTACH_PARENT_PROCESS = -1;
 #endif
 
@@ -1177,7 +1180,7 @@ namespace NudgeTray
                 }
 
                 string csvPath = PlatformConfig.CsvPath;
-                string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --csv \"{csvPath}\" --model-dir \"{_modelDirPath}\" --check-interval 1 --min-total-samples 1 --force";
+                string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --csv \"{csvPath}\" --model-dir \"{_modelDirPath}\" --check-interval 300 --min-total-samples 1 --force --once";
 
                 _mlTrainerProcess = new Process
                 {
@@ -1191,6 +1194,13 @@ namespace NudgeTray
                         CreateNoWindow = true
                     }
                 };
+
+                // Set state BEFORE starting the process so the async stdout
+                // reader can't race ahead and set IsTraining=false before we finish.
+                TrainerState.IsTraining = true;
+                TrainerState.Architecture = "…";
+                TrainerState.LastError = "";
+                TrainerState.TrainingProgress = -1f;
 
                 _mlTrainerProcess.OutputDataReceived += (s, e) =>
                 {
@@ -1214,9 +1224,7 @@ namespace NudgeTray
                 _mlTrainerProcess.BeginOutputReadLine();
                 _mlTrainerProcess.BeginErrorReadLine();
 
-                TrainerState.IsTraining = true;
-                TrainerState.Architecture = "…";
-                TrainerState.LastError = "";
+                _analyticsWindow?.RequestTrainingViewRefresh();
 
                 Console.WriteLine("  ✓ Manual training started");
             }
@@ -1380,6 +1388,9 @@ namespace NudgeTray
 
                 _waitingForResponse = true;
 
+                // Capture the app that was focused before the notification appeared
+                var previousApp = LiveAIState.CurrentApp ?? "";
+
                 // Create and show custom notification window on Avalonia UI thread (works on all platforms)
                 Dispatcher.UIThread.Post(() =>
                 {
@@ -1387,6 +1398,7 @@ namespace NudgeTray
                     {
                         var appName = LiveAIState.CurrentApp ?? "";
                         var notificationWindow = new CustomNotificationWindow(appName);
+                        notificationWindow.Closed += (s, e) => RestorePreviousAppFocus(previousApp);
                         notificationWindow.ShowWithAnimation((productive) =>
                         {
                             _waitingForResponse = false;
@@ -1616,6 +1628,50 @@ namespace NudgeTray
         }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // FOCUS RESTORATION
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        private static void RestorePreviousAppFocus(string appName)
+        {
+            if (string.IsNullOrEmpty(appName))
+                return;
+
+            try
+            {
+                if (OperatingSystem.IsLinux())
+                {
+                    // Strip browser site suffix like "Firefox (youtube.com)" -> "firefox"
+                    string searchName = appName;
+                    int parenIndex = appName.IndexOf(" (", StringComparison.Ordinal);
+                    if (parenIndex > 0)
+                        searchName = appName[..parenIndex].ToLowerInvariant();
+
+                    // Try xdotool (works on X11)
+                    using var xd = Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "xdotool",
+                        Arguments = $"search --class --onlyvisible --limit 1 \"{searchName}\" windowactivate",
+                        UseShellExecute = false,
+                        RedirectStandardError = true,
+                    });
+                    if (xd != null)
+                    {
+                        xd.WaitForExit(2000);
+                        if (xd.ExitCode == 0)
+                            return;
+                    }
+
+                    // Fallback: wmctrl
+                    Process.Start("wmctrl", $"-a \"{appName}\"")?.WaitForExit(2000);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[DEBUG] Could not restore focus to '{appName}': {ex.Message}");
+            }
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // COMMON FUNCTIONS
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -1829,10 +1885,12 @@ namespace NudgeTray
         public static int  ModelVersion;
         public static bool IsTraining;
         public static float LastAccuracy = -1f;
+        public static float PreviousAccuracy = -1f;
         public static string Architecture = "";
         public static string LastError    = "";
         public static DateTime LastChecked = DateTime.MinValue;
         public static DateTime LastTrained = DateTime.MinValue;
+        public static float TrainingProgress = -1f;
 
         public static void ParseLine(string raw)
         {
@@ -1865,10 +1923,11 @@ namespace NudgeTray
             {
                 lock (_lock)
                 {
-                    Architecture = m.Groups[1].Value;
-                    SampleCount  = int.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
-                    IsTraining   = true;
-                    LastError    = "";
+                    Architecture    = m.Groups[1].Value;
+                    SampleCount     = int.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
+                    IsTraining      = true;
+                    LastError       = "";
+                    TrainingProgress = -1f;
                 }
                 return;
             }
@@ -1880,14 +1939,18 @@ namespace NudgeTray
             {
                 lock (_lock)
                 {
-                    IsTraining       = false;
-                    LastTrained      = DateTime.Now;
-                    LastTrainedCount = SampleCount;
-                    if (float.TryParse(m.Groups[1].Value,
-                        System.Globalization.NumberStyles.Float,
-                        System.Globalization.CultureInfo.InvariantCulture,
-                        out float acc))
-                        LastAccuracy = acc;
+                IsTraining       = false;
+                LastTrained      = DateTime.Now;
+                LastTrainedCount = SampleCount;
+                TrainingProgress = -1f;
+                if (float.TryParse(m.Groups[1].Value,
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out float acc))
+                {
+                    PreviousAccuracy = LastAccuracy;
+                    LastAccuracy = acc;
+                }
                     if (int.TryParse(m.Groups[2].Value,
                         System.Globalization.NumberStyles.Integer,
                         System.Globalization.CultureInfo.InvariantCulture,
@@ -1904,8 +1967,9 @@ namespace NudgeTray
             {
                 lock (_lock)
                 {
-                    IsTraining = false;
-                    LastError  = m.Groups[1].Value;
+                    IsTraining       = false;
+                    LastError        = m.Groups[1].Value;
+                    TrainingProgress = -1f;
                 }
                 return;
             }
@@ -1913,7 +1977,7 @@ namespace NudgeTray
             // [trainer] Nothing to do.
             if (raw.Contains("[trainer] Nothing to do"))
             {
-                lock (_lock) { IsTraining = false; }
+                lock (_lock) { IsTraining = false; TrainingProgress = -1f; }
             }
         }
 
@@ -1965,27 +2029,6 @@ namespace NudgeTray
                     catch { }
                 }
 
-                // Fallback: read model version from trainer_state.json
-                if (ModelVersion == 0)
-                {
-                    string statePath = System.IO.Path.Combine(PlatformConfig.DataDirectory, "model", "trainer_state.json");
-                    if (System.IO.File.Exists(statePath))
-                    {
-                        try
-                        {
-                            var doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllBytes(statePath));
-                            var root = doc.RootElement;
-                            if (root.TryGetProperty("training_count", out var tc))
-                                ModelVersion = tc.GetInt32();
-                        }
-                        catch { }
-                    }
-                }
-
-                // If a model exists but we have no version yet, default to v1
-                if (ModelVersion == 0 && trained != DateTime.MinValue)
-                    ModelVersion = 1;
-
                 lock (_lock)
                 {
                     SampleCount = count;
@@ -2007,15 +2050,17 @@ namespace NudgeTray
         }
 
         public static (int sample, int min, int lastTrained, bool training,
-                        float acc, string arch, string err,
+                        float acc, float prevAcc, string arch, string err,
                         DateTime lastChecked, DateTime lastTrained2,
-                        int version, IReadOnlyList<string> log) Snapshot()
+                        int version, IReadOnlyList<string> log,
+                        float trainingProgress) Snapshot()
         {
             lock (_lock)
             {
                 return (SampleCount, MinSamples, LastTrainedCount, IsTraining,
-                        LastAccuracy, Architecture, LastError,
-                        LastChecked, LastTrained, ModelVersion, _log.ToArray());
+                        LastAccuracy, PreviousAccuracy, Architecture, LastError,
+                        LastChecked, LastTrained, ModelVersion, _log.ToArray(),
+                        TrainingProgress);
             }
         }
     }

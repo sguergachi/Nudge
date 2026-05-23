@@ -155,7 +155,7 @@ public class NudgeSignalFusionTests
     [Fact]
     public void FeatureSchema_ToFeatureDictionary_IncludesNewFlags()
     {
-        var features = new FeatureVectorV2(
+        var features = new FeatureVector(
             HourOfDay: 10, DayOfWeek: 1, FocusedAppHash: 0, FocusedDomainHash: 0,
             IdleMs: 0, FocusedSinceMs: 5000, TitleStabilityMs: 5000,
             SwitchCount60s: 0, SwitchCount300s: 0, DistinctApps300s: 1,

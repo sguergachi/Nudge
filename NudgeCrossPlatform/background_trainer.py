@@ -140,6 +140,8 @@ def main() -> None:
                         help=f'Minimum labeled samples before first train (default: {DEFAULT_MIN_SAMPLES})')
     parser.add_argument('--force', action='store_true',
                         help='Force training regardless of thresholds')
+    parser.add_argument('--once', action='store_true',
+                        help='Run a single training pass then exit')
     args = parser.parse_args()
 
     csv_path = args.csv
@@ -147,6 +149,7 @@ def main() -> None:
     interval = args.check_interval
     min_samples = args.min_total_samples
     force = args.force
+    once = args.once
 
     print(f'[trainer] Starting. csv={csv_path} model-dir={model_dir} '
           f'interval={interval}s min-samples={min_samples}', flush=True)
@@ -174,6 +177,8 @@ def main() -> None:
         except Exception as exc:
             print(f'[trainer] Unexpected error: {exc}', file=sys.stderr, flush=True)
 
+        if once:
+            break
         time.sleep(interval)
 
 

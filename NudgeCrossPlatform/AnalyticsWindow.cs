@@ -147,7 +147,7 @@ namespace NudgeTray
             // Live AI Brain tab refresh — only runs when AI tab is active
             _aiLiveRefreshTimer = new DispatcherTimer
             {
-                Interval = TimeSpan.FromSeconds(3)
+                Interval = TimeSpan.FromSeconds(10)
             };
             _aiLiveRefreshTimer.Tick += (s, e) =>
             {
@@ -590,8 +590,9 @@ namespace NudgeTray
         private static StackPanel CreateTrainingView()
         {
             var (sampleCount, minSamples, lastTrainedCount, isTraining,
-                 lastAccuracy, architecture, lastError,
-                 lastChecked, lastTrained, modelVersion, log) = TrainerState.Snapshot();
+                 lastAccuracy, prevAccuracy, architecture, lastError,
+                 lastChecked, lastTrained, modelVersion, log,
+                 trainingProgress) = TrainerState.Snapshot();
 
             var panel = new StackPanel { Spacing = 8 };
 
@@ -670,94 +671,159 @@ namespace NudgeTray
                 panel.Children.Add(headerGrid);
             }
 
-            // ── Sample progress bar ──────────────────────────────────────────────
-            bool   hasModel = lastTrained != DateTime.MinValue;
-            int    retrainThreshold = hasModel
-                ? lastTrainedCount + Math.Max(10, (int)(lastTrainedCount * 0.10))
-                : minSamples;
-            int    newSamples = hasModel ? Math.Max(0, sampleCount - lastTrainedCount) : sampleCount;
-            int    neededTotal = hasModel ? retrainThreshold : minSamples;
-            double ratio = neededTotal > 0 ? Math.Min(1.0, (double)newSamples / neededTotal) : 1.0;
-
-            string progressLabel = hasModel
-                ? $"{newSamples} new samples since last training"
-                : $"{sampleCount} / {minSamples} samples needed for first model";
-
-            panel.Children.Add(new TextBlock
-            {
-                Text = progressLabel,
-                FontSize = 11,
-                Foreground = new SolidColorBrush(TextSecondary)
-            });
-
-            {
-                var barBg = new Border
-                {
-                    Height = 4,
-                    CornerRadius = new CornerRadius(2),
-                    Background = new SolidColorBrush(ProgressBarBg),
-                    Margin = new Thickness(0, 2, 0, 0)
-                };
-                var barFill = new Border
-                {
-                    Height = 4,
-                    CornerRadius = new CornerRadius(2),
-                    Background = new SolidColorBrush(hasModel ? Color.FromRgb(140, 200, 120) : PrimaryBlue),
-                    HorizontalAlignment = HorizontalAlignment.Left
-                };
-                var barGrid = new Grid();
-                barGrid.ColumnDefinitions.Add(new ColumnDefinition(ratio, GridUnitType.Star));
-                barGrid.ColumnDefinitions.Add(new ColumnDefinition(Math.Max(0, 1 - ratio), GridUnitType.Star));
-                Grid.SetColumn(barFill, 0);
-                barGrid.Children.Add(barFill);
-                barBg.Child = barGrid;
-                panel.Children.Add(barBg);
-            }
-
-            // ── Next check ───────────────────────────────────────────────────────
-            if (lastChecked != DateTime.MinValue)
-            {
-                TimeSpan sinceCheck = DateTime.Now - lastChecked;
-                TimeSpan nextCheck = TimeSpan.FromSeconds(300) - sinceCheck;
-                string nextText = nextCheck.TotalSeconds > 0
-                    ? $"Next check: in {nextCheck.Minutes}m {nextCheck.Seconds}s"
-                    : "Next check: any moment";
-                panel.Children.Add(new TextBlock
-                {
-                    Text = nextText,
-                    FontSize = 10,
-                    Foreground = new SolidColorBrush(TextTertiary),
-                    Margin = new Thickness(0, 2, 0, 0)
-                });
-            }
-
-            // ── Last model info ──────────────────────────────────────────────────
+            // ── Current model info (right under status) ──────────────────────────
             if (lastAccuracy >= 0)
             {
-                var accuracyRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-                accuracyRow.Children.Add(new TextBlock
+                var modelRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(0, 0, 0, 0) };
+                modelRow.Children.Add(new TextBlock
                 {
-                    Text = "Last model:",
+                    Text = "Current Model:",
                     FontSize = 11,
                     Foreground = new SolidColorBrush(TextTertiary)
                 });
                 var versionLabel = modelVersion > 0 ? $"v{modelVersion} · " : "";
-                accuracyRow.Children.Add(new TextBlock
+                modelRow.Children.Add(new TextBlock
                 {
                     Text = $"{versionLabel}{lastAccuracy * 100:F0}% accuracy",
                     FontSize = 11,
                     Foreground = new SolidColorBrush(TextSecondary)
                 });
+                if (prevAccuracy >= 0)
+                {
+                    double delta = (lastAccuracy - prevAccuracy) * 100;
+                    string deltaStr = delta >= 0 ? $"+{delta:F1}%" : $"{delta:F1}%";
+                    Color deltaColor = delta >= 0 ? ProductiveGreen : UnproductiveRed;
+                    modelRow.Children.Add(new TextBlock
+                    {
+                        Text = $"({deltaStr})",
+                        FontSize = 11,
+                        Foreground = new SolidColorBrush(deltaColor)
+                    });
+                }
                 if (!string.IsNullOrEmpty(architecture) && !isTraining)
                 {
-                    accuracyRow.Children.Add(new TextBlock
+                    modelRow.Children.Add(new TextBlock
                     {
                         Text = $"· {architecture}",
                         FontSize = 11,
                         Foreground = new SolidColorBrush(TextTertiary)
                     });
                 }
-                panel.Children.Add(accuracyRow);
+                panel.Children.Add(modelRow);
+            }
+
+            // ── Training / Sample progress bar ────────────────────────────────────
+            if (isTraining)
+            {
+                string trainLabel = architecture is "" or "…"
+                    ? "Training model…"
+                    : $"Training {architecture} model…";
+
+                panel.Children.Add(new TextBlock
+                {
+                    Text = trainLabel,
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(AIStatusLearning)
+                });
+
+                if (trainingProgress >= 0f)
+                {
+                    var barBg = new Border
+                    {
+                        Height = 4,
+                        CornerRadius = new CornerRadius(2),
+                        Background = new SolidColorBrush(ProgressBarBg),
+                        Margin = new Thickness(0, 2, 0, 0),
+                        ClipToBounds = true
+                    };
+                    var fill = new Border
+                    {
+                        Background = new SolidColorBrush(PrimaryBlue),
+                        CornerRadius = new CornerRadius(2),
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                        Width = trainingProgress * 400
+                    };
+                    barBg.Child = fill;
+                    panel.Children.Add(barBg);
+                }
+                else
+                {
+                    panel.Children.Add(CreateIndeterminateBar());
+                }
+            }
+            else
+            {
+                bool   hasModel = lastTrained != DateTime.MinValue;
+                int    retrainThreshold = hasModel
+                    ? lastTrainedCount + Math.Max(10, (int)(lastTrainedCount * 0.10))
+                    : minSamples;
+                int    newSamples = hasModel ? Math.Max(0, sampleCount - lastTrainedCount) : sampleCount;
+                int    neededTotal = hasModel ? retrainThreshold : minSamples;
+
+                string progressLabel = hasModel
+                    ? $"{newSamples} new samples since last training"
+                    : $"{sampleCount} / {minSamples} samples needed for first model";
+
+                panel.Children.Add(new TextBlock
+                {
+                    Text = progressLabel,
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(TextSecondary)
+                });
+
+                // ── Animated countdown bar to next trainer check ───────────────────
+                if (lastChecked != DateTime.MinValue)
+                {
+                    var anchor = lastChecked;
+                    const double checkIntervalSec = 300;
+
+                    var barBg = new Border
+                    {
+                        Height = 4,
+                        CornerRadius = new CornerRadius(2),
+                        Background = new SolidColorBrush(ProgressBarBg),
+                        Margin = new Thickness(0, 2, 0, 0),
+                        ClipToBounds = true
+                    };
+
+                    var fill = new Border
+                    {
+                        Background = new SolidColorBrush(PrimaryBlue),
+                        CornerRadius = new CornerRadius(2),
+                        HorizontalAlignment = HorizontalAlignment.Left
+                    };
+                    barBg.Child = fill;
+
+                    var countdownLabel = new TextBlock
+                    {
+                        FontSize = 10,
+                        Foreground = new SolidColorBrush(TextTertiary),
+                        Margin = new Thickness(0, 2, 0, 0)
+                    };
+
+                    panel.Children.Add(barBg);
+                    panel.Children.Add(countdownLabel);
+
+                    // Update once on creation, then every second
+                    Action update = () =>
+                    {
+                        double elapsed = (DateTime.Now - anchor).TotalSeconds;
+                        double p = Math.Min(1.0, Math.Max(0.0, elapsed / checkIntervalSec));
+                        double w = barBg.Bounds.Width;
+                        if (w > 0) fill.Width = p * w;
+
+                        double rem = Math.Max(0, checkIntervalSec - elapsed);
+                        countdownLabel.Text = rem > 1
+                            ? $"Next check: in {(int)rem / 60}m {(int)rem % 60}s"
+                            : "Next check: any moment";
+                    };
+                    update();
+
+                    var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+                    timer.Tick += (_, _) => update();
+                    timer.Start();
+                    barBg.Unloaded += (_, _) => timer.Stop();
+                }
             }
 
             // ── Collapsible details (error, log, last-checked) ───────────────────
@@ -1444,6 +1510,51 @@ namespace NudgeTray
             parent.Children.Add(row);
         }
 
+        /// <summary>Creates a self-animating indeterminate progress bar (bouncing bubble).</summary>
+        private static Border CreateIndeterminateBar()
+        {
+            const double bubbleWidth = 48;
+            const double speed = 2.5;
+
+            var track = new Border
+            {
+                Height = 4,
+                CornerRadius = new CornerRadius(2),
+                Background = new SolidColorBrush(ProgressBarBg),
+                ClipToBounds = true,
+                Margin = new Thickness(0, 2, 0, 0)
+            };
+
+            var bubble = new Border
+            {
+                Width = bubbleWidth,
+                Height = 4,
+                Background = new SolidColorBrush(PrimaryBlue),
+                CornerRadius = new CornerRadius(2),
+                HorizontalAlignment = HorizontalAlignment.Left
+            };
+            track.Child = bubble;
+
+            double pos = -(bubbleWidth / 2);
+            double dir = 1;
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+            timer.Tick += (_, _) =>
+            {
+                double w = track.Bounds.Width;
+                if (w <= 0) return;
+
+                pos += speed * dir;
+                if (pos > w - bubbleWidth + 4) { pos = w - bubbleWidth + 4; dir = -1; }
+                else if (pos < -4) { pos = -4; dir = 1; }
+
+                bubble.Margin = new Thickness(pos, 0, 0, 0);
+            };
+            timer.Start();
+
+            track.Unloaded += (_, _) => timer.Stop();
+            return track;
+        }
+
         private static string GetHarvestCategoryFallback(HarvestSignal h)
         {
             if (h.Afk == 1)     return "AFK";
@@ -1480,9 +1591,7 @@ namespace NudgeTray
 
             // ── Header row: title + countdown text ───────────────────────────
             var headerGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-            string titleText = events.Count == 0
-                ? "Prediction History"
-                : $"Prediction History  ·  {events.Count} check{(events.Count == 1 ? "" : "s")}";
+            string titleText = "Prediction History";
             headerGrid.Children.Add(new TextBlock
             {
                 Text = titleText,
@@ -1514,17 +1623,8 @@ namespace NudgeTray
             };
             if (nextCheckAt > 0 && secondsLeft == 0)
             {
-                // Indeterminate (bouncing) progress bar while checking now
-                var indeterminate = new ProgressBar
-                {
-                    IsIndeterminate = true,
-                    Height = 4,
-                    Foreground = new SolidColorBrush(PrimaryBlue),
-                    Background = Brushes.Transparent,
-                    Margin = new Thickness(0),
-                    HorizontalAlignment = HorizontalAlignment.Stretch
-                };
-                barContainer.Child = indeterminate;
+                // Indeterminate bouncing bar while checking now
+                barContainer.Child = CreateIndeterminateBar();
             }
             else
             {
@@ -2092,15 +2192,10 @@ namespace NudgeTray
                     actionLabel = "nudged";
                     actionColor = UnproductiveRed;
                 }
-                else if (evt.Confidence >= 0.98)
+                else
                 {
                     actionLabel = "skipped";
                     actionColor = ProductiveGreen;
-                }
-                else
-                {
-                    actionLabel = "low conf";
-                    actionColor = Color.FromRgb(255, 193, 7);
                 }
                 var actionText = new TextBlock
                 {
@@ -3791,6 +3886,12 @@ namespace NudgeTray
             _sensorSignalsOpen = sensorSignalsOpen;
             _trainingDetailsOpen = trainingDetailsOpen;
             if (_aiTabActive) RefreshContent();
+        }
+
+        public void RequestTrainingViewRefresh()
+        {
+            if (_aiTabActive)
+                Dispatcher.UIThread.Post(RefreshContent, DispatcherPriority.Normal);
         }
     }
 
