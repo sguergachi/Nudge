@@ -52,6 +52,27 @@ internal readonly record struct ActivityLogEntry(DateTime Timestamp, string AppN
 
 internal readonly record struct HarvestEntry(DateTime Timestamp, int HourOfDay, string AppName, bool Productive);
 
+public enum AppCategory
+{
+    Unknown,
+    Development,
+    Creative,
+    Office,
+    Communication,
+    Entertainment,
+    Utility
+}
+
+public enum CategoryConfidence
+{
+    Unknown  = 0,
+    Fallback = 1,  // defaulted to Utility — nothing matched
+    Inferred = 2,  // browser inherited anchor app's category
+    Semantic = 3,  // keyword token match
+    Desktop  = 4,  // XDG .desktop file (OS ground truth)
+    Override = 5   // user-defined in app_categories.json
+}
+
 internal enum FocusSource
 {
     Unknown,
@@ -149,11 +170,18 @@ internal readonly record struct FeatureVectorV2(
     int WorkDomainFlag,
     int AfkFlag,
     int FullscreenFlag,
-    int WorkspaceSwitchCount300s);
+    int WorkspaceSwitchCount300s,
+    int DevAppFlag,
+    int CreativeAppFlag,
+    int OfficeAppFlag,
+    int CommAppFlag,
+    int EntAppFlag);
 
 internal readonly record struct ActivityTickResult(
     ActivityContext Context,
     FeatureVectorV2 Features,
+    AppCategory AppCategory,
+    CategoryConfidence AppCategoryConfidence,
     string DisplayAppName,
     string LegacyAppName,
     int LegacyForegroundAppHash,
@@ -204,7 +232,7 @@ internal sealed class ActivityFeatureTracker
         _samples.Enqueue(new ActivitySample(now, focusKey, appId, domain, workspaceId));
         TrimSamples(now);
 
-        var featureVector = BuildFeatureVector(now, context);
+        var (featureVector, appCategory, appConf) = BuildFeatureVector(now, context);
         string legacyAppName = BuildLegacyAppName(appId, title);
         string displayAppName = BuildDisplayAppName(appId, title, domain);
 
@@ -214,13 +242,15 @@ internal sealed class ActivityFeatureTracker
         return new ActivityTickResult(
             Context: context,
             Features: featureVector,
+            AppCategory: appCategory,
+            AppCategoryConfidence: appConf,
             DisplayAppName: displayAppName,
             LegacyAppName: legacyAppName,
             LegacyForegroundAppHash: NudgeCoreLogic.GetStableHash(legacyAppName),
             TimeLastRequestMs: context.FocusedSinceMs);
     }
 
-    private FeatureVectorV2 BuildFeatureVector(DateTime now, ActivityContext context)
+    private (FeatureVectorV2 Features, AppCategory Category, CategoryConfidence Confidence) BuildFeatureVector(DateTime now, ActivityContext context)
     {
         ActivitySample[] last300 = GetSamplesSince(now.AddSeconds(-299));
         ActivitySample[] last60 = GetSamplesSince(now.AddSeconds(-59));
@@ -236,7 +266,15 @@ internal sealed class ActivityFeatureTracker
                                    string.Equals(anchorApp, context.FocusedAppId, StringComparison.Ordinal) &&
                                    HasInterveningSwitch(last300, context.FocusedAppId);
 
-        return new FeatureVectorV2(
+        // Classify the anchor app for browser-anchor temporal fusion (confidence not needed for anchor)
+        AppCategory anchorCategory = (!string.IsNullOrEmpty(anchorApp) &&
+                                      !string.Equals(anchorApp, context.FocusedAppId, StringComparison.Ordinal))
+            ? AppCategoryClassifier.Classify(anchorApp, "").Category
+            : AppCategory.Unknown;
+
+        var (appCategory, appConf) = AppCategoryClassifier.Classify(context.FocusedAppId, context.FocusedTitle, anchorCategory);
+
+        var features = new FeatureVectorV2(
             HourOfDay: now.Hour,
             DayOfWeek: (int)now.DayOfWeek,
             FocusedAppHash: NudgeCoreLogic.GetStableHash(context.FocusedAppId),
@@ -257,7 +295,14 @@ internal sealed class ActivityFeatureTracker
             WorkDomainFlag: IsWorkDomain(context.FocusedDomain) ? 1 : 0,
             AfkFlag: context.IdleMs >= AfkThresholdMs ? 1 : 0,
             FullscreenFlag: context.FullscreenFlag,
-            WorkspaceSwitchCount300s: CountWorkspaceSwitches(last300));
+            WorkspaceSwitchCount300s: CountWorkspaceSwitches(last300),
+            DevAppFlag: appCategory == AppCategory.Development ? 1 : 0,
+            CreativeAppFlag: appCategory == AppCategory.Creative ? 1 : 0,
+            OfficeAppFlag: appCategory == AppCategory.Office ? 1 : 0,
+            CommAppFlag: appCategory == AppCategory.Communication ? 1 : 0,
+            EntAppFlag: appCategory == AppCategory.Entertainment ? 1 : 0);
+
+        return (features, appCategory, appConf);
     }
 
     private ActivitySample[] GetSamplesSince(DateTime threshold) =>
@@ -442,7 +487,7 @@ internal sealed class ActivityFeatureTracker
 
 internal static class FeatureSchemaV2
 {
-    public const int SchemaVersion = 2;
+    public const int SchemaVersion = 3;
 
     public static readonly string[] OrderedFeatureNames =
     [
@@ -466,7 +511,12 @@ internal static class FeatureSchemaV2
         "work_domain_flag",
         "afk_flag",
         "fullscreen_flag",
-        "workspace_switch_count_300s"
+        "workspace_switch_count_300s",
+        "dev_app_flag",
+        "creative_app_flag",
+        "office_app_flag",
+        "comm_app_flag",
+        "ent_app_flag"
     ];
 
     public static readonly string[] ActivityLogHeaders =
@@ -530,7 +580,12 @@ internal static class FeatureSchemaV2
         "entertainment_domain_flag",
         "work_domain_flag",
         "afk_flag",
-        "workspace_switch_count_300s"
+        "workspace_switch_count_300s",
+        "dev_app_flag",
+        "creative_app_flag",
+        "office_app_flag",
+        "comm_app_flag",
+        "ent_app_flag"
     ];
 
     public static IReadOnlyDictionary<string, double> ToFeatureDictionary(FeatureVectorV2 features) =>
@@ -556,7 +611,12 @@ internal static class FeatureSchemaV2
             ["work_domain_flag"] = features.WorkDomainFlag,
             ["afk_flag"] = features.AfkFlag,
             ["fullscreen_flag"] = features.FullscreenFlag,
-            ["workspace_switch_count_300s"] = features.WorkspaceSwitchCount300s
+            ["workspace_switch_count_300s"] = features.WorkspaceSwitchCount300s,
+            ["dev_app_flag"] = features.DevAppFlag,
+            ["creative_app_flag"] = features.CreativeAppFlag,
+            ["office_app_flag"] = features.OfficeAppFlag,
+            ["comm_app_flag"] = features.CommAppFlag,
+            ["ent_app_flag"] = features.EntAppFlag
         };
 }
 
@@ -998,6 +1058,429 @@ internal static class BrowserDetector
     private static bool IsTokenSeparator(char c) => c is ' ' or '\t' or '-' or '—' or '–' or '|' or '\\' or '·' or '•';
 
     private static bool IsTrimCharacter(char c) => c is ' ' or '\t' or '-' or '—' or '–' or '|' or '/' or '\\' or '[' or ']' or '(' or ')' or '{' or '}' or '<' or '>' or ',' or ';' or ':' or '!' or '?' or '"' or '\'' or '`';
+}
+
+internal static class AppCategoryClassifier
+{
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (AppCategory Category, CategoryConfidence Confidence)> _cache
+        = new(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly object _loadLock = new();
+    private static bool _loaded;
+    private static readonly string? _inferredCachePath;
+
+    private static readonly FrozenDictionary<string, AppCategory> XdgCategoryMap =
+        new Dictionary<string, AppCategory>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Development"]      = AppCategory.Development,
+            ["IDE"]              = AppCategory.Development,
+            ["TextEditor"]       = AppCategory.Development,
+            ["TerminalEmulator"] = AppCategory.Development,
+            ["WebDevelopment"]   = AppCategory.Development,
+            ["Office"]           = AppCategory.Office,
+            ["WordProcessor"]    = AppCategory.Office,
+            ["Spreadsheet"]      = AppCategory.Office,
+            ["Presentation"]     = AppCategory.Office,
+            ["Publishing"]       = AppCategory.Office,
+            ["Viewer"]           = AppCategory.Office,
+            ["Graphics"]         = AppCategory.Creative,
+            ["2DGraphics"]       = AppCategory.Creative,
+            ["3DGraphics"]       = AppCategory.Creative,
+            ["RasterGraphics"]   = AppCategory.Creative,
+            ["VectorGraphics"]   = AppCategory.Creative,
+            ["AudioVideo"]       = AppCategory.Creative,
+            ["Audio"]            = AppCategory.Creative,
+            ["Video"]            = AppCategory.Creative,
+            ["Midi"]             = AppCategory.Creative,
+            ["Sequencer"]        = AppCategory.Creative,
+            ["Game"]             = AppCategory.Entertainment,
+            ["ActionGame"]       = AppCategory.Entertainment,
+            ["Network"]          = AppCategory.Communication,
+            ["Chat"]             = AppCategory.Communication,
+            ["InstantMessaging"] = AppCategory.Communication,
+            ["Email"]            = AppCategory.Communication,
+            ["Calendar"]         = AppCategory.Communication,
+            ["VideoConference"]  = AppCategory.Communication,
+            ["IRCClient"]        = AppCategory.Communication,
+            ["System"]           = AppCategory.Utility,
+            ["Utility"]          = AppCategory.Utility,
+            ["FileManager"]      = AppCategory.Utility,
+            ["Monitor"]          = AppCategory.Utility,
+            ["Security"]         = AppCategory.Utility,
+        }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+    // Ordered: first keyword match wins; more-specific lists come first
+    private static readonly (string[] Keywords, AppCategory Category)[] SemanticRules =
+    [
+        (["konsole", "kitty", "alacritty", "wezterm", "tilix", "hyper", "xterm", "urxvt",
+          "neovim", "codium", "helix", "sublime", "antigravity",
+          "term", "terminal", "shell", "editor", "ide", "code", "git", "debug", "sql", "database", "diff"], AppCategory.Development),
+        (["blender", "gimp", "krita", "inkscape", "darktable", "rawtherapee", "kdenlive", "pitivi",
+          "obs", "audacity", "ardour", "resolve",
+          "paint", "draw", "sketch", "design", "cad", "render", "synth", "studio"], AppCategory.Creative),
+        (["libreoffice", "writer", "calc", "impress", "okular", "evince", "mupdf", "zathura",
+          "sheet", "xls", "pdf", "present", "note", "organizer"], AppCategory.Office),
+        (["discord", "slack", "teams", "zoom", "signal", "telegram", "thunderbird", "evolution",
+          "chat", "mail", "message", "meet", "call", "collab"], AppCategory.Communication),
+        (["spotify", "vlc", "mpv", "mplayer", "totem", "rhythmbox", "clementine", "amarok",
+          "steam", "lutris", "heroic",
+          "music", "game", "stream", "movie", "player"], AppCategory.Entertainment),
+    ];
+
+    private static readonly string[] DesktopSearchPaths;
+
+    static AppCategoryClassifier()
+    {
+        string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var paths = new List<string>
+        {
+            Path.Combine(home, ".local", "share", "applications"),
+            "/usr/share/applications",
+            "/usr/local/share/applications",
+        };
+
+        string? xdgDirs = Environment.GetEnvironmentVariable("XDG_DATA_DIRS");
+        if (!string.IsNullOrWhiteSpace(xdgDirs))
+        {
+            foreach (var dir in xdgDirs.Split(':', StringSplitOptions.RemoveEmptyEntries))
+            {
+                string appDir = Path.Combine(dir.Trim(), "applications");
+                if (!paths.Contains(appDir))
+                    paths.Add(appDir);
+            }
+        }
+
+        DesktopSearchPaths = [.. paths];
+        _inferredCachePath = Path.Combine(home, ".nudge", "inferred_categories.json");
+    }
+
+    public static (AppCategory Category, CategoryConfidence Confidence) Classify(string appId, string title, AppCategory anchorCategory = AppCategory.Unknown)
+    {
+        if (string.IsNullOrWhiteSpace(appId) || string.Equals(appId, "unknown", StringComparison.OrdinalIgnoreCase))
+            return (AppCategory.Unknown, CategoryConfidence.Unknown);
+
+        if (_cache.TryGetValue(appId, out var cached))
+            return cached;
+
+        EnsureLoaded();
+        if (_cache.TryGetValue(appId, out cached))
+            return cached;
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) && TryClassifyFromDesktopFile(appId, out var desktopCat))
+            return Store(appId, desktopCat, CategoryConfidence.Desktop, persist: true);
+
+        if (TryClassifyFromTokens(appId, title, out var tokenCat))
+            return Store(appId, tokenCat, CategoryConfidence.Semantic, persist: true);
+
+        // Browser-anchor temporal fusion: browser inherits anchor context when anchor is a focused work/creative category
+        if (BrowserDetector.IsBrowser(appId) && anchorCategory is AppCategory.Development or AppCategory.Creative or AppCategory.Office)
+            return Store(appId, anchorCategory, CategoryConfidence.Inferred, persist: false);
+
+        // Fallback: don't persist — nothing was learned, re-classification is fast
+        return Store(appId, AppCategory.Utility, CategoryConfidence.Fallback, persist: false);
+    }
+
+    public static float GetConfidenceScore(CategoryConfidence conf) => conf switch
+    {
+        CategoryConfidence.Override => 1.00f,
+        CategoryConfidence.Desktop  => 0.95f,
+        CategoryConfidence.Semantic => 0.75f,
+        CategoryConfidence.Inferred => 0.50f,
+        CategoryConfidence.Fallback => 0.20f,
+        _                           => 0.00f
+    };
+
+    public static string GetConfidenceLabel(CategoryConfidence conf) => conf switch
+    {
+        CategoryConfidence.Override or CategoryConfidence.Desktop => "Verified",
+        CategoryConfidence.Semantic => "Estimated",
+        CategoryConfidence.Inferred => "Inferred",
+        _ => ""
+    };
+
+    public static string GetCategoryName(AppCategory cat) => cat switch
+    {
+        AppCategory.Development  => "Development",
+        AppCategory.Creative     => "Creative & Design",
+        AppCategory.Office       => "Office & Writing",
+        AppCategory.Communication => "Communication",
+        AppCategory.Entertainment => "Entertainment",
+        AppCategory.Utility      => "Utility",
+        _                        => ""
+    };
+
+    // Testable: map a raw XDG Categories= value to AppCategory
+    public static AppCategory MapXdgCategories(string categoriesValue)
+    {
+        if (string.IsNullOrWhiteSpace(categoriesValue))
+            return AppCategory.Unknown;
+
+        // Two-pass: prefer non-Utility matches
+        AppCategory utilityResult = AppCategory.Unknown;
+        foreach (var token in categoriesValue.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!XdgCategoryMap.TryGetValue(token.Trim(), out var cat))
+                continue;
+            if (cat != AppCategory.Utility)
+                return cat;
+            utilityResult = cat;
+        }
+
+        return utilityResult;
+    }
+
+    // Testable: keyword-based classification
+    public static bool TryClassifyFromTokens(string appId, string title, out AppCategory category)
+    {
+        string combined = $"{appId} {title}".ToLowerInvariant();
+        foreach (var (keywords, cat) in SemanticRules)
+        {
+            foreach (var kw in keywords)
+            {
+                if (combined.Contains(kw, StringComparison.Ordinal))
+                {
+                    category = cat;
+                    return true;
+                }
+            }
+        }
+
+        category = AppCategory.Unknown;
+        return false;
+    }
+
+    private static bool TryClassifyFromDesktopFile(string appId, out AppCategory category)
+    {
+        // Build candidate filenames: try exact, lowercase, and cleaned variants
+        string lower = appId.ToLowerInvariant();
+        string[] candidates = [$"{appId}.desktop", $"{lower}.desktop"];
+
+        foreach (var dir in DesktopSearchPaths)
+        {
+            if (!Directory.Exists(dir))
+                continue;
+
+            foreach (var candidate in candidates)
+            {
+                string path = Path.Combine(dir, candidate);
+                if (!File.Exists(path))
+                    continue;
+
+                string? cats = ReadDesktopCategories(path);
+                if (cats is null)
+                    continue;
+
+                var result = MapXdgCategories(cats);
+                if (result != AppCategory.Unknown)
+                {
+                    category = result;
+                    return true;
+                }
+            }
+        }
+
+        // Fallback: scan all .desktop files and match on Exec= binary name
+        foreach (var dir in DesktopSearchPaths)
+        {
+            if (!Directory.Exists(dir))
+                continue;
+
+            try
+            {
+                foreach (var file in Directory.EnumerateFiles(dir, "*.desktop"))
+                {
+                    if (TryMatchByExec(file, appId, out var execCat))
+                    {
+                        category = execCat;
+                        return true;
+                    }
+                }
+            }
+            catch { /* permission errors */ }
+        }
+
+        category = AppCategory.Unknown;
+        return false;
+    }
+
+    private static string? ReadDesktopCategories(string path)
+    {
+        try
+        {
+            foreach (var line in File.ReadLines(path))
+            {
+                var span = line.AsSpan().TrimStart();
+                if (span.StartsWith("Categories=", StringComparison.OrdinalIgnoreCase))
+                    return span["Categories=".Length..].ToString();
+                // Stop at next section header (not [Desktop Entry])
+                if (span.Length > 0 && span[0] == '[' && !span.StartsWith("[Desktop Entry]", StringComparison.OrdinalIgnoreCase))
+                    break;
+            }
+        }
+        catch { /* ignore */ }
+
+        return null;
+    }
+
+    private static bool TryMatchByExec(string filePath, string appId, out AppCategory category)
+    {
+        category = AppCategory.Unknown;
+        string? cats = null;
+        bool matched = false;
+
+        try
+        {
+            foreach (var line in File.ReadLines(filePath))
+            {
+                var span = line.AsSpan().TrimStart();
+                if (span.StartsWith("Exec=", StringComparison.OrdinalIgnoreCase))
+                {
+                    string exec = span["Exec=".Length..].ToString();
+                    string binary = Path.GetFileNameWithoutExtension(exec.Split(' ')[0]).ToLowerInvariant();
+                    if (binary.Contains(appId, StringComparison.OrdinalIgnoreCase) ||
+                        appId.Contains(binary, StringComparison.OrdinalIgnoreCase))
+                    {
+                        matched = true;
+                    }
+                }
+                else if (span.StartsWith("Categories=", StringComparison.OrdinalIgnoreCase))
+                {
+                    cats = span["Categories=".Length..].ToString();
+                }
+
+                if (matched && cats != null)
+                {
+                    var result = MapXdgCategories(cats);
+                    if (result != AppCategory.Unknown)
+                    {
+                        category = result;
+                        return true;
+                    }
+                    return false;
+                }
+            }
+        }
+        catch { /* ignore */ }
+
+        return false;
+    }
+
+    private static (AppCategory, CategoryConfidence) Store(string appId, AppCategory category, CategoryConfidence confidence, bool persist)
+    {
+        _cache[appId] = (category, confidence);
+        if (persist && _inferredCachePath != null)
+            PersistAsync(appId, category, confidence);
+        return (category, confidence);
+    }
+
+    private static void PersistAsync(string appId, AppCategory category, CategoryConfidence confidence)
+    {
+        // Fire-and-forget: write new entry to the on-disk cache as "Category:confidence"
+        System.Threading.Tasks.Task.Run(() =>
+        {
+            try
+            {
+                string path = _inferredCachePath!;
+                Dictionary<string, string> stored;
+                if (File.Exists(path))
+                {
+                    stored = JsonSerializer.Deserialize<Dictionary<string, string>>(
+                        File.ReadAllText(path)) ?? [];
+                }
+                else
+                {
+                    stored = [];
+                }
+
+                stored[appId] = $"{GetCategoryName(category)}:{confidence.ToString().ToLowerInvariant()}";
+                File.WriteAllText(path, JsonSerializer.Serialize(stored));
+            }
+            catch { /* ignore write failures */ }
+        });
+    }
+
+    private static void EnsureLoaded()
+    {
+        if (_loaded) return;
+        lock (_loadLock)
+        {
+            if (_loaded) return;
+            _loaded = true;
+
+            // Load user overrides: ~/.nudge/app_categories.json (highest confidence)
+            try
+            {
+                string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                string overridesPath = Path.Combine(home, ".nudge", "app_categories.json");
+                if (File.Exists(overridesPath))
+                {
+                    var overrides = JsonSerializer.Deserialize<Dictionary<string, string>>(
+                        File.ReadAllText(overridesPath));
+                    if (overrides != null)
+                    {
+                        foreach (var (key, val) in overrides)
+                        {
+                            if (TryParseCategory(val, out var cat))
+                                _cache[key] = (cat, CategoryConfidence.Override);
+                        }
+                    }
+                }
+            }
+            catch { /* ignore */ }
+
+            // Load previously inferred cache: ~/.nudge/inferred_categories.json
+            // Values are stored as "Category:confidence" (new) or plain "Category" (legacy → Semantic)
+            if (_inferredCachePath != null && File.Exists(_inferredCachePath))
+            {
+                try
+                {
+                    var saved = JsonSerializer.Deserialize<Dictionary<string, string>>(
+                        File.ReadAllText(_inferredCachePath));
+                    if (saved != null)
+                    {
+                        foreach (var (key, val) in saved)
+                        {
+                            if (_cache.ContainsKey(key))
+                                continue;
+
+                            int colon = val.IndexOf(':');
+                            string catPart = colon > 0 ? val[..colon] : val;
+                            string confPart = colon > 0 ? val[(colon + 1)..] : "semantic";
+
+                            if (!TryParseCategory(catPart, out var cat))
+                                continue;
+
+                            CategoryConfidence conf = confPart switch
+                            {
+                                "override" => CategoryConfidence.Override,
+                                "desktop"  => CategoryConfidence.Desktop,
+                                "inferred" => CategoryConfidence.Inferred,
+                                "fallback" => CategoryConfidence.Fallback,
+                                _          => CategoryConfidence.Semantic
+                            };
+                            _cache[key] = (cat, conf);
+                        }
+                    }
+                }
+                catch { /* ignore */ }
+            }
+        }
+    }
+
+    private static bool TryParseCategory(string value, out AppCategory category)
+    {
+        category = value.ToLowerInvariant() switch
+        {
+            "development"           => AppCategory.Development,
+            "creative" or "creative & design" => AppCategory.Creative,
+            "office" or "office & writing"    => AppCategory.Office,
+            "communication"         => AppCategory.Communication,
+            "entertainment"         => AppCategory.Entertainment,
+            "utility"               => AppCategory.Utility,
+            _                       => AppCategory.Unknown
+        };
+        return category != AppCategory.Unknown;
+    }
 }
 
 internal static class NudgeCoreLogic

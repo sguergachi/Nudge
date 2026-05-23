@@ -54,6 +54,8 @@ internal sealed class HarvestSignal
 {
     public string Quality { get; set; } = "poor";     // "trusted", "usable", "poor"
     public string FocusSrc { get; set; } = "unknown"; // FocusSource enum name (snake_case)
+    public string Category { get; set; } = "";        // AppCategoryClassifier result
+    public float CategoryConf { get; set; }           // confidence score 0.0–1.0
     public int IdleMs { get; set; }
     public int FocusedMs { get; set; }
     public string Domain { get; set; } = "";

@@ -79,6 +79,8 @@ namespace NudgeTray
         static bool _showAnalyticsOnStartup;
         static bool _verifyAnalyticsScrollOnStartup;
         static int _analyticsScrollVerificationAttempts;
+        static bool _uiAuditMode;
+        static string _uiAuditOutputDir = "";
 
         // Common tray icon for all platforms
         static TrayIcon? _trayIcon;
@@ -99,12 +101,16 @@ namespace NudgeTray
         [STAThread]
         static void Main(string[] args)
         {
-            bool createdNew;
-            _singleInstanceMutex = new Mutex(true, SingleInstanceMutexName, out createdNew);
-            if (NudgeCoreLogic.ShouldExitForExistingTrayInstance(createdNew))
+            bool auditModeEarly = Array.IndexOf(args, "--ui-audit") >= 0;
+            if (!auditModeEarly)
             {
-                Console.WriteLine("[WARN] Another nudge-tray instance is already running. Exiting.");
-                return;
+                bool createdNew;
+                _singleInstanceMutex = new Mutex(true, SingleInstanceMutexName, out createdNew);
+                if (NudgeCoreLogic.ShouldExitForExistingTrayInstance(createdNew))
+                {
+                    Console.WriteLine("[WARN] Another nudge-tray instance is already running. Exiting.");
+                    return;
+                }
             }
 
             // Add global exception handlers
@@ -203,6 +209,15 @@ namespace NudgeTray
                     _showAnalyticsOnStartup = true;
                     _verifyAnalyticsScrollOnStartup = true;
                 }
+                else if (args[i] == "--ui-audit")
+                {
+                    _uiAuditMode = true;
+                    if (i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal))
+                    {
+                        _uiAuditOutputDir = args[i + 1];
+                        i++;
+                    }
+                }
             }
 
             // ── Load persisted settings (CLI args take precedence) ────────────────
@@ -270,11 +285,20 @@ namespace NudgeTray
                         Console.WriteLine($"[WARN] Could not set up Dispatcher exception handler: {ex.Message}");
                     }
 
-                    StartNudge(interval);
+                    if (!_uiAuditMode)
+                    {
+                        StartNudge(interval);
 #if WINDOWS
-                    InitializeNotifications();
+                        InitializeNotifications();
 #endif
+                    }
                     CreateTrayIcon();
+
+                    if (_uiAuditMode)
+                    {
+                        Dispatcher.UIThread.InvokeAsync(RunUiAuditAsync);
+                        return;
+                    }
 
                     if (_showAnalyticsOnStartup)
                     {
@@ -342,6 +366,94 @@ namespace NudgeTray
 
             ShutdownApplication(passed ? 0 : 1);
         }
+
+        // ━━ UI Audit ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        static async Task RunUiAuditAsync()
+        {
+            if (string.IsNullOrEmpty(_uiAuditOutputDir))
+                _uiAuditOutputDir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    "nudge-ui-audit");
+
+            Directory.CreateDirectory(_uiAuditOutputDir);
+            Console.WriteLine($"[UI-AUDIT] Output → {_uiAuditOutputDir}");
+
+            // ── Analytics window ─────────────────────────────────────────────────
+            _analyticsWindow = new AnalyticsWindow();
+            _analyticsWindow.Show();
+            await Task.Delay(900);
+
+            CaptureWindow(_analyticsWindow, "analytics_today.png");
+
+            _analyticsWindow.AuditSelectTab(AnalyticsWindow.TimeFilter.ThisWeek);
+            await Task.Delay(300);
+            CaptureWindow(_analyticsWindow, "analytics_week.png");
+
+            _analyticsWindow.AuditSelectTab(AnalyticsWindow.TimeFilter.ThisMonth);
+            await Task.Delay(300);
+            CaptureWindow(_analyticsWindow, "analytics_month.png");
+
+            _analyticsWindow.AuditSelectTab(AnalyticsWindow.TimeFilter.AllTime);
+            await Task.Delay(300);
+            CaptureWindow(_analyticsWindow, "analytics_alltime.png");
+
+            _analyticsWindow.AuditSelectAIBrainTab();
+            await Task.Delay(400);
+            CaptureWindow(_analyticsWindow, "analytics_ai_brain.png");
+
+            _analyticsWindow.AuditSetSections(sensorSignalsOpen: true, trainingDetailsOpen: true);
+            await Task.Delay(200);
+            CaptureWindow(_analyticsWindow, "analytics_ai_brain_expanded.png");
+
+            _analyticsWindow.Hide();
+
+            // ── Settings window ──────────────────────────────────────────────────
+            _settingsWindow = new SettingsWindow();
+            _settingsWindow.Show();
+            await Task.Delay(600);
+            CaptureWindow(_settingsWindow, "settings.png");
+            _settingsWindow.Hide();
+
+            // ── Notification window ──────────────────────────────────────────────
+            var notification = new CustomNotificationWindow("Visual Studio Code");
+            notification.Show();
+            await Task.Delay(600);
+            CaptureWindow(notification, "notification.png");
+
+            notification.AuditSetActive(true);
+            await Task.Delay(150);
+            CaptureWindow(notification, "notification_active.png");
+
+            notification.Hide();
+
+            Console.WriteLine($"[UI-AUDIT] Done — {_uiAuditOutputDir}");
+            ShutdownApplication(0);
+        }
+
+        static void CaptureWindow(Window window, string filename)
+        {
+            try
+            {
+                var path = Path.Combine(_uiAuditOutputDir, filename);
+                int w = (int)Math.Max(window.Bounds.Width, window.Width);
+                int h = (int)Math.Max(window.Bounds.Height, window.Height);
+                if (w <= 0 || h <= 0)
+                {
+                    Console.WriteLine($"[UI-AUDIT] SKIP {filename} — zero bounds");
+                    return;
+                }
+                using var bmp = new RenderTargetBitmap(new PixelSize(w, h), new Vector(96, 96));
+                bmp.Render(window);
+                bmp.Save(path);
+                Console.WriteLine($"[UI-AUDIT] Captured {filename} ({w}×{h})");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[UI-AUDIT] ERROR {filename}: {ex.Message}");
+            }
+        }
+
 
         static void ShutdownApplication(int exitCode)
         {

@@ -3,6 +3,174 @@ using Xunit;
 
 public class NudgeSignalFusionTests
 {
+    // ── AppCategoryClassifier ─────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("Development;TextEditor;Qt", AppCategory.Development)]
+    [InlineData("AudioVideo;Audio;Sequencer", AppCategory.Creative)]
+    [InlineData("Office;WordProcessor", AppCategory.Office)]
+    [InlineData("Network;InstantMessaging", AppCategory.Communication)]
+    [InlineData("Game;ActionGame", AppCategory.Entertainment)]
+    [InlineData("System;Utility", AppCategory.Utility)]
+    [InlineData("TerminalEmulator;System", AppCategory.Development)]
+    [InlineData("", AppCategory.Unknown)]
+    public void MapXdgCategories_MapsStandardCategoriesCorrectly(string input, AppCategory expected)
+    {
+        var result = AppCategoryClassifier.MapXdgCategories(input);
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("konsole", "", AppCategory.Development)]
+    [InlineData("alacritty", "", AppCategory.Development)]
+    [InlineData("term-emulator", "", AppCategory.Development)]
+    [InlineData("my-ide-tool", "", AppCategory.Development)]
+    [InlineData("krita-sketch", "", AppCategory.Creative)]
+    [InlineData("blender3d", "", AppCategory.Creative)]
+    [InlineData("libreoffice-writer", "", AppCategory.Office)]
+    [InlineData("discord-app", "", AppCategory.Communication)]
+    [InlineData("spotify-player", "", AppCategory.Entertainment)]
+    [InlineData("steam-runtime", "", AppCategory.Entertainment)]
+    public void TryClassifyFromTokens_MatchesSemanticKeywords(string appId, string title, AppCategory expected)
+    {
+        bool matched = AppCategoryClassifier.TryClassifyFromTokens(appId, title, out var category);
+        Assert.True(matched);
+        Assert.Equal(expected, category);
+    }
+
+    [Fact]
+    public void TryClassifyFromTokens_NoMatch_ReturnsFalse()
+    {
+        bool matched = AppCategoryClassifier.TryClassifyFromTokens("xyz-unknown-app-q7z", "", out _);
+        Assert.False(matched);
+    }
+
+    [Fact]
+    public void ActivityFeatureTracker_DevAppFlag_SetForTerminal()
+    {
+        var tracker = new ActivityFeatureTracker();
+        var tick = tracker.Capture(
+            new DateTime(2026, 5, 23, 14, 0, 0),
+            new WindowObservation("konsole", "~/Dev/Nudge", "w1", "", FocusSource.KWinScript, false, 1),
+            new IdleObservation(0, IdleSource.Unknown));
+
+        Assert.Equal(1, tick.Features.DevAppFlag);
+        Assert.Equal(0, tick.Features.CreativeAppFlag);
+        Assert.Equal(0, tick.Features.OfficeAppFlag);
+        Assert.Equal(0, tick.Features.CommAppFlag);
+        Assert.Equal(0, tick.Features.EntAppFlag);
+        Assert.Equal(AppCategory.Development, tick.AppCategory);
+        // keyword match → Semantic confidence
+        Assert.Equal(CategoryConfidence.Semantic, tick.AppCategoryConfidence);
+        Assert.True(AppCategoryClassifier.GetConfidenceScore(tick.AppCategoryConfidence) >= 0.70f);
+    }
+
+    [Fact]
+    public void ActivityFeatureTracker_EntAppFlag_SetForSpotify()
+    {
+        var tracker = new ActivityFeatureTracker();
+        var tick = tracker.Capture(
+            new DateTime(2026, 5, 23, 14, 0, 0),
+            new WindowObservation("spotify", "Spotify", "w1", "", FocusSource.KWinScript, false, 1),
+            new IdleObservation(0, IdleSource.Unknown));
+
+        Assert.Equal(1, tick.Features.EntAppFlag);
+        Assert.Equal(0, tick.Features.DevAppFlag);
+        Assert.Equal(AppCategory.Entertainment, tick.AppCategory);
+        Assert.Equal(CategoryConfidence.Semantic, tick.AppCategoryConfidence);
+    }
+
+    [Fact]
+    public void ActivityFeatureTracker_CommAppFlag_SetForDiscord()
+    {
+        var tracker = new ActivityFeatureTracker();
+        var tick = tracker.Capture(
+            new DateTime(2026, 5, 23, 14, 0, 0),
+            new WindowObservation("discord", "Discord", "w1", "", FocusSource.KWinScript, false, 1),
+            new IdleObservation(0, IdleSource.Unknown));
+
+        Assert.Equal(1, tick.Features.CommAppFlag);
+        Assert.Equal(0, tick.Features.DevAppFlag);
+        Assert.Equal(AppCategory.Communication, tick.AppCategory);
+        Assert.Equal(CategoryConfidence.Semantic, tick.AppCategoryConfidence);
+    }
+
+    // ── CategoryConfidence ────────────────────────────────────────────────────
+
+    [Fact]
+    public void Classify_UnknownApp_ReturnsFallbackConfidence()
+    {
+        var (cat, conf) = AppCategoryClassifier.Classify("xq7z-completely-unknown-binary", "");
+        Assert.Equal(AppCategory.Utility, cat);
+        Assert.Equal(CategoryConfidence.Fallback, conf);
+        Assert.True(AppCategoryClassifier.GetConfidenceScore(conf) < 0.45f);
+    }
+
+    [Fact]
+    public void Classify_SemanticMatch_ReturnsSemanticConfidence()
+    {
+        // "xterm-test-unique-xyz" contains "term" (Development keyword) but has no .desktop file
+        var (cat, conf) = AppCategoryClassifier.Classify("xterm-test-unique-xyz", "");
+        Assert.Equal(AppCategory.Development, cat);
+        Assert.Equal(CategoryConfidence.Semantic, conf);
+    }
+
+    [Fact]
+    public void GetConfidenceScore_OrderedCorrectly()
+    {
+        Assert.True(AppCategoryClassifier.GetConfidenceScore(CategoryConfidence.Override)
+                  > AppCategoryClassifier.GetConfidenceScore(CategoryConfidence.Desktop));
+        Assert.True(AppCategoryClassifier.GetConfidenceScore(CategoryConfidence.Desktop)
+                  > AppCategoryClassifier.GetConfidenceScore(CategoryConfidence.Semantic));
+        Assert.True(AppCategoryClassifier.GetConfidenceScore(CategoryConfidence.Semantic)
+                  > AppCategoryClassifier.GetConfidenceScore(CategoryConfidence.Inferred));
+        Assert.True(AppCategoryClassifier.GetConfidenceScore(CategoryConfidence.Inferred)
+                  > AppCategoryClassifier.GetConfidenceScore(CategoryConfidence.Fallback));
+    }
+
+    [Fact]
+    public void GetConfidenceLabel_CorrectLabelsForTiers()
+    {
+        Assert.Equal("Verified",  AppCategoryClassifier.GetConfidenceLabel(CategoryConfidence.Desktop));
+        Assert.Equal("Verified",  AppCategoryClassifier.GetConfidenceLabel(CategoryConfidence.Override));
+        Assert.Equal("Estimated", AppCategoryClassifier.GetConfidenceLabel(CategoryConfidence.Semantic));
+        Assert.Equal("Inferred",  AppCategoryClassifier.GetConfidenceLabel(CategoryConfidence.Inferred));
+        Assert.Equal("",          AppCategoryClassifier.GetConfidenceLabel(CategoryConfidence.Fallback));
+    }
+
+    [Fact]
+    public void FeatureSchemaV2_OrderedFeatureNames_IncludesNewCategoryFlags()
+    {
+        var names = FeatureSchemaV2.OrderedFeatureNames;
+        Assert.Contains("dev_app_flag", names);
+        Assert.Contains("creative_app_flag", names);
+        Assert.Contains("office_app_flag", names);
+        Assert.Contains("comm_app_flag", names);
+        Assert.Contains("ent_app_flag", names);
+    }
+
+    [Fact]
+    public void FeatureSchemaV2_ToFeatureDictionary_IncludesNewFlags()
+    {
+        var features = new FeatureVectorV2(
+            HourOfDay: 10, DayOfWeek: 1, FocusedAppHash: 0, FocusedDomainHash: 0,
+            IdleMs: 0, FocusedSinceMs: 5000, TitleStabilityMs: 5000,
+            SwitchCount60s: 0, SwitchCount300s: 0, DistinctApps300s: 1,
+            DistinctDomains300s: 0, ReturnedToAnchorApp300s: 0,
+            CurrentAppShare300s: 1.0, CurrentDomainShare300s: 0,
+            BrowserWindowFlag: 0, CommunicationAppFlag: 0,
+            EntertainmentDomainFlag: 0, WorkDomainFlag: 0,
+            AfkFlag: 0, FullscreenFlag: 0, WorkspaceSwitchCount300s: 0,
+            DevAppFlag: 1, CreativeAppFlag: 0, OfficeAppFlag: 0,
+            CommAppFlag: 0, EntAppFlag: 0);
+
+        var dict = FeatureSchemaV2.ToFeatureDictionary(features);
+        Assert.Equal(1.0, dict["dev_app_flag"]);
+        Assert.Equal(0.0, dict["creative_app_flag"]);
+        Assert.Equal(0.0, dict["comm_app_flag"]);
+    }
+
+
     [Fact]
     public void ActivityFeatureTracker_BrowserDomainWorkVsEntertainmentFlagsDiffer()
     {

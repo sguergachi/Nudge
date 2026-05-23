@@ -777,5 +777,7 @@ namespace NudgeTray
 
             base.OnClosed(e);
         }
+
+        internal void AuditSetActive(bool active) => SetActiveState(active);
     }
 }

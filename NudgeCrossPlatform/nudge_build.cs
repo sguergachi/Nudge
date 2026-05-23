@@ -1346,6 +1346,8 @@ publish();
                     {
                         Quality   = ctx.SignalQuality.ToString().ToLowerInvariant(),
                         FocusSrc  = ctx.FocusSource.ToString(),
+                        Category  = AppCategoryClassifier.GetCategoryName(t.AppCategory),
+                        CategoryConf = AppCategoryClassifier.GetConfidenceScore(t.AppCategoryConfidence),
                         IdleMs    = ctx.IdleMs,
                         FocusedMs = ctx.FocusedSinceMs,
                         Domain    = ctx.FocusedDomain,
@@ -1790,7 +1792,12 @@ publish();
                         fusedTick.Features.EntertainmentDomainFlag,
                         fusedTick.Features.WorkDomainFlag,
                         fusedTick.Features.AfkFlag,
-                        fusedTick.Features.WorkspaceSwitchCount300s);
+                        fusedTick.Features.WorkspaceSwitchCount300s,
+                        fusedTick.Features.DevAppFlag,
+                        fusedTick.Features.CreativeAppFlag,
+                        fusedTick.Features.OfficeAppFlag,
+                        fusedTick.Features.CommAppFlag,
+                        fusedTick.Features.EntAppFlag);
                     wroteRow = true;
                 }
                 else

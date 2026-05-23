@@ -1087,16 +1087,22 @@ namespace NudgeTray
                 ? BrowserDetector.GetBrowserDisplayName(currentApp) ?? currentApp
                 : "";
 
-            // Fusion quality color: driven by Harvest Engine signal quality
-            Color fusionColor = harvest == null     ? TextTertiary
-                : harvest.Quality == "trusted"      ? ProductiveGreen
-                : harvest.Quality == "usable"       ? Color.FromRgb(255, 193, 7)
-                                                    : UnproductiveRed;
+            // Effective quality blends Harvest Engine signal quality with category confidence.
+            // A trusted signal is downgraded to Usable when the app category is too uncertain
+            // (conf < 0.45 means Fallback or Unknown — we genuinely don't know what the app is).
+            string effectiveQuality = harvest?.Quality ?? "";
+            if (effectiveQuality == "trusted" && harvest != null && harvest.CategoryConf < 0.45f && !string.IsNullOrEmpty(harvest.Category))
+                effectiveQuality = "usable";
 
-            string qualityLabel = harvest == null        ? "Initializing"
-                : harvest.Quality == "trusted"           ? "Trusted"
-                : harvest.Quality == "usable"            ? "Usable"
-                                                         : "Poor Signal";
+            Color fusionColor = harvest == null         ? TextTertiary
+                : effectiveQuality == "trusted"         ? ProductiveGreen
+                : effectiveQuality == "usable"          ? Color.FromRgb(255, 193, 7)
+                                                        : UnproductiveRed;
+
+            string qualityLabel = harvest == null            ? "Initializing"
+                : effectiveQuality == "trusted"              ? "Trusted"
+                : effectiveQuality == "usable"               ? "Usable"
+                                                             : "Poor Signal";
 
             // ── Main row ──────────────────────────────────────────────────────
             var mainGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
@@ -1179,9 +1185,9 @@ namespace NudgeTray
                 AddFusionRow(signalPanel, "In Focus",       FormatMs(harvest.FocusedMs),   TextSecondary);
                 if (harvest.V2)
                 {
-                    string cat = GetHarvestCategory(harvest);
+                    string cat = !string.IsNullOrEmpty(harvest.Category) ? harvest.Category : GetHarvestCategoryFallback(harvest);
                     if (!string.IsNullOrEmpty(cat))
-                        AddFusionRow(signalPanel, "Category", cat, Color.FromRgb(180, 140, 255));
+                        AddCategoryBadgeRow(signalPanel, cat, harvest.CategoryConf);
                     if (!string.IsNullOrEmpty(harvest.Domain))
                         AddFusionRow(signalPanel, "Domain", harvest.Domain, PrimaryBlue);
                     if (showDetail && !string.IsNullOrEmpty(currentDetail))
@@ -1302,13 +1308,90 @@ namespace NudgeTray
             return s > 0 ? $"{m}m {s}s" : $"{m}m";
         }
 
-        private static string GetHarvestCategory(HarvestSignal h)
+        // Category colors: each string name maps to a background tint and text color
+        private static (Color Bg, Color Fg, Color Border) GetCategoryBadgeColors(string category) => category switch
         {
-            if (h.Afk == 1)    return "AFK";
-            if (h.Work == 1)   return "Work";
-            if (h.Comm == 1)   return "Communication";
-            if (h.Ent == 1)    return "Entertainment";
-            if (h.Browser == 1)return "Browser";
+            "Development"     => (Color.FromArgb(40,  180, 140, 255), Color.FromRgb(180, 140, 255), Color.FromArgb(80, 180, 140, 255)),
+            "Creative & Design" => (Color.FromArgb(40, 0, 188, 212),  Color.FromRgb(0, 188, 212),   Color.FromArgb(80, 0, 188, 212)),
+            "Office & Writing"  => (Color.FromArgb(40, 76, 175, 80),  Color.FromRgb(76, 175, 80),   Color.FromArgb(80, 76, 175, 80)),
+            "Communication"   => (Color.FromArgb(40,  255, 193, 7),   Color.FromRgb(255, 193, 7),   Color.FromArgb(80, 255, 193, 7)),
+            "Entertainment"   => (Color.FromArgb(40,  255, 82, 82),   Color.FromRgb(255, 82, 82),   Color.FromArgb(80, 255, 82, 82)),
+            "Work"            => (Color.FromArgb(40,  76, 175, 80),   Color.FromRgb(76, 175, 80),   Color.FromArgb(80, 76, 175, 80)),
+            "AFK"             => (Color.FromArgb(40,  150, 150, 160), Color.FromRgb(150, 150, 160), Color.FromArgb(80, 150, 150, 160)),
+            _                 => (Color.FromArgb(40,  144, 164, 174), Color.FromRgb(144, 164, 174), Color.FromArgb(80, 144, 164, 174)),
+        };
+
+        private static string GetConfidenceLabelFromScore(float score)
+        {
+            if (score >= 0.90f) return "Verified";
+            if (score >= 0.70f) return "Estimated";
+            if (score >= 0.45f) return "Inferred";
+            return "";
+        }
+
+        private static void AddCategoryBadgeRow(StackPanel parent, string category, float confidence = 1f)
+        {
+            var (bg, fg, borderColor) = GetCategoryBadgeColors(category);
+            string confLabel = GetConfidenceLabelFromScore(confidence);
+
+            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("90,*") };
+            row.Children.Add(new TextBlock
+            {
+                Text       = "Category",
+                FontSize   = 10,
+                Foreground = new SolidColorBrush(TextTertiary),
+                VerticalAlignment = VerticalAlignment.Center
+            });
+
+            // Badge content: category name + optional confidence label
+            var badgeContent = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 4,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            badgeContent.Children.Add(new TextBlock
+            {
+                Text       = category,
+                FontSize   = 9.5,
+                FontWeight = FontWeight.SemiBold,
+                Foreground = new SolidColorBrush(fg),
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            if (!string.IsNullOrEmpty(confLabel))
+            {
+                badgeContent.Children.Add(new TextBlock
+                {
+                    Text       = $"· {confLabel}",
+                    FontSize   = 8.5,
+                    Foreground = new SolidColorBrush(Color.FromArgb(160, fg.R, fg.G, fg.B)),
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+            }
+
+            var badge = new Border
+            {
+                Background      = new SolidColorBrush(bg),
+                BorderBrush     = new SolidColorBrush(borderColor),
+                BorderThickness = new Thickness(1),
+                CornerRadius    = new CornerRadius(4),
+                Padding         = new Thickness(6, 2),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Child = badgeContent
+            };
+            Grid.SetColumn(badge, 1);
+            row.Children.Add(badge);
+            parent.Children.Add(row);
+        }
+
+        // Fallback for signals without a Category field (older nudge core or V1 engine)
+        private static string GetHarvestCategoryFallback(HarvestSignal h)
+        {
+            if (h.Afk == 1)     return "AFK";
+            if (h.Work == 1)    return "Work";
+            if (h.Comm == 1)    return "Communication";
+            if (h.Ent == 1)     return "Entertainment";
+            if (h.Browser == 1) return "Browser";
             return "";
         }
 
@@ -3428,6 +3511,35 @@ namespace NudgeTray
                 default:
                     return now.Date;
             }
+        }
+
+        // ━━ UI Audit helpers — called from nudge-tray --ui-audit mode ━━━━━━━━━━━
+
+        public void AuditSelectTab(TimeFilter filter)
+        {
+            _aiTabActive = false;
+            _aiLiveRefreshTimer?.Stop();
+            _currentFilter = filter;
+            _contentScrollOffset = 0;
+            UpdateTabStyles();
+            _data = AnalyticsData.LoadFromCSV(_currentFilter);
+            RefreshContent();
+        }
+
+        public void AuditSelectAIBrainTab()
+        {
+            _aiTabActive = true;
+            _activeDetailView = DetailViewType.None;
+            _contentScrollOffset = 0;
+            UpdateTabStyles();
+            RefreshContent();
+        }
+
+        public void AuditSetSections(bool sensorSignalsOpen, bool trainingDetailsOpen)
+        {
+            _sensorSignalsOpen = sensorSignalsOpen;
+            _trainingDetailsOpen = trainingDetailsOpen;
+            if (_aiTabActive) RefreshContent();
         }
     }
 
