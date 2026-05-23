@@ -46,6 +46,29 @@ internal sealed class MLLiveEvent
     public bool Triggered { get; set; }
 }
 
+/// <summary>
+/// Broadcast over stdout as "HARVEST:{json}" by nudge.cs every 2 seconds when V2 engine is active.
+/// Contains key sensor fusion signals for display in the AI Brain tab.
+/// </summary>
+internal sealed class HarvestSignal
+{
+    public string Quality { get; set; } = "poor";     // "trusted", "usable", "poor"
+    public string FocusSrc { get; set; } = "unknown"; // FocusSource enum name (snake_case)
+    public int IdleMs { get; set; }
+    public int FocusedMs { get; set; }
+    public string Domain { get; set; } = "";
+    public int Work { get; set; }       // WorkDomainFlag
+    public int Ent { get; set; }        // EntertainmentDomainFlag
+    public int Comm { get; set; }       // CommunicationAppFlag
+    public int Browser { get; set; }    // BrowserWindowFlag
+    public int Afk { get; set; }        // AfkFlag
+    public int Fullscreen { get; set; } // FullscreenFlag
+    public int Sw300 { get; set; }      // SwitchCount300s
+    public double Share { get; set; }   // CurrentAppShare300s
+    public int Apps300 { get; set; }    // DistinctApps300s
+    public bool V2 { get; set; }        // true when backed by V2 engine data
+}
+
 namespace NudgeTray
 {
     internal sealed class NotificationPositionConfig
@@ -76,6 +99,8 @@ namespace NudgeTray
 [JsonSerializable(typeof(MLPredictionRequestV2))]
 [JsonSerializable(typeof(MLPrediction))]
 [JsonSerializable(typeof(MLLiveEvent))]
+[JsonSerializable(typeof(List<MLLiveEvent>))]
+[JsonSerializable(typeof(HarvestSignal))]
 [JsonSerializable(typeof(NudgeTray.NotificationPositionConfig))]
 [JsonSerializable(typeof(NudgeTray.TraySettings))]
 internal sealed partial class NudgeJsonContext : JsonSerializerContext

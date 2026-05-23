@@ -1178,6 +1178,34 @@ namespace NudgeTray
                             if (long.TryParse(e.Data.AsSpan(7), out long ts))
                                 LiveAIState.NextCheckAt = ts;
                         }
+                        // Real-time foreground app tracking (format: APPFOCUS:app\ttitle)
+                        else if (e.Data.StartsWith("APPFOCUS:", StringComparison.Ordinal))
+                        {
+                            var payload = e.Data.AsSpan(9);
+                            int tab = payload.IndexOf('\t');
+                            if (tab >= 0)
+                            {
+                                LiveAIState.CurrentApp    = payload.Slice(0, tab).ToString();
+                                LiveAIState.CurrentDetail = payload.Slice(tab + 1).ToString();
+                            }
+                            else
+                            {
+                                LiveAIState.CurrentApp    = payload.ToString();
+                                LiveAIState.CurrentDetail = "";
+                            }
+                        }
+                        else if (e.Data.StartsWith("HARVEST:", StringComparison.Ordinal))
+                        {
+                            try
+                            {
+                                var sig = JsonSerializer.Deserialize(
+                                    e.Data.AsSpan(8),
+                                    NudgeJsonContext.Default.HarvestSignal);
+                                if (sig != null)
+                                    LiveAIState.LastHarvest = sig;
+                            }
+                            catch { /* non-critical */ }
+                        }
                     }
                 };
 
@@ -1805,8 +1833,18 @@ namespace NudgeTray
     internal static class LiveAIState
     {
         private static readonly object _lock = new();
-        // Ring buffer — keep the last 30 ML predictions in memory
-        private static readonly List<MLLiveEvent> _events = new(capacity: 32);
+        private static readonly List<MLLiveEvent> _events = new(capacity: 210);
+        private static readonly string _historyFile;
+
+        static LiveAIState()
+        {
+            string nudgeDir = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".nudge");
+            System.IO.Directory.CreateDirectory(nudgeDir);
+            _historyFile = System.IO.Path.Combine(nudgeDir, "prediction_history.json");
+            LoadFromDisk();
+        }
 
         /// <summary>
         /// Unix timestamp (seconds UTC) of the next scheduled ML check.
@@ -1814,15 +1852,22 @@ namespace NudgeTray
         /// 0 = not yet received.
         /// </summary>
         public static long NextCheckAt;
+        /// <summary>Most-recent foreground app name; updated in real time via APPFOCUS: lines.</summary>
+        public static volatile string CurrentApp = "";
+        /// <summary>Window title / domain detail for the current app (tab-separated second field of APPFOCUS).</summary>
+        public static volatile string CurrentDetail = "";
+        /// <summary>Latest sensor fusion snapshot from the V2 Harvest Engine (HARVEST: lines), updated every 2s.</summary>
+        public static volatile HarvestSignal? LastHarvest;
 
         public static void Add(MLLiveEvent evt)
         {
             lock (_lock)
             {
                 _events.Add(evt);
-                if (_events.Count > 30)
+                if (_events.Count > 200)
                     _events.RemoveAt(0);
             }
+            SaveToDisk();
         }
 
         /// <summary>Returns a snapshot of recent events, oldest first.</summary>
@@ -1843,6 +1888,37 @@ namespace NudgeTray
                     return _events.Count > 0 ? _events[_events.Count - 1] : null;
                 }
             }
+        }
+
+        private static void LoadFromDisk()
+        {
+            try
+            {
+                if (!System.IO.File.Exists(_historyFile)) return;
+                var json = System.IO.File.ReadAllText(_historyFile);
+                var loaded = System.Text.Json.JsonSerializer.Deserialize(json, NudgeJsonContext.Default.ListMLLiveEvent);
+                if (loaded == null) return;
+                lock (_lock)
+                {
+                    _events.Clear();
+                    int start = Math.Max(0, loaded.Count - 200);
+                    for (int i = start; i < loaded.Count; i++)
+                        _events.Add(loaded[i]);
+                }
+            }
+            catch { }
+        }
+
+        private static void SaveToDisk()
+        {
+            try
+            {
+                List<MLLiveEvent> snapshot;
+                lock (_lock) { snapshot = new List<MLLiveEvent>(_events); }
+                var json = System.Text.Json.JsonSerializer.Serialize(snapshot, NudgeJsonContext.Default.ListMLLiveEvent);
+                System.IO.File.WriteAllText(_historyFile, json);
+            }
+            catch { }
         }
     }
 

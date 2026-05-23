@@ -64,6 +64,14 @@ namespace NudgeTray
         private Border? _aiLiveTab;
         private DispatcherTimer? _aiLiveRefreshTimer;
 
+        // Pin (always-on-top) state
+        private bool _isPinned;
+        private TextBlock? _pinIcon;
+
+        // AI Brain tab collapse state — survives refreshes
+        private static bool _sensorSignalsOpen;
+        private static bool _trainingDetailsOpen;
+
         // AI Status enum
         public enum AIStatus
         {
@@ -277,10 +285,10 @@ namespace NudgeTray
                 CornerRadius = new CornerRadius(12, 12, 0, 0)
             };
 
-            // Title anchored left, AI status + close anchored right
+            // Title anchored left, AI status + pin + close anchored right
             var topGrid = new Grid
             {
-                ColumnDefinitions = new ColumnDefinitions("*,Auto,8,Auto")
+                ColumnDefinitions = new ColumnDefinitions("*,Auto,8,Auto,4,Auto")
             };
 
             // Title — chrome-weight: present but not competing with content
@@ -298,12 +306,17 @@ namespace NudgeTray
             var aiStatusContainer = CreateAIStatusIndicator();
             Grid.SetColumn(aiStatusContainer, 1);
 
-            // Close Button
+            // Pin Button (col 3)
+            var pinButton = CreatePinButton();
+            Grid.SetColumn(pinButton, 3);
+
+            // Close Button (col 5)
             var closeButton = CreateCloseButton();
-            Grid.SetColumn(closeButton, 3);
+            Grid.SetColumn(closeButton, 5);
 
             topGrid.Children.Add(titleText);
             topGrid.Children.Add(aiStatusContainer);
+            topGrid.Children.Add(pinButton);
             topGrid.Children.Add(closeButton);
             topBar.Child = topGrid;
 
@@ -545,9 +558,8 @@ namespace NudgeTray
         /// <summary>Builds the entire AI Brain tab content panel.</summary>
         private static StackPanel CreateAILiveView()
         {
-            var panel = new StackPanel { Spacing = 12 };
+            var panel = new StackPanel { Spacing = 10 };
 
-            // Not enabled state
             if (!Program._mlEnabled)
             {
                 panel.Children.Add(CreateAINotEnabledCard());
@@ -557,21 +569,18 @@ namespace NudgeTray
             var events = LiveAIState.GetRecent();
             var latest = events.Count > 0 ? events[events.Count - 1] : null;
 
-            // ── Model training status ────────────────────────────────────────────
-            panel.Children.Add(CreateSection("Model Training", CreateTrainingView()));
+            // ── Live app focus ────────────────────────────────────────────────────
+            panel.Children.Add(CreateLiveFocusCard(latest));
 
-            // ── Current state card ───────────────────────────────────────────────
-            panel.Children.Add(CreateSection("Current Prediction", CreateCurrentPredictionView(latest)));
+            // ── Prediction History (countdown + score + chart merged) ─────────────
+            panel.Children.Add(CreatePredictionHistorySection(events, latest));
 
-            // ── Sparkline history ────────────────────────────────────────────────
-            string histLabel = events.Count == 0
-                ? "History"
-                : $"History  ({events.Count} check{(events.Count == 1 ? "" : "s")})";
-            panel.Children.Add(CreateSection(histLabel, BuildSparkline(events)));
-
-            // ── Recent events log ────────────────────────────────────────────────
+            // ── Recent events log ─────────────────────────────────────────────────
             if (events.Count > 0)
                 panel.Children.Add(CreateSection("Recent Checks", CreateEventsLog(events)));
+
+            // ── Training status ───────────────────────────────────────────────────
+            panel.Children.Add(CreateSection("Model Training", CreateTrainingView()));
 
             return panel;
         }
@@ -704,47 +713,103 @@ namespace NudgeTray
                 panel.Children.Add(accuracyRow);
             }
 
-            // ── Error ────────────────────────────────────────────────────────────
-            if (!string.IsNullOrEmpty(lastError))
-            {
-                panel.Children.Add(new TextBlock
-                {
-                    Text = lastError,
-                    FontSize = 10,
-                    Foreground = new SolidColorBrush(UnproductiveRed),
-                    TextWrapping = TextWrapping.Wrap
-                });
-            }
+            // ── Collapsible details (error, log, last-checked) ───────────────────
+            bool hasDetails = !string.IsNullOrEmpty(lastError)
+                           || log.Count > 0
+                           || lastChecked != DateTime.MinValue;
 
-            // ── Trainer log (last few lines) ─────────────────────────────────────
-            if (log.Count > 0)
+            if (hasDetails)
             {
-                var logPanel = new StackPanel { Spacing = 1, Margin = new Thickness(0, 4, 0, 0) };
-                foreach (var line in log)
+                var detailPanel = new StackPanel
                 {
-                    if (string.IsNullOrWhiteSpace(line)) continue;
-                    logPanel.Children.Add(new TextBlock
+                    Spacing = 4,
+                    Margin = new Thickness(0, 4, 0, 0),
+                    IsVisible = _trainingDetailsOpen
+                };
+
+                if (!string.IsNullOrEmpty(lastError))
+                {
+                    detailPanel.Children.Add(new TextBlock
                     {
-                        Text = line,
-                        FontSize = 9,
-                        Foreground = new SolidColorBrush(TextTertiary),
-                        TextWrapping = TextWrapping.Wrap,
-                        FontFamily = new FontFamily("Monospace")
+                        Text = lastError,
+                        FontSize = 10,
+                        Foreground = new SolidColorBrush(UnproductiveRed),
+                        TextWrapping = TextWrapping.Wrap
                     });
                 }
-                panel.Children.Add(logPanel);
-            }
 
-            // ── Last checked timestamp ───────────────────────────────────────────
-            if (lastChecked != DateTime.MinValue)
-            {
-                panel.Children.Add(new TextBlock
+                if (log.Count > 0)
                 {
-                    Text = $"Last checked: {lastChecked:HH:mm:ss}",
+                    var logPanel = new StackPanel { Spacing = 1 };
+                    foreach (var line in log)
+                    {
+                        if (string.IsNullOrWhiteSpace(line)) continue;
+                        logPanel.Children.Add(new TextBlock
+                        {
+                            Text = line,
+                            FontSize = 9,
+                            Foreground = new SolidColorBrush(TextTertiary),
+                            TextWrapping = TextWrapping.Wrap,
+                            FontFamily = new FontFamily("Monospace")
+                        });
+                    }
+                    detailPanel.Children.Add(logPanel);
+                }
+
+                if (lastChecked != DateTime.MinValue)
+                {
+                    detailPanel.Children.Add(new TextBlock
+                    {
+                        Text = $"Last checked: {lastChecked:HH:mm:ss}",
+                        FontSize = 9,
+                        Foreground = new SolidColorBrush(TextTertiary)
+                    });
+                }
+
+                // Toggle row: "▸ Details" / "▾ Details"
+                var chevron = new TextBlock
+                {
+                    Text = _trainingDetailsOpen ? "▾" : "▸",
                     FontSize = 9,
                     Foreground = new SolidColorBrush(TextTertiary),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 4, 0)
+                };
+                var toggleRow = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 0,
+                    Cursor = new Cursor(StandardCursorType.Hand),
                     Margin = new Thickness(0, 2, 0, 0)
+                };
+                toggleRow.Children.Add(chevron);
+                toggleRow.Children.Add(new TextBlock
+                {
+                    Text = "Details",
+                    FontSize = 9,
+                    Foreground = new SolidColorBrush(TextTertiary),
+                    VerticalAlignment = VerticalAlignment.Center
                 });
+
+                toggleRow.PointerPressed += (s, e) =>
+                {
+                    _trainingDetailsOpen = !detailPanel.IsVisible;
+                    detailPanel.IsVisible = _trainingDetailsOpen;
+                    chevron.Text = _trainingDetailsOpen ? "▾" : "▸";
+                };
+                toggleRow.PointerEntered += (s, e) =>
+                {
+                    foreach (var child in toggleRow.Children)
+                        if (child is TextBlock tb) tb.Foreground = new SolidColorBrush(TextSecondary);
+                };
+                toggleRow.PointerExited += (s, e) =>
+                {
+                    foreach (var child in toggleRow.Children)
+                        if (child is TextBlock tb) tb.Foreground = new SolidColorBrush(TextTertiary);
+                };
+
+                panel.Children.Add(toggleRow);
+                panel.Children.Add(detailPanel);
             }
 
             return panel;
@@ -985,6 +1050,653 @@ namespace NudgeTray
                 Canvas.SetLeft(dot, x - r);
                 Canvas.SetTop(dot, y - r);
                 canvas.Children.Add(dot);
+            }
+
+            return canvas;
+        }
+
+        /// <summary>Live card: current app in focus + latest prediction verdict.</summary>
+        private static Border CreateLiveFocusCard(MLLiveEvent? latest)
+        {
+            var currentApp  = LiveAIState.CurrentApp;
+            var currentDetail = LiveAIState.CurrentDetail;
+            var harvest     = LiveAIState.LastHarvest;
+            bool hasApp     = !string.IsNullOrEmpty(currentApp);
+
+            // Fusion quality color: driven by Harvest Engine signal quality
+            Color fusionColor = harvest == null     ? TextTertiary
+                : harvest.Quality == "trusted"      ? ProductiveGreen
+                : harvest.Quality == "usable"       ? Color.FromRgb(255, 193, 7)
+                                                    : UnproductiveRed;
+
+            string qualityLabel = harvest == null        ? "Initializing"
+                : harvest.Quality == "trusted"           ? "Trusted"
+                : harvest.Quality == "usable"            ? "Usable"
+                                                         : "Poor Signal";
+
+            // ── Main row ──────────────────────────────────────────────────────
+            var mainGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+
+            var dot = new Border
+            {
+                Width = 10, Height = 10,
+                CornerRadius = new CornerRadius(5),
+                Background = new SolidColorBrush(fusionColor),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 10, 0)
+            };
+            Grid.SetColumn(dot, 0);
+
+            bool showDetail = !string.IsNullOrWhiteSpace(currentDetail)
+                && !currentDetail.Equals(currentApp, StringComparison.OrdinalIgnoreCase)
+                && !currentDetail.Contains(currentApp, StringComparison.OrdinalIgnoreCase);
+
+            var textStack = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
+            textStack.Children.Add(new TextBlock
+            {
+                Text       = hasApp ? TruncateAppName(currentApp, 24) : "Waiting…",
+                FontSize   = 13,
+                FontWeight = FontWeight.SemiBold,
+                Foreground = new SolidColorBrush(hasApp ? TextPrimary : TextTertiary)
+            });
+            if (showDetail)
+            {
+                textStack.Children.Add(new TextBlock
+                {
+                    Text          = TruncateAppName(currentDetail, 30),
+                    FontSize      = 10,
+                    Foreground    = new SolidColorBrush(TextSecondary),
+                    TextTrimming  = TextTrimming.CharacterEllipsis
+                });
+            }
+            // Fusion quality + "In Focus Now" on the same line
+            var qualityRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+            qualityRow.Children.Add(new Border
+            {
+                Width = 6, Height = 6,
+                CornerRadius = new CornerRadius(3),
+                Background = new SolidColorBrush(fusionColor),
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            qualityRow.Children.Add(new TextBlock
+            {
+                Text       = qualityLabel,
+                FontSize   = 9,
+                FontWeight = FontWeight.Medium,
+                Foreground = new SolidColorBrush(fusionColor)
+            });
+            qualityRow.Children.Add(new TextBlock
+            {
+                Text       = "· In Focus Now",
+                FontSize   = 9,
+                Foreground = new SolidColorBrush(TextTertiary)
+            });
+            textStack.Children.Add(qualityRow);
+            Grid.SetColumn(textStack, 1);
+
+            mainGrid.Children.Add(dot);
+            mainGrid.Children.Add(textStack);
+
+            // ── Separator ────────────────────────────────────────────────────
+            var sep = new Border
+            {
+                Height = 1,
+                Background = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255)),
+                Margin = new Thickness(0, 10, 0, 8)
+            };
+
+            // ── Sensor Signals collapse ──────────────────────────────────────
+            var signalPanel = new StackPanel { Spacing = 5, IsVisible = _sensorSignalsOpen, Margin = new Thickness(0, 6, 0, 2) };
+            if (harvest != null)
+            {
+                AddFusionRow(signalPanel, "Signal Quality", qualityLabel, fusionColor);
+                AddFusionRow(signalPanel, "Focus Source",   FormatFocusSource(harvest.FocusSrc), TextSecondary);
+                AddFusionRow(signalPanel, "Idle",           FormatMs(harvest.IdleMs),      TextSecondary);
+                AddFusionRow(signalPanel, "In Focus",       FormatMs(harvest.FocusedMs),   TextSecondary);
+                if (harvest.V2)
+                {
+                    string cat = GetHarvestCategory(harvest);
+                    if (!string.IsNullOrEmpty(cat))
+                        AddFusionRow(signalPanel, "Category", cat, Color.FromRgb(180, 140, 255));
+                    if (!string.IsNullOrEmpty(harvest.Domain))
+                        AddFusionRow(signalPanel, "Domain", harvest.Domain, PrimaryBlue);
+                    AddFusionRow(signalPanel, "Activity (5m)",
+                        $"{harvest.Sw300} switches · {harvest.Share * 100:F0}% dominant", TextSecondary);
+                    if (harvest.Apps300 > 1)
+                        AddFusionRow(signalPanel, "Distinct Apps", $"{harvest.Apps300} apps seen", TextSecondary);
+                    if (harvest.Fullscreen == 1)
+                        AddFusionRow(signalPanel, "Fullscreen", "Yes", Color.FromRgb(255, 193, 7));
+                }
+            }
+            else
+            {
+                signalPanel.Children.Add(new TextBlock
+                {
+                    Text       = "Waiting for Harvest Engine data…",
+                    FontSize   = 10,
+                    Foreground = new SolidColorBrush(TextTertiary)
+                });
+            }
+
+            // Toggle button for the collapse
+            var toggleText = new TextBlock
+            {
+                Text       = _sensorSignalsOpen ? "▾ Sensor Signals" : "▸ Sensor Signals",
+                FontSize   = 10,
+                Foreground = new SolidColorBrush(Color.FromArgb(140, 100, 180, 255)),
+                Cursor     = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
+            };
+            var toggleBtn = new Border
+            {
+                Background = Brushes.Transparent,
+                Cursor     = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
+                Child      = toggleText
+            };
+            toggleBtn.PointerPressed += (_, _) =>
+            {
+                bool nowVisible = !signalPanel.IsVisible;
+                _sensorSignalsOpen = nowVisible;
+                signalPanel.IsVisible = nowVisible;
+                toggleText.Text = nowVisible ? "▾ Sensor Signals" : "▸ Sensor Signals";
+            };
+
+            // ── Footer row: engine badge + toggle ────────────────────────────
+            var footerRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            footerRow.Children.Add(new TextBlock
+            {
+                Text       = harvest?.V2 == true ? "POWERED BY NUDGE HARVEST ENGINE V2" : "POWERED BY NUDGE HARVEST ENGINE",
+                FontSize   = 7.5,
+                LetterSpacing = 1.0,
+                Foreground = new SolidColorBrush(Color.FromArgb(80, 100, 180, 255)),
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            Grid.SetColumn(toggleBtn, 1);
+            footerRow.Children.Add(toggleBtn);
+
+            var outerStack = new StackPanel { Spacing = 0 };
+            outerStack.Children.Add(mainGrid);
+            outerStack.Children.Add(sep);
+            outerStack.Children.Add(footerRow);
+            outerStack.Children.Add(signalPanel);
+
+            return new Border
+            {
+                Background      = new SolidColorBrush(SurfaceColor),
+                CornerRadius    = new CornerRadius(8),
+                Padding         = new Thickness(14, 12),
+                BorderBrush     = new SolidColorBrush(BorderColor),
+                BorderThickness = new Thickness(1),
+                Child           = outerStack
+            };
+        }
+
+        private static void AddFusionRow(StackPanel parent, string label, string value, Color valueColor)
+        {
+            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("90,*") };
+            row.Children.Add(new TextBlock
+            {
+                Text       = label,
+                FontSize   = 10,
+                Foreground = new SolidColorBrush(TextTertiary)
+            });
+            var valBlock = new TextBlock
+            {
+                Text          = value,
+                FontSize      = 10,
+                FontWeight    = FontWeight.Medium,
+                Foreground    = new SolidColorBrush(valueColor),
+                TextTrimming  = TextTrimming.CharacterEllipsis
+            };
+            Grid.SetColumn(valBlock, 1);
+            row.Children.Add(valBlock);
+            parent.Children.Add(row);
+        }
+
+        private static string FormatFocusSource(string src) => src switch
+        {
+            "KWinScript"              => "KWin Script",
+            "X11Ewmh"                 => "X11 EWMH",
+            "WaylandActivatedProtocol"=> "Wayland Protocol",
+            "SwayIpc"                 => "Sway IPC",
+            "GnomeShell"              => "GNOME Shell",
+            "WindowsApi"              => "Windows API",
+            "HeuristicProcessScan"    => "Process Scan (heuristic)",
+            _                         => src
+        };
+
+        private static string FormatMs(int ms)
+        {
+            if (ms < 1000) return $"{ms}ms";
+            int s = ms / 1000;
+            if (s < 60)  return $"{s}s";
+            int m = s / 60; s %= 60;
+            return s > 0 ? $"{m}m {s}s" : $"{m}m";
+        }
+
+        private static string GetHarvestCategory(HarvestSignal h)
+        {
+            if (h.Afk == 1)    return "AFK";
+            if (h.Work == 1)   return "Work";
+            if (h.Comm == 1)   return "Communication";
+            if (h.Ent == 1)    return "Entertainment";
+            if (h.Browser == 1)return "Browser";
+            return "";
+        }
+
+        /// <summary>
+        /// Merged card: Prediction History title, countdown bar, latest score, and gradient chart.
+        /// </summary>
+        private static Border CreatePredictionHistorySection(IReadOnlyList<MLLiveEvent> events, MLLiveEvent? latest)
+        {
+            long nextCheckAt = LiveAIState.NextCheckAt;
+            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            const long totalInterval = 60;
+            long secondsLeft = nextCheckAt > 0 ? Math.Max(0, nextCheckAt - now) : 0;
+            long elapsed = totalInterval - secondsLeft;
+            double progress = nextCheckAt > 0
+                ? Math.Min(1.0, Math.Max(0.0, (double)elapsed / totalInterval))
+                : 0;
+            string countdownText = nextCheckAt == 0 ? "Waiting for first check…"
+                : secondsLeft == 0 ? "Checking now…"
+                : $"{secondsLeft / 60}:{secondsLeft % 60:D2} until next check";
+
+            Color mlColor = latest == null ? TextTertiary
+                : latest.Confidence < 0.5 ? Color.FromRgb(255, 193, 7)
+                : latest.Productive       ? ProductiveGreen
+                                          : UnproductiveRed;
+
+            var panel = new StackPanel { Spacing = 8 };
+
+            // ── Header row: title + countdown text ───────────────────────────
+            var headerGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            string titleText = events.Count == 0
+                ? "Prediction History"
+                : $"Prediction History  ·  {events.Count} check{(events.Count == 1 ? "" : "s")}";
+            headerGrid.Children.Add(new TextBlock
+            {
+                Text = titleText,
+                FontSize = 11,
+                FontWeight = FontWeight.Medium,
+                Foreground = new SolidColorBrush(TextSecondary),
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            var cdLabel = new TextBlock
+            {
+                Text = countdownText,
+                FontSize = 10,
+                Foreground = new SolidColorBrush(TextTertiary),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(cdLabel, 1);
+            headerGrid.Children.Add(cdLabel);
+            panel.Children.Add(headerGrid);
+
+            // ── Countdown progress bar ────────────────────────────────────────
+            var barBg = new Border
+            {
+                Height = 4,
+                CornerRadius = new CornerRadius(2),
+                Background = new SolidColorBrush(ProgressBarBg),
+                ClipToBounds = true
+            };
+            var barGrid = new Grid();
+            if (progress >= 0.995)
+            {
+                barGrid.ColumnDefinitions = new ColumnDefinitions("*");
+                barGrid.Children.Add(new Border
+                {
+                    Background = new SolidColorBrush(PrimaryBlue),
+                    CornerRadius = new CornerRadius(2),
+                    HorizontalAlignment = HorizontalAlignment.Stretch
+                });
+            }
+            else if (progress > 0.005)
+            {
+                double rem = 1.0 - progress;
+                barGrid.ColumnDefinitions = new ColumnDefinitions($"{progress * 100:F1}*,{rem * 100:F1}*");
+                var fill = new Border
+                {
+                    Background = new SolidColorBrush(PrimaryBlue),
+                    CornerRadius = new CornerRadius(2, 0, 0, 2),
+                    HorizontalAlignment = HorizontalAlignment.Stretch
+                };
+                Grid.SetColumn(fill, 0);
+                barGrid.Children.Add(fill);
+            }
+            barBg.Child = barGrid;
+            panel.Children.Add(barBg);
+
+            // ── Latest score row ──────────────────────────────────────────────
+            if (latest != null)
+            {
+                var scoreGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+                scoreGrid.Children.Add(new TextBlock
+                {
+                    Text = "Last prediction",
+                    FontSize = 10,
+                    Foreground = new SolidColorBrush(TextTertiary),
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+                var scoreStack = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 5,
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                scoreStack.Children.Add(new TextBlock
+                {
+                    Text = $"{latest.Score * 100:F0}%",
+                    FontSize = 15,
+                    FontWeight = FontWeight.Bold,
+                    Foreground = new SolidColorBrush(mlColor),
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+                scoreStack.Children.Add(new TextBlock
+                {
+                    Text = latest.Productive ? "productive" : "not productive",
+                    FontSize = 9,
+                    FontWeight = FontWeight.Medium,
+                    Foreground = new SolidColorBrush(mlColor),
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+                Grid.SetColumn(scoreStack, 1);
+                scoreGrid.Children.Add(scoreStack);
+                panel.Children.Add(scoreGrid);
+            }
+
+            // ── Gradient chart ────────────────────────────────────────────────
+            panel.Children.Add(BuildGradientChart(events));
+
+            return new Border
+            {
+                Background = new SolidColorBrush(SurfaceColor),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(14, 12),
+                BorderBrush = new SolidColorBrush(BorderColor),
+                BorderThickness = new Thickness(1),
+                Child = panel
+            };
+        }
+
+        /// <summary>Progress bar counting down to the next AI check.</summary>
+        private static Border CreateCountdownCard()
+        {
+            long nextCheckAt = LiveAIState.NextCheckAt;
+            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            const long totalInterval = 60;
+
+            long secondsLeft = nextCheckAt > 0 ? Math.Max(0, nextCheckAt - now) : 0;
+            long elapsed = totalInterval - secondsLeft;
+            double progress = nextCheckAt > 0
+                ? Math.Min(1.0, Math.Max(0.0, (double)elapsed / totalInterval))
+                : 0;
+
+            string countdownText = nextCheckAt == 0
+                ? "Waiting for first check..."
+                : secondsLeft == 0 ? "Checking now..."
+                : $"{secondsLeft / 60}:{secondsLeft % 60:D2} until next check";
+
+            var panel = new StackPanel { Spacing = 6 };
+
+            var labelRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            labelRow.Children.Add(new TextBlock
+            {
+                Text = "Next AI Check",
+                FontSize = 11,
+                FontWeight = FontWeight.Medium,
+                Foreground = new SolidColorBrush(TextSecondary),
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            var cdTb = new TextBlock
+            {
+                Text = countdownText,
+                FontSize = 10,
+                Foreground = new SolidColorBrush(TextTertiary),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(cdTb, 1);
+            labelRow.Children.Add(cdTb);
+            panel.Children.Add(labelRow);
+
+            var barBg = new Border
+            {
+                Height = 4,
+                CornerRadius = new CornerRadius(2),
+                Background = new SolidColorBrush(ProgressBarBg),
+                ClipToBounds = true
+            };
+            var barGrid = new Grid();
+            if (progress >= 0.995)
+            {
+                barGrid.ColumnDefinitions = new ColumnDefinitions("*");
+                barGrid.Children.Add(new Border
+                {
+                    Background = new SolidColorBrush(PrimaryBlue),
+                    CornerRadius = new CornerRadius(2),
+                    HorizontalAlignment = HorizontalAlignment.Stretch
+                });
+            }
+            else if (progress > 0.005)
+            {
+                double rem = 1.0 - progress;
+                barGrid.ColumnDefinitions = new ColumnDefinitions($"{progress * 100:F1}*,{rem * 100:F1}*");
+                var fill = new Border
+                {
+                    Background = new SolidColorBrush(PrimaryBlue),
+                    CornerRadius = new CornerRadius(2, 0, 0, 2),
+                    HorizontalAlignment = HorizontalAlignment.Stretch
+                };
+                Grid.SetColumn(fill, 0);
+                barGrid.Children.Add(fill);
+            }
+            barBg.Child = barGrid;
+            panel.Children.Add(barBg);
+
+            return new Border
+            {
+                Background = new SolidColorBrush(SurfaceColor),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(14, 12),
+                BorderBrush = new SolidColorBrush(BorderColor),
+                BorderThickness = new Thickness(1),
+                Child = panel
+            };
+        }
+
+        /// <summary>Full-width gradient area chart of prediction history.</summary>
+        private static Canvas BuildGradientChart(IReadOnlyList<MLLiveEvent> events)
+        {
+            const double W = 328;
+            const double H = 80;
+            const double dotR = 3.5;
+            const double yPad = dotR + 4;
+            const double yTop = yPad;
+            const double yBottom = H - yPad;
+            const double yRange = yBottom - yTop;
+
+            var canvas = new Canvas { Width = W, Height = H };
+
+            // Zone gradient background: green (productive) → red (unproductive)
+            var zoneBg = new Border
+            {
+                Width = W, Height = H,
+                Background = new LinearGradientBrush
+                {
+                    StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                    EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+                    GradientStops = new GradientStops
+                    {
+                        new GradientStop(Color.FromArgb(20, 76, 175, 80), 0),
+                        new GradientStop(Color.FromArgb(0, 128, 128, 128), 0.5),
+                        new GradientStop(Color.FromArgb(20, 244, 67, 54), 1)
+                    }
+                }
+            };
+            Canvas.SetLeft(zoneBg, 0);
+            Canvas.SetTop(zoneBg, 0);
+            canvas.Children.Add(zoneBg);
+
+            // Faint zone labels
+            var prodLabel = new TextBlock
+            {
+                Text = "productive",
+                FontSize = 8,
+                Foreground = new SolidColorBrush(Color.FromArgb(40, 76, 175, 80))
+            };
+            Canvas.SetLeft(prodLabel, 4);
+            Canvas.SetTop(prodLabel, 2);
+            canvas.Children.Add(prodLabel);
+
+            var notProdLabel = new TextBlock
+            {
+                Text = "not productive",
+                FontSize = 8,
+                Foreground = new SolidColorBrush(Color.FromArgb(40, 244, 67, 54))
+            };
+            Canvas.SetLeft(notProdLabel, 4);
+            Canvas.SetTop(notProdLabel, H - 13);
+            canvas.Children.Add(notProdLabel);
+
+            // Midline at score = 0.5
+            var midline = new Border
+            {
+                Width = W, Height = 1,
+                Background = new SolidColorBrush(Color.FromArgb(25, 255, 255, 255))
+            };
+            Canvas.SetLeft(midline, 0);
+            Canvas.SetTop(midline, yTop + yRange * 0.5);
+            canvas.Children.Add(midline);
+
+            if (events.Count == 0)
+            {
+                var tb = new TextBlock
+                {
+                    Text = "Waiting for first AI check...",
+                    FontSize = 10,
+                    Foreground = new SolidColorBrush(TextTertiary)
+                };
+                Canvas.SetLeft(tb, W / 2 - 90);
+                Canvas.SetTop(tb, H / 2 - 7);
+                canvas.Children.Add(tb);
+                return canvas;
+            }
+
+            int n = events.Count;
+            var pts = new List<(double x, double y, MLLiveEvent ev)>(n);
+            for (int i = 0; i < n; i++)
+            {
+                double xFrac = n == 1 ? 0.5 : (double)i / (n - 1);
+                double x = dotR + xFrac * (W - dotR * 2);
+                double y = yTop + (1.0 - events[i].Score) * yRange;
+                pts.Add((x, y, events[i]));
+            }
+
+            // Filled area under the line (gradient fill)
+            if (n >= 2)
+            {
+                var latestEv = pts[pts.Count - 1].ev;
+                Color fillColor = latestEv.Confidence < 0.5
+                    ? Color.FromRgb(255, 193, 7)
+                    : (latestEv.Productive ? ProductiveGreen : UnproductiveRed);
+
+                var areaGeo = new StreamGeometry();
+                using (var ctx = areaGeo.Open())
+                {
+                    ctx.BeginFigure(new Point(pts[0].x, pts[0].y), true);
+                    for (int i = 1; i < pts.Count; i++)
+                        ctx.LineTo(new Point(pts[i].x, pts[i].y));
+                    ctx.LineTo(new Point(pts[pts.Count - 1].x, yBottom));
+                    ctx.LineTo(new Point(pts[0].x, yBottom));
+                }
+                canvas.Children.Add(new Avalonia.Controls.Shapes.Path
+                {
+                    Data = areaGeo,
+                    Fill = new LinearGradientBrush
+                    {
+                        StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                        EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+                        GradientStops = new GradientStops
+                        {
+                            new GradientStop(Color.FromArgb(60, fillColor.R, fillColor.G, fillColor.B), 0),
+                            new GradientStop(Color.FromArgb(5, fillColor.R, fillColor.G, fillColor.B), 1)
+                        }
+                    }
+                });
+            }
+
+            // Connecting line
+            if (n >= 2)
+            {
+                var lineGeo = new StreamGeometry();
+                using (var ctx = lineGeo.Open())
+                {
+                    ctx.BeginFigure(new Point(pts[0].x, pts[0].y), false);
+                    for (int i = 1; i < pts.Count; i++)
+                        ctx.LineTo(new Point(pts[i].x, pts[i].y));
+                }
+                canvas.Children.Add(new Avalonia.Controls.Shapes.Path
+                {
+                    Data = lineGeo,
+                    Stroke = new SolidColorBrush(Color.FromArgb(200, 255, 255, 255)),
+                    StrokeThickness = 1.5,
+                    StrokeLineCap = PenLineCap.Round
+                });
+            }
+
+            // Dots — latest is larger with a glow ring
+            for (int i = 0; i < pts.Count; i++)
+            {
+                var (x, y, ev) = pts[i];
+                bool isLatest = i == pts.Count - 1;
+                double r = isLatest ? dotR + 1.5 : dotR;
+
+                Color dotColor = ev.Confidence < 0.5
+                    ? Color.FromRgb(255, 193, 7)
+                    : (ev.Productive ? ProductiveGreen : UnproductiveRed);
+
+                if (isLatest)
+                {
+                    var ring = new Avalonia.Controls.Shapes.Ellipse
+                    {
+                        Width = (r + 4) * 2,
+                        Height = (r + 4) * 2,
+                        Stroke = new SolidColorBrush(Color.FromArgb(50, dotColor.R, dotColor.G, dotColor.B)),
+                        StrokeThickness = 2,
+                        Fill = new SolidColorBrush(Color.FromArgb(15, dotColor.R, dotColor.G, dotColor.B))
+                    };
+                    Canvas.SetLeft(ring, x - r - 4);
+                    Canvas.SetTop(ring, y - r - 4);
+                    canvas.Children.Add(ring);
+                }
+
+                var dot = new Avalonia.Controls.Shapes.Ellipse
+                {
+                    Width = r * 2,
+                    Height = r * 2,
+                    Fill = new SolidColorBrush(dotColor)
+                };
+                Canvas.SetLeft(dot, x - r);
+                Canvas.SetTop(dot, y - r);
+                canvas.Children.Add(dot);
+
+                if (isLatest)
+                {
+                    var scoreLabel = new TextBlock
+                    {
+                        Text = $"{ev.Score * 100:F0}%",
+                        FontSize = 9,
+                        FontWeight = FontWeight.SemiBold,
+                        Foreground = new SolidColorBrush(dotColor)
+                    };
+                    // Place label above the dot when near bottom of chart, below when near top
+                    bool nearBottom = y > H * 0.6;
+                    Canvas.SetLeft(scoreLabel, x - 10);
+                    Canvas.SetTop(scoreLabel, nearBottom ? y - r - 14 : y + r + 3);
+                    canvas.Children.Add(scoreLabel);
+                }
             }
 
             return canvas;
@@ -1342,6 +2054,63 @@ namespace NudgeTray
             }
         }
 
+
+        private Border CreatePinButton()
+        {
+            var border = new Border
+            {
+                Background = Brushes.Transparent,
+                CornerRadius = new CornerRadius(6),
+                Width = 32,
+                Height = 32,
+                Cursor = new Cursor(StandardCursorType.Hand)
+            };
+
+            var button = new Button
+            {
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Cursor = new Cursor(StandardCursorType.Hand),
+                Padding = new Thickness(0),
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Width = 32,
+                Height = 32
+            };
+
+            _pinIcon = new TextBlock
+            {
+                Text = "⊙",
+                FontSize = 16,
+                Foreground = new SolidColorBrush(TextSecondary),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            button.Content = _pinIcon;
+            button.Click += (s, e) =>
+            {
+                _isPinned = !_isPinned;
+                Topmost = _isPinned;
+                if (_pinIcon != null)
+                {
+                    _pinIcon.Text = _isPinned ? "◉" : "⊙";
+                    _pinIcon.Foreground = _isPinned
+                        ? new SolidColorBrush(PrimaryBlue)
+                        : new SolidColorBrush(TextSecondary);
+                }
+            };
+
+            ToolTip.SetTip(button, "Pin window on top");
+            border.Child = button;
+
+            border.PointerEntered += (s, e) =>
+                border.Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255));
+            border.PointerExited += (s, e) =>
+                border.Background = Brushes.Transparent;
+
+            return border;
+        }
 
         private Border CreateCloseButton()
         {

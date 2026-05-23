@@ -1277,6 +1277,7 @@ publish();
     {
         int elapsed = 0;
         int mlElapsed = 0;
+        int harvestElapsed = 0;
         int lastMinute = -1;
         int lastStatsSnapshot = 0;
 
@@ -1304,6 +1305,9 @@ publish();
                 _currentApp = app;
                 _currentTitle = title;
                 _attentionSpanMs = 0;
+                // Keep the tray AI Brain tab aware of which app is in focus (tab-separated: app\ttitle)
+                // Strip browser name suffix so detail shows just the page/tab name
+                Console.WriteLine($"APPFOCUS:{app}\t{BrowserDetector.TrimBrowserSuffix(title)}");
             }
             else if (!isNudgeWindow)
             {
@@ -1322,6 +1326,49 @@ publish();
                 ? CaptureActivityTick(now, app, title, idle)
                 : null;
 
+            // Broadcast harvest sensor signals to AI Brain tab every 2 seconds
+            harvestElapsed += CYCLE_MS;
+            if (harvestElapsed >= 2000)
+            {
+                harvestElapsed = 0;
+                HarvestSignal sig;
+                if (tick is ActivityTickResult t)
+                {
+                    var ctx = t.Context;
+                    var feat = t.Features;
+                    sig = new HarvestSignal
+                    {
+                        Quality   = ctx.SignalQuality.ToString().ToLowerInvariant(),
+                        FocusSrc  = ctx.FocusSource.ToString(),
+                        IdleMs    = ctx.IdleMs,
+                        FocusedMs = ctx.FocusedSinceMs,
+                        Domain    = ctx.FocusedDomain,
+                        Work      = feat.WorkDomainFlag,
+                        Ent       = feat.EntertainmentDomainFlag,
+                        Comm      = feat.CommunicationAppFlag,
+                        Browser   = feat.BrowserWindowFlag,
+                        Afk       = feat.AfkFlag,
+                        Fullscreen = feat.FullscreenFlag,
+                        Sw300     = feat.SwitchCount300s,
+                        Share     = feat.CurrentAppShare300s,
+                        Apps300   = feat.DistinctApps300s,
+                        V2        = true
+                    };
+                }
+                else
+                {
+                    sig = new HarvestSignal
+                    {
+                        Quality   = "poor",
+                        FocusSrc  = "Unknown",
+                        IdleMs    = idle,
+                        FocusedMs = _attentionSpanMs,
+                        V2        = false
+                    };
+                }
+                Console.WriteLine($"HARVEST:{JsonSerializer.Serialize(sig, NudgeJsonContext.Default.HarvestSignal)}");
+            }
+
             // Check for snapshot triggers
             elapsed += CYCLE_MS;
             mlElapsed += CYCLE_MS;
@@ -1336,20 +1383,19 @@ publish();
                 _activityLogElapsed = 0;
             }
 
+            // Always reset ML timer when interval fires — even if waiting for a response —
+            // so the AI Brain countdown never gets stuck at "Checking now..."
+            bool mlCheckDue = _mlEnabled && mlElapsed >= ML_CHECK_INTERVAL_MS;
+            if (mlCheckDue)
+            {
+                mlElapsed = 0;
+                Console.WriteLine($"MLNEXT:{DateTimeOffset.UtcNow.ToUnixTimeSeconds() + ML_CHECK_INTERVAL_MS / 1000}");
+            }
+
             if (!_waitingForResponse)
             {
-                // ML-powered adaptive checking (if enabled) - check every minute
-                if (_mlEnabled && _mlAvailable && mlElapsed >= ML_CHECK_INTERVAL_MS)
-                {
-                    // Check ML predictions every minute when ML is enabled
-                    if (ShouldTriggerSnapshot(app, idle, _attentionSpanMs, tick))
-                    {
-                        mlTriggered = true;
-                    }
-                    mlElapsed = 0; // Reset ML check timer
-                    // Broadcast next scheduled check time to the AI Brain tab
-                    Console.WriteLine($"MLNEXT:{DateTimeOffset.UtcNow.ToUnixTimeSeconds() + ML_CHECK_INTERVAL_MS / 1000}");
-                }
+                if (mlCheckDue && ShouldTriggerSnapshot(app, idle, _attentionSpanMs, tick))
+                    mlTriggered = true;
 
                 // Trigger snapshot if:
                 // 1. ML triggered with high confidence (checked every minute)
@@ -1973,10 +2019,10 @@ publish();
         // Check ML availability every time (this function is called once per minute)
         CheckMLAvailability();
 
-        // If ML not available, fall back to interval-based
+        // ML not available — let the regular interval fallback handle notification timing
         if (!_mlAvailable)
         {
-            return true;
+            return false;
         }
 
         if (_harvestEngine == HarvestEngineMode.V2 && tick is ActivityTickResult fusedTick)

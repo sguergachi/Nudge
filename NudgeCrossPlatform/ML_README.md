@@ -4,135 +4,116 @@ This document describes the machine learning system that enables personalized, a
 
 ## Overview
 
-The ML system learns from your behavior to predict when you're productive or not. Instead of always asking every 5 minutes, it adapts based on:
+The ML system learns from your behavior to predict when you're productive or not. Instead of always asking every 5–10 minutes, it adapts based on:
 
-- **High Confidence (>98%)**: Nudge detects you're NOT productive → Sends alert immediately
-- **Low Confidence (<98%)**: Nudge is uncertain → Falls back to regular 5-minute intervals
-- **Productive Detection**: Nudge detects you're productive → Suppresses unnecessary alerts
+- **High Confidence, Not Productive**: Nudge detects you're NOT productive → alert fires immediately
+- **Low Confidence**: Nudge is uncertain → falls back to the random 5–10 min interval
+- **High Confidence, Productive**: Nudge detects you're productive → alert suppressed
 
 This creates a personalized feedback loop that improves over time as the model learns your patterns.
 
 ## System Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Main Components                         │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌────────────┐      ┌──────────────┐      ┌────────────────┐  │
-│  │   nudge    │◄────►│ ML Inference │      │   Background   │  │
-│  │  (C# app)  │      │   Service    │      │    Trainer     │  │
-│  │            │      │  (Python)    │      │   (Python)     │  │
-│  └────────────┘      └──────────────┘      └────────────────┘  │
-│       │                     │                      │            │
-│       │                     │                      │            │
-│       ▼                     ▼                      ▼            │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │              /tmp/HARVEST.CSV                             │  │
-│  │          (Productivity Log Database)                      │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                         nudge-tray (GUI)                         │
+│  AI Brain tab ← MLDATA/HARVEST/APPFOCUS/MLNEXT (stdout)         │
+│  Settings, Analytics, Model Training accordion                   │
+└─────────────────────────────┬────────────────────────────────────┘
+                              │ spawns
+                              ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                    nudge.dll (harvest subprocess)                │
+│                                                                  │
+│  V2 Harvest Engine                                               │
+│  ├─ ActivityContext (focus source, signal quality, domain, …)    │
+│  └─ FeatureVectorV2 (21 features, 300s rolling windows)          │
+│                                                                  │
+│  Every 60s ──────────────────────────────────────────────────►  │
+│                                          ML Inference Service    │
+│                                          127.0.0.1:45002 (TCP)  │
+│                                          scikit-learn model      │
+└──────────────────────────────────────────────────────────────────┘
+                              │
+                              │ trains
+                              ▼
+                    Background Trainer
+                    (monitors HARVEST.CSV, retrains automatically)
 ```
 
 ### Components
 
-1. **nudge** (Main Application)
-   - Tracks foreground app, idle time, attention span
-   - Queries ML inference service for predictions
-   - Falls back to interval-based alerts when ML unavailable
-   - Collects labeled training data from user responses
-
-2. **ML Inference Service** (`model_inference.py`)
-   - Loads trained TensorFlow model
-   - Provides real-time predictions via Unix domain socket
-   - Returns confidence scores for adaptive behavior
-   - Low-latency (<10ms per prediction)
-
-3. **Background Trainer** (`background_trainer.py`)
-   - Monitors productivity log for new data
-   - Automatically retrains model when enough data accumulated
-   - Validates models before deployment
-   - Rolls back if performance degrades
+1. **nudge-tray** — Avalonia GUI, manages all subprocesses, shows AI Brain tab
+2. **nudge.dll** — harvest subprocess; tracks focus, builds feature vectors, queries ML every 60s
+3. **ML Inference Service** (`model_inference.py`) — scikit-learn model served over TCP 127.0.0.1:45002
+4. **Background Trainer** (`background_trainer.py`) — watches HARVEST.CSV, retrains when enough new data
 
 ## Getting Started
 
-### Phase 1: Initial Data Collection (Days 1-7)
+### Phase 1: Initial Data Collection (Days 1–7)
 
-Start with regular interval-based notifications to collect initial training data:
+Start the tray without ML to collect labeled training data:
 
 ```bash
-# Start nudge-tray without ML (regular 5-minute intervals)
 ./nudge-tray --interval 5
 ```
 
-**Goal**: Collect at least 100 labeled examples (about 8 hours of usage)
-
-**Tips**:
-- Be honest with your responses
-- Respond to every notification
-- Use for a full work day to capture different patterns
+**Goal**: Collect at least 100 labeled examples (~8 hours of usage). Answer the nudge prompts honestly.
 
 ### Phase 2: First Training (After 100+ samples)
 
-Once you have sufficient data, train your first model:
-
 ```bash
-# Train the model
-python3 train_model.py /tmp/HARVEST.CSV --model-dir ./model
-
-# Expected output:
-# 📊 Dataset: 150 samples
-#    Productive: 90 (60.0%)
-#    Unproductive: 60 (40.0%)
-# 🏗️  Building standard model...
-# 🚀 Starting training...
-# ✅ Model saved to: ./model/
+python3 train_model.py ~/.nudge/HARVEST.CSV --model-dir ~/.nudge/model
 ```
 
-### Phase 3: Enable ML-Powered Notifications
+Expected output:
+```
+📊 Dataset: 150 samples
+   Productive: 90 (60.0%)
+   Unproductive: 60 (40.0%)
+🏗️  Building lightweight model...
+✅ Model saved to: ~/.nudge/model/productivity_model.joblib
+```
 
-Start nudge-tray with ML enabled (it automatically manages all services):
+### Phase 3: Enable ML Mode
 
 ```bash
-# Easy way - use the launcher
-./start_nudge_ml.sh
-
-# Or directly
-./nudge-tray --ml --interval 5
+./nudge-tray --ml
 ```
 
 Nudge Tray automatically starts:
-- ML inference server (real-time predictions)
+- ML inference server (TCP 127.0.0.1:45002)
 - Background trainer (continuous learning)
-- Nudge process (productivity tracking)
+- Harvest subprocess (feature extraction + nudge logic)
 
-Now the system will:
-- ✅ Send alerts when ML is >98% confident you're NOT productive
-- ⏭️  Skip alerts when ML is >98% confident you ARE productive
-- 🔄 Fall back to 5-minute intervals when confidence is low
-- 📈 Continuously improve as you provide more feedback
+## AI Brain Tab
 
-## Configuration Options
+The **AI Brain tab** in the tray window shows the ML system in real time:
 
-### Main Application (nudge-tray)
+- **In Focus Now** — current foreground app, browser tab name, sensor fusion quality (Green=Trusted / Amber=Usable / Red=Poor), live ML prediction score
+- **Sensor Signals** (expandable) — signal quality, focus source, idle time, category (Work/Entertainment/Communication), activity (switches, app share), domain
+- **Next AI Check** — countdown progress bar (60s ML check interval)
+- **Prediction History** — gradient area chart of recent productivity scores
+- **Recent Checks** — timestamped event log with confidence labels
+- **Model Training** — training status, accuracy, sample count; "▸ Details" for full log
 
-```bash
-./nudge-tray [options]
+## Configuration
 
-Options:
-  --ml              Enable ML-powered adaptive notifications
-  --interval N      Fallback interval in minutes (default: 5)
+### nudge-tray options
 
-Examples:
-  ./nudge-tray                    # Data collection mode
-  ./nudge-tray --ml               # ML with 5-min fallback
-  ./nudge-tray --ml --interval 2  # ML with 2-min fallback
-  ./start_nudge_ml.sh             # Recommended launcher
+```
+--ml              Enable ML-powered adaptive notifications
+--interval N      Fallback interval in minutes (default: 5)
+--harvest-engine  v1 or v2 (default: v2)
 ```
 
-**Note**: Nudge Tray automatically manages all services (ML inference, background trainer, nudge process).
-No need to manually start Python services!
+### Confidence Threshold
+
+Defined in `nudge.cs` as `ML_CONFIDENCE_THRESHOLD`. The default threshold means:
+
+- Nudge fires immediately only when the model is confident you're NOT productive
+- Productive sessions with high confidence suppress the nudge
+- Low-confidence checks fall back to the interval timer
 
 ### Inference Service
 
@@ -141,13 +122,8 @@ python3 model_inference.py [options]
 
 Options:
   --model-dir PATH   Model directory (default: ./model)
-  --socket PATH      Unix socket path (default: /tmp/nudge_ml.sock)
-  --test             Test mode: send sample prediction
-
-Examples:
-  python3 model_inference.py
-  python3 model_inference.py --model-dir /path/to/model
-  python3 model_inference.py --test  # Test if server is working
+  --host HOST        Bind host (default: 127.0.0.1)
+  --port PORT        TCP port (default: 45002)
 ```
 
 ### Background Trainer
@@ -156,33 +132,15 @@ Examples:
 python3 background_trainer.py [options]
 
 Options:
-  --csv PATH              CSV file path (default: /tmp/HARVEST.CSV)
-  --model-dir PATH        Model directory (default: ./model)
+  --csv PATH              CSV file path (default: ~/.nudge/HARVEST.CSV)
+  --model-dir PATH        Model directory (default: ~/.nudge/model)
   --min-new-samples N     Min new samples before retrain (default: 50)
   --min-total-samples N   Min total for first training (default: 100)
   --check-interval N      Check interval in seconds (default: 300)
-  --architecture TYPE     Model type: lightweight/standard/deep
-
-Examples:
-  python3 background_trainer.py
-  python3 background_trainer.py --min-new-samples 100
-  python3 background_trainer.py --architecture deep
+  --architecture TYPE     Model type: lightweight/standard
 ```
 
 ## Model Performance
-
-### Confidence Threshold
-
-The system uses **98% confidence** as the threshold for ML-based decisions:
-
-- **High confidence NOT productive (>98%)**: Trigger alert immediately
-- **High confidence productive (>98%)**: Suppress alert
-- **Low confidence (<98%)**: Fall back to interval-based
-
-This conservative threshold ensures:
-- ✅ Minimal false positives (bothering you when productive)
-- ✅ High accuracy when triggering alerts
-- ✅ Graceful fallback when uncertain
 
 ### Training Requirements
 
@@ -191,214 +149,109 @@ This conservative threshold ensures:
 | Initial training | 100 samples | 200 samples | 500+ samples |
 | Retraining trigger | 50 new | 100 new | 200+ new |
 | Class balance | 30/70 split | 40/60 split | 45/55 split |
-| Training time | 30 seconds | 2 minutes | 5 minutes |
+| Training time | ~5 seconds | ~15 seconds | ~60 seconds |
 
 ### Model Architectures
 
-Choose based on your needs:
-
-- **Lightweight**: Fast, low memory, good for limited data (<200 samples)
-- **Standard**: Balanced performance, recommended for most users
-- **Deep**: Best accuracy, requires more data (>500 samples)
+- **Lightweight**: Fast, low memory, good for limited data (<200 samples). Default.
+- **Standard**: Balanced performance, recommended for 200+ samples.
 
 ```bash
-# Train with different architectures
-python3 train_model.py /tmp/HARVEST.CSV --architecture lightweight
-python3 train_model.py /tmp/HARVEST.CSV --architecture standard
-python3 train_model.py /tmp/HARVEST.CSV --architecture deep
+python3 train_model.py ~/.nudge/HARVEST.CSV --architecture lightweight
+python3 train_model.py ~/.nudge/HARVEST.CSV --architecture standard
 ```
 
 ## Monitoring & Debugging
 
-### Check Inference Server Status
+### Test Inference Server
 
 ```bash
-# Test if inference server is running
 python3 model_inference.py --test
-
-# Expected output:
-# 🧪 Testing inference server...
-# 📤 Sending: {'foreground_app': 12345, 'idle_time': 1000, ...}
-# 📥 Response: {...}
-# ✅ Model is working!
 ```
 
-### View Prediction Logs
-
-The inference server logs all predictions to stderr:
-
-```
-📊 Request #1: NOT_PRODUCTIVE (confidence: 99.2%, 8.3ms)
-📊 Request #2: PRODUCTIVE (confidence: 87.5%, 7.1ms)
-📊 Request #3: NOT_PRODUCTIVE (confidence: 98.8%, 6.9ms)
-```
-
-### View Training Logs
-
-The background trainer logs training events:
-
-```
-⏳ Waiting for more data... need 30 more samples (70/100)
-✅ Sufficient data for initial training: 150 samples
-🧠 STARTING TRAINING #1
-🏗️  Building standard model...
-✅ TRAINING #1 COMPLETED
-   Accuracy: 94.5%
-   Samples trained on: 150
-```
-
-### Nudge ML Status
-
-When running with `--ml`, nudge shows ML status:
+### Check if Server is Running
 
 ```bash
-# Main loop messages
-  ML: NOT productive (confidence: 99.1%) - triggering alert
-  ML: Productive (confidence: 98.5%) - skipping alert
-  ML: Low confidence (67.3%) - waiting for interval
-  2 min until next snapshot [ML: active]  (firefox, idle: 1234ms)
+# Check port 45002
+ss -tlnp | grep 45002
+# or
+lsof -i :45002
+```
+
+### nudge-tray Logs
+
+When running with `--ml`, the tray console shows:
+```
+✓ ML inference server connected
+[Nudge] ML SKIP: Productive (confidence: 98.8%, avg: 95.3%)
+[Nudge] ML TRIGGER: NOT productive (confidence: 99.1%, avg: 94.2%)
+[Nudge] ML: Low confidence (67.3%) - waiting for interval
+[Nudge] ⏰ INTERVAL SNAPSHOT (ML low confidence or productive)
 ```
 
 ## Data Privacy
 
 All data stays **local on your machine**:
 
-- ✅ CSV file stored locally (`/tmp/HARVEST.CSV`)
-- ✅ Model trained locally
-- ✅ Predictions computed locally
-- ✅ No data sent to any server
-- ✅ All communication via Unix domain sockets (local only)
-
-Application hashes are FNV-1a hashes, making them:
-- Deterministic (same app → same hash)
-- Privacy-preserving (hash cannot be reversed)
-- Collision-resistant (different apps → different hashes)
+- CSV files stored in `~/.nudge/`
+- Model trained locally with scikit-learn
+- Predictions computed locally over loopback TCP
+- No data sent to any external server
+- App names stored as FNV-1a hashes (non-reversible) in ML features
 
 ## Troubleshooting
 
-### ML Not Available
+### ML Not Available / Fallback Mode
 
-**Symptoms**: `[ML: fallback]` status, no ML predictions
+**Symptoms**: `[ML: fallback]` in tray logs, AI Brain tab shows "Checking now..."
 
-**Fixes**:
-1. Check if inference server is running:
-   ```bash
-   python3 model_inference.py --test
-   ```
+1. Check if inference server started: `ss -tlnp | grep 45002`
+2. Check model exists: `ls ~/.nudge/model/productivity_model.joblib`
+3. Check Python deps: `python3 -c "import joblib, sklearn; print('OK')"`
 
-2. Check if socket exists:
-   ```bash
-   ls -la /tmp/nudge_ml.sock
-   ```
+### Stuck "Checking now..." in AI Brain Tab
 
-3. Check if model exists:
-   ```bash
-   ls -la ./model/productivity_model.keras
-   ```
+The countdown resets every 60s even when no ML server is running (fallback mode). If it appears stuck past 60s, restart nudge-tray.
 
 ### Low Accuracy
 
-**Symptoms**: Model makes poor predictions, accuracy <75%
-
-**Fixes**:
 1. Collect more data (aim for 200+ samples)
-2. Ensure class balance (30% productive, 70% not productive)
-3. Be consistent with labels
-4. Try different architecture:
-   ```bash
-   python3 train_model.py /tmp/HARVEST.CSV --architecture deep
-   ```
+2. Be consistent — define what "productive" means to you and apply it uniformly
+3. Ensure class balance: both productive and unproductive examples
+4. Try `--architecture standard` once you have 200+ samples
 
 ### Training Fails
 
-**Symptoms**: Training errors, cannot save model
-
-**Fixes**:
-1. Validate data:
-   ```bash
-   python3 validate_data.py /tmp/HARVEST.CSV
-   ```
-
-2. Check TensorFlow installation:
-   ```bash
-   python3 -c "import tensorflow as tf; print(tf.__version__)"
-   ```
-
-3. Check disk space:
-   ```bash
-   df -h ./model
-   ```
-
-## Advanced Usage
-
-### Multiple Models
-
-Run A/B tests with different models:
-
 ```bash
-# Train multiple architectures
-python3 train_model.py /tmp/HARVEST.CSV --model-dir ./model_light --architecture lightweight
-python3 train_model.py /tmp/HARVEST.CSV --model-dir ./model_deep --architecture deep
+# Validate data
+python3 validate_data.py ~/.nudge/HARVEST.CSV
 
-# Compare performance
-python3 model_inference.py --model-dir ./model_light &
-./nudge --ml  # Test for a day
-killall python3
-
-python3 model_inference.py --model-dir ./model_deep &
-./nudge --ml  # Test for a day
+# Check Python dependencies
+python3 -c "import sklearn, joblib, pandas, numpy; print('All OK')"
 ```
 
-### Custom Confidence Threshold
+## Files Overview
 
-Edit `nudge.cs` line 51 to adjust threshold:
-
-```csharp
-const double ML_CONFIDENCE_THRESHOLD = 0.95;  // 95% instead of 98%
 ```
+NudgeCrossPlatform/
+├── nudge.cs / nudge_build.cs     # Main harvest subprocess (with ML integration)
+├── nudge-tray.cs                 # Tray UI + subprocess management
+├── AnalyticsWindow.cs            # Analytics + AI Brain tab
+├── NudgeJsonContext.cs           # IPC DTOs (MLLiveEvent, HarvestSignal, …)
+├── NudgeCore.TestableLogic.cs    # V2 Harvest Engine, BrowserDetector, feature extraction
+├── model_inference.py            # scikit-learn inference server (TCP 45002)
+├── background_trainer.py         # Continuous learning service
+├── train_model.py                # Model training script
+├── validate_data.py              # Data validation tool
+├── ML_README.md                  # This file
+└── QUICKSTART_ML.md              # Quick start guide
 
-Lower threshold = More aggressive ML triggers
-Higher threshold = More conservative, fewer false positives
-
-### Export Model Metrics
-
-```bash
-# View TensorBoard logs
-tensorboard --logdir ./model/logs
-
-# Open browser to: http://localhost:6006
+~/.nudge/
+├── HARVEST.CSV                   # Labeled productivity snapshots
+├── ACTIVITY_LOG.CSV              # Minute-by-minute activity log
+├── tray-settings.json            # Persisted tray preferences
+└── model/
+    ├── productivity_model.joblib # Trained scikit-learn model
+    ├── scaler.json               # Feature normalization params
+    └── trainer_state.json        # Training history
 ```
-
-## Performance Benchmarks
-
-Typical performance on modern hardware:
-
-| Operation | Time | Notes |
-|-----------|------|-------|
-| Single prediction | <10ms | Unix socket + inference |
-| Model load time | 200-500ms | At inference server startup |
-| Training (100 samples) | 30-60s | CPU-only, standard model |
-| Training (500 samples) | 2-5min | CPU-only, deep model |
-
-## Roadmap
-
-Future improvements planned:
-
-- [ ] Time-of-day features (morning vs afternoon patterns)
-- [ ] Day-of-week features (weekday vs weekend)
-- [ ] Multi-user support
-- [ ] Model export for sharing anonymized patterns
-- [ ] Web dashboard for visualizing productivity patterns
-- [ ] Integration with calendar/task management tools
-
-## Support
-
-For issues or questions:
-1. Check this README
-2. Validate your data: `python3 validate_data.py /tmp/HARVEST.CSV`
-3. Test inference: `python3 model_inference.py --test`
-4. Check logs in stderr
-
-## License
-
-Same as parent Nudge project.

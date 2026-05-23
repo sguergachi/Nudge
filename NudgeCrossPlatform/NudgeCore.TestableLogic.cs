@@ -762,6 +762,9 @@ internal static class BrowserDetector
         return null;
     }
 
+    public static string TrimBrowserSuffix(string title) =>
+        TrimKnownBrowserSuffix(title.AsSpan()).ToString();
+
     private static ReadOnlySpan<char> TrimKnownBrowserSuffix(ReadOnlySpan<char> title)
     {
         foreach (var suffix in BrowserSuffixes)

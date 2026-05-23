@@ -40,42 +40,95 @@ Build notes:
 
 This produces three main executables:
 
-- `nudge` / `nudge.exe` - main tracker
+- `nudge` / `nudge.exe` - main tracker (harvest subprocess)
 - `nudge-notify` / `nudge-notify.exe` - sends YES/NO responses
-- `nudge-tray` / `nudge-tray.exe` - tray UI
+- `nudge-tray` / `nudge-tray.exe` - tray UI with AI Brain tab
 
 ## Run
 
 ### Linux / macOS
 
 ```bash
-./nudge
-./nudge-notify YES
-./nudge-notify NO
-./nudge-tray
+./nudge-tray           # recommended — manages everything
+./nudge-tray --ml      # enable ML-powered adaptive notifications
 ```
 
 ### Windows
 
 ```powershell
-.\nudge.exe
-.\nudge-notify.exe YES
-.\nudge-notify.exe NO
 .\nudge-tray.exe
+.\nudge-tray.exe --ml
 ```
+
+`nudge-tray` automatically starts and manages:
+- the harvest subprocess (`nudge.dll`)
+- the ML inference server (when `--ml` is active)
+- the background model trainer
 
 ## Data Files
 
 By default Nudge stores data in `~/.nudge/` on every platform:
 
-- `HARVEST.CSV` - labeled productivity snapshots
+- `HARVEST.CSV` - labeled productivity snapshots (training data)
 - `ACTIVITY_LOG.CSV` - minute-by-minute foreground-app activity
+- `model/productivity_model.joblib` - trained scikit-learn model
 
 ## Architecture
 
-Still intentionally direct:
+```
+nudge-tray (Avalonia GUI)
+├── System tray icon + context menu
+├── Settings window
+├── Analytics window
+│   ├── Today / This Week / This Month / All Time tabs
+│   └── AI Brain tab
+│       ├── In Focus Now  (live app + sensor fusion signals)
+│       ├── Next AI Check (countdown to next ML inference)
+│       ├── Prediction History (gradient chart of recent checks)
+│       ├── Recent Checks (event log)
+│       └── Model Training (accordion with training details)
+│
+└── nudge subprocess (nudge.dll) — IPC via stdout lines + UDP 45001
+    ├── V2 Harvest Engine
+    │   ├── ActivityContext (focus source, signal quality, idle, domain)
+    │   └── FeatureVectorV2 (21 ML-ready features, 300s rolling windows)
+    ├── ML check every 60s → TCP 127.0.0.1:45002
+    └── Fallback: random 5–10 min snapshot interval
+```
 
-- small shared helpers for pure logic and shared paths
-- direct platform checks instead of large abstraction layers
-- single-file-ish entry points for the main apps
-- no trimming / AOT / publish tricks enabled by default
+### IPC Protocol (nudge.dll → nudge-tray stdout)
+
+| Prefix | Meaning |
+|--------|---------|
+| `SNAPSHOT` | Show nudge notification |
+| `MLDATA:{json}` | ML prediction result (every 60s) |
+| `MLNEXT:{unixts}` | Next scheduled check timestamp |
+| `APPFOCUS:{app}\t{title}` | Foreground app changed |
+| `HARVEST:{json}` | Sensor fusion signals (every 2s, V2 engine) |
+
+## V2 Harvest Engine
+
+The V2 engine builds a rich `ActivityContext` from:
+- Focus source (KWin Script, X11 EWMH, Wayland Protocol, Sway IPC, …)
+- Signal quality (Trusted / Usable / Poor)
+- Browser domain extraction
+- 300-second rolling window: switch counts, distinct apps, app share, anchor return
+
+Signal quality colors in the AI Brain tab:
+- **Green** — Trusted (compositor API, high confidence)
+- **Amber** — Usable (browser without domain, or catalog disagrees)
+- **Red** — Poor (heuristic scan, unknown source)
+
+## ML System
+
+Nudge uses a **scikit-learn** classifier served over TCP at `127.0.0.1:45002`.
+
+Every 60 seconds:
+1. V2 engine produces 21 features from current context
+2. Features sent to inference server via TCP
+3. Server returns `prediction` (0=not productive, 1=productive) + `confidence`
+4. If not-productive + confidence ≥ threshold → nudge fires immediately
+5. If productive + high confidence → check skipped
+6. If low confidence → wait for 5–10 min fallback interval
+
+See [ML_README.md](ML_README.md) for full ML documentation.
