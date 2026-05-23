@@ -1289,7 +1289,10 @@ publish();
             // Get current activity
             var now = DateTime.Now;
             var (app, title) = _platformService?.GetForegroundAppWithTitle() ?? ("unknown", "");
+            long focusMs = sw.ElapsedMilliseconds;
+
             int idle = _platformService?.GetIdleTime() ?? 0;
+            long idleMs = sw.ElapsedMilliseconds - focusMs;
 
             // Ignore Nudge notification window in app tracking
             // This prevents the notification from polluting analytics data
@@ -1329,9 +1332,11 @@ publish();
                 title = _currentTitle;
             }
 
+            long beforeTick = sw.ElapsedMilliseconds;
             ActivityTickResult? tick = _harvestEngine == HarvestEngineMode.V2
                 ? CaptureActivityTick(now, app, title, idle)
                 : null;
+            long tickMs = sw.ElapsedMilliseconds - beforeTick;
 
             // Broadcast harvest sensor signals to AI Brain tab every 2 seconds
             harvestElapsed += CYCLE_MS;
@@ -1399,11 +1404,15 @@ publish();
                 Console.WriteLine($"MLNEXT:{DateTimeOffset.UtcNow.ToUnixTimeSeconds() + ML_CHECK_INTERVAL_MS / 1000}");
             }
 
+            long mlInferMs = 0;
             if (!_waitingForResponse)
             {
                 if (mlCheckDue)
                 {
-                    if (ShouldTriggerSnapshot(app, idle, _attentionSpanMs, tick))
+                    long beforeMlInfer = sw.ElapsedMilliseconds;
+                    bool mlResult = ShouldTriggerSnapshot(app, idle, _attentionSpanMs, tick);
+                    mlInferMs = sw.ElapsedMilliseconds - beforeMlInfer;
+                    if (mlResult)
                         mlTriggered = true;
                     else if (_productivityConfirmed)
                     {
@@ -1457,7 +1466,14 @@ publish();
             sw.Stop();
             if (sw.ElapsedMilliseconds > 10)
             {
-                Dim($"  PERF: Monitoring cycle took {sw.ElapsedMilliseconds}ms");
+                var perfDetail = new System.Text.StringBuilder();
+                perfDetail.Append($"  PERF: cycle={sw.ElapsedMilliseconds}ms");
+                perfDetail.Append($" (focus={focusMs}ms");
+                perfDetail.Append($", idle={idleMs}ms");
+                if (tickMs > 0) perfDetail.Append($", tick={tickMs}ms");
+                if (mlInferMs > 0) perfDetail.Append($", ml={mlInferMs}ms");
+                perfDetail.Append(')');
+                Dim(perfDetail.ToString());
             }
 
             Thread.Sleep(CYCLE_MS);

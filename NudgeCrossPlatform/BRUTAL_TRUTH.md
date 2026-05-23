@@ -520,8 +520,8 @@ The whole idea of Nudge isn't just to track activity—it's to **notify at the r
 **RESULT:** 50% of codebase deleted, core value remains.
 
 ### Hour 2-4: MEASURE & PROFILE
-- [ ] Add performance timing to monitoring cycle
-- [ ] Profile ML inference latency (must be <10ms)
+- [x] Add performance timing to monitoring cycle
+- [x] Profile ML inference latency (must be <10ms)
 - [ ] Find actual hotspots
 - [ ] Document measurements
 
