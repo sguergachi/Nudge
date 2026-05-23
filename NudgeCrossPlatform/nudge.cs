@@ -69,7 +69,7 @@ sealed class Nudge
     // VERSION & CONSTANTS
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    const string VERSION = "1.3.0";
+    const string VERSION = "1.4.0";
     const int CYCLE_MS = 1000;           // 1 second monitoring cycle
     const int UDP_PORT = 45001;          // UDP listener port
     const int RESPONSE_TIMEOUT_MS = 60000; // 60 seconds to respond
@@ -1019,6 +1019,7 @@ publish();
     static int _mlTriggeredSnapshots;
     static int _mlSkippedAlerts;
     static int _intervalTriggeredSnapshots;
+    static bool _productivityConfirmed;
     static List<double> _mlConfidenceScores = new List<double>();
 
     // Log message formats
@@ -1306,7 +1307,13 @@ publish();
                 _currentTitle = title;
                 _attentionSpanMs = 0;
                 // Keep the tray AI Brain tab aware of which app is in focus (tab-separated: app\ttitle)
-                // Strip browser name suffix so detail shows just the page/tab name
+                Console.WriteLine($"APPFOCUS:{app}\t{BrowserDetector.TrimBrowserSuffix(title)}");
+            }
+            // Broadcast title changes within the same app (e.g. browser tab switches)
+            else if (!isNudgeWindow && title != _currentTitle)
+            {
+                _currentTitle = title;
+                _attentionSpanMs += CYCLE_MS;
                 Console.WriteLine($"APPFOCUS:{app}\t{BrowserDetector.TrimBrowserSuffix(title)}");
             }
             else if (!isNudgeWindow)
@@ -1394,13 +1401,23 @@ publish();
 
             if (!_waitingForResponse)
             {
-                if (mlCheckDue && ShouldTriggerSnapshot(app, idle, _attentionSpanMs, tick))
-                    mlTriggered = true;
+                if (mlCheckDue)
+                {
+                    if (ShouldTriggerSnapshot(app, idle, _attentionSpanMs, tick))
+                        mlTriggered = true;
+                    else if (_productivityConfirmed)
+                    {
+                        _productivityConfirmed = false;
+                        elapsed = 0;
+                        intervalReached = false;
+                    }
+                }
 
                 // Trigger snapshot if:
                 // 1. ML triggered with high confidence (checked every minute)
-                // 2. Interval reached (fallback when ML doesn't trigger)
-                if (mlTriggered || intervalReached)
+                // 2. Interval reached (fallback when ML is disabled or unavailable)
+                bool useIntervalFallback = !_mlEnabled || !_mlAvailable;
+                if (mlTriggered || (useIntervalFallback && intervalReached))
                 {
                     if (mlTriggered)
                     {
@@ -1409,10 +1426,7 @@ publish();
                     else if (intervalReached)
                     {
                         _intervalTriggeredSnapshots++;
-                        if (_mlEnabled)
-                        {
-                            Info($"  {Color.BYELLOW}⏰ INTERVAL SNAPSHOT{Color.RESET} (ML low confidence or productive)");
-                        }
+                        Info($"  {Color.BYELLOW}⏰ INTERVAL SNAPSHOT{Color.RESET} ({( _mlEnabled ? "ML unavailable" : "ML disabled" )})");
                     }
 
                     TakeSnapshot(app, title, idle, _attentionSpanMs, tick);
@@ -2099,8 +2113,9 @@ publish();
         }
         else
         {
-            // High confidence user IS productive - skip snapshot
+            // High confidence user IS productive - skip snapshot, reset interval
             _mlSkippedAlerts++;
+            _productivityConfirmed = true;
             Info($"  {Color.BGREEN}ML SKIP{Color.RESET}: Productive (confidence: {Color.BYELLOW}{prediction.Confidence*100:F1}%{Color.RESET}, avg: {avgConfidence*100:F1}%)");
             Dim($"  {Color.DIM}Stats: {_mlPredictions} predictions, {_mlTriggeredSnapshots} triggered, {_mlSkippedAlerts} skipped{Color.RESET}");
             return false;

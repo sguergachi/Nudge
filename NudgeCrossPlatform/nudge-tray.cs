@@ -41,7 +41,7 @@ namespace NudgeTray
     sealed class Program
     {
         const int UDP_PORT = 45001;
-        const string VERSION = "1.3.0";
+        const string VERSION = "1.4.0";
         static Process? _nudgeProcess;
         static Process? _mlInferenceProcess;
         static Process? _mlTrainerProcess;
@@ -1269,7 +1269,8 @@ namespace NudgeTray
                 {
                     try
                     {
-                        var notificationWindow = new CustomNotificationWindow();
+                        var appName = LiveAIState.CurrentApp ?? "";
+                        var notificationWindow = new CustomNotificationWindow(appName);
                         notificationWindow.ShowWithAnimation((productive) =>
                         {
                             _waitingForResponse = false;

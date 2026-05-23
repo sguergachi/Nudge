@@ -45,9 +45,11 @@ namespace NudgeTray
         private Arc? _progressArc;
         private Arc? _backgroundArc;
         private StackPanel? _pauseIconView;
+        private readonly string _appName;
 
-        public CustomNotificationWindow()
+        public CustomNotificationWindow(string? appName = null)
         {
+            _appName = appName ?? "";
             InitializeWindow();
             InitializeContent();
             LoadPosition();
@@ -57,7 +59,7 @@ namespace NudgeTray
         private void InitializeWindow()
         {
             Width = 340;
-            Height = 144; // header(20)+gap(8)+question(18)+gap(12)+buttons(32)+padding(32)+margins(20)=142 +2 buffer
+            Height = 158; // header(20)+app(14)+gap(4)+question(18)+gap(12)+buttons(32)+padding(32)+margins(20)=152 +6 buffer
             CanResize = false;
             ShowInTaskbar = false;
             WindowStartupLocation = WindowStartupLocation.Manual;
@@ -275,6 +277,23 @@ namespace NudgeTray
 
             // Add all elements to stack
             stackPanel.Children.Add(headerPanel);
+
+            // App in focus — small text below the header
+            if (!string.IsNullOrEmpty(_appName))
+            {
+                var appText = new TextBlock
+                {
+                    Text = _appName,
+                    FontSize = 10,
+                    FontWeight = FontWeight.Normal,
+                    Foreground = new SolidColorBrush(Color.FromRgb(120, 120, 130)),
+                    TextAlignment = TextAlignment.Left,
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    Margin = new Thickness(0, 2, 0, 0)
+                };
+                stackPanel.Children.Add(appText);
+            }
+
             stackPanel.Children.Add(messageText);
             stackPanel.Children.Add(buttonsPanel);
 

@@ -1062,6 +1062,9 @@ namespace NudgeTray
             var currentDetail = LiveAIState.CurrentDetail;
             var harvest     = LiveAIState.LastHarvest;
             bool hasApp     = !string.IsNullOrEmpty(currentApp);
+            string displayApp = hasApp
+                ? BrowserDetector.GetBrowserDisplayName(currentApp) ?? currentApp
+                : "";
 
             // Fusion quality color: driven by Harvest Engine signal quality
             Color fusionColor = harvest == null     ? TextTertiary
@@ -1094,7 +1097,7 @@ namespace NudgeTray
             var textStack = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
             textStack.Children.Add(new TextBlock
             {
-                Text       = hasApp ? TruncateAppName(currentApp, 24) : "Waiting…",
+                Text       = hasApp ? TruncateAppName(displayApp, 24) : "Waiting…",
                 FontSize   = 13,
                 FontWeight = FontWeight.SemiBold,
                 Foreground = new SolidColorBrush(hasApp ? TextPrimary : TextTertiary)
@@ -1103,7 +1106,7 @@ namespace NudgeTray
             {
                 textStack.Children.Add(new TextBlock
                 {
-                    Text          = TruncateAppName(currentDetail, 30),
+                    Text          = TruncateAppName(currentDetail, 55),
                     FontSize      = 10,
                     Foreground    = new SolidColorBrush(TextSecondary),
                     TextTrimming  = TextTrimming.CharacterEllipsis
@@ -1160,6 +1163,8 @@ namespace NudgeTray
                         AddFusionRow(signalPanel, "Category", cat, Color.FromRgb(180, 140, 255));
                     if (!string.IsNullOrEmpty(harvest.Domain))
                         AddFusionRow(signalPanel, "Domain", harvest.Domain, PrimaryBlue);
+                    if (showDetail && !string.IsNullOrEmpty(currentDetail))
+                        AddFusionRow(signalPanel, "Tab", currentDetail, TextSecondary);
                     AddFusionRow(signalPanel, "Activity (5m)",
                         $"{harvest.Sw300} switches · {harvest.Share * 100:F0}% dominant", TextSecondary);
                     if (harvest.Apps300 > 1)
@@ -1200,8 +1205,12 @@ namespace NudgeTray
                 toggleText.Text = nowVisible ? "▾ Sensor Signals" : "▸ Sensor Signals";
             };
 
-            // ── Footer row: engine badge + toggle ────────────────────────────
-            var footerRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            // ── Footer row: engine badge ─────────────────────────────────────
+            var footerRow = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 4
+            };
             footerRow.Children.Add(new TextBlock
             {
                 Text       = harvest?.V2 == true ? "POWERED BY NUDGE HARVEST ENGINE V2" : "POWERED BY NUDGE HARVEST ENGINE",
@@ -1210,13 +1219,12 @@ namespace NudgeTray
                 Foreground = new SolidColorBrush(Color.FromArgb(80, 100, 180, 255)),
                 VerticalAlignment = VerticalAlignment.Center
             });
-            Grid.SetColumn(toggleBtn, 1);
-            footerRow.Children.Add(toggleBtn);
 
             var outerStack = new StackPanel { Spacing = 0 };
             outerStack.Children.Add(mainGrid);
             outerStack.Children.Add(sep);
             outerStack.Children.Add(footerRow);
+            outerStack.Children.Add(toggleBtn);
             outerStack.Children.Add(signalPanel);
 
             return new Border

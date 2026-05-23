@@ -608,6 +608,8 @@ internal static class BrowserDetector
         ("opera", "Opera"),
         ("vivaldi", "Vivaldi"),
         ("safari", "Safari"),
+        ("zen-browser", "Zen"),
+        ("zen", "Zen"),
         ("browser", "Browser")
     ];
 
@@ -625,7 +627,9 @@ internal static class BrowserDetector
         " - Opera", " | Opera", " — Opera", " – Opera", " · Opera", " : Opera",
         " - Vivaldi", " | Vivaldi", " — Vivaldi", " – Vivaldi", " · Vivaldi", " : Vivaldi",
         " - Safari", " | Safari", " — Safari", " – Safari", " · Safari", " : Safari",
-        " - LibreWolf", " | LibreWolf", " — LibreWolf", " – LibreWolf", " · LibreWolf", " : LibreWolf"
+        " - LibreWolf", " | LibreWolf", " — LibreWolf", " – LibreWolf", " · LibreWolf", " : LibreWolf",
+        " - Zen Browser", " | Zen Browser", " — Zen Browser", " – Zen Browser", " · Zen Browser", " : Zen Browser",
+        " - Zen", " | Zen", " — Zen", " – Zen", " · Zen", " : Zen"
     ];
 
     private static readonly FrozenSet<string> KnownSiteDomains = new[]
