@@ -48,7 +48,7 @@ def _count_labeled_rows(csv_path: str) -> int:
 
 
 def _model_exists(model_dir: str) -> bool:
-    return os.path.exists(os.path.join(model_dir, 'productivity_model.keras'))
+    return os.path.exists(os.path.join(model_dir, 'productivity_model.joblib'))
 
 
 def _load_meta(model_dir: str) -> dict:

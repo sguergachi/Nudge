@@ -1736,16 +1736,22 @@ publish();
         int dayOfWeek = (int)now.DayOfWeek;  // 0-6 (Sunday=0)
         string timestamp = now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 
+        // Productive responses get a stronger training signal (3x) to bias the model
+        int boost = productive ? 3 : 1;
+
         try
         {
-            if (_harvestEngine == HarvestEngineMode.V2 && tick is ActivityTickResult fusedTick)
+            for (int i = 0; i < boost; i++)
             {
-                if (fusedTick.Context.SignalQuality == SignalQuality.Poor)
+                if (_harvestEngine == HarvestEngineMode.V2 && tick is ActivityTickResult fusedTick)
                 {
-                    Warning("  Skipping labeled V2 row because signal quality is poor");
-                }
-                else
-                {
+                    if (fusedTick.Context.SignalQuality == SignalQuality.Poor)
+                    {
+                        if (i == 0)
+                            Warning("  Skipping labeled V2 row because signal quality is poor");
+                        continue;
+                    }
+
                     WriteCsvRow(
                         _csvFile,
                         timestamp,
@@ -1788,11 +1794,11 @@ publish();
                         fusedTick.Features.WorkspaceSwitchCount300s);
                     wroteRow = true;
                 }
-            }
-            else
-            {
-                WriteCsvRow(_csvFile, timestamp, hourOfDay, dayOfWeek, app, appHash, idle, attention, productiveInt);
-                wroteRow = true;
+                else
+                {
+                    WriteCsvRow(_csvFile, timestamp, hourOfDay, dayOfWeek, app, appHash, idle, attention, productiveInt);
+                    wroteRow = true;
+                }
             }
 
             if (wroteRow)
@@ -1800,7 +1806,8 @@ publish();
                 var label = productive ?
                     $"{Color.BGREEN}PRODUCTIVE{Color.RESET}" :
                     $"{Color.YELLOW}NOT PRODUCTIVE{Color.RESET}";
-                Success($"✓ Saved as {label}");
+                string boostInfo = productive ? $" (x{boost} boost)" : "";
+                Success($"✓ Saved as {label}{boostInfo}");
             }
             else
             {
@@ -2078,7 +2085,7 @@ publish();
 
         // ── Broadcast live state to nudge-tray AI Brain tab ──────────────────
         {
-            bool willTrigger = prediction.Prediction == 0 && prediction.Confidence >= ML_CONFIDENCE_THRESHOLD;
+            bool willTrigger = prediction.Prediction == 0;
             bool isProductive = prediction.Prediction == 1;
             // Score: 1.0 = AI very confident you ARE productive; 0.0 = very confident NOT productive
             double productivityScore = isProductive
@@ -2096,24 +2103,18 @@ publish();
             Console.WriteLine($"MLDATA:{JsonSerializer.Serialize(liveEvt, NudgeJsonContext.Default.MLLiveEvent)}");
         }
 
-        // Check confidence threshold
-        if (prediction.Prediction == 0 && prediction.Confidence >= ML_CONFIDENCE_THRESHOLD)
+        // Trigger based on prediction regardless of confidence
+        if (prediction.Prediction == 0)
         {
-            // High confidence user is NOT productive - trigger snapshot!
+            // NOT productive - trigger snapshot!
             _mlTriggeredSnapshots++;
             Info($"  {Color.BRED}ML TRIGGER{Color.RESET}: NOT productive (confidence: {Color.BYELLOW}{prediction.Confidence*100:F1}%{Color.RESET}, avg: {avgConfidence*100:F1}%)");
-            Info($"  {Color.DIM}Stats: {_mlPredictions} predictions, {_mlTriggeredSnapshots} triggered, {_mlSkippedAlerts} skipped{Color.RESET}");
+            Dim($"  {Color.DIM}Stats: {_mlPredictions} predictions, {_mlTriggeredSnapshots} triggered, {_mlSkippedAlerts} skipped{Color.RESET}");
             return true;
-        }
-        else if (prediction.Confidence < ML_CONFIDENCE_THRESHOLD)
-        {
-            // Low confidence - suppress this check, wait for interval
-            Dim($"  ML: Low confidence ({prediction.Confidence*100:F1}%, avg: {avgConfidence*100:F1}%) - waiting for interval");
-            return false;
         }
         else
         {
-            // High confidence user IS productive - skip snapshot, reset interval
+            // User IS productive - skip snapshot, reset interval
             _mlSkippedAlerts++;
             _productivityConfirmed = true;
             Info($"  {Color.BGREEN}ML SKIP{Color.RESET}: Productive (confidence: {Color.BYELLOW}{prediction.Confidence*100:F1}%{Color.RESET}, avg: {avgConfidence*100:F1}%)");

@@ -59,7 +59,7 @@ namespace NudgeTray
         private void InitializeWindow()
         {
             Width = 340;
-            Height = 158; // header(20)+app(14)+gap(4)+question(18)+gap(12)+buttons(32)+padding(32)+margins(20)=152 +6 buffer
+            Height = 144; // header(20)+question(18)+gap(12)+buttons(32)+padding(32)+margins(20)=134 +10 buffer
             CanResize = false;
             ShowInTaskbar = false;
             WindowStartupLocation = WindowStartupLocation.Manual;
@@ -144,8 +144,8 @@ namespace NudgeTray
             // Title - recedes so the question becomes the visual anchor
             var titleText = new TextBlock
             {
-                Text = "Nudge",
-                FontSize = 11,
+                Text = string.IsNullOrEmpty(_appName) ? "Nudge" : $"Nudge  >  {_appName}",
+                FontSize = 10,
                 FontWeight = FontWeight.Normal,
                 Foreground = new SolidColorBrush(Color.FromRgb(120, 120, 130)),
                 HorizontalAlignment = HorizontalAlignment.Left,
@@ -277,23 +277,6 @@ namespace NudgeTray
 
             // Add all elements to stack
             stackPanel.Children.Add(headerPanel);
-
-            // App in focus — small text below the header
-            if (!string.IsNullOrEmpty(_appName))
-            {
-                var appText = new TextBlock
-                {
-                    Text = _appName,
-                    FontSize = 10,
-                    FontWeight = FontWeight.Normal,
-                    Foreground = new SolidColorBrush(Color.FromRgb(120, 120, 130)),
-                    TextAlignment = TextAlignment.Left,
-                    HorizontalAlignment = HorizontalAlignment.Left,
-                    Margin = new Thickness(0, 2, 0, 0)
-                };
-                stackPanel.Children.Add(appText);
-            }
-
             stackPanel.Children.Add(messageText);
             stackPanel.Children.Add(buttonsPanel);
 

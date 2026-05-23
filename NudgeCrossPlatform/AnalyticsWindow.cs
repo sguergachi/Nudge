@@ -606,7 +606,7 @@ namespace NudgeTray
                 statusColor = UnproductiveRed;
                 statusText  = "Error";
             }
-            else if (lastTrained != DateTime.MinValue)
+            else if (lastTrained != DateTime.MinValue && sampleCount - lastTrainedCount <= 5)
             {
                 statusColor = ProductiveGreen;
                 statusText  = "Up to date";
@@ -646,10 +646,16 @@ namespace NudgeTray
             panel.Children.Add(statusRow);
 
             // ── Sample progress bar ──────────────────────────────────────────────
-            double ratio    = minSamples > 0 ? Math.Min(1.0, (double)sampleCount / minSamples) : 1.0;
             bool   hasModel = lastTrained != DateTime.MinValue;
+            int    retrainThreshold = hasModel
+                ? lastTrainedCount + Math.Max(10, (int)(lastTrainedCount * 0.10))
+                : minSamples;
+            int    newSamples = hasModel ? Math.Max(0, sampleCount - lastTrainedCount) : sampleCount;
+            int    neededTotal = hasModel ? retrainThreshold : minSamples;
+            double ratio = neededTotal > 0 ? Math.Min(1.0, (double)newSamples / neededTotal) : 1.0;
+
             string progressLabel = hasModel
-                ? $"{sampleCount} labeled samples  (last run: {lastTrainedCount})"
+                ? $"{sampleCount} total labeled  ·  {newSamples} new  ·  {neededTotal} needed for retrain"
                 : $"{sampleCount} / {minSamples} samples needed for first model";
 
             panel.Children.Add(new TextBlock
@@ -659,7 +665,6 @@ namespace NudgeTray
                 Foreground = new SolidColorBrush(TextSecondary)
             });
 
-            if (!hasModel)
             {
                 var barBg = new Border
                 {
@@ -672,10 +677,9 @@ namespace NudgeTray
                 {
                     Height = 4,
                     CornerRadius = new CornerRadius(2),
-                    Background = new SolidColorBrush(PrimaryBlue),
+                    Background = new SolidColorBrush(hasModel ? Color.FromRgb(140, 200, 120) : PrimaryBlue),
                     HorizontalAlignment = HorizontalAlignment.Left
                 };
-                // Bind fill width via layout — use a Grid with column star trick
                 var barGrid = new Grid();
                 barGrid.ColumnDefinitions.Add(new ColumnDefinition(ratio, GridUnitType.Star));
                 barGrid.ColumnDefinitions.Add(new ColumnDefinition(Math.Max(0, 1 - ratio), GridUnitType.Star));
@@ -683,6 +687,23 @@ namespace NudgeTray
                 barGrid.Children.Add(barFill);
                 barBg.Child = barGrid;
                 panel.Children.Add(barBg);
+            }
+
+            // ── Next check ───────────────────────────────────────────────────────
+            if (lastChecked != DateTime.MinValue)
+            {
+                TimeSpan sinceCheck = DateTime.Now - lastChecked;
+                TimeSpan nextCheck = TimeSpan.FromSeconds(300) - sinceCheck;
+                string nextText = nextCheck.TotalSeconds > 0
+                    ? $"Next check: in {nextCheck.Minutes}m {nextCheck.Seconds}s"
+                    : "Next check: any moment";
+                panel.Children.Add(new TextBlock
+                {
+                    Text = nextText,
+                    FontSize = 10,
+                    Foreground = new SolidColorBrush(TextTertiary),
+                    Margin = new Thickness(0, 2, 0, 0)
+                });
             }
 
             // ── Last model info ──────────────────────────────────────────────────

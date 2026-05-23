@@ -82,13 +82,13 @@ fi
 
 # Check Python packages
 info "Checking Python packages..."
-if python3 -c "import tensorflow, pandas, numpy, sklearn" 2>/dev/null; then
+if python3 -c "import joblib, pandas, numpy, sklearn" 2>/dev/null; then
     success "Python packages OK"
 else
     error "Missing Python packages"
     echo ""
     echo "Install with:"
-    echo "  pip install tensorflow pandas numpy scikit-learn"
+    echo "  pip install joblib pandas numpy scikit-learn"
     exit 1
 fi
 
@@ -112,8 +112,8 @@ fi
 # Check model
 header "Checking Model"
 
-if [ -f "$MODEL_DIR/productivity_model.keras" ]; then
-    success "Model found: $MODEL_DIR/productivity_model.keras"
+if [ -f "$MODEL_DIR/productivity_model.joblib" ]; then
+    success "Model found: $MODEL_DIR/productivity_model.joblib"
     model_exists=true
 else
     warning "No trained model found"

@@ -768,43 +768,7 @@ namespace NudgeTray
 
         static bool CheckPythonVersion()
         {
-            try
-            {
-                var versionProcess = new Process
-                {
-                    StartInfo = new ProcessStartInfo
-                    {
-                        FileName = "/home/sammy/Dev/Nudge/NudgeCrossPlatform/venv/bin/python",
-                        Arguments = "-c \"import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')\"",
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    }
-                };
-
-                versionProcess.Start();
-                string versionOutput = versionProcess.StandardOutput.ReadToEnd();
-                versionProcess.WaitForExit(5000);
-
-                if (versionProcess.ExitCode == 0 && Version.TryParse(versionOutput.Trim(), out Version? pythonVersion))
-                {
-                    // TensorFlow 2.13+ requires Python 3.9-3.12, doesn't support 3.13+
-                    if (pythonVersion?.Major == 3 && pythonVersion?.Minor >= 13)
-                    {
-                        Console.WriteLine($"  ⚠ Python {pythonVersion} detected - TensorFlow doesn't support Python 3.13+");
-                        Console.WriteLine("  To use ML features, install Python 3.11 or 3.12");
-                        Console.WriteLine("  ML features will be skipped for now.");
-                        return false;
-                    }
-                }
-
-                return true;
-            }
-            catch
-            {
-                return true; // Continue anyway
-            }
+            return true;
         }
 
         static bool EnsurePythonDependencies()
