@@ -2,15 +2,8 @@
 """
 Real-time ML inference service for Nudge productivity predictions.
 
-This service loads a trained TensorFlow model and provides predictions
-via Unix domain socket. It returns both the prediction and confidence score
-to enable the hybrid alert system (model-based + interval fallback).
-
-Features:
-- Unix domain socket IPC for fast communication
-- Confidence scores for adaptive behavior
-- Graceful model loading/fallback
-- Low-latency predictions (<10ms)
+Loads a trained scikit-learn model and serves predictions over TCP.
+Automatically reloads when the model file is updated by the background trainer.
 """
 
 import os
@@ -23,365 +16,266 @@ import time
 import warnings
 from pathlib import Path
 
-# Suppress TensorFlow warnings
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 warnings.filterwarnings('ignore')
 
 import numpy as np
 
-# Try to import TensorFlow, but handle gracefully if not available
 try:
-    import tensorflow as tf
-    TENSORFLOW_AVAILABLE = True
+    import joblib
+    JOBLIB_AVAILABLE = True
 except ImportError:
-    TENSORFLOW_AVAILABLE = False
-    print("⚠️  TensorFlow not available - running in fallback mode", file=sys.stderr)
+    JOBLIB_AVAILABLE = False
+    print('joblib not available — running in fallback mode', file=sys.stderr)
+
+MODEL_FILE = 'productivity_model.joblib'
 
 
 class ProductivityPredictor:
-    """ML-powered productivity predictor with confidence scoring"""
+    """Sklearn-based productivity predictor with confidence scoring."""
 
     def __init__(self, model_dir='./model'):
-        self.model_dir = model_dir
-        self.model = None
-        self.scaler_mean = None
+        self.model_dir   = model_dir
+        self.model       = None
+        self.scaler_mean  = None
         self.scaler_scale = None
         self.feature_order = None
         self.schema_version = None
-        self.model_loaded = False
+        self.model_loaded   = False
+        self._model_mtime   = 0.0
+        self._lock = threading.Lock()
         self.load_model()
 
-    def load_model(self):
-        """Load trained model and scaler"""
-        model_path = os.path.join(self.model_dir, 'productivity_model.keras')
+    def load_model(self) -> bool:
+        model_path  = os.path.join(self.model_dir, MODEL_FILE)
         scaler_path = os.path.join(self.model_dir, 'scaler.json')
 
         if not os.path.exists(model_path):
-            print(f"ℹ️  No model found at {model_path}", file=sys.stderr)
-            print(f"   Run 'python train_model.py' to train a model first", file=sys.stderr)
+            print(f'No model at {model_path} — waiting for trainer', file=sys.stderr)
             return False
 
-        if not TENSORFLOW_AVAILABLE:
-            print("❌ TensorFlow not available - cannot load model", file=sys.stderr)
+        if not JOBLIB_AVAILABLE:
+            print('joblib not available — cannot load model', file=sys.stderr)
             return False
 
         try:
-            # Load model
-            self.model = tf.keras.models.load_model(model_path)
-            print(f"✅ Model loaded from {model_path}", file=sys.stderr)
+            self.model = joblib.load(model_path)
+            print(f'Model loaded from {model_path}', file=sys.stderr)
 
-            # Load scaler
             if os.path.exists(scaler_path):
-                with open(scaler_path, 'r') as f:
-                    scaler_params = json.load(f)
-                self.scaler_mean = np.array(scaler_params['mean'])
-                self.scaler_scale = np.array(scaler_params['scale'])
-                self.feature_order = scaler_params.get('feature_order')
-                self.schema_version = scaler_params.get('schema_version')
-                print(f"✅ Scaler loaded from {scaler_path}", file=sys.stderr)
+                with open(scaler_path) as f:
+                    params = json.load(f)
+                self.scaler_mean   = np.array(params['mean'])
+                self.scaler_scale  = np.array(params['scale'])
+                self.feature_order = params.get('feature_order')
+                self.schema_version = params.get('schema_version')
+                print(f'Scaler loaded from {scaler_path}', file=sys.stderr)
             else:
-                print(f"⚠️  No scaler found - using raw features", file=sys.stderr)
+                print('No scaler found — using raw features', file=sys.stderr)
 
             self.model_loaded = True
+            try:
+                self._model_mtime = os.path.getmtime(model_path)
+            except Exception:
+                pass
             return True
 
         except Exception as e:
-            print(f"❌ Error loading model: {e}", file=sys.stderr)
+            print(f'Error loading model: {e}', file=sys.stderr)
             return False
 
+    def check_and_reload(self):
+        """Reload if the model file on disk is newer than what we loaded."""
+        model_path = os.path.join(self.model_dir, MODEL_FILE)
+        try:
+            if not os.path.exists(model_path):
+                return
+            mtime = os.path.getmtime(model_path)
+            if mtime > self._model_mtime:
+                print('Model file updated — reloading', file=sys.stderr)
+                with self._lock:
+                    self.load_model()
+        except Exception as e:
+            print(f'Model reload check error: {e}', file=sys.stderr)
+
     def predict(self, features_by_name, request_feature_order=None):
-        """
-        Make prediction with confidence score
-
-        Returns:
-            dict with:
-                - prediction: 0 (not productive) or 1 (productive)
-                - confidence: probability of the prediction (0.0-1.0)
-                - model_available: whether model was used
-        """
-
-        # Fallback if no model
         if not self.model_loaded:
-            return {
-                'prediction': None,
-                'confidence': 0.0,
-                'model_available': False,
-                'reason': 'no_model'
-            }
-
+            return {'prediction': None, 'confidence': 0.0,
+                    'model_available': False, 'reason': 'no_model'}
         try:
             feature_order = self.feature_order or request_feature_order
             if not feature_order:
                 raise ValueError('missing_feature_order')
 
-            features = np.array([
-                [float(features_by_name.get(name, 0.0)) for name in feature_order]
-            ], dtype=np.float32)
+            X = np.array([[float(features_by_name.get(n, 0.0)) for n in feature_order]],
+                         dtype=np.float32)
 
-            # Scale features if scaler is available
             if self.scaler_mean is not None and self.scaler_scale is not None:
-                features = (features - self.scaler_mean) / self.scaler_scale
+                X = (X - self.scaler_mean) / self.scaler_scale
 
-            # Get prediction probability
-            prob = self.model.predict(features, verbose=0)[0][0]
-
-            # Convert to binary prediction
+            prob       = float(self.model.predict_proba(X)[0][1])
             prediction = 1 if prob >= 0.5 else 0
+            confidence = abs(prob - 0.5) * 2.0  # 0 = uncertain, 1 = certain
 
-            # Confidence is how far from 0.5 (uncertain) the probability is
-            # Range: 0.5 (no confidence) to 1.0 (absolute confidence)
-            confidence = abs(prob - 0.5) * 2.0  # Scale to 0.0-1.0
-
-            return {
-                'prediction': int(prediction),
-                'confidence': float(confidence),
-                'probability': float(prob),
-                'model_available': True
-            }
+            return {'prediction': prediction, 'confidence': confidence,
+                    'probability': prob, 'model_available': True}
 
         except Exception as e:
-            print(f"❌ Prediction error: {e}", file=sys.stderr)
-            return {
-                'prediction': None,
-                'confidence': 0.0,
-                'model_available': False,
-                'reason': str(e)
-            }
+            print(f'Prediction error: {e}', file=sys.stderr)
+            return {'prediction': None, 'confidence': 0.0,
+                    'model_available': False, 'reason': str(e)}
 
 
 class InferenceServer:
-    """TCP socket server for ML predictions (cross-platform)"""
+    """TCP inference server on 127.0.0.1:45002."""
 
     def __init__(self, host='127.0.0.1', port=45002, model_dir='./model'):
-        self.host = host
-        self.port = port
+        self.host      = host
+        self.port      = port
         self.predictor = ProductivityPredictor(model_dir)
-        self.running = False
-        self.sock = None
-
-        # Statistics
-        self.request_count = 0
+        self.running   = False
+        self.sock      = None
+        self.request_count    = 0
         self.prediction_times = []
 
     def start(self):
-        """Start the inference server"""
-        # Create TCP socket (cross-platform compatible)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.bind((self.host, self.port))
         self.sock.listen(5)
-        self.sock.settimeout(1.0)  # Allow periodic cleanup checks
-
+        self.sock.settimeout(1.0)
         self.running = True
-        print(f"🚀 Inference server listening on {self.host}:{self.port}", file=sys.stderr)
 
+        print(f'Inference server listening on {self.host}:{self.port}', file=sys.stderr)
         if self.predictor.model_loaded:
-            print(f"✅ Model ready for predictions", file=sys.stderr)
+            print('Model ready', file=sys.stderr)
         else:
-            print(f"⚠️  Running in fallback mode (no model)", file=sys.stderr)
+            print('No model yet — will reload when trainer produces one', file=sys.stderr)
 
-        # Handle shutdown signals
-        signal.signal(signal.SIGINT, self.shutdown)
+        signal.signal(signal.SIGINT,  self.shutdown)
         signal.signal(signal.SIGTERM, self.shutdown)
 
-        # Main server loop
+        # Reload loop — picks up newly trained models every 60 s
+        def _reload_loop():
+            while self.running:
+                time.sleep(60)
+                self.predictor.check_and_reload()
+        threading.Thread(target=_reload_loop, daemon=True).start()
+
         while self.running:
             try:
                 conn, _ = self.sock.accept()
-                threading.Thread(target=self.handle_client, args=(conn,), daemon=True).start()
+                threading.Thread(target=self.handle_client,
+                                 args=(conn,), daemon=True).start()
             except socket.timeout:
                 continue
             except Exception as e:
                 if self.running:
-                    print(f"❌ Accept error: {e}", file=sys.stderr)
+                    print(f'Accept error: {e}', file=sys.stderr)
 
     def handle_client(self, conn):
-        """Handle client request"""
         try:
-            # Read request (JSON)
             data = b''
             while True:
                 chunk = conn.recv(1024)
                 if not chunk:
                     break
                 data += chunk
-                if b'\n' in chunk:  # Newline-delimited JSON
+                if b'\n' in chunk:
                     break
-
             if not data:
                 return
 
-            # Parse request
             request = json.loads(data.decode('utf-8'))
 
             if 'features' in request:
-                features_by_name = request.get('features', {})
+                features_by_name      = request.get('features', {})
                 request_feature_order = request.get('feature_order', [])
             else:
                 features_by_name = {
-                    'hour_of_day': request.get('hour_of_day', 0),
-                    'day_of_week': request.get('day_of_week', 0),
-                    'foreground_app': request.get('foreground_app', 0),
-                    'idle_time': request.get('idle_time', 0),
+                    'hour_of_day':       request.get('hour_of_day', 0),
+                    'day_of_week':       request.get('day_of_week', 0),
+                    'foreground_app':    request.get('foreground_app', 0),
+                    'idle_time':         request.get('idle_time', 0),
                     'time_last_request': request.get('time_last_request', 0),
                 }
                 request_feature_order = list(features_by_name.keys())
 
-            # Time prediction
-            start_time = time.time()
+            t0 = time.time()
+            with self.predictor._lock:
+                result = self.predictor.predict(features_by_name, request_feature_order)
+            ms = (time.time() - t0) * 1000
 
-            result = self.predictor.predict(features_by_name, request_feature_order)
-
-            # Track performance
-            prediction_time = (time.time() - start_time) * 1000  # ms
-            self.prediction_times.append(prediction_time)
+            self.prediction_times.append(ms)
             if len(self.prediction_times) > 100:
                 self.prediction_times.pop(0)
-
             self.request_count += 1
+            result['request_id']        = self.request_count
+            result['prediction_time_ms'] = round(ms, 2)
 
-            # Add metadata
-            result['request_id'] = self.request_count
-            result['prediction_time_ms'] = round(prediction_time, 2)
+            conn.sendall((json.dumps(result) + '\n').encode('utf-8'))
 
-            # Send response
-            response = json.dumps(result) + '\n'
-            conn.sendall(response.encode('utf-8'))
-
-            # Log prediction
             if result.get('model_available'):
-                pred_str = "PRODUCTIVE" if result['prediction'] == 1 else "NOT_PRODUCTIVE"
-                conf_pct = result['confidence'] * 100
-                print(f"📊 Request #{self.request_count}: {pred_str} "
-                      f"(confidence: {conf_pct:.1f}%, {prediction_time:.1f}ms)",
-                      file=sys.stderr)
+                label = 'PRODUCTIVE' if result['prediction'] == 1 else 'NOT_PRODUCTIVE'
+                print(f'#{self.request_count}: {label} '
+                      f'conf={result["confidence"]*100:.1f}% {ms:.1f}ms', file=sys.stderr)
 
         except Exception as e:
-            print(f"❌ Client error: {e}", file=sys.stderr)
-            error_response = json.dumps({
-                'prediction': None,
-                'confidence': 0.0,
-                'model_available': False,
-                'error': str(e)
-            }) + '\n'
+            print(f'Client error: {e}', file=sys.stderr)
             try:
-                conn.sendall(error_response.encode('utf-8'))
-            except:
+                conn.sendall((json.dumps({'prediction': None, 'confidence': 0.0,
+                                          'model_available': False, 'error': str(e)}) + '\n')
+                             .encode('utf-8'))
+            except Exception:
                 pass
         finally:
             conn.close()
 
     def shutdown(self, signum=None, frame=None):
-        """Graceful shutdown"""
-        print(f"\n🛑 Shutting down inference server...", file=sys.stderr)
-
-        # Print statistics
-        if self.request_count > 0:
-            avg_time = sum(self.prediction_times) / len(self.prediction_times)
-            print(f"📊 Statistics:", file=sys.stderr)
-            print(f"   Total requests: {self.request_count}", file=sys.stderr)
-            print(f"   Avg prediction time: {avg_time:.2f}ms", file=sys.stderr)
-
+        print('Shutting down inference server', file=sys.stderr)
+        if self.request_count > 0 and self.prediction_times:
+            avg = sum(self.prediction_times) / len(self.prediction_times)
+            print(f'Total requests: {self.request_count}  avg: {avg:.2f}ms', file=sys.stderr)
         self.running = False
         if self.sock:
             self.sock.close()
         sys.exit(0)
 
 
+def test_client(host='127.0.0.1', port=45002):
+    print('Testing inference server...')
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect((host, port))
+        request = {'foreground_app': 12345, 'idle_time': 1000, 'time_last_request': 30000}
+        sock.sendall((json.dumps(request) + '\n').encode('utf-8'))
+        data = b''
+        while True:
+            chunk = sock.recv(1024)
+            if not chunk or b'\n' in chunk:
+                data += chunk
+                break
+            data += chunk
+        result = json.loads(data.decode('utf-8'))
+        print(json.dumps(result, indent=2))
+        sock.close()
+    except ConnectionRefusedError:
+        print(f'Connection refused — is the server running on {host}:{port}?')
+        sys.exit(1)
+
+
 def main():
     import argparse
-
-    parser = argparse.ArgumentParser(
-        description='ML inference service for Nudge productivity predictions',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Start inference server
-  python model_inference.py
-
-  # Use custom model directory
-  python model_inference.py --model-dir /path/to/model
-
-  # Use custom host/port
-  python model_inference.py --host 0.0.0.0 --port 8080
-
-  # Test prediction (client mode)
-  python model_inference.py --test
-
-The server runs in the foreground and logs predictions to stderr.
-        """
-    )
-
-    parser.add_argument('--model-dir', default='./model',
-                        help='Directory containing trained model')
-    parser.add_argument('--host', default='127.0.0.1',
-                        help='Host to bind to (default: 127.0.0.1)')
-    parser.add_argument('--port', type=int, default=45002,
-                        help='Port to bind to (default: 45002)')
-    parser.add_argument('--test', action='store_true',
-                        help='Test mode: send a sample prediction request')
-
+    parser = argparse.ArgumentParser(description='Nudge ML inference server')
+    parser.add_argument('--model-dir', default='./model')
+    parser.add_argument('--host', default='127.0.0.1')
+    parser.add_argument('--port', type=int, default=45002)
+    parser.add_argument('--test', action='store_true')
     args = parser.parse_args()
 
     if args.test:
-        # Test client mode
         test_client(args.host, args.port)
     else:
-        # Start server
-        server = InferenceServer(args.host, args.port, args.model_dir)
-        server.start()
-
-
-def test_client(host='127.0.0.1', port=45002):
-    """Test client to verify inference server"""
-    print("🧪 Testing inference server...")
-
-    try:
-        # Connect to server via TCP
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.connect((host, port))
-        print(f"✅ Connected to {host}:{port}")
-
-        # Send test request
-        request = {
-            'foreground_app': 12345,
-            'idle_time': 1000,
-            'time_last_request': 30000
-        }
-
-        print(f"📤 Sending: {request}")
-        sock.sendall(json.dumps(request).encode('utf-8') + b'\n')
-
-        # Receive response
-        response = b''
-        while True:
-            chunk = sock.recv(1024)
-            if not chunk:
-                break
-            response += chunk
-            if b'\n' in chunk:
-                break
-
-        result = json.loads(response.decode('utf-8'))
-        print(f"📥 Response: {json.dumps(result, indent=2)}")
-
-        if result.get('model_available'):
-            print(f"✅ Model is working!")
-            pred_str = "PRODUCTIVE" if result['prediction'] == 1 else "NOT_PRODUCTIVE"
-            print(f"   Prediction: {pred_str}")
-            print(f"   Confidence: {result['confidence']*100:.1f}%")
-        else:
-            print(f"⚠️  Model not available: {result.get('reason', 'unknown')}")
-
-        sock.close()
-
-    except ConnectionRefusedError:
-        print(f"❌ Connection refused to {host}:{port}")
-        print(f"   Make sure the inference server is running!")
-        sys.exit(1)
-    except Exception as e:
-        print(f"❌ Test failed: {e}")
-        sys.exit(1)
+        InferenceServer(args.host, args.port, args.model_dir).start()
 
 
 if __name__ == '__main__':

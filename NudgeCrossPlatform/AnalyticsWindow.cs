@@ -557,6 +557,9 @@ namespace NudgeTray
             var events = LiveAIState.GetRecent();
             var latest = events.Count > 0 ? events[events.Count - 1] : null;
 
+            // ── Model training status ────────────────────────────────────────────
+            panel.Children.Add(CreateSection("Model Training", CreateTrainingView()));
+
             // ── Current state card ───────────────────────────────────────────────
             panel.Children.Add(CreateSection("Current Prediction", CreateCurrentPredictionView(latest)));
 
@@ -569,6 +572,180 @@ namespace NudgeTray
             // ── Recent events log ────────────────────────────────────────────────
             if (events.Count > 0)
                 panel.Children.Add(CreateSection("Recent Checks", CreateEventsLog(events)));
+
+            return panel;
+        }
+
+        private static StackPanel CreateTrainingView()
+        {
+            var (sampleCount, minSamples, lastTrainedCount, isTraining,
+                 lastAccuracy, architecture, lastError,
+                 lastChecked, lastTrained, log) = TrainerState.Snapshot();
+
+            var panel = new StackPanel { Spacing = 8 };
+
+            // ── Status row ──────────────────────────────────────────────────────
+            Color statusColor;
+            string statusText;
+            if (isTraining)
+            {
+                statusColor = AIStatusLearning;
+                statusText  = $"Training ({architecture})…";
+            }
+            else if (!string.IsNullOrEmpty(lastError))
+            {
+                statusColor = UnproductiveRed;
+                statusText  = "Error";
+            }
+            else if (lastTrained != DateTime.MinValue)
+            {
+                statusColor = ProductiveGreen;
+                statusText  = "Up to date";
+            }
+            else if (sampleCount >= minSamples)
+            {
+                statusColor = AIStatusLearning;
+                statusText  = "Waiting to train…";
+            }
+            else
+            {
+                statusColor = TextSecondary;
+                statusText  = "Collecting data";
+            }
+
+            var statusRow = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
+                Margin = new Thickness(0, 0, 0, 2)
+            };
+            statusRow.Children.Add(new Border
+            {
+                Width = 8, Height = 8,
+                CornerRadius = new CornerRadius(4),
+                Background = new SolidColorBrush(statusColor),
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            statusRow.Children.Add(new TextBlock
+            {
+                Text = statusText,
+                FontSize = 12,
+                FontWeight = FontWeight.Medium,
+                Foreground = new SolidColorBrush(statusColor),
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            panel.Children.Add(statusRow);
+
+            // ── Sample progress bar ──────────────────────────────────────────────
+            double ratio    = minSamples > 0 ? Math.Min(1.0, (double)sampleCount / minSamples) : 1.0;
+            bool   hasModel = lastTrained != DateTime.MinValue;
+            string progressLabel = hasModel
+                ? $"{sampleCount} labeled samples  (last run: {lastTrainedCount})"
+                : $"{sampleCount} / {minSamples} samples needed for first model";
+
+            panel.Children.Add(new TextBlock
+            {
+                Text = progressLabel,
+                FontSize = 11,
+                Foreground = new SolidColorBrush(TextSecondary)
+            });
+
+            if (!hasModel)
+            {
+                var barBg = new Border
+                {
+                    Height = 4,
+                    CornerRadius = new CornerRadius(2),
+                    Background = new SolidColorBrush(ProgressBarBg),
+                    Margin = new Thickness(0, 2, 0, 0)
+                };
+                var barFill = new Border
+                {
+                    Height = 4,
+                    CornerRadius = new CornerRadius(2),
+                    Background = new SolidColorBrush(PrimaryBlue),
+                    HorizontalAlignment = HorizontalAlignment.Left
+                };
+                // Bind fill width via layout — use a Grid with column star trick
+                var barGrid = new Grid();
+                barGrid.ColumnDefinitions.Add(new ColumnDefinition(ratio, GridUnitType.Star));
+                barGrid.ColumnDefinitions.Add(new ColumnDefinition(Math.Max(0, 1 - ratio), GridUnitType.Star));
+                Grid.SetColumn(barFill, 0);
+                barGrid.Children.Add(barFill);
+                barBg.Child = barGrid;
+                panel.Children.Add(barBg);
+            }
+
+            // ── Last model info ──────────────────────────────────────────────────
+            if (lastAccuracy >= 0)
+            {
+                var accuracyRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+                accuracyRow.Children.Add(new TextBlock
+                {
+                    Text = "Last model:",
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(TextTertiary)
+                });
+                accuracyRow.Children.Add(new TextBlock
+                {
+                    Text = $"{lastAccuracy * 100:F0}% accuracy",
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(TextSecondary)
+                });
+                if (!string.IsNullOrEmpty(architecture) && !isTraining)
+                {
+                    accuracyRow.Children.Add(new TextBlock
+                    {
+                        Text = $"· {architecture}",
+                        FontSize = 11,
+                        Foreground = new SolidColorBrush(TextTertiary)
+                    });
+                }
+                panel.Children.Add(accuracyRow);
+            }
+
+            // ── Error ────────────────────────────────────────────────────────────
+            if (!string.IsNullOrEmpty(lastError))
+            {
+                panel.Children.Add(new TextBlock
+                {
+                    Text = lastError,
+                    FontSize = 10,
+                    Foreground = new SolidColorBrush(UnproductiveRed),
+                    TextWrapping = TextWrapping.Wrap
+                });
+            }
+
+            // ── Trainer log (last few lines) ─────────────────────────────────────
+            if (log.Count > 0)
+            {
+                var logPanel = new StackPanel { Spacing = 1, Margin = new Thickness(0, 4, 0, 0) };
+                foreach (var line in log)
+                {
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+                    logPanel.Children.Add(new TextBlock
+                    {
+                        Text = line,
+                        FontSize = 9,
+                        Foreground = new SolidColorBrush(TextTertiary),
+                        TextWrapping = TextWrapping.Wrap,
+                        FontFamily = new FontFamily("Monospace")
+                    });
+                }
+                panel.Children.Add(logPanel);
+            }
+
+            // ── Last checked timestamp ───────────────────────────────────────────
+            if (lastChecked != DateTime.MinValue)
+            {
+                panel.Children.Add(new TextBlock
+                {
+                    Text = $"Last checked: {lastChecked:HH:mm:ss}",
+                    FontSize = 9,
+                    Foreground = new SolidColorBrush(TextTertiary),
+                    Margin = new Thickness(0, 2, 0, 0)
+                });
+            }
 
             return panel;
         }

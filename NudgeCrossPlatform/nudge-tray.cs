@@ -53,7 +53,28 @@ namespace NudgeTray
         static Mutex? _singleInstanceMutex;
         internal const string SingleInstanceMutexName = NudgeCoreLogic.TraySingleInstanceMutexName;
         static readonly string _baseDir = AppContext.BaseDirectory;
-        static readonly string _modelDirPath = Path.Combine(_baseDir, "model");
+        // Model lives in user data dir so it survives binary updates
+        static readonly string _modelDirPath = Path.Combine(PlatformConfig.DataDirectory, "model");
+
+        // Locate the venv Python: check next to binary first (release), then 3 levels up (dev).
+        static string FindPython()
+        {
+            var local = Path.Combine(_baseDir, "venv", "bin", "python");
+            if (File.Exists(local)) return local;
+            var srcDir = Path.GetFullPath(Path.Combine(_baseDir, "..", "..", ".."));
+            var dev    = Path.Combine(srcDir, "venv", "bin", "python");
+            if (File.Exists(dev)) return dev;
+            return PlatformConfig.PythonCommand;
+        }
+
+        // Locate a Python script: check next to binary first, then 3 levels up (dev).
+        static string FindScript(string name)
+        {
+            var local = Path.Combine(_baseDir, name);
+            if (File.Exists(local)) return local;
+            var srcDir = Path.GetFullPath(Path.Combine(_baseDir, "..", "..", ".."));
+            return Path.Combine(srcDir, name);
+        }
         static readonly string[] _dbusNotificationActions = new[] { "yes", "Yes - Productive", "no", "No - Not Productive" };
         static bool _showAnalyticsOnStartup;
         static bool _verifyAnalyticsScrollOnStartup;
@@ -749,7 +770,6 @@ namespace NudgeTray
         {
             try
             {
-                string python = PlatformConfig.PythonCommand;
                 var versionProcess = new Process
                 {
                     StartInfo = new ProcessStartInfo
@@ -800,8 +820,7 @@ namespace NudgeTray
                 Console.WriteLine("  Checking Python dependencies...");
 
                 // Check if required packages are installed
-                string python = PlatformConfig.PythonCommand;
-                var requiredPackages = new[] { "tensorflow", "pandas", "numpy", "sklearn" };
+                var requiredPackages = new[] { "sklearn", "joblib", "pandas", "numpy" };
                 bool allInstalled = true;
 
                 foreach (var package in requiredPackages)
@@ -810,7 +829,7 @@ namespace NudgeTray
                     {
                         StartInfo = new ProcessStartInfo
                         {
-                            FileName = "/home/sammy/Dev/Nudge/NudgeCrossPlatform/venv/bin/python",
+                            FileName = FindPython(),
                             Arguments = $"-c \"import {package}\"",
                             RedirectStandardOutput = true,
                             RedirectStandardError = true,
@@ -915,7 +934,7 @@ namespace NudgeTray
                             {
                                 StartInfo = new ProcessStartInfo
                                 {
-                                    FileName = "/home/sammy/Dev/Nudge/NudgeCrossPlatform/venv/bin/python",
+                                    FileName = FindPython(),
                                     Arguments = $"-m pip install --break-system-packages -r \"{minimalPath}\"",
                                     RedirectStandardOutput = true,
                                     RedirectStandardError = true,
@@ -981,8 +1000,6 @@ namespace NudgeTray
                     return;
                 }
 
-                // Use shared platform configuration
-                string python = PlatformConfig.PythonCommand;
                 string csvPath = PlatformConfig.CsvPath;
 
                 // Start ML inference service (TCP on port 45002)
@@ -991,8 +1008,8 @@ namespace NudgeTray
                 {
                     StartInfo = new ProcessStartInfo
                     {
-                        FileName = "/home/sammy/Dev/Nudge/NudgeCrossPlatform/venv/bin/python",
-                        Arguments = $"\"{Path.Combine(_baseDir, "model_inference.py")}\" --host 127.0.0.1 --port 45002 --model-dir \"{_modelDirPath}\"",
+                        FileName = FindPython(),
+                        Arguments = $"\"{FindScript("model_inference.py")}\" --host 127.0.0.1 --port 45002 --model-dir \"{_modelDirPath}\"",
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
                         UseShellExecute = false,
@@ -1039,7 +1056,7 @@ namespace NudgeTray
 
                 // Start background trainer
                 Console.WriteLine("  Starting background trainer...");
-                string trainerArgs = $"\"{Path.Combine(_baseDir, "background_trainer.py")}\" --csv \"{csvPath}\" --model-dir \"{_modelDirPath}\" --check-interval 300";
+                string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --csv \"{csvPath}\" --model-dir \"{_modelDirPath}\" --check-interval 300";
                 if (_forceTrainedModel)
                 {
                     trainerArgs += " --min-total-samples 1";
@@ -1062,6 +1079,7 @@ namespace NudgeTray
                 {
                     if (!string.IsNullOrEmpty(e.Data))
                     {
+                        TrainerState.ParseLine(e.Data);
                         Console.WriteLine($"[ML Trainer] {e.Data}");
                     }
                 };
@@ -1070,6 +1088,7 @@ namespace NudgeTray
                 {
                     if (!string.IsNullOrEmpty(e.Data))
                     {
+                        TrainerState.ParseLine(e.Data);
                         Console.WriteLine($"[ML Trainer] {e.Data}");
                     }
                 };
@@ -1662,6 +1681,120 @@ namespace NudgeTray
             }
 
             StartNudge(_intervalMinutes > 0 ? _intervalMinutes : 5);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Trainer state — fed by background_trainer.py stdout, read by AI tab.
+    // ─────────────────────────────────────────────────────────────────────────────
+    internal static class TrainerState
+    {
+        private static readonly object _lock = new();
+        private static readonly List<string> _log = new(capacity: 10);
+
+        public static int  SampleCount;
+        public static int  MinSamples   = 100;
+        public static int  LastTrainedCount;
+        public static bool IsTraining;
+        public static float LastAccuracy = -1f;
+        public static string Architecture = "";
+        public static string LastError    = "";
+        public static DateTime LastChecked = DateTime.MinValue;
+        public static DateTime LastTrained = DateTime.MinValue;
+
+        public static void ParseLine(string raw)
+        {
+            // raw is the line emitted by background_trainer.py (no prefix added yet)
+            lock (_lock)
+            {
+                if (_log.Count >= 8) _log.RemoveAt(0);
+                _log.Add(raw);
+            }
+
+            // [trainer] Labeled samples: 119  last-trained-at: 0  min: 100
+            var m = System.Text.RegularExpressions.Regex.Match(raw,
+                @"\[trainer\] Labeled samples:\s*(\d+)\s+last-trained-at:\s*(\d+)\s+min:\s*(\d+)");
+            if (m.Success)
+            {
+                lock (_lock)
+                {
+                    SampleCount      = int.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+                    LastTrainedCount = int.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
+                    MinSamples       = int.Parse(m.Groups[3].Value, System.Globalization.CultureInfo.InvariantCulture);
+                    LastChecked      = DateTime.Now;
+                }
+                return;
+            }
+
+            // [trainer] Training lightweight model on 119 samples...
+            m = System.Text.RegularExpressions.Regex.Match(raw,
+                @"\[trainer\] Training (\w+) model on (\d+) samples");
+            if (m.Success)
+            {
+                lock (_lock)
+                {
+                    Architecture = m.Groups[1].Value;
+                    SampleCount  = int.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
+                    IsTraining   = true;
+                    LastError    = "";
+                }
+                return;
+            }
+
+            // [trainer] Done. accuracy=0.872
+            m = System.Text.RegularExpressions.Regex.Match(raw,
+                @"\[trainer\] Done\. accuracy=([0-9.]+)");
+            if (m.Success)
+            {
+                lock (_lock)
+                {
+                    IsTraining       = false;
+                    LastTrained      = DateTime.Now;
+                    LastTrainedCount = SampleCount;
+                    if (float.TryParse(m.Groups[1].Value,
+                        System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out float acc))
+                        LastAccuracy = acc;
+                }
+                return;
+            }
+
+            // [trainer] Training failed: ...
+            m = System.Text.RegularExpressions.Regex.Match(raw,
+                @"\[trainer\] Training failed: (.+)");
+            if (m.Success)
+            {
+                lock (_lock)
+                {
+                    IsTraining = false;
+                    LastError  = m.Groups[1].Value;
+                }
+                return;
+            }
+
+            // [trainer] Nothing to do.
+            if (raw.Contains("[trainer] Nothing to do"))
+            {
+                lock (_lock) { IsTraining = false; }
+            }
+        }
+
+        public static IReadOnlyList<string> GetLog()
+        {
+            lock (_lock) { return _log.ToArray(); }
+        }
+
+        public static (int sample, int min, int lastTrained, bool training,
+                        float acc, string arch, string err,
+                        DateTime lastChecked, DateTime lastTrained2, IReadOnlyList<string> log) Snapshot()
+        {
+            lock (_lock)
+            {
+                return (SampleCount, MinSamples, LastTrainedCount, IsTraining,
+                        LastAccuracy, Architecture, LastError,
+                        LastChecked, LastTrained, _log.ToArray());
+            }
         }
     }
 

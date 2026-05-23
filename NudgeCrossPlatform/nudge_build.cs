@@ -1629,6 +1629,9 @@ publish();
 
             if (_harvestEngine == HarvestEngineMode.V2 && tick is ActivityTickResult fusedTick)
             {
+                if (fusedTick.Context.SignalQuality == SignalQuality.Poor)
+                    return;
+
                 WriteCsvRow(
                     _activityLogFile,
                     timestamp,
