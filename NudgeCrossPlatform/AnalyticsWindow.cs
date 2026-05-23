@@ -26,6 +26,8 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 
+using NudgeCore;
+
 namespace NudgeTray
 {
     public class AnalyticsWindow : Window
@@ -589,7 +591,7 @@ namespace NudgeTray
         {
             var (sampleCount, minSamples, lastTrainedCount, isTraining,
                  lastAccuracy, architecture, lastError,
-                 lastChecked, lastTrained, log) = TrainerState.Snapshot();
+                 lastChecked, lastTrained, modelVersion, log) = TrainerState.Snapshot();
 
             var panel = new StackPanel { Spacing = 8 };
 
@@ -599,7 +601,7 @@ namespace NudgeTray
             if (isTraining)
             {
                 statusColor = AIStatusLearning;
-                statusText  = $"Training ({architecture})…";
+                statusText  = architecture is "" or "…" ? "Training…" : $"Training ({architecture})…";
             }
             else if (!string.IsNullOrEmpty(lastError))
             {
@@ -622,28 +624,51 @@ namespace NudgeTray
                 statusText  = "Collecting data";
             }
 
-            var statusRow = new StackPanel
+            // ── Header row: status left, button right ──────────────────────────
             {
-                Orientation = Orientation.Horizontal,
-                Spacing = 8,
-                Margin = new Thickness(0, 0, 0, 2)
-            };
-            statusRow.Children.Add(new Border
-            {
-                Width = 8, Height = 8,
-                CornerRadius = new CornerRadius(4),
-                Background = new SolidColorBrush(statusColor),
-                VerticalAlignment = VerticalAlignment.Center
-            });
-            statusRow.Children.Add(new TextBlock
-            {
-                Text = statusText,
-                FontSize = 12,
-                FontWeight = FontWeight.Medium,
-                Foreground = new SolidColorBrush(statusColor),
-                VerticalAlignment = VerticalAlignment.Center
-            });
-            panel.Children.Add(statusRow);
+                var headerGrid = new Grid();
+                headerGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+                headerGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+
+                var statusStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+                statusStack.Children.Add(new Border
+                {
+                    Width = 8, Height = 8,
+                    CornerRadius = new CornerRadius(4),
+                    Background = new SolidColorBrush(statusColor),
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+                statusStack.Children.Add(new TextBlock
+                {
+                    Text = statusText,
+                    FontSize = 12,
+                    FontWeight = FontWeight.Medium,
+                    Foreground = new SolidColorBrush(statusColor),
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+                Grid.SetColumn(statusStack, 0);
+                headerGrid.Children.Add(statusStack);
+
+                var trainNowBtn = new Button
+                {
+                    Content = "Train Now",
+                    Background = new SolidColorBrush(PrimaryBlue),
+                    Foreground = Brushes.White,
+                    BorderThickness = new Thickness(0),
+                    Padding = new Thickness(14, 6),
+                    FontSize = 11,
+                    FontWeight = FontWeight.Medium,
+                    Cursor = new Cursor(StandardCursorType.Hand),
+                    CornerRadius = new CornerRadius(5),
+                    IsEnabled = !isTraining
+                };
+                ToolTip.SetTip(trainNowBtn, "Force an immediate training run using current data");
+                trainNowBtn.Click += (s, e) => Program.TriggerTrainingNow();
+                Grid.SetColumn(trainNowBtn, 1);
+                headerGrid.Children.Add(trainNowBtn);
+
+                panel.Children.Add(headerGrid);
+            }
 
             // ── Sample progress bar ──────────────────────────────────────────────
             bool   hasModel = lastTrained != DateTime.MinValue;
@@ -655,7 +680,7 @@ namespace NudgeTray
             double ratio = neededTotal > 0 ? Math.Min(1.0, (double)newSamples / neededTotal) : 1.0;
 
             string progressLabel = hasModel
-                ? $"{sampleCount} total labeled  ·  {newSamples} new  ·  {neededTotal} needed for retrain"
+                ? $"{newSamples} new samples since last training"
                 : $"{sampleCount} / {minSamples} samples needed for first model";
 
             panel.Children.Add(new TextBlock
@@ -716,9 +741,10 @@ namespace NudgeTray
                     FontSize = 11,
                     Foreground = new SolidColorBrush(TextTertiary)
                 });
+                var versionLabel = modelVersion > 0 ? $"v{modelVersion} · " : "";
                 accuracyRow.Children.Add(new TextBlock
                 {
-                    Text = $"{lastAccuracy * 100:F0}% accuracy",
+                    Text = $"{versionLabel}{lastAccuracy * 100:F0}% accuracy",
                     FontSize = 11,
                     Foreground = new SolidColorBrush(TextSecondary)
                 });
@@ -1140,6 +1166,7 @@ namespace NudgeTray
                 });
             }
             // Fusion quality + "In Focus Now" on the same line
+            string qualityReason = harvest != null ? ComputeQualityReason(harvest, effectiveQuality) : "";
             var qualityRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
             qualityRow.Children.Add(new Border
             {
@@ -1155,6 +1182,15 @@ namespace NudgeTray
                 FontWeight = FontWeight.Medium,
                 Foreground = new SolidColorBrush(fusionColor)
             });
+            if (!string.IsNullOrEmpty(qualityReason))
+            {
+                qualityRow.Children.Add(new TextBlock
+                {
+                    Text       = $"({qualityReason})",
+                    FontSize   = 9,
+                    Foreground = new SolidColorBrush(Color.FromArgb(180, fusionColor.R, fusionColor.G, fusionColor.B))
+                });
+            }
             qualityRow.Children.Add(new TextBlock
             {
                 Text       = "· In Focus Now",
@@ -1183,7 +1219,6 @@ namespace NudgeTray
                 AddFusionRow(signalPanel, "Focus Source",   FormatFocusSource(harvest.FocusSrc), TextSecondary);
                 AddFusionRow(signalPanel, "Idle",           FormatMs(harvest.IdleMs),      TextSecondary);
                 AddFusionRow(signalPanel, "In Focus",       FormatMs(harvest.FocusedMs),   TextSecondary);
-                if (harvest.V2)
                 {
                     string cat = !string.IsNullOrEmpty(harvest.Category) ? harvest.Category : GetHarvestCategoryFallback(harvest);
                     if (!string.IsNullOrEmpty(cat))
@@ -1240,7 +1275,7 @@ namespace NudgeTray
             };
             footerRow.Children.Add(new TextBlock
             {
-                Text       = harvest?.V2 == true ? "POWERED BY NUDGE HARVEST ENGINE V2" : "POWERED BY NUDGE HARVEST ENGINE",
+                Text       = "POWERED BY NUDGE HARVEST ENGINE",
                 FontSize   = 7.5,
                 LetterSpacing = 1.0,
                 Foreground = new SolidColorBrush(Color.FromArgb(80, 100, 180, 255)),
@@ -1285,6 +1320,31 @@ namespace NudgeTray
             Grid.SetColumn(valBlock, 1);
             row.Children.Add(valBlock);
             parent.Children.Add(row);
+        }
+
+        private static string ComputeQualityReason(HarvestSignal harvest, string effectiveQuality)
+        {
+            if (effectiveQuality == "trusted") return "";
+
+            // Downgraded from trusted because category is unclassified
+            if (harvest.Quality == "trusted" && effectiveQuality == "usable")
+                return "category unclassified";
+
+            if (effectiveQuality == "poor")
+            {
+                return harvest.FocusSrc switch
+                {
+                    "HeuristicProcessScan" => "process scan only",
+                    "Unknown" or ""        => "no focus source",
+                    _                      => "unreliable source"
+                };
+            }
+
+            // Native usable
+            if (harvest.Browser == 1 && string.IsNullOrEmpty(harvest.Domain))
+                return "browser tab unknown";
+
+            return "degraded signal";
         }
 
         private static string FormatFocusSource(string src) => src switch
@@ -1384,7 +1444,6 @@ namespace NudgeTray
             parent.Children.Add(row);
         }
 
-        // Fallback for signals without a Category field (older nudge core or V1 engine)
         private static string GetHarvestCategoryFallback(HarvestSignal h)
         {
             if (h.Afk == 1)     return "AFK";
@@ -1445,39 +1504,57 @@ namespace NudgeTray
             panel.Children.Add(headerGrid);
 
             // ── Countdown progress bar ────────────────────────────────────────
-            var barBg = new Border
+            var barContainer = new Border
             {
                 Height = 4,
                 CornerRadius = new CornerRadius(2),
                 Background = new SolidColorBrush(ProgressBarBg),
-                ClipToBounds = true
+                ClipToBounds = true,
+                HorizontalAlignment = HorizontalAlignment.Stretch
             };
-            var barGrid = new Grid();
-            if (progress >= 0.995)
+            if (nextCheckAt > 0 && secondsLeft == 0)
             {
-                barGrid.ColumnDefinitions = new ColumnDefinitions("*");
-                barGrid.Children.Add(new Border
+                // Indeterminate (bouncing) progress bar while checking now
+                var indeterminate = new ProgressBar
                 {
-                    Background = new SolidColorBrush(PrimaryBlue),
-                    CornerRadius = new CornerRadius(2),
-                    HorizontalAlignment = HorizontalAlignment.Stretch
-                });
-            }
-            else if (progress > 0.005)
-            {
-                double rem = 1.0 - progress;
-                barGrid.ColumnDefinitions = new ColumnDefinitions($"{progress * 100:F1}*,{rem * 100:F1}*");
-                var fill = new Border
-                {
-                    Background = new SolidColorBrush(PrimaryBlue),
-                    CornerRadius = new CornerRadius(2, 0, 0, 2),
+                    IsIndeterminate = true,
+                    Height = 4,
+                    Foreground = new SolidColorBrush(PrimaryBlue),
+                    Background = Brushes.Transparent,
+                    Margin = new Thickness(0),
                     HorizontalAlignment = HorizontalAlignment.Stretch
                 };
-                Grid.SetColumn(fill, 0);
-                barGrid.Children.Add(fill);
+                barContainer.Child = indeterminate;
             }
-            barBg.Child = barGrid;
-            panel.Children.Add(barBg);
+            else
+            {
+                var barGrid = new Grid();
+                if (progress >= 0.995)
+                {
+                    barGrid.ColumnDefinitions = new ColumnDefinitions("*");
+                    barGrid.Children.Add(new Border
+                    {
+                        Background = new SolidColorBrush(PrimaryBlue),
+                        CornerRadius = new CornerRadius(2),
+                        HorizontalAlignment = HorizontalAlignment.Stretch
+                    });
+                }
+                else if (progress > 0.005)
+                {
+                    double rem = 1.0 - progress;
+                    barGrid.ColumnDefinitions = new ColumnDefinitions($"{progress * 100:F1}*,{rem * 100:F1}*");
+                    var fill = new Border
+                    {
+                        Background = new SolidColorBrush(PrimaryBlue),
+                        CornerRadius = new CornerRadius(2, 0, 0, 2),
+                        HorizontalAlignment = HorizontalAlignment.Stretch
+                    };
+                    Grid.SetColumn(fill, 0);
+                    barGrid.Children.Add(fill);
+                }
+                barContainer.Child = barGrid;
+            }
+            panel.Children.Add(barContainer);
 
             // ── Latest score row ──────────────────────────────────────────────
             if (latest != null)
@@ -1759,6 +1836,7 @@ namespace NudgeTray
             }
 
             // Dots — latest is larger with a glow ring
+            var dotElements = new List<(Avalonia.Controls.Shapes.Ellipse Dot, double R, double X, double Y, MLLiveEvent Ev)>();
             for (int i = 0; i < pts.Count; i++)
             {
                 var (x, y, ev) = pts[i];
@@ -1788,11 +1866,12 @@ namespace NudgeTray
                 {
                     Width = r * 2,
                     Height = r * 2,
-                    Fill = new SolidColorBrush(dotColor)
+                    Fill = new SolidColorBrush(dotColor),
                 };
                 Canvas.SetLeft(dot, x - r);
                 Canvas.SetTop(dot, y - r);
                 canvas.Children.Add(dot);
+                dotElements.Add((dot, r, x, y, ev));
 
                 if (isLatest)
                 {
@@ -1809,6 +1888,133 @@ namespace NudgeTray
                     Canvas.SetTop(scoreLabel, nearBottom ? y - r - 14 : y + r + 3);
                     canvas.Children.Add(scoreLabel);
                 }
+            }
+
+            // ── Sweep line + hover tooltip ──────────────────────────────────
+            if (dotElements.Count > 0)
+            {
+                // Shared tooltip content (updated on hover)
+                var tipGrid = new Grid
+                {
+                    RowDefinitions = new RowDefinitions("Auto,Auto,Auto"),
+                    ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+                    Width = 180
+                };
+                var timeTb = new TextBlock
+                {
+                    FontSize = 10,
+                    Foreground = new SolidColorBrush(Color.FromArgb(160, 255, 255, 255))
+                };
+                Grid.SetColumn(timeTb, 1);
+                tipGrid.Children.Add(timeTb);
+                var appTb = new TextBlock
+                {
+                    FontSize = 13,
+                    FontWeight = FontWeight.SemiBold,
+                    Foreground = new SolidColorBrush(Color.FromArgb(230, 255, 255, 255))
+                };
+                Grid.SetRow(appTb, 1);
+                Grid.SetColumnSpan(appTb, 2);
+                tipGrid.Children.Add(appTb);
+                var scoreTb = new TextBlock
+                {
+                    FontSize = 11,
+                };
+                Grid.SetRow(scoreTb, 2);
+                Grid.SetColumnSpan(scoreTb, 2);
+                tipGrid.Children.Add(scoreTb);
+                var tipBorder = new Border
+                {
+                    Background = new SolidColorBrush(Color.FromArgb(200, 30, 30, 30)),
+                    BorderBrush = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(8),
+                    Padding = new Thickness(10, 8),
+                    Child = tipGrid
+                };
+
+                // Sweep vertical line
+                var sweepLine = new Border
+                {
+                    Width = 1,
+                    Height = yBottom - yPad,
+                    Background = new SolidColorBrush(Color.FromArgb(100, 255, 255, 255)),
+                    IsVisible = false,
+                };
+                Canvas.SetLeft(sweepLine, 0);
+                Canvas.SetTop(sweepLine, yPad);
+                canvas.Children.Add(sweepLine);
+
+                // Transparent overlay to capture pointer across whole chart
+                var overlay = new Border
+                {
+                    Width = W,
+                    Height = H,
+                    Background = Brushes.Transparent,
+                };
+                Canvas.SetLeft(overlay, 0);
+                Canvas.SetTop(overlay, 0);
+
+                // Tooltip (added after overlay so it renders on top)
+                tipBorder.IsVisible = false;
+                canvas.Children.Add(tipBorder);
+
+                overlay.PointerMoved += (_, e) =>
+                {
+                    var pos = e.GetPosition(canvas);
+
+                    int nearest = 0;
+                    double minDist = double.MaxValue;
+                    for (int i = 0; i < dotElements.Count; i++)
+                    {
+                        double dist = Math.Abs(dotElements[i].X - pos.X);
+                        if (dist < minDist)
+                        {
+                            minDist = dist;
+                            nearest = i;
+                        }
+                    }
+
+                    foreach (var (d, r, _, _, _) in dotElements)
+                    {
+                        d.Width = r * 2;
+                        d.Height = r * 2;
+                    }
+
+                    var (nearestDot, nr, nx, ny, nev) = dotElements[nearest];
+                    nearestDot.Width = (nr + 2) * 2;
+                    nearestDot.Height = (nr + 2) * 2;
+
+                    Canvas.SetLeft(sweepLine, nx);
+                    sweepLine.IsVisible = true;
+
+                    timeTb.Text = DateTimeOffset.FromUnixTimeSeconds(nev.T).LocalDateTime.ToString("t", CultureInfo.CurrentCulture);
+                    appTb.Text = nev.App;
+                    Color evColor = nev.Confidence < 0.5
+                        ? Color.FromRgb(255, 193, 7)
+                        : (nev.Productive ? ProductiveGreen : UnproductiveRed);
+                    scoreTb.Text = $"{nev.Score * 100:F0}% · {(nev.Productive ? "productive" : "not productive")}";
+                    scoreTb.Foreground = new SolidColorBrush(evColor);
+
+                    // Position tooltip above the dot, centered horizontally
+                    double tipW = tipBorder.Width > 0 ? tipBorder.Width : 180;
+                    Canvas.SetLeft(tipBorder, nx - tipW / 2);
+                    Canvas.SetTop(tipBorder, ny - 60);
+                    tipBorder.IsVisible = true;
+                };
+
+                overlay.PointerExited += (_, _) =>
+                {
+                    foreach (var (d, r, _, _, _) in dotElements)
+                    {
+                        d.Width = r * 2;
+                        d.Height = r * 2;
+                    }
+                    sweepLine.IsVisible = false;
+                    tipBorder.IsVisible = false;
+                };
+
+                canvas.Children.Add(overlay);
             }
 
             return canvas;
@@ -1979,6 +2185,30 @@ namespace NudgeTray
         private static string TruncateAppName(string app, int maxLen) =>
             app.Length <= maxLen ? app : string.Concat(app.AsSpan(0, maxLen - 1), "…");
 
+        private static readonly System.Collections.Generic.Dictionary<string, string> s_appDisplayNames =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["zen"]          = "Zen Browser",
+                ["zen-bin"]      = "Zen Browser",
+                ["firefox-bin"]  = "Firefox",
+                ["chromium-bin"] = "Chromium",
+            };
+
+        private static (string Primary, string Subtitle) ParseAppDisplayName(string appName)
+        {
+            int bracketStart = appName.LastIndexOf(" [", StringComparison.Ordinal);
+            if (bracketStart > 0 && appName.EndsWith(']'))
+            {
+                string primary = appName[..bracketStart];
+                if (s_appDisplayNames.TryGetValue(primary, out var mapped)) primary = mapped;
+                string subtitle = appName[(bracketStart + 2)..^1];
+                return (primary, subtitle);
+            }
+            if (s_appDisplayNames.TryGetValue(appName, out var displayName))
+                return (displayName, string.Empty);
+            return (appName, string.Empty);
+        }
+
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
         private StackPanel CreateAIStatusIndicator()
@@ -2105,6 +2335,8 @@ namespace NudgeTray
         {
             if (_aiStatusDot == null || _aiStatusText == null || _aiEnableButton == null || _aiInfoIcon == null)
                 return;
+
+            TrainerState.RefreshFromCsv();
 
             var status = GetAIStatus();
 
@@ -2481,13 +2713,19 @@ namespace NudgeTray
                 : productiveRate >= 30 ? Color.FromRgb(255, 193, 7)
                 : UnproductiveRed;
 
+            // Show "<1%" when there is activity but the rate rounds to zero
+            bool hasProductiveMinutes = (_data?.ProductiveMinutes ?? 0) > 0;
+            string productiveLabel = hasProductiveMinutes && productiveRate < 0.5
+                ? "<1%"
+                : productiveRate.ToString("F0", CultureInfo.InvariantCulture) + "%";
+
             var productivePanel = CreateStatCard(
-                "star",
-                (_data?.ProductivePercentage ?? 0).ToString("F0", CultureInfo.InvariantCulture) + "%",
+                "trend",
+                productiveLabel,
                 "Productive",
                 DetailViewType.Productivity,
                 productiveValueColor,
-                productiveValueColor
+                null  // icon always stays blue
             );
             Grid.SetColumn(productivePanel, 2);
 
@@ -2994,10 +3232,12 @@ namespace NudgeTray
                 VerticalAlignment = VerticalAlignment.Center
             };
 
-            // App name
+            // Split "appId [subtitle]" into primary + optional subtitle
+            var (primaryName, subtitleName) = ParseAppDisplayName(appName);
+
             var nameText = new TextBlock
             {
-                Text = appName,
+                Text = primaryName,
                 FontSize = 11,
                 FontWeight = FontWeight.Medium,
                 Foreground = new SolidColorBrush(TextPrimary),
@@ -3047,6 +3287,17 @@ namespace NudgeTray
             progressBorder.Child = progressGrid;
 
             leftStack.Children.Add(nameText);
+            if (!string.IsNullOrEmpty(subtitleName))
+            {
+                leftStack.Children.Add(new TextBlock
+                {
+                    Text = subtitleName,
+                    FontSize = 9,
+                    Foreground = new SolidColorBrush(TextSecondary),
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    Margin = new Thickness(0, -2, 0, 0)
+                });
+            }
             leftStack.Children.Add(progressBorder);
 
             Grid.SetColumn(leftStack, 0);

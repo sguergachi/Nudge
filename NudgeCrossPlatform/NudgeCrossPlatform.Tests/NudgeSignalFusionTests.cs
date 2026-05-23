@@ -1,5 +1,8 @@
 using System;
 using Xunit;
+using NudgeCore;
+
+namespace NudgeCrossPlatform.Tests;
 
 public class NudgeSignalFusionTests
 {
@@ -139,9 +142,9 @@ public class NudgeSignalFusionTests
     }
 
     [Fact]
-    public void FeatureSchemaV2_OrderedFeatureNames_IncludesNewCategoryFlags()
+    public void FeatureSchema_OrderedFeatureNames_IncludesNewCategoryFlags()
     {
-        var names = FeatureSchemaV2.OrderedFeatureNames;
+        var names = FeatureSchema.OrderedFeatureNames;
         Assert.Contains("dev_app_flag", names);
         Assert.Contains("creative_app_flag", names);
         Assert.Contains("office_app_flag", names);
@@ -150,7 +153,7 @@ public class NudgeSignalFusionTests
     }
 
     [Fact]
-    public void FeatureSchemaV2_ToFeatureDictionary_IncludesNewFlags()
+    public void FeatureSchema_ToFeatureDictionary_IncludesNewFlags()
     {
         var features = new FeatureVectorV2(
             HourOfDay: 10, DayOfWeek: 1, FocusedAppHash: 0, FocusedDomainHash: 0,
@@ -164,12 +167,41 @@ public class NudgeSignalFusionTests
             DevAppFlag: 1, CreativeAppFlag: 0, OfficeAppFlag: 0,
             CommAppFlag: 0, EntAppFlag: 0);
 
-        var dict = FeatureSchemaV2.ToFeatureDictionary(features);
+        var dict = FeatureSchema.ToFeatureDictionary(features);
         Assert.Equal(1.0, dict["dev_app_flag"]);
         Assert.Equal(0.0, dict["creative_app_flag"]);
         Assert.Equal(0.0, dict["comm_app_flag"]);
     }
 
+
+    [Fact]
+    public void ActivityFeatureTracker_YouTubeIsEntertainmentEvenWhenAnchorIsDevelopment()
+    {
+        // Regression: anchor fusion was overriding domain knowledge — youtube.com was classified
+        // as Development because the previous anchor app (konsole) is a Development app.
+        var tracker = new ActivityFeatureTracker();
+        var start = new DateTime(2026, 5, 23, 14, 0, 0);
+
+        // Establish konsole as the dominant anchor (Development)
+        for (int i = 0; i < 60; i++)
+        {
+            tracker.Capture(
+                start.AddSeconds(i),
+                new WindowObservation("konsole", "~/Dev", "k1", "", FocusSource.KWinScript, false, 1),
+                new IdleObservation(0, IdleSource.Unknown));
+        }
+
+        // Switch to Zen on youtube.com — must be Entertainment, NOT Development
+        var youtubeTick = tracker.Capture(
+            start.AddSeconds(61),
+            new WindowObservation("zen", "Industry Wide AI Psychosis - YouTube - Zen Browser", "z1", "", FocusSource.KWinScript, false, 1),
+            new IdleObservation(0, IdleSource.Unknown));
+
+        Assert.Equal("youtube.com", youtubeTick.Context.FocusedDomain);
+        Assert.Equal(AppCategory.Entertainment, youtubeTick.AppCategory);
+        Assert.Equal(1, youtubeTick.Features.EntAppFlag);
+        Assert.Equal(0, youtubeTick.Features.DevAppFlag);
+    }
 
     [Fact]
     public void ActivityFeatureTracker_BrowserDomainWorkVsEntertainmentFlagsDiffer()

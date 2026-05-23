@@ -1,16 +1,12 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
+using NudgeCore;
 
-internal readonly record struct MLPredictionRequest(
-    int HourOfDay,
-    int DayOfWeek,
-    int ForegroundApp,
-    int IdleTime,
-    int TimeLastRequest);
+namespace NudgeTray;
 
-internal sealed class MLPredictionRequestV2
+internal sealed class MLPredictionRequest
 {
-    public int SchemaVersion { get; init; } = FeatureSchemaV2.SchemaVersion;
+    public int SchemaVersion { get; init; } = FeatureSchema.SchemaVersion;
     public string[] FeatureOrder { get; init; } = [];
     public IReadOnlyDictionary<string, double> Features { get; init; } = new Dictionary<string, double>();
     public string FocusSource { get; init; } = "unknown";
@@ -47,7 +43,7 @@ internal sealed class MLLiveEvent
 }
 
 /// <summary>
-/// Broadcast over stdout as "HARVEST:{json}" by nudge.cs every 2 seconds when V2 engine is active.
+/// Broadcast over stdout as "HARVEST:{json}" by nudge.cs every 2 seconds.
 /// Contains key sensor fusion signals for display in the AI Brain tab.
 /// </summary>
 internal sealed class HarvestSignal
@@ -68,43 +64,36 @@ internal sealed class HarvestSignal
     public int Sw300 { get; set; }      // SwitchCount300s
     public double Share { get; set; }   // CurrentAppShare300s
     public int Apps300 { get; set; }    // DistinctApps300s
-    public bool V2 { get; set; }        // true when backed by V2 engine data
 }
 
-namespace NudgeTray
+internal sealed class NotificationPositionConfig
 {
-    internal sealed class NotificationPositionConfig
-    {
-        public double X { get; set; }
-        public double Y { get; set; }
-        public bool HasSavedPosition { get; set; }
-    }
+    public double X { get; set; }
+    public double Y { get; set; }
+    public bool HasSavedPosition { get; set; }
+}
 
-    /// <summary>
-    /// Persisted user preferences written to ~/.nudge/tray-settings.json.
-    /// </summary>
-    internal sealed class TraySettings
-    {
-        /// <summary>Whether ML mode was last enabled by the user.</summary>
-        public bool MlEnabled { get; set; }
-        /// <summary>Last-used snapshot interval in minutes.</summary>
-        public int IntervalMinutes { get; set; } = 5;
-        /// <summary>Active harvest engine mode, persisted as "v1" or "v2".</summary>
-        public string HarvestEngine { get; set; } = "v2";
-    }
+/// <summary>
+/// Persisted user preferences written to ~/.nudge/tray-settings.json.
+/// </summary>
+internal sealed class TraySettings
+{
+    /// <summary>Whether ML mode was last enabled by the user.</summary>
+    public bool MlEnabled { get; set; }
+    /// <summary>Last-used snapshot interval in minutes.</summary>
+    public int IntervalMinutes { get; set; } = 5;
 }
 
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(MLPredictionRequest))]
-[JsonSerializable(typeof(MLPredictionRequestV2))]
 [JsonSerializable(typeof(MLPrediction))]
 [JsonSerializable(typeof(MLLiveEvent))]
 [JsonSerializable(typeof(List<MLLiveEvent>))]
 [JsonSerializable(typeof(HarvestSignal))]
-[JsonSerializable(typeof(NudgeTray.NotificationPositionConfig))]
-[JsonSerializable(typeof(NudgeTray.TraySettings))]
+[JsonSerializable(typeof(NotificationPositionConfig))]
+[JsonSerializable(typeof(TraySettings))]
 internal sealed partial class NudgeJsonContext : JsonSerializerContext
 {
 }

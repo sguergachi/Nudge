@@ -59,12 +59,14 @@ def _load_meta(model_dir: str) -> dict:
         return {}
 
 
-def _save_meta(model_dir: str, sample_count: int, accuracy: float) -> None:
+def _save_meta(model_dir: str, sample_count: int, accuracy: float,
+               model_version: int = 0) -> None:
     os.makedirs(model_dir, exist_ok=True)
     meta = {
         'trained_at': time.time(),
         'sample_count': sample_count,
         'accuracy': round(accuracy, 4),
+        'model_version': model_version,
     }
     with open(os.path.join(model_dir, 'trainer_meta.json'), 'w') as f:
         json.dump(meta, f)
@@ -95,8 +97,17 @@ def _run_training(csv_path: str, model_dir: str, sample_count: int) -> bool:
             cpu_only=True,
         )
 
-        _save_meta(model_dir, sample_count, accuracy)
-        print(f'[trainer] Done. accuracy={accuracy:.3f}', flush=True)
+        # Read model version written by train_modern
+        model_version = 0
+        try:
+            with open(os.path.join(model_dir, 'trainer_state.json'), 'r') as f:
+                state = json.load(f)
+                model_version = state.get('training_count', 0)
+        except Exception:
+            pass
+
+        _save_meta(model_dir, sample_count, accuracy, model_version)
+        print(f'[trainer] Done. accuracy={accuracy:.3f} version={model_version}', flush=True)
         return True
 
     except Exception as exc:
@@ -106,10 +117,13 @@ def _run_training(csv_path: str, model_dir: str, sample_count: int) -> bool:
         return False
 
 
-def _should_train(model_dir: str, current_count: int, min_samples: int) -> bool:
-    if current_count < min_samples:
+def _should_train(model_dir: str, current_count: int, min_samples: int,
+                  force: bool = False) -> bool:
+    if current_count < min_samples and not force:
         return False
     if not _model_exists(model_dir):
+        return True
+    if force:
         return True
     last_count = _load_meta(model_dir).get('sample_count', 0)
     threshold = last_count + max(10, int(last_count * _RETRAIN_NEW_DATA_RATIO))
@@ -124,12 +138,15 @@ def main() -> None:
                         help=f'Seconds between checks (default: {DEFAULT_CHECK_INTERVAL})')
     parser.add_argument('--min-total-samples', type=int, default=DEFAULT_MIN_SAMPLES,
                         help=f'Minimum labeled samples before first train (default: {DEFAULT_MIN_SAMPLES})')
+    parser.add_argument('--force', action='store_true',
+                        help='Force training regardless of thresholds')
     args = parser.parse_args()
 
     csv_path = args.csv
     model_dir = args.model_dir
     interval = args.check_interval
     min_samples = args.min_total_samples
+    force = args.force
 
     print(f'[trainer] Starting. csv={csv_path} model-dir={model_dir} '
           f'interval={interval}s min-samples={min_samples}', flush=True)
@@ -146,7 +163,7 @@ def main() -> None:
             print(f'[trainer] Labeled samples: {count}  last-trained-at: {last_count}  min: {min_samples}',
                   flush=True)
 
-            if _should_train(model_dir, count, min_samples):
+            if _should_train(model_dir, count, min_samples, force=force):
                 _run_training(csv_path, model_dir, count)
             else:
                 print('[trainer] Nothing to do.', flush=True)

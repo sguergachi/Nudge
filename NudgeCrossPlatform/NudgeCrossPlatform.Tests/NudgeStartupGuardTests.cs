@@ -1,4 +1,7 @@
 using Xunit;
+using NudgeCore;
+
+namespace NudgeCrossPlatform.Tests;
 
 public class NudgeStartupGuardTests
 {

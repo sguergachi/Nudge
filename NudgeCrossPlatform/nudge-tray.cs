@@ -23,6 +23,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Tmds.DBus.Protocol;
 
+using NudgeCore;
+
 // Avalonia - used on all platforms for custom notifications
 using Avalonia;
 using Avalonia.Controls;
@@ -46,7 +48,6 @@ namespace NudgeTray
         static Process? _mlInferenceProcess;
         static Process? _mlTrainerProcess;
         internal static bool _mlEnabled;
-        internal static HarvestEngineMode _harvestEngine = HarvestEngineMode.V2;
         static bool _forceTrainedModel;
         static DateTime? _nextSnapshotTime;
         static int _intervalMinutes;
@@ -192,14 +193,6 @@ namespace NudgeTray
                 {
                     _forceTrainedModel = true;
                 }
-                else if (args[i] == "--harvest-engine" && i + 1 < args.Length)
-                {
-                    if (NudgeCoreLogic.TryParseHarvestEngine(args[i + 1], out var parsedEngine))
-                    {
-                        _harvestEngine = parsedEngine;
-                    }
-                    i++;
-                }
                 else if (args[i] == "--show-analytics")
                 {
                     _showAnalyticsOnStartup = true;
@@ -231,11 +224,6 @@ namespace NudgeTray
                     Console.WriteLine("[INFO] ML re-enabled from saved settings");
                 }
 
-                if (NudgeCoreLogic.TryParseHarvestEngine(savedSettings.HarvestEngine, out var savedEngine) &&
-                    !_HasExplicitHarvestEngineArg(args))
-                {
-                    _harvestEngine = savedEngine;
-                }
             }
 
             // Persist whatever state we ended up with
@@ -246,7 +234,6 @@ namespace NudgeTray
             Console.WriteLine("╔═══════════════════════════════════════════════════════╗");
             Console.WriteLine("║        Nudge Tray - Productivity Tracker          ║");
             Console.WriteLine($"║        Version {VERSION}                                   ║");
-            Console.WriteLine($"║        Harvest Engine: {NudgeCoreLogic.GetHarvestEngineName(_harvestEngine).ToUpperInvariant(),-26}║");
             if (_mlEnabled)
             {
                 Console.WriteLine("║        🧠 ML MODE ENABLED                         ║");
@@ -321,17 +308,6 @@ namespace NudgeTray
                         });
                     }
                 });
-        }
-
-        static bool _HasExplicitHarvestEngineArg(string[] args)
-        {
-            foreach (string arg in args)
-            {
-                if (string.Equals(arg, "--harvest-engine", StringComparison.Ordinal))
-                    return true;
-            }
-
-            return false;
         }
 
         static void VerifyAnalyticsScroll()
@@ -1184,6 +1160,72 @@ namespace NudgeTray
             }
         }
 
+        public static void TriggerTrainingNow()
+        {
+            try
+            {
+                Console.WriteLine("[ML Trainer] Manual training trigger requested...");
+
+                if (_mlTrainerProcess != null && !_mlTrainerProcess.HasExited)
+                {
+                    try
+                    {
+                        _mlTrainerProcess.Kill();
+                        _mlTrainerProcess.Dispose();
+                    }
+                    catch { }
+                }
+
+                string csvPath = PlatformConfig.CsvPath;
+                string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --csv \"{csvPath}\" --model-dir \"{_modelDirPath}\" --check-interval 1 --min-total-samples 1 --force";
+
+                _mlTrainerProcess = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = FindPython(),
+                        Arguments = trainerArgs,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+
+                _mlTrainerProcess.OutputDataReceived += (s, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        TrainerState.ParseLine(e.Data);
+                        Console.WriteLine($"[ML Trainer] {e.Data}");
+                    }
+                };
+
+                _mlTrainerProcess.ErrorDataReceived += (s, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        TrainerState.ParseLine(e.Data);
+                        Console.WriteLine($"[ML Trainer] {e.Data}");
+                    }
+                };
+
+                _mlTrainerProcess.Start();
+                _mlTrainerProcess.BeginOutputReadLine();
+                _mlTrainerProcess.BeginErrorReadLine();
+
+                TrainerState.IsTraining = true;
+                TrainerState.Architecture = "…";
+                TrainerState.LastError = "";
+
+                Console.WriteLine("  ✓ Manual training started");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"⚠ Failed to start manual training: {ex.Message}");
+            }
+        }
+
         static void StartNudge(int interval)
         {
             _intervalMinutes = interval;
@@ -1208,8 +1250,6 @@ namespace NudgeTray
                 {
                     args += " --force-model";
                 }
-                args += $" --harvest-engine {NudgeCoreLogic.GetHarvestEngineName(_harvestEngine)}";
-
                 // Start the Nudge Harvest process
                 _nudgeProcess = new Process
                 {
@@ -1297,7 +1337,7 @@ namespace NudgeTray
                 _nudgeProcess.BeginOutputReadLine();
                 _nudgeProcess.BeginErrorReadLine();
 
-                Console.WriteLine($"✓ Nudge Harvest started ({NudgeCoreLogic.GetHarvestEngineName(_harvestEngine).ToUpperInvariant()})");
+                Console.WriteLine($"✓ Nudge Harvest started");
                 if (_mlEnabled)
                 {
                     Console.WriteLine("  ML mode enabled - waiting for inference server connection...");
@@ -1697,7 +1737,6 @@ namespace NudgeTray
                 {
                     MlEnabled       = _mlEnabled,
                     IntervalMinutes = _intervalMinutes > 0 ? _intervalMinutes : 5,
-                    HarvestEngine   = NudgeCoreLogic.GetHarvestEngineName(_harvestEngine)
                 };
                 File.WriteAllText(
                     SettingsPath,
@@ -1760,19 +1799,6 @@ namespace NudgeTray
 
         internal static string CurrentVersion => VERSION;
 
-        internal static HarvestEngineMode CurrentHarvestEngine => _harvestEngine;
-
-        internal static void SetHarvestEngine(HarvestEngineMode engine)
-        {
-            if (_harvestEngine == engine)
-                return;
-
-            Console.WriteLine($"[INFO] Switching Nudge Harvest engine to {NudgeCoreLogic.GetHarvestEngineName(engine).ToUpperInvariant()}...");
-            _harvestEngine = engine;
-            SaveSettings();
-            RestartHarvestProcess();
-        }
-
         internal static void RestartHarvestProcess()
         {
             if (_nudgeProcess != null && !_nudgeProcess.HasExited)
@@ -1800,6 +1826,7 @@ namespace NudgeTray
         public static int  SampleCount;
         public static int  MinSamples   = 100;
         public static int  LastTrainedCount;
+        public static int  ModelVersion;
         public static bool IsTraining;
         public static float LastAccuracy = -1f;
         public static string Architecture = "";
@@ -1846,9 +1873,9 @@ namespace NudgeTray
                 return;
             }
 
-            // [trainer] Done. accuracy=0.872
+            // [trainer] Done. accuracy=0.872 version=3
             m = System.Text.RegularExpressions.Regex.Match(raw,
-                @"\[trainer\] Done\. accuracy=([0-9.]+)");
+                @"\[trainer\] Done\. accuracy=([0-9.]+) version=(\d+)");
             if (m.Success)
             {
                 lock (_lock)
@@ -1861,6 +1888,11 @@ namespace NudgeTray
                         System.Globalization.CultureInfo.InvariantCulture,
                         out float acc))
                         LastAccuracy = acc;
+                    if (int.TryParse(m.Groups[2].Value,
+                        System.Globalization.NumberStyles.Integer,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out int ver))
+                        ModelVersion = ver;
                 }
                 return;
             }
@@ -1885,6 +1917,90 @@ namespace NudgeTray
             }
         }
 
+        public static void RefreshFromCsv()
+        {
+            string csvPath = PlatformConfig.CsvPath;
+            if (!System.IO.File.Exists(csvPath)) return;
+            try
+            {
+                var lines = System.IO.File.ReadAllLines(csvPath);
+                if (lines.Length < 2) return;
+                var header = lines[0].Split(',');
+                int idx = System.Array.IndexOf(header, "productive");
+                if (idx < 0) return;
+                int count = 0;
+                for (int i = 1; i < lines.Length; i++)
+                {
+                    var parts = lines[i].Split(',');
+                    if (parts.Length > idx)
+                    {
+                        var val = parts[idx].Trim();
+                        if (val != "" && !string.Equals(val, "nan", StringComparison.OrdinalIgnoreCase))
+                            count++;
+                    }
+                }
+
+                string metaPath = System.IO.Path.Combine(PlatformConfig.DataDirectory, "model", "trainer_meta.json");
+                DateTime trained = DateTime.MinValue;
+                int trainedCount = 0;
+                float accuracy = -1f;
+                if (System.IO.File.Exists(metaPath))
+                {
+                    try
+                    {
+                        var doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllBytes(metaPath));
+                        var root = doc.RootElement;
+                        if (root.TryGetProperty("trained_at", out var t))
+                        {
+                            double unix = t.GetDouble();
+                            trained = DateTimeOffset.FromUnixTimeMilliseconds((long)(unix * 1000)).LocalDateTime;
+                        }
+                        if (root.TryGetProperty("sample_count", out var s))
+                            trainedCount = s.GetInt32();
+                        if (root.TryGetProperty("accuracy", out var a))
+                            accuracy = (float)a.GetDouble();
+                        if (root.TryGetProperty("model_version", out var mv))
+                            ModelVersion = mv.GetInt32();
+                    }
+                    catch { }
+                }
+
+                // Fallback: read model version from trainer_state.json
+                if (ModelVersion == 0)
+                {
+                    string statePath = System.IO.Path.Combine(PlatformConfig.DataDirectory, "model", "trainer_state.json");
+                    if (System.IO.File.Exists(statePath))
+                    {
+                        try
+                        {
+                            var doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllBytes(statePath));
+                            var root = doc.RootElement;
+                            if (root.TryGetProperty("training_count", out var tc))
+                                ModelVersion = tc.GetInt32();
+                        }
+                        catch { }
+                    }
+                }
+
+                // If a model exists but we have no version yet, default to v1
+                if (ModelVersion == 0 && trained != DateTime.MinValue)
+                    ModelVersion = 1;
+
+                lock (_lock)
+                {
+                    SampleCount = count;
+                    LastChecked = DateTime.Now;
+                    if (trained != DateTime.MinValue)
+                    {
+                        LastTrained = trained;
+                        LastTrainedCount = trainedCount;
+                        LastAccuracy = accuracy;
+                    }
+                }
+            }
+            catch { }
+        }
+
         public static IReadOnlyList<string> GetLog()
         {
             lock (_lock) { return _log.ToArray(); }
@@ -1892,13 +2008,14 @@ namespace NudgeTray
 
         public static (int sample, int min, int lastTrained, bool training,
                         float acc, string arch, string err,
-                        DateTime lastChecked, DateTime lastTrained2, IReadOnlyList<string> log) Snapshot()
+                        DateTime lastChecked, DateTime lastTrained2,
+                        int version, IReadOnlyList<string> log) Snapshot()
         {
             lock (_lock)
             {
                 return (SampleCount, MinSamples, LastTrainedCount, IsTraining,
                         LastAccuracy, Architecture, LastError,
-                        LastChecked, LastTrained, _log.ToArray());
+                        LastChecked, LastTrained, ModelVersion, _log.ToArray());
             }
         }
     }
@@ -1933,7 +2050,7 @@ namespace NudgeTray
         public static volatile string CurrentApp = "";
         /// <summary>Window title / domain detail for the current app (tab-separated second field of APPFOCUS).</summary>
         public static volatile string CurrentDetail = "";
-        /// <summary>Latest sensor fusion snapshot from the V2 Harvest Engine (HARVEST: lines), updated every 2s.</summary>
+        /// <summary>Latest sensor fusion snapshot (HARVEST: lines), updated every 2s.</summary>
         public static volatile HarvestSignal? LastHarvest;
 
         public static void Add(MLLiveEvent evt)

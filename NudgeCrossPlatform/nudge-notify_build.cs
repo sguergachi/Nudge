@@ -23,6 +23,10 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 
+using NudgeCore;
+
+namespace NudgeNotify;
+
 sealed class NudgeNotify
 {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

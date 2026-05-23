@@ -9,17 +9,13 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading.Tasks;
 
+namespace NudgeCore;
+
 internal enum NudgeStartupAction
 {
     Run,
     ShowHelp,
     ShowVersion
-}
-
-internal enum HarvestEngineMode
-{
-    V1,
-    V2
 }
 
 internal sealed class NudgeParsedArgs
@@ -28,7 +24,6 @@ internal sealed class NudgeParsedArgs
     public int? IntervalMinutes { get; init; }
     public bool MlEnabled { get; init; }
     public bool ForceTrainedModel { get; init; }
-    public HarvestEngineMode HarvestEngine { get; init; } = HarvestEngineMode.V2;
     public string? CsvPath { get; init; }
 }
 
@@ -149,7 +144,7 @@ internal readonly record struct ActivityContextRecord(
     string SignalQuality,
     int FullscreenFlag);
 
-internal readonly record struct FeatureVectorV2(
+internal readonly record struct FeatureVector(
     int HourOfDay,
     int DayOfWeek,
     int FocusedAppHash,
@@ -179,7 +174,7 @@ internal readonly record struct FeatureVectorV2(
 
 internal readonly record struct ActivityTickResult(
     ActivityContext Context,
-    FeatureVectorV2 Features,
+    FeatureVector Features,
     AppCategory AppCategory,
     CategoryConfidence AppCategoryConfidence,
     string DisplayAppName,
@@ -250,7 +245,7 @@ internal sealed class ActivityFeatureTracker
             TimeLastRequestMs: context.FocusedSinceMs);
     }
 
-    private (FeatureVectorV2 Features, AppCategory Category, CategoryConfidence Confidence) BuildFeatureVector(DateTime now, ActivityContext context)
+    private (FeatureVector Features, AppCategory Category, CategoryConfidence Confidence) BuildFeatureVector(DateTime now, ActivityContext context)
     {
         ActivitySample[] last300 = GetSamplesSince(now.AddSeconds(-299));
         ActivitySample[] last60 = GetSamplesSince(now.AddSeconds(-59));
@@ -272,9 +267,25 @@ internal sealed class ActivityFeatureTracker
             ? AppCategoryClassifier.Classify(anchorApp, "").Category
             : AppCategory.Unknown;
 
-        var (appCategory, appConf) = AppCategoryClassifier.Classify(context.FocusedAppId, context.FocusedTitle, anchorCategory);
+        // For browsers, the current domain is a stronger signal than the anchor app context.
+        // Classify directly from known domain sets so e.g. youtube.com is always Entertainment
+        // regardless of what the anchor app is. Fall through to Classify() only for unknown domains.
+        AppCategory appCategory;
+        CategoryConfidence appConf;
+        if (BrowserDetector.IsBrowser(context.FocusedAppId) && !string.IsNullOrEmpty(context.FocusedDomain))
+        {
+            AppCategory domainCat = ClassifyBrowserDomain(context.FocusedDomain);
+            if (domainCat != AppCategory.Unknown)
+                (appCategory, appConf) = (domainCat, CategoryConfidence.Semantic);
+            else
+                (appCategory, appConf) = AppCategoryClassifier.Classify(context.FocusedAppId, context.FocusedTitle, anchorCategory);
+        }
+        else
+        {
+            (appCategory, appConf) = AppCategoryClassifier.Classify(context.FocusedAppId, context.FocusedTitle, anchorCategory);
+        }
 
-        var features = new FeatureVectorV2(
+        var features = new FeatureVector(
             HourOfDay: now.Hour,
             DayOfWeek: (int)now.DayOfWeek,
             FocusedAppHash: NudgeCoreLogic.GetStableHash(context.FocusedAppId),
@@ -439,6 +450,14 @@ internal sealed class ActivityFeatureTracker
                       .Any(sample => !string.Equals(sample.AppId, currentApp, StringComparison.Ordinal));
     }
 
+    private static AppCategory ClassifyBrowserDomain(string domain)
+    {
+        if (EntertainmentDomains.Contains(domain)) return AppCategory.Entertainment;
+        if (CommunicationDomains.Contains(domain)) return AppCategory.Communication;
+        if (WorkDomains.Contains(domain))          return AppCategory.Development;
+        return AppCategory.Unknown;
+    }
+
     private static bool IsCommunicationContext(ActivityContext context)
     {
         if (CommunicationAppIds.Contains(context.FocusedAppId))
@@ -485,7 +504,7 @@ internal sealed class ActivityFeatureTracker
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 }
 
-internal static class FeatureSchemaV2
+internal static class FeatureSchema
 {
     public const int SchemaVersion = 3;
 
@@ -588,7 +607,7 @@ internal static class FeatureSchemaV2
         "ent_app_flag"
     ];
 
-    public static IReadOnlyDictionary<string, double> ToFeatureDictionary(FeatureVectorV2 features) =>
+    public static IReadOnlyDictionary<string, double> ToFeatureDictionary(FeatureVector features) =>
         new Dictionary<string, double>(OrderedFeatureNames.Length, StringComparer.Ordinal)
         {
             ["hour_of_day"] = features.HourOfDay,
@@ -1159,12 +1178,17 @@ internal static class AppCategoryClassifier
         if (string.IsNullOrWhiteSpace(appId) || string.Equals(appId, "unknown", StringComparison.OrdinalIgnoreCase))
             return (AppCategory.Unknown, CategoryConfidence.Unknown);
 
-        if (_cache.TryGetValue(appId, out var cached))
-            return cached;
+        // Browser category is domain-dependent and changes every tick — never serve from cache
+        bool isBrowser = BrowserDetector.IsBrowser(appId);
+        if (!isBrowser)
+        {
+            if (_cache.TryGetValue(appId, out var cached))
+                return cached;
 
-        EnsureLoaded();
-        if (_cache.TryGetValue(appId, out cached))
-            return cached;
+            EnsureLoaded();
+            if (_cache.TryGetValue(appId, out cached))
+                return cached;
+        }
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) && TryClassifyFromDesktopFile(appId, out var desktopCat))
             return Store(appId, desktopCat, CategoryConfidence.Desktop, persist: true);
@@ -1367,8 +1391,9 @@ internal static class AppCategoryClassifier
 
     private static (AppCategory, CategoryConfidence) Store(string appId, AppCategory category, CategoryConfidence confidence, bool persist)
     {
-        _cache[appId] = (category, confidence);
-        if (persist && _inferredCachePath != null)
+        if (!BrowserDetector.IsBrowser(appId))
+            _cache[appId] = (category, confidence);
+        if (persist && !BrowserDetector.IsBrowser(appId) && _inferredCachePath != null)
             PersistAsync(appId, category, confidence);
         return (category, confidence);
     }
@@ -1492,7 +1517,6 @@ internal static class NudgeCoreLogic
         int? intervalMinutes = null;
         bool mlEnabled = false;
         bool forceModel = false;
-        HarvestEngineMode harvestEngine = HarvestEngineMode.V2;
         string? csvPath = null;
 
         for (int i = 0; i < args.Length; i++)
@@ -1527,13 +1551,6 @@ internal static class NudgeCoreLogic
                 forceModel = true;
                 continue;
             }
-            if (arg == "--harvest-engine" && i + 1 < args.Length)
-            {
-                if (TryParseHarvestEngine(args[i + 1], out var parsedEngine))
-                    harvestEngine = parsedEngine;
-                i++;
-                continue;
-            }
             if (!arg.StartsWith("--", StringComparison.Ordinal) && !arg.StartsWith('-'))
             {
                 csvPath = arg;
@@ -1546,36 +1563,9 @@ internal static class NudgeCoreLogic
             IntervalMinutes = intervalMinutes,
             MlEnabled = mlEnabled,
             ForceTrainedModel = forceModel,
-            HarvestEngine = harvestEngine,
             CsvPath = csvPath
         };
     }
-
-    internal static bool TryParseHarvestEngine(string? value, out HarvestEngineMode engine)
-    {
-        if (string.Equals(value, "v1", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(value, "legacy", StringComparison.OrdinalIgnoreCase))
-        {
-            engine = HarvestEngineMode.V1;
-            return true;
-        }
-
-        if (string.Equals(value, "v2", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(value, "wayland-first", StringComparison.OrdinalIgnoreCase))
-        {
-            engine = HarvestEngineMode.V2;
-            return true;
-        }
-
-        engine = HarvestEngineMode.V2;
-        return false;
-    }
-
-    internal static string GetHarvestEngineName(HarvestEngineMode engine) => engine switch
-    {
-        HarvestEngineMode.V1 => "v1",
-        _ => "v2"
-    };
 
     internal static NudgeNotifyParsedArgs ParseNudgeNotifyArgs(string[] args)
     {
@@ -1859,8 +1849,38 @@ internal static class NudgeCoreLogic
         _ => "poor"
     };
 
-    internal static bool ShouldIgnoreAnalyticsApp(string appName) =>
-        appName.Contains("nudge", StringComparison.OrdinalIgnoreCase);
+    private static readonly FrozenSet<string> s_systemProcessDenylist =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            // Window managers / compositors
+            "kwin_wayland", "kwin_x11", "plasmashell", "gnome-shell",
+            "xfwm4", "openbox", "mutter", "compiz", "i3",
+            // System bars / panels
+            "waybar", "polybar", "lxpanel", "xfce4-panel",
+            // Test artifacts
+            "unknown", "test-mode",
+        }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    internal static bool ShouldIgnoreAnalyticsApp(string appName)
+    {
+        // Self — never count the tracker itself
+        if (appName.Contains("nudge", StringComparison.OrdinalIgnoreCase))
+            return true;
+        // Known system/WM/test names
+        if (s_systemProcessDenylist.Contains(appName))
+            return true;
+        // Reverse-DNS bundle IDs (e.g. com.company.app) — raw IDs, not display names
+        if (appName.Length > 5 && char.IsLower(appName[0]) && CountDots(appName) >= 2)
+            return true;
+        return false;
+    }
+
+    private static int CountDots(string s)
+    {
+        int n = 0;
+        foreach (char c in s) if (c == '.') n++;
+        return n;
+    }
 
     internal static bool TryParseActivityLogLine(string line, out ActivityLogEntry entry)
     {

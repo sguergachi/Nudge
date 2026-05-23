@@ -1,4 +1,7 @@
 using Xunit;
+using NudgeCore;
+
+namespace NudgeCrossPlatform.Tests;
 
 public class NudgeCliParserTests
 {
@@ -44,14 +47,6 @@ public class NudgeCliParserTests
     }
 
     [Fact]
-    public void ParseNudgeArgs_RecognizesHarvestEngine()
-    {
-        var parsed = NudgeCoreLogic.ParseNudgeArgs(["--harvest-engine", "v1"]);
-
-        Assert.Equal(HarvestEngineMode.V1, parsed.HarvestEngine);
-    }
-
-    [Fact]
     public void ParseNudgeArgs_ShortIntervalFlag_SetsInterval()
     {
         var parsed = NudgeCoreLogic.ParseNudgeArgs(["-i", "3"]);
@@ -91,7 +86,6 @@ public class NudgeCliParserTests
         Assert.Null(parsed.IntervalMinutes);
         Assert.False(parsed.MlEnabled);
         Assert.False(parsed.ForceTrainedModel);
-        Assert.Equal(HarvestEngineMode.V2, parsed.HarvestEngine);
         Assert.Null(parsed.CsvPath);
     }
 

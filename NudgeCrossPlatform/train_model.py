@@ -190,6 +190,22 @@ def train_modern(csv_file, model_dir='./model', architecture='standard',
     os.makedirs(model_dir, exist_ok=True)
     joblib.dump(model, os.path.join(model_dir, MODEL_FILE))
 
+    # Track model version across training runs
+    trainer_state_path = os.path.join(model_dir, 'trainer_state.json')
+    model_version = 1
+    try:
+        with open(trainer_state_path, 'r') as f:
+            state = json.load(f)
+            model_version = state.get('training_count', 0) + 1
+    except Exception:
+        pass
+    with open(trainer_state_path, 'w') as f:
+        json.dump({
+            'last_trained_samples': len(X),
+            'training_count': model_version,
+            'last_training_time': datetime.now().isoformat(),
+        }, f)
+
     scaler_params = {
         'mean':           scaler.mean_.tolist(),
         'scale':          scaler.scale_.tolist(),
@@ -199,6 +215,7 @@ def train_modern(csv_file, model_dir='./model', architecture='standard',
         'architecture':   architecture,
         'n_samples':      len(X),
         'accuracy':       round(accuracy, 4),
+        'model_version':  model_version,
     }
     with open(os.path.join(model_dir, 'scaler.json'), 'w') as f:
         json.dump(scaler_params, f)

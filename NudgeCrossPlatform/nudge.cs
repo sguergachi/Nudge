@@ -15,7 +15,6 @@
 //   --interval N        Snapshot interval in minutes (default: 5)
 //   --ml                Enable ML-powered adaptive notifications
 //   --force-model       Force use of trained model even if below 100 sample threshold
-//   --harvest-engine    Select v1 (legacy) or v2 (fused) collector mode
 //
 // Example:
 //   nudge                    # Use defaults
@@ -51,9 +50,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using Tmds.DBus.Protocol;
 
+using NudgeCore;
+using NudgeTray;
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // PLATFORM SERVICE IMPLEMENTATIONS
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+namespace Nudge;
 
 interface IPlatformService
 {
@@ -87,7 +91,6 @@ sealed class Nudge
     static bool _mlEnabled;
     static bool _mlAvailable;
     static bool _forceTrainedModel;  // Force use of trained model even if below threshold
-    static HarvestEngineMode _harvestEngine = HarvestEngineMode.V2;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // ANSI COLORS - Professional terminal output
@@ -976,27 +979,7 @@ publish();
     static string _csvPath = PlatformConfig.CsvPath;
     static StreamWriter? _csvFile;
     static StreamWriter? _activityLogFile;
-    static readonly ActivityFeatureTracker V2FeatureTracker = new();
-    static readonly string[] LegacyHarvestHeaders =
-    [
-        "timestamp",
-        "hour_of_day",
-        "day_of_week",
-        "app_name",
-        "foreground_app",
-        "idle_time",
-        "time_last_request",
-        "productive"
-    ];
-    static readonly string[] LegacyActivityLogHeaders =
-    [
-        "timestamp",
-        "hour_of_day",
-        "day_of_week",
-        "app_name",
-        "foreground_app",
-        "idle_time"
-    ];
+    static readonly ActivityFeatureTracker FeatureTracker = new();
 
     // Activity tracking
     static string _currentApp = "";
@@ -1066,7 +1049,6 @@ publish();
             SNAPSHOT_INTERVAL_MS = minutes * 60 * 1000;
             _customInterval = true;
         }
-        _harvestEngine = parsed.HarvestEngine;
         _mlEnabled = parsed.MlEnabled;
         _forceTrainedModel = parsed.ForceTrainedModel;
         if (!string.IsNullOrWhiteSpace(parsed.CsvPath))
@@ -1113,7 +1095,6 @@ publish();
                 Info($"  Minimum samples required: {MIN_SAMPLES_THRESHOLD}");
             }
         }
-        Info($"  Harvest engine: {NudgeCoreLogic.GetHarvestEngineName(_harvestEngine).ToUpperInvariant()}");
         Info($"  Respond with: {Color.BCYAN}nudge-notify YES{Color.RESET} or {Color.BCYAN}nudge-notify NO{Color.RESET}");
         Console.WriteLine();
 
@@ -1258,7 +1239,7 @@ publish();
     }
 
     static ActivityTickResult CaptureActivityTick(DateTime now, string app, string title, int idle) =>
-        V2FeatureTracker.Capture(
+        FeatureTracker.Capture(
             now,
             new WindowObservation(
                 AppId: app,
@@ -1329,21 +1310,18 @@ publish();
                 title = _currentTitle;
             }
 
-            ActivityTickResult? tick = _harvestEngine == HarvestEngineMode.V2
-                ? CaptureActivityTick(now, app, title, idle)
-                : null;
+            ActivityTickResult? tick = CaptureActivityTick(now, app, title, idle);
 
             // Broadcast harvest sensor signals to AI Brain tab every 2 seconds
             harvestElapsed += CYCLE_MS;
             if (harvestElapsed >= 2000)
             {
                 harvestElapsed = 0;
-                HarvestSignal sig;
                 if (tick is ActivityTickResult t)
                 {
                     var ctx = t.Context;
                     var feat = t.Features;
-                    sig = new HarvestSignal
+                    var sig = new HarvestSignal
                     {
                         Quality   = ctx.SignalQuality.ToString().ToLowerInvariant(),
                         FocusSrc  = ctx.FocusSource.ToString(),
@@ -1361,21 +1339,9 @@ publish();
                         Sw300     = feat.SwitchCount300s,
                         Share     = feat.CurrentAppShare300s,
                         Apps300   = feat.DistinctApps300s,
-                        V2        = true
                     };
+                    Console.WriteLine($"HARVEST:{JsonSerializer.Serialize(sig, NudgeJsonContext.Default.HarvestSignal)}");
                 }
-                else
-                {
-                    sig = new HarvestSignal
-                    {
-                        Quality   = "poor",
-                        FocusSrc  = "Unknown",
-                        IdleMs    = idle,
-                        FocusedMs = _attentionSpanMs,
-                        V2        = false
-                    };
-                }
-                Console.WriteLine($"HARVEST:{JsonSerializer.Serialize(sig, NudgeJsonContext.Default.HarvestSignal)}");
             }
 
             // Check for snapshot triggers
@@ -1496,77 +1462,6 @@ publish();
     // DATA COLLECTION - CSV management with professional error handling
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    static void MigrateOldCsvFormat()
-    {
-        string tempPath = _csvPath + ".migrating";
-
-        try
-        {
-            if (!File.Exists(_csvPath))
-                return;
-
-            using var lines = File.ReadLines(_csvPath).GetEnumerator();
-            if (!lines.MoveNext())
-                return;
-
-            var header = lines.Current;
-            if (header.Contains("timestamp", StringComparison.OrdinalIgnoreCase) &&
-                header.Contains("app_name", StringComparison.OrdinalIgnoreCase))
-            {
-                return;
-            }
-
-            Dim("  Migrating CSV to new format...");
-
-            var backupPath = _csvPath + ".backup";
-            File.Copy(_csvPath, backupPath, overwrite: true);
-            Dim($"  Created backup: {backupPath}");
-
-            var fileTime = File.GetLastWriteTime(_csvPath);
-            string timestamp = fileTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
-            int hour = fileTime.Hour;
-            int day = (int)fileTime.DayOfWeek;
-            int migratedRows = 0;
-
-            using (var writer = new StreamWriter(tempPath, false, Encoding.UTF8))
-            {
-                writer.WriteLine("timestamp,hour_of_day,day_of_week,app_name,foreground_app,idle_time,time_last_request,productive");
-
-                while (lines.MoveNext())
-                {
-                    var line = lines.Current;
-                    if (string.IsNullOrWhiteSpace(line))
-                        continue;
-
-                    var parts = line.Split(',', 4);
-                    if (parts.Length < 3)
-                        continue;
-
-                    string appHash = parts[0];
-                    string idle = parts.Length > 1 ? parts[1] : "0";
-                    string attention = parts.Length > 2 ? parts[2] : "0";
-                    string productive = parts.Length > 3 ? parts[3] : "0";
-
-                    writer.WriteLine($"{timestamp},{hour},{day},unknown,{appHash},{idle},{attention},{productive}");
-                    migratedRows++;
-                }
-            }
-
-            File.Move(tempPath, _csvPath, overwrite: true);
-            Success($"  ✓ Migrated {migratedRows} rows to new format");
-        }
-        catch (Exception ex)
-        {
-            if (File.Exists(tempPath))
-            {
-                try { File.Delete(tempPath); } catch { }
-            }
-
-            Warning($"  CSV migration failed: {ex.Message}");
-            Warning($"  Continuing with existing file...");
-        }
-    }
-
     static void InitializeCSV()
     {
         try
@@ -1579,14 +1474,7 @@ publish();
             }
 
             bool harvestExists = File.Exists(_csvPath);
-            if (_harvestEngine == HarvestEngineMode.V1 && harvestExists)
-            {
-                MigrateOldCsvFormat();
-            }
-
-            EnsureCsvSchema(
-                _csvPath,
-                _harvestEngine == HarvestEngineMode.V2 ? FeatureSchemaV2.HarvestHeaders : LegacyHarvestHeaders);
+            EnsureCsvSchema(_csvPath, FeatureSchema.HarvestHeaders);
             _csvFile = new StreamWriter(_csvPath, append: true);
             _csvFile.AutoFlush = true; // Ensure data is written immediately
 
@@ -1595,9 +1483,7 @@ publish();
             // Initialize activity log
             var activityLogPath = Path.Combine(Path.GetDirectoryName(_csvPath) ?? "", "ACTIVITY_LOG.CSV");
             bool activityExists = File.Exists(activityLogPath);
-            EnsureCsvSchema(
-                activityLogPath,
-                _harvestEngine == HarvestEngineMode.V2 ? FeatureSchemaV2.ActivityLogHeaders : LegacyActivityLogHeaders);
+            EnsureCsvSchema(activityLogPath, FeatureSchema.ActivityLogHeaders);
             _activityLogFile = new StreamWriter(activityLogPath, append: true);
             _activityLogFile.AutoFlush = true;
             Dim($"  {(activityExists ? "Activity log" : "Created activity log")}: {activityLogPath}");
@@ -1690,7 +1576,7 @@ publish();
             int dayOfWeek = (int)now.DayOfWeek;  // 0-6 (Sunday=0)
             string timestamp = now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 
-            if (_harvestEngine == HarvestEngineMode.V2 && tick is ActivityTickResult fusedTick)
+            if (tick is ActivityTickResult fusedTick)
             {
                 if (fusedTick.Context.SignalQuality == SignalQuality.Poor)
                     return;
@@ -1715,10 +1601,7 @@ publish();
                     NudgeCoreLogic.GetFocusSourceName(fusedTick.Context.FocusSource),
                     NudgeCoreLogic.GetSignalQualityName(fusedTick.Context.SignalQuality),
                     fusedTick.Context.FullscreenFlag);
-                return;
             }
-
-            WriteCsvRow(_activityLogFile, timestamp, hourOfDay, dayOfWeek, app, appHash, idle);
         }
         catch (Exception ex)
         {
@@ -1745,12 +1628,12 @@ publish();
         {
             for (int i = 0; i < boost; i++)
             {
-                if (_harvestEngine == HarvestEngineMode.V2 && tick is ActivityTickResult fusedTick)
+                if (tick is ActivityTickResult fusedTick)
                 {
                     if (fusedTick.Context.SignalQuality == SignalQuality.Poor)
                     {
                         if (i == 0)
-                            Warning("  Skipping labeled V2 row because signal quality is poor");
+                            Warning("  Skipping labeled row because signal quality is poor");
                         continue;
                     }
 
@@ -1764,7 +1647,7 @@ publish();
                         fusedTick.Context.IdleMs,
                         fusedTick.TimeLastRequestMs,
                         productiveInt,
-                        FeatureSchemaV2.SchemaVersion,
+                        FeatureSchema.SchemaVersion,
                         fusedTick.Context.FocusedAppId,
                         fusedTick.Context.FocusedTitle,
                         fusedTick.Context.FocusedDomain,
@@ -1799,11 +1682,6 @@ publish();
                         fusedTick.Features.OfficeAppFlag,
                         fusedTick.Features.CommAppFlag,
                         fusedTick.Features.EntAppFlag);
-                    wroteRow = true;
-                }
-                else
-                {
-                    WriteCsvRow(_csvFile, timestamp, hourOfDay, dayOfWeek, app, appHash, idle, attention, productiveInt);
                     wroteRow = true;
                 }
             }
@@ -1955,34 +1833,21 @@ publish();
             using var stream = client.GetStream();
 
             string requestJson;
-            if (_harvestEngine == HarvestEngineMode.V2 && tick is ActivityTickResult fusedTick)
+            if (tick is ActivityTickResult fusedTick)
             {
-                var request = new MLPredictionRequestV2
+                var request = new MLPredictionRequest
                 {
-                    SchemaVersion = FeatureSchemaV2.SchemaVersion,
-                    FeatureOrder = FeatureSchemaV2.OrderedFeatureNames,
-                    Features = FeatureSchemaV2.ToFeatureDictionary(fusedTick.Features),
+                    SchemaVersion = FeatureSchema.SchemaVersion,
+                    FeatureOrder = FeatureSchema.OrderedFeatureNames,
+                    Features = FeatureSchema.ToFeatureDictionary(fusedTick.Features),
                     FocusSource = NudgeCoreLogic.GetFocusSourceName(fusedTick.Context.FocusSource),
                     SignalQuality = NudgeCoreLogic.GetSignalQualityName(fusedTick.Context.SignalQuality)
                 };
-                requestJson = JsonSerializer.Serialize(request, NudgeJsonContext.Default.MLPredictionRequestV2) + "\n";
+                requestJson = JsonSerializer.Serialize(request, NudgeJsonContext.Default.MLPredictionRequest) + "\n";
             }
             else
             {
-                // Prepare request with time-based features
-                var now = DateTime.Now;
-                int appHash = GetHash(app);
-                int hourOfDay = now.Hour;  // 0-23
-                int dayOfWeek = (int)now.DayOfWeek;  // 0-6 (Sunday=0)
-
-                var request = new MLPredictionRequest(
-                    hourOfDay,
-                    dayOfWeek,
-                    appHash,
-                    idle,
-                    attention);
-
-                requestJson = JsonSerializer.Serialize(request, NudgeJsonContext.Default.MLPredictionRequest) + "\n";
+                return null;
             }
 
             byte[] requestBytes = Encoding.UTF8.GetBytes(requestJson);
@@ -2053,17 +1918,17 @@ publish();
             return false;
         }
 
-        if (_harvestEngine == HarvestEngineMode.V2 && tick is ActivityTickResult fusedTick)
+        if (tick is ActivityTickResult fusedTick)
         {
             if (fusedTick.Context.SignalQuality == SignalQuality.Poor)
             {
-                Dim("  ML: Skipping fused prediction because signal quality is poor");
+                Dim("  ML: Skipping prediction because signal quality is poor");
                 return false;
             }
 
             if (fusedTick.Features.AfkFlag == 1)
             {
-                Dim("  ML: Skipping fused prediction because user is AFK");
+                Dim("  ML: Skipping prediction because user is AFK");
                 return false;
             }
         }
@@ -2207,7 +2072,6 @@ publish();
         Console.WriteLine($"{Color.BCYAN}╔═══════════════════════════════════════════════╗{Color.RESET}");
         Console.WriteLine($"{Color.BCYAN}║{Color.RESET}  {Color.BOLD}Nudge Harvest{Color.RESET} - Activity Collector     {Color.BCYAN}║{Color.RESET}");
         Console.WriteLine($"{Color.BCYAN}║{Color.RESET}  {Color.DIM}Version {VERSION,-36}{Color.RESET}{Color.BCYAN}║{Color.RESET}");
-        Console.WriteLine($"{Color.BCYAN}║{Color.RESET}  {Color.DIM}Engine: {NudgeCoreLogic.GetHarvestEngineName(_harvestEngine).ToUpperInvariant(),-35}{Color.RESET}{Color.BCYAN}║{Color.RESET}");
         Console.WriteLine($"{Color.BCYAN}╚═══════════════════════════════════════════════╝{Color.RESET}");
         Console.WriteLine();
     }
@@ -2226,7 +2090,6 @@ publish();
         Console.WriteLine($"  {Color.CYAN}--interval, -i N{Color.RESET}    Snapshot interval in minutes (default: 5)");
         Console.WriteLine($"  {Color.CYAN}--ml{Color.RESET}                Enable ML-powered adaptive notifications");
         Console.WriteLine($"  {Color.CYAN}--force-model{Color.RESET}       Force use of trained model even if below 100 samples");
-        Console.WriteLine($"  {Color.CYAN}--harvest-engine{Color.RESET}    Select v1 or v2 collector mode");
         Console.WriteLine();
         Console.WriteLine($"{Color.BOLD}ARGUMENTS:{Color.RESET}");
         Console.WriteLine($"  {Color.CYAN}csv-path{Color.RESET}            Path to CSV file (default: {PlatformConfig.CsvPath})");
@@ -2237,7 +2100,6 @@ publish();
         Console.WriteLine($"  nudge --interval 2             # Snapshot every 2 minutes");
         Console.WriteLine($"  nudge --ml                     # Enable ML predictions");
         Console.WriteLine($"  nudge --ml --force-model       # Force trained model usage");
-        Console.WriteLine($"  nudge --harvest-engine v1      # Use the legacy harvest engine");
         Console.WriteLine();
         Console.WriteLine($"{Color.BOLD}RESPONDING TO SNAPSHOTS:{Color.RESET}");
         Console.WriteLine($"  In another terminal, run:");
