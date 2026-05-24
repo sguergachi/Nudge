@@ -139,21 +139,22 @@ namespace NudgeTray
                 if (_aiTabActive) RefreshContent();
             };
 
-            // Position near bottom-right (typical tray icon location)
-            var screen = Screens.Primary;
-            if (screen != null)
-            {
-                var workingArea = screen.WorkingArea;
-                Position = new PixelPoint(
-                    workingArea.Right - 420 - 20,
-                    workingArea.Bottom - 640 - 20
-                );
-            }
-            else
-            {
-                WindowStartupLocation = WindowStartupLocation.Manual;
-                Position = new PixelPoint(100, 100);
-            }
+    // Position near bottom-right (typical tray icon location)
+    var screen = Screens.Primary;
+    if (screen != null)
+    {
+        var workingArea = screen.WorkingArea;
+        var scale = RenderScaling;
+        Position = new PixelPoint(
+            workingArea.Right - (int)(420 * scale + 20 * scale),
+            workingArea.Bottom - (int)(640 * scale + 20 * scale)
+        );
+    }
+    else
+    {
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        Position = new PixelPoint(100, 100);
+    }
         }
 
         protected override void OnClosed(EventArgs e)

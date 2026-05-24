@@ -98,9 +98,6 @@ namespace NudgeTray
         [DllImport("kernel32.dll")]
         static extern bool AttachConsole(int dwProcessId);
 
-        [DllImport("kernel32.dll")]
-        static extern bool AllocConsole();
-
         [DllImport("user32.dll")]
         static extern bool SetForegroundWindow(IntPtr hWnd);
 
@@ -176,11 +173,10 @@ namespace NudgeTray
             };
 
 #if WINDOWS
-            // Attach to parent console for logging (when run from terminal)
-            if (!AttachConsole(ATTACH_PARENT_PROCESS))
-            {
-                AllocConsole();
-            }
+            // Attach to parent console when launched from a terminal.
+            // Don't allocate a new one — as a WinExe app, no console window should appear
+            // when launched from GUI (Start menu, double-click, etc.)
+            AttachConsole(ATTACH_PARENT_PROCESS);
 #endif
 
             int interval = 5; // default 5 minutes
@@ -2323,19 +2319,22 @@ namespace NudgeTray
         {
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             {
-                // Create an invisible main window to keep the app alive on Linux
-                // and ensure proper tray icon display
-                var mainWindow = new Window
+                // Hidden window needed on all platforms:
+                // - Linux: keeps the app alive so the tray icon stays registered
+                // - Windows: provides the HWND that receives tray icon callback messages
+                //   (WM_CONTEXTMENU for right-click, WM_APP for notifications).
+                //   Without it, right-click menu won't appear.
+                desktop.MainWindow = new Window
                 {
                     IsVisible = false,
                     ShowInTaskbar = false,
+                    ShowActivated = false,
                     CanResize = false,
-                    Width = 1,
-                    Height = 1,
-                    Topmost = false
+                    Width = 0,
+                    Height = 0,
+                    Topmost = false,
+                    SystemDecorations = SystemDecorations.None
                 };
-
-                desktop.MainWindow = mainWindow;
             }
 
             base.OnFrameworkInitializationCompleted();

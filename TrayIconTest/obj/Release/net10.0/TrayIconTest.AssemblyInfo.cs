@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("TrayIconTest")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3aab4434a5de6b30a8b71b696bc404d51b23d899")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e8e7ac3023a355ecfe9c33faea867ddd8c15eb3e")]
 [assembly: System.Reflection.AssemblyProductAttribute("TrayIconTest")]
 [assembly: System.Reflection.AssemblyTitleAttribute("TrayIconTest")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "targets": {
     "net10.0": {
       "Avalonia/12.0.1": {
@@ -1267,19 +1267,19 @@
     ]
   },
   "packageFolders": {
-    "/home/sammy/.nuget/packages/": {}
+    "C:\\Users\\magis\\.nuget\\packages\\": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "/home/sammy/Dev/Nudge/TrayIconTest/TrayIconTest.csproj",
+      "projectUniqueName": "C:\\Users\\magis\\Documents\\GitHub\\Nudge\\TrayIconTest\\TrayIconTest.csproj",
       "projectName": "TrayIconTest",
-      "projectPath": "/home/sammy/Dev/Nudge/TrayIconTest/TrayIconTest.csproj",
-      "packagesPath": "/home/sammy/.nuget/packages/",
-      "outputPath": "/home/sammy/Dev/Nudge/TrayIconTest/obj/",
+      "projectPath": "C:\\Users\\magis\\Documents\\GitHub\\Nudge\\TrayIconTest\\TrayIconTest.csproj",
+      "packagesPath": "C:\\Users\\magis\\.nuget\\packages\\",
+      "outputPath": "C:\\Users\\magis\\Documents\\GitHub\\Nudge\\TrayIconTest\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
-        "/home/sammy/.nuget/NuGet/NuGet.Config"
+        "C:\\Users\\magis\\AppData\\Roaming\\NuGet\\NuGet.Config"
       ],
       "originalTargetFrameworks": [
         "net10.0"
@@ -1289,6 +1289,7 @@
       },
       "frameworks": {
         "net10.0": {
+          "framework": "net10.0",
           "targetAlias": "net10.0",
           "projectReferences": {}
         }
@@ -1303,10 +1304,11 @@
         "auditLevel": "low",
         "auditMode": "all"
       },
-      "SdkAnalysisLevel": "10.0.100"
+      "SdkAnalysisLevel": "10.0.300"
     },
     "frameworks": {
       "net10.0": {
+        "framework": "net10.0",
         "targetAlias": "net10.0",
         "dependencies": {
           "Avalonia": {
@@ -1329,18 +1331,12 @@
         ],
         "assetTargetFallback": true,
         "warn": true,
-        "downloadDependencies": [
-          {
-            "name": "Microsoft.AspNetCore.App.Ref",
-            "version": "[10.0.4, 10.0.4]"
-          }
-        ],
         "frameworkReferences": {
           "Microsoft.NETCore.App": {
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/10.0.104/PortableRuntimeIdentifierGraph.json",
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.300/PortableRuntimeIdentifierGraph.json",
         "packagesToPrune": {
           "Microsoft.CSharp": "(,4.7.32767]",
           "Microsoft.VisualBasic": "(,10.4.32767]",

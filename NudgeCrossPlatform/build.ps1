@@ -5,13 +5,13 @@
 #   .\build.ps1 -Clean        Remove generated build artifacts first
 #   .\build.ps1 -SkipDeps     Skip dependency installation helpers
 #   .\build.ps1 -SkipTests    Skip dotnet test
-#   .\build.ps1 -NoRun        Do not auto-launch nudge-tray after build
+#   .\build.ps1 -Platform     Also publish self-contained platform binaries (win-x64, linux-x64)
 
 param(
     [switch]$Clean,
     [switch]$SkipDeps,
     [switch]$SkipTests,
-    [switch]$NoRun
+    [switch]$Platform
 )
 
 $ErrorActionPreference = "Stop"
@@ -50,7 +50,7 @@ function Remove-IfUntracked {
 
 function Clean-Artifacts {
     Write-Info "Cleaning generated build artifacts..."
-    Remove-Item -Path "bin", "obj", "dist", "NudgeCrossPlatform.Tests/bin", "NudgeCrossPlatform.Tests/obj", "../TrayIconTest/bin", "../TrayIconTest/obj" -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "bin", "obj", "dist", "NudgeCrossPlatform.Tests/bin", "NudgeCrossPlatform.Tests/obj" -Recurse -Force -ErrorAction SilentlyContinue
 
     Remove-IfUntracked "nudge_build.cs"
     Remove-IfUntracked "nudge-notify_build.cs"
@@ -148,13 +148,13 @@ function Ensure-Dotnet10 {
 }
 
 function Ensure-Python {
-    $pythonCommand = $null
+    $script:PythonCommand = $null
 
-    foreach ($candidate in @("python", "py")) {
+    foreach ($candidate in @("py", "python")) {
         if (Get-Command $candidate -ErrorAction SilentlyContinue) {
             try {
                 $version = (& $candidate --version 2>&1 | Out-String).Trim()
-                if ($version) {
+                if ($version -match '^Python \d+\.\d+\.\d+') {
                     $script:PythonCommand = $candidate
                     Write-Success "[OK] Python ready"
                     Write-Host "  Version: $version" -ForegroundColor DarkGray
@@ -174,11 +174,17 @@ function Ensure-Python {
     winget install Python.Python.3.12 --silent --accept-package-agreements --accept-source-agreements
     Refresh-Path
 
-    foreach ($candidate in @("python", "py")) {
+    foreach ($candidate in @("py", "python")) {
         if (Get-Command $candidate -ErrorAction SilentlyContinue) {
-            $script:PythonCommand = $candidate
-            Write-Success "[OK] Python ready"
-            return
+            try {
+                $version = (& $candidate --version 2>&1 | Out-String).Trim()
+                if ($version -match '^Python \d+\.\d+\.\d+') {
+                    $script:PythonCommand = $candidate
+                    Write-Success "[OK] Python ready"
+                    return
+                }
+            }
+            catch { }
         }
     }
 
@@ -208,8 +214,10 @@ function Install-PythonDeps {
 
 function Prepare-BuildSources {
     Write-Host "  Preparing shebang-stripped sources..." -ForegroundColor DarkGray
-    Get-Content -LiteralPath "nudge.cs" | Select-Object -Skip 1 | Set-Content -LiteralPath "nudge_build.cs" -Encoding utf8
-    Get-Content -LiteralPath "nudge-notify.cs" | Select-Object -Skip 1 | Set-Content -LiteralPath "nudge-notify_build.cs" -Encoding utf8
+    $body = [System.IO.File]::ReadAllText((Resolve-Path "nudge.cs"), [System.Text.Encoding]::UTF8) -replace '^#!/usr/bin/env dotnet-script\r?\n', ''
+    [System.IO.File]::WriteAllText((Join-Path $PSScriptRoot "nudge_build.cs"), $body, [System.Text.Encoding]::UTF8)
+    $body = [System.IO.File]::ReadAllText((Resolve-Path "nudge-notify.cs"), [System.Text.Encoding]::UTF8) -replace '^#!/usr/bin/env dotnet-script\r?\n', ''
+    [System.IO.File]::WriteAllText((Join-Path $PSScriptRoot "nudge-notify_build.cs"), $body, [System.Text.Encoding]::UTF8)
 }
 
 function Invoke-Dotnet {
@@ -308,26 +316,17 @@ Invoke-Dotnet @("restore", "nudge.csproj", "--nologo")
 Invoke-Dotnet @("restore", "nudge-notify.csproj", "--nologo")
 Invoke-Dotnet @("restore", "nudge-tray.csproj", "--nologo")
 Invoke-Dotnet @("restore", "NudgeCrossPlatform.Tests/NudgeCrossPlatform.Tests.csproj", "--nologo")
-Invoke-Dotnet @("restore", "../TrayIconTest/TrayIconTest.csproj", "--nologo")
 
 Write-Host "  Building projects in parallel..." -ForegroundColor DarkGray
 $buildJobs = @()
-$buildJobs += Start-Job -WorkingDirectory $PSScriptRoot { dotnet build nudge.csproj -c Release -f "net10.0" --no-restore --nologo -m -v quiet }
-$buildJobs += Start-Job -WorkingDirectory $PSScriptRoot { dotnet build nudge-notify.csproj -c Release -f "net10.0" --no-restore --nologo -m -v quiet }
-$buildJobs += Start-Job -WorkingDirectory $PSScriptRoot { dotnet build nudge-tray.csproj -c Release -f "net10.0-windows10.0.17763.0" --no-restore --nologo -m -v quiet }
-$buildJobs += Start-Job -WorkingDirectory $PSScriptRoot { dotnet build ../TrayIconTest/TrayIconTest.csproj -c Release --no-restore --nologo -m -v quiet }
-
+$buildJobs += Start-Job -ArgumentList $PSScriptRoot { param($d) Set-Location $d; dotnet build nudge.csproj -c Release -f "net10.0" --no-restore --nologo -m -v quiet }
+$buildJobs += Start-Job -ArgumentList $PSScriptRoot { param($d) Set-Location $d; dotnet build nudge-notify.csproj -c Release -f "net10.0" --no-restore --nologo -m -v quiet }
+$buildJobs += Start-Job -ArgumentList $PSScriptRoot { param($d) Set-Location $d; dotnet build nudge-tray.csproj -c Release -f "net10.0-windows10.0.17763.0" --no-restore --nologo -m -v quiet }
 Wait-Job $buildJobs | Out-Null
 $failedJobs = $buildJobs | Where-Object { $_.State -ne 'Completed' -or $_.ChildJobs[0].JobStateInfo.State -eq 'Failed' }
 $jobOutput = Receive-Job $buildJobs 2>&1
 Remove-Job $buildJobs
-
-if ($failedJobs) {
-    Write-Err "[ERROR] One or more build jobs failed:"
-    $jobOutput | ForEach-Object { Write-Host $_ }
-    exit 1
-}
-
+if ($failedJobs) { Write-Err "[ERROR] Build jobs failed:"; $jobOutput | ForEach-Object { Write-Host $_ }; exit 1 }
 Write-Success "  [OK] Build completed"
 
 if (-not $SkipTests) {
@@ -340,7 +339,7 @@ else {
 }
 
 Write-Host "  Publishing nudge-tray runtime output..." -ForegroundColor DarkGray
-Invoke-Dotnet @("publish", "nudge-tray.csproj", "-c", "Release", "-f", $WindowsTfm, "--no-self-contained", "--no-restore", "--nologo", "-v", "quiet")
+Invoke-Dotnet @("publish", "nudge-tray.csproj", "-c", "Release", "-f", $WindowsTfm, "--no-self-contained", "--no-restore", "--no-build", "--nologo", "-v", "quiet")
 Write-Success "  [OK] nudge-tray publish"
 
 $runningProcesses = Get-Process -Name "nudge", "nudge-notify", "nudge-tray" -ErrorAction SilentlyContinue
@@ -370,12 +369,14 @@ if (Test-Path "bin/Release/$WindowsTfm/publish/runtimes") {
     Copy-Item "bin/Release/$WindowsTfm/publish/runtimes" -Destination "." -Recurse -Force
 }
 
-Write-Host ""
-Write-Host "==========================================" -ForegroundColor Cyan
-Write-Info "Building platform binaries..."
-Write-Host ""
-Publish-DistBinary -Framework $WindowsTfm -Rid "win-x64" -OutputDir "dist/win-x64" -ExpectedFile "dist/win-x64/nudge-tray.exe"
-Publish-DistBinary -Framework $MainTfm -Rid "linux-x64" -OutputDir "dist/linux-x64" -ExpectedFile "dist/linux-x64/nudge-tray"
+if ($Platform) {
+    Write-Host ""
+    Write-Host "==========================================" -ForegroundColor Cyan
+    Write-Info "Building platform binaries..."
+    Write-Host ""
+    Publish-DistBinary -Framework $WindowsTfm -Rid "win-x64" -OutputDir "dist/win-x64" -ExpectedFile "dist/win-x64/nudge-tray.exe"
+    Publish-DistBinary -Framework $MainTfm -Rid "linux-x64" -OutputDir "dist/linux-x64" -ExpectedFile "dist/linux-x64/nudge-tray"
+}
 
 Write-Host ""
 Write-Info "Verifying binaries..."
@@ -402,8 +403,4 @@ Write-Host "  .\nudge-notify.exe YES         # I was productive" -ForegroundColo
 Write-Host "  .\nudge-notify.exe NO          # I was not productive" -ForegroundColor Yellow
 Write-Host ""
 
-if (-not $NoRun -and (Test-Path "./nudge-tray.exe")) {
-    Write-Info "Launching Nudge..."
-    Start-Process -FilePath "./nudge-tray.exe"
-    Write-Success "[OK] nudge-tray launched"
-}
+
