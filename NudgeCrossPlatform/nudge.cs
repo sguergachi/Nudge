@@ -1080,9 +1080,9 @@ publish();
             if (hwnd == IntPtr.Zero)
                 return ("unknown", "");
 
-            var sb = new StringBuilder(512);
-            var len = GetWindowText(hwnd, sb, sb.Capacity);
-            var title = len > 0 ? sb.ToString() : "";
+            var buf = new char[512];
+            var len = GetWindowText(hwnd, buf, buf.Length);
+            var title = len > 0 ? new string(buf, 0, len) : "";
 
             GetWindowThreadProcessId(hwnd, out uint pid);
             try
@@ -1111,7 +1111,7 @@ publish();
         private static extern IntPtr GetForegroundWindow();
 
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-        private static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
+        private static extern int GetWindowText(IntPtr hWnd, char[] text, int count);
 
         [DllImport("user32.dll")]
         private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
