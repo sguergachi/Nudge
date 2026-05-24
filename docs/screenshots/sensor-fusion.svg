@@ -1,190 +1,139 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" width="800" height="520">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 420" width="820" height="420">
   <defs>
-    <filter id="shadow" x="-5%" y="-5%" width="115%" height="115%">
-      <feDropShadow dx="0" dy="3" stdDeviation="8" flood-color="#000" flood-opacity="0.25"/>
-    </filter>
-    <linearGradient id="flowGrad" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#58A6FF" stop-opacity="0.15"/>
-      <stop offset="50%" stop-color="#58A6FF" stop-opacity="0.06"/>
-      <stop offset="100%" stop-color="#58A6FF" stop-opacity="0.15"/>
-    </linearGradient>
-    <linearGradient id="signalGrad1" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#58A6FF" stop-opacity="0.12"/>
-      <stop offset="100%" stop-color="#1C1C20"/>
-    </linearGradient>
-    <linearGradient id="signalGrad2" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#4CAF50" stop-opacity="0.12"/>
-      <stop offset="100%" stop-color="#1C1C20"/>
-    </linearGradient>
-    <linearGradient id="signalGrad3" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#FFC107" stop-opacity="0.12"/>
-      <stop offset="100%" stop-color="#1C1C20"/>
-    </linearGradient>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#58A6FF" fill-opacity="0.5"/>
     </marker>
   </defs>
 
   <!-- Background -->
-  <rect x="0" y="0" width="800" height="520" rx="16" ry="16" fill="#121214"/>
-  <rect x="0.5" y="0.5" width="799" height="519" rx="15.5" ry="15.5" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+  <rect x="0" y="0" width="820" height="420" rx="14" fill="#0B0B0E" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
 
   <!-- Title -->
-  <text x="400" y="32" font-family="Inter, -apple-system, sans-serif" font-size="14" fill="#F0F0F5" text-anchor="middle" font-weight="700">Sensor Fusion Pipeline</text>
+  <text x="24" y="34" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="14" fill="#EDEDF5" font-weight="700">Sensor Fusion Pipeline</text>
 
-  <!-- ===== CONNECTING ARROWS ===== -->
-  <!-- Signal sources → Fusion engine -->
-  <line x1="148" y1="140" x2="282" y2="140" stroke="#58A6FF" stroke-opacity="0.35" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
-  <line x1="148" y1="200" x2="282" y2="200" stroke="#58A6FF" stroke-opacity="0.35" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
-  <line x1="148" y1="260" x2="282" y2="260" stroke="#58A6FF" stroke-opacity="0.35" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <!-- Column headers -->
+  <rect x="16" y="52" width="180" height="28" rx="5" fill="#121215"/>
+  <text x="106" y="71" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="10" fill="#94949E" text-anchor="middle" font-weight="600">RAW SIGNALS</text>
 
-  <!-- Fusion → Feature Vector -->
-  <line x1="415" y1="200" x2="532" y2="200" stroke="#58A6FF" stroke-opacity="0.5" stroke-width="2" marker-end="url(#arrow)"/>
+  <rect x="236" y="52" width="180" height="28" rx="5" fill="#121215"/>
+  <text x="326" y="71" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="10" fill="#94949E" text-anchor="middle" font-weight="600">SIGNAL FUSION</text>
 
-  <!-- Feature Vector → Category Classification -->
-  <line x1="665" y1="160" x2="665" y2="290" stroke="#58A6FF" stroke-opacity="0.35" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <rect x="456" y="52" width="180" height="28" rx="5" fill="#121215"/>
+  <text x="546" y="71" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="10" fill="#94949E" text-anchor="middle" font-weight="600">FEATURE VECTOR</text>
 
-  <!-- ===== COLUMN 1: SIGNAL SOURCES ===== -->
-  <rect x="16" y="60" width="140" height="32" rx="6" ry="6" fill="#1C1C20" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-  <text x="86" y="80" font-family="Inter, -apple-system, sans-serif" font-size="11" fill="#9696A0" text-anchor="middle" font-weight="500">RAW SIGNALS</text>
+  <rect x="676" y="52" width="130" height="28" rx="5" fill="#121215"/>
+  <text x="741" y="71" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="10" fill="#94949E" text-anchor="middle" font-weight="600">OUTPUT</text>
 
-  <!-- Signal 1: App Focus -->
-  <rect x="16" y="104" width="132" height="62" rx="8" ry="8" fill="url(#signalGrad1)" stroke="rgba(88,166,255,0.2)" stroke-width="1" filter="url(#shadow)"/>
-  <rect x="24" y="112" width="20" height="20" rx="4" ry="4" fill="rgba(88,166,255,0.12)"/>
-  <text x="30" y="126" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#58A6FF" text-anchor="middle" font-weight="600">A</text>
-  <text x="52" y="122" font-family="Inter, -apple-system, sans-serif" font-size="10" fill="#F0F0F5" font-weight="600">App Focus</text>
-  <text x="24" y="144" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">Window title &#xB7; Process name</text>
-  <text x="24" y="156" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">Browser domain extracted</text>
+  <!-- Arrows between columns -->
+  <line x1="196" y1="66" x2="232" y2="66" stroke="#58A6FF" stroke-opacity="0.3" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="416" y1="66" x2="452" y2="66" stroke="#58A6FF" stroke-opacity="0.3" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="636" y1="66" x2="672" y2="66" stroke="#58A6FF" stroke-opacity="0.3" stroke-width="1.5" marker-end="url(#arrow)"/>
 
-  <!-- Signal 2: Idle State -->
-  <rect x="16" y="172" width="132" height="62" rx="8" ry="8" fill="url(#signalGrad2)" stroke="rgba(76,175,80,0.2)" stroke-width="1" filter="url(#shadow)"/>
-  <rect x="24" y="180" width="20" height="20" rx="4" ry="4" fill="rgba(76,175,80,0.12)"/>
-  <text x="30" y="194" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#4CAF50" text-anchor="middle" font-weight="600">I</text>
-  <text x="52" y="190" font-family="Inter, -apple-system, sans-serif" font-size="10" fill="#F0F0F5" font-weight="600">Idle State</text>
-  <text x="24" y="212" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">Seconds since last input</text>
-  <text x="24" y="224" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">Cross-referenced with activity</text>
+  <!-- ── Column 1: Signal Sources ── -->
+  <rect x="16" y="96" width="180" height="52" rx="6" fill="#121215" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+  <rect x="24" y="104" width="16" height="16" rx="3" fill="rgba(88,166,255,0.15)"/>
+  <text x="33" y="117" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" fill="#58A6FF" text-anchor="middle" font-weight="600">A</text>
+  <text x="50" y="115" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="11" fill="#EDEDF5" font-weight="600">App focus</text>
+  <text x="24" y="138" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="8" fill="#5C5C66">Window title, process name, browser domain</text>
 
-  <!-- Signal 3: Window Transitions -->
-  <rect x="16" y="240" width="132" height="62" rx="8" ry="8" fill="url(#signalGrad3)" stroke="rgba(255,193,7,0.2)" stroke-width="1" filter="url(#shadow)"/>
-  <rect x="24" y="248" width="20" height="20" rx="4" ry="4" fill="rgba(255,193,7,0.12)"/>
-  <text x="30" y="262" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#FFC107" text-anchor="middle" font-weight="600">W</text>
-  <text x="52" y="258" font-family="Inter, -apple-system, sans-serif" font-size="10" fill="#F0F0F5" font-weight="600">Window Transitions</text>
-  <text x="24" y="280" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">Switch frequency &#xB7; App count</text>
-  <text x="24" y="292" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">Time per app &#xB7; Anchor return</text>
+  <rect x="16" y="158" width="180" height="52" rx="6" fill="#121215" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+  <rect x="24" y="166" width="16" height="16" rx="3" fill="rgba(88,166,255,0.15)"/>
+  <text x="33" y="179" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" fill="#58A6FF" text-anchor="middle" font-weight="600">I</text>
+  <text x="50" y="177" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="11" fill="#EDEDF5" font-weight="600">Idle state</text>
+  <text x="24" y="200" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="8" fill="#5C5C66">Seconds since last input event</text>
 
-  <!-- ===== COLUMN 2: FUSION ENGINE ===== -->
-  <rect x="286" y="60" width="130" height="32" rx="6" ry="6" fill="#1C1C20" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-  <text x="351" y="80" font-family="Inter, -apple-system, sans-serif" font-size="11" fill="#9696A0" text-anchor="middle" font-weight="500">SIGNAL FUSION</text>
+  <rect x="16" y="220" width="180" height="52" rx="6" fill="#121215" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+  <rect x="24" y="228" width="16" height="16" rx="3" fill="rgba(88,166,255,0.15)"/>
+  <text x="33" y="241" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" fill="#58A6FF" text-anchor="middle" font-weight="600">W</text>
+  <text x="50" y="239" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="11" fill="#EDEDF5" font-weight="600">Window transitions</text>
+  <text x="24" y="262" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="8" fill="#5C5C66">Switch frequency, app count, time-per-app</text>
 
-  <rect x="286" y="104" width="130" height="210" rx="10" ry="10" fill="#1C1C20" stroke="rgba(88,166,255,0.08)" stroke-width="1" filter="url(#shadow)"/>
+  <!-- ── Column 2: Fusion Engine ── -->
+  <rect x="236" y="96" width="180" height="176" rx="8" fill="#121215" stroke="rgba(88,166,255,0.08)" stroke-width="1"/>
 
-  <!-- Quality Assessment -->
-  <rect x="298" y="116" width="106" height="40" rx="6" ry="6" fill="rgba(255,255,255,0.04)"/>
-  <text x="351" y="132" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#9696A0" text-anchor="middle" font-weight="500">QUALITY ASSESSMENT</text>
-  <!-- Quality dots -->
-  <circle cx="320" cy="145" r="4" fill="#4CAF50"/>
-  <text x="328" y="148" font-family="Inter, -apple-system, sans-serif" font-size="7.5" fill="#4CAF50">Trusted</text>
-  <circle cx="367" cy="145" r="4" fill="#FFC107"/>
-  <text x="375" y="148" font-family="Inter, -apple-system, sans-serif" font-size="7.5" fill="#FFC107">Usable</text>
-  <circle cx="401" cy="145" r="4" fill="#F44336"/>
-  <text x="409" y="148" font-family="Inter, -apple-system, sans-serif" font-size="7.5" fill="#F44336">Poor</text>
+  <rect x="246" y="106" width="160" height="36" rx="5" fill="rgba(255,255,255,0.04)"/>
+  <text x="326" y="121" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" fill="#58A6FF" text-anchor="middle" font-weight="600">Quality assessment</text>
+  <text x="326" y="134" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="7.5" fill="#5C5C66" text-anchor="middle">Trusted · Usable · Poor</text>
 
-  <!-- Rolling Window -->
-  <rect x="298" y="162" width="106" height="40" rx="6" ry="6" fill="rgba(255,255,255,0.04)"/>
-  <text x="351" y="178" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#9696A0" text-anchor="middle" font-weight="500">ROLLING WINDOW</text>
-  <rect x="306" y="186" width="10" height="10" rx="2" ry="2" fill="#58A6FF" opacity="0.4"/>
-  <rect x="318" y="186" width="10" height="10" rx="2" ry="2" fill="#58A6FF" opacity="0.25"/>
-  <rect x="330" y="186" width="10" height="10" rx="2" ry="2" fill="#58A6FF" opacity="0.15"/>
-  <text x="348" y="195" font-family="Inter, -apple-system, sans-serif" font-size="7.5" fill="#787882">300s of observations</text>
+  <rect x="246" y="150" width="160" height="36" rx="5" fill="rgba(255,255,255,0.04)"/>
+  <text x="326" y="165" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" fill="#58A6FF" text-anchor="middle" font-weight="600">Rolling window</text>
+  <text x="326" y="178" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="7.5" fill="#5C5C66" text-anchor="middle">300 s of observations</text>
 
-  <!-- Pattern Extraction -->
-  <rect x="298" y="208" width="106" height="40" rx="6" ry="6" fill="rgba(255,255,255,0.04)"/>
-  <text x="351" y="224" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#9696A0" text-anchor="middle" font-weight="500">PATTERN EXTRACTION</text>
-  <text x="305" y="240" font-family="Inter, -apple-system, sans-serif" font-size="7.5" fill="#787882">Switch counts</text>
-  <text x="305" y="249" font-family="Inter, -apple-system, sans-serif" font-size="7.5" fill="#787882">Distinct apps &#xB7; App share</text>
-  <text x="305" y="258" font-family="Inter, -apple-system, sans-serif" font-size="7.5" fill="#787882">Anchor return rate</text>
+  <rect x="246" y="194" width="160" height="36" rx="5" fill="rgba(255,255,255,0.04)"/>
+  <text x="326" y="209" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" fill="#58A6FF" text-anchor="middle" font-weight="600">Pattern extraction</text>
+  <text x="326" y="222" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="7.5" fill="#5C5C66" text-anchor="middle">Switch counts · app share · anchor return</text>
 
-  <!-- Signal quality legend -->
-  <rect x="298" y="254" width="106" height="48" rx="6" ry="6" fill="rgba(255,255,255,0.04)"/>
-  <text x="351" y="270" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#9696A0" text-anchor="middle" font-weight="500">CATEGORY CONFIDENCE</text>
-  <text x="305" y="285" font-family="Inter, -apple-system, sans-serif" font-size="7" fill="#787882">
-    <tspan fill="#4CAF50" font-weight="600">Override/Desktop</tspan> — OS ground truth or user override
-  </text>
-  <text x="305" y="296" font-family="Inter, -apple-system, sans-serif" font-size="7" fill="#787882">
-    <tspan fill="#58A6FF" font-weight="600">Semantic</tspan> — keyword match in app name
-  </text>
+  <rect x="246" y="238" width="160" height="26" rx="5" fill="rgba(34,197,94,0.06)"/>
+  <text x="326" y="256" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="8" fill="#22C55E" text-anchor="middle" font-weight="600">Category confidence (5 tiers)</text>
 
-  <!-- ===== COLUMN 3: FEATURE VECTOR ===== -->
-  <rect x="536" y="60" width="130" height="32" rx="6" ry="6" fill="#1C1C20" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-  <text x="601" y="80" font-family="Inter, -apple-system, sans-serif" font-size="11" fill="#9696A0" text-anchor="middle" font-weight="500">FEATURE VECTOR</text>
+  <!-- Arrows from signals to fusion zone -->
+  <line x1="196" y1="122" x2="232" y2="122" stroke="#58A6FF" stroke-opacity="0.2" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="196" y1="184" x2="232" y2="184" stroke="#58A6FF" stroke-opacity="0.2" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="196" y1="246" x2="232" y2="246" stroke="#58A6FF" stroke-opacity="0.2" stroke-width="1" stroke-dasharray="3,3"/>
 
-  <rect x="536" y="104" width="130" height="210" rx="10" ry="10" fill="#1C1C20" stroke="rgba(88,166,255,0.08)" stroke-width="1" filter="url(#shadow)"/>
+  <!-- ── Column 3: Feature Vector ── -->
+  <rect x="456" y="96" width="180" height="176" rx="8" fill="#121215" stroke="rgba(88,166,255,0.08)" stroke-width="1"/>
 
-  <!-- Feature block -->
-  <rect x="548" y="116" width="106" height="40" rx="6" ry="6" fill="rgba(88,166,255,0.04)"/>
-  <text x="601" y="132" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#58A6FF" text-anchor="middle" font-weight="600">21 FEATURES</text>
-  <text x="548" y="148" font-family="Inter, -apple-system, sans-serif" font-size="7.5" fill="#A0A0AA">
-    <tspan fill="#58A6FF">App category</tspan> (Development, Creative, etc.)
-  </text>
+  <rect x="466" y="106" width="160" height="80" rx="5" fill="rgba(88,166,255,0.04)"/>
+  <text x="546" y="124" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="10" fill="#58A6FF" text-anchor="middle" font-weight="600">21 features</text>
+  <line x1="474" y1="132" x2="618" y2="132" stroke="rgba(255,255,255,0.04)"/>
+  <text x="474" y="148" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="8" fill="#94949E">App category</text>
+  <text x="548" y="148" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="8" fill="#94949E">Idle ratio</text>
+  <text x="474" y="162" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="8" fill="#94949E">Switch velocity</text>
+  <text x="548" y="162" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="8" fill="#94949E">Anchor return</text>
+  <text x="474" y="176" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="8" fill="#94949E">Domain signals</text>
+  <text x="550" y="176" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="8" fill="#5C5C66">+14 temporal</text>
 
-  <rect x="548" y="160" width="106" height="40" rx="6" ry="6" fill="rgba(88,166,255,0.04)"/>
-  <text x="548" y="176" font-family="Inter, -apple-system, sans-serif" font-size="7.5" fill="#A0A0AA">
-    <tspan fill="#58A6FF">Idle ratio</tspan> — active vs. idle time
-  </text>
-  <text x="548" y="190" font-family="Inter, -apple-system, sans-serif" font-size="7.5" fill="#A0A0AA">
-    <tspan fill="#58A6FF">Dev app flag</tspan> — are you in a development tool?
-  </text>
+  <rect x="466" y="196" width="160" height="40" rx="5" fill="rgba(34,197,94,0.04)"/>
+  <text x="546" y="212" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" fill="#22C55E" text-anchor="middle" font-weight="600">Inference</text>
+  <text x="546" y="226" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="8" fill="#5C5C66" text-anchor="middle">scikit-learn · TCP 127.0.0.1:45002</text>
 
-  <rect x="548" y="204" width="106" height="40" rx="6" ry="6" fill="rgba(88,166,255,0.04)"/>
-  <text x="548" y="220" font-family="Inter, -apple-system, sans-serif" font-size="7.5" fill="#A0A0AA">
-    <tspan fill="#58A6FF">Anchor return</tspan> — coming back to your main tool
-  </text>
-  <text x="548" y="234" font-family="Inter, -apple-system, sans-serif" font-size="7.5" fill="#A0A0AA">
-    <tspan fill="#58A6FF">Switch velocity</tspan> — apps per minute
-  </text>
+  <rect x="466" y="244" width="160" height="22" rx="5" fill="rgba(255,255,255,0.03)"/>
+  <text x="546" y="258" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="7.5" fill="#5C5C66" text-anchor="middle">≥98% confidence → interrupt</text>
 
-  <rect x="548" y="248" width="106" height="30" rx="6" ry="6" fill="rgba(88,166,255,0.04)"/>
-  <text x="548" y="264" font-family="Inter, -apple-system, sans-serif" font-size="7.5" fill="#A0A0AA">
-    <tspan fill="#58A6FF">Domain signals</tspan> — browser category
-  </text>
+  <!-- Arrow fusion → features -->
+  <line x1="416" y1="184" x2="452" y2="184" stroke="#58A6FF" stroke-opacity="0.2" stroke-width="1" stroke-dasharray="3,3"/>
 
-  <rect x="548" y="282" width="106" height="22" rx="6" ry="6" fill="rgba(88,166,255,0.04)"/>
-  <text x="601" y="296" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882" text-anchor="middle">+ 14 more temporal features</text>
+  <!-- ── Column 4: Output ── -->
+  <rect x="676" y="96" width="130" height="176" rx="8" fill="#121215" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
 
-  <!-- ===== COLUMN 4: CATEGORY LABELS ===== -->
-  <rect x="536" y="324" width="250" height="32" rx="6" ry="6" fill="#1C1C20" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-  <text x="661" y="344" font-family="Inter, -apple-system, sans-serif" font-size="11" fill="#9696A0" text-anchor="middle" font-weight="500">APP CATEGORIES</text>
+  <!-- 6 category tags in two columns -->
+  <g transform="translate(686, 104)">
+    <rect x="0" y="0" width="55" height="22" rx="4" fill="rgba(88,166,255,0.08)"/>
+    <text x="27" y="15" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="8" fill="#58A6FF" text-anchor="middle" font-weight="600">Development</text>
 
-  <!-- Category labels row 1 -->
-  <g transform="translate(536, 368)">
-    <rect x="0" y="0" width="118" height="34" rx="6" ry="6" fill="rgba(180,140,255,0.12)" stroke="rgba(180,140,255,0.25)" stroke-width="1"/>
-    <text x="12" y="22" font-family="Inter, -apple-system, sans-serif" font-size="10" fill="#B48CFF" font-weight="600">Development</text>
-    <text x="110" y="22" font-family="Inter, -apple-system, sans-serif" font-size="7.5" fill="rgba(180,140,255,0.5)" text-anchor="end">VS Code, Terminal, Git</text>
+    <rect x="0" y="26" width="55" height="22" rx="4" fill="rgba(34,197,94,0.08)"/>
+    <text x="27" y="41" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="8" fill="#22C55E" text-anchor="middle" font-weight="600">Creative</text>
 
-    <rect x="126" y="0" width="118" height="34" rx="6" ry="6" fill="rgba(0,188,212,0.12)" stroke="rgba(0,188,212,0.25)" stroke-width="1"/>
-    <text x="138" y="22" font-family="Inter, -apple-system, sans-serif" font-size="10" fill="#00BCD4" font-weight="600">Creative &amp; Design</text>
-    <text x="236" y="22" font-family="Inter, -apple-system, sans-serif" font-size="7.5" fill="rgba(0,188,212,0.5)" text-anchor="end">Figma, Blender, GIMP</text>
+    <rect x="0" y="52" width="55" height="22" rx="4" fill="rgba(88,166,255,0.08)"/>
+    <text x="27" y="67" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="8" fill="#58A6FF" text-anchor="middle" font-weight="600">Office</text>
+
+    <rect x="0" y="78" width="55" height="22" rx="4" fill="rgba(34,197,94,0.08)"/>
+    <text x="27" y="93" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="8" fill="#22C55E" text-anchor="middle" font-weight="600">Comm</text>
+
+    <rect x="0" y="104" width="55" height="22" rx="4" fill="rgba(88,166,255,0.08)"/>
+    <text x="27" y="119" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="8" fill="#58A6FF" text-anchor="middle" font-weight="600">Entertain</text>
+
+    <rect x="0" y="130" width="55" height="22" rx="4" fill="rgba(34,197,94,0.08)"/>
+    <text x="27" y="145" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="8" fill="#22C55E" text-anchor="middle" font-weight="600">Utility</text>
   </g>
 
-  <!-- Category labels row 2 -->
-  <g transform="translate(536, 410)">
-    <rect x="0" y="0" width="118" height="34" rx="6" ry="6" fill="rgba(76,175,80,0.12)" stroke="rgba(76,175,80,0.25)" stroke-width="1"/>
-    <text x="12" y="22" font-family="Inter, -apple-system, sans-serif" font-size="10" fill="#4CAF50" font-weight="600">Office &amp; Writing</text>
-    <text x="110" y="22" font-family="Inter, -apple-system, sans-serif" font-size="7.5" fill="rgba(76,175,80,0.5)" text-anchor="end">Obsidian, Word, Docs</text>
+  <rect x="686" y="256" width="110" height="16" rx="4" fill="rgba(255,255,255,0.03)"/>
+  <text x="741" y="267" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="7.5" fill="#5C5C66" text-anchor="middle">6 categories, 5 tiers</text>
 
-    <rect x="126" y="0" width="118" height="34" rx="6" ry="6" fill="rgba(255,193,7,0.12)" stroke="rgba(255,193,7,0.25)" stroke-width="1"/>
-    <text x="138" y="22" font-family="Inter, -apple-system, sans-serif" font-size="10" fill="#FFC107" font-weight="600">Communication</text>
-    <text x="236" y="22" font-family="Inter, -apple-system, sans-serif" font-size="7.5" fill="rgba(255,193,7,0.5)" text-anchor="end">Slack, Discord, Email</text>
+  <!-- Arrow features → output -->
+  <line x1="636" y1="184" x2="672" y2="184" stroke="#58A6FF" stroke-opacity="0.2" stroke-width="1" stroke-dasharray="3,3"/>
+
+  <!-- Bottom bar: data flow summary -->
+  <rect x="16" y="292" width="788" height="1" fill="rgba(255,255,255,0.04)"/>
+
+  <g font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="8" fill="#5C5C66">
+    <text x="24" y="316">Sources: KWin Script · X11 EWMH · Sway IPC · Win32</text>
+    <text x="24" y="330">Flow: 1 Hz sampling → 60 s snapshots → local TCP inference → YES/NO interrupt</text>
+    <text x="24" y="344">Privacy: All data in ~/.nudge/ · No network egress · No accounts · No telemetry</text>
   </g>
 
-  <!-- Category labels row 3 -->
-  <g transform="translate(536, 452)">
-    <rect x="0" y="0" width="118" height="34" rx="6" ry="6" fill="rgba(255,82,82,0.12)" stroke="rgba(255,82,82,0.25)" stroke-width="1"/>
-    <text x="12" y="22" font-family="Inter, -apple-system, sans-serif" font-size="10" fill="#FF5252" font-weight="600">Entertainment</text>
-    <text x="110" y="22" font-family="Inter, -apple-system, sans-serif" font-size="7.5" fill="rgba(255,82,82,0.5)" text-anchor="end">Spotify, YouTube, Games</text>
-
-    <rect x="126" y="0" width="118" height="34" rx="6" ry="6" fill="rgba(144,164,174,0.12)" stroke="rgba(144,164,174,0.25)" stroke-width="1"/>
-    <text x="138" y="22" font-family="Inter, -apple-system, sans-serif" font-size="10" fill="#90A4AE" font-weight="600">Utility</text>
-    <text x="236" y="22" font-family="Inter, -apple-system, sans-serif" font-size="7.5" fill="rgba(144,164,174,0.5)" text-anchor="end">Settings, Finder, System</text>
-  </g>
+  <!-- ─── Feedback loop annotation ─── -->
+  <path d="M 778 254 L 778 368 L 546 368 L 546 308" fill="none" stroke="rgba(34,197,94,0.15)" stroke-width="1" stroke-dasharray="4,4"/>
+  <text x="660" y="362" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="7" fill="#22C55E" text-anchor="middle" opacity="0.5">← every YES/NO retrains the model</text>
 </svg>

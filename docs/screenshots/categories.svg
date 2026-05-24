@@ -1,86 +1,64 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 240" width="700" height="240">
-  <defs>
-    <filter id="shadow" x="-5%" y="-5%" width="115%" height="115%">
-      <feDropShadow dx="0" dy="2" stdDeviation="6" flood-color="#000" flood-opacity="0.2"/>
-    </filter>
-  </defs>
-  <rect x="0" y="0" width="700" height="240" rx="12" ry="12" fill="#121214"/>
-  <rect x="0.5" y="0.5" width="699" height="239" rx="11.5" ry="11.5" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 260" width="680" height="260">
+  <rect x="0" y="0" width="680" height="260" rx="12" fill="#0B0B0E" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
 
-  <text x="24" y="30" font-family="Inter, -apple-system, sans-serif" font-size="13" fill="#F0F0F5" font-weight="700">App Categories</text>
-  <text x="24" y="46" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#787882">Every observed app is classified into one of six categories</text>
+  <!-- Title -->
+  <text x="24" y="32" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="14" fill="#EDEDF5" font-weight="700">App categories</text>
 
-  <!-- Category badges row -->
-  <g transform="translate(16, 62)">
-    <rect x="0" y="0" width="200" height="44" rx="6" ry="6" fill="rgba(180,140,255,0.08)" stroke="rgba(180,140,255,0.2)" stroke-width="1" filter="url(#shadow)"/>
-    <circle cx="20" cy="22" r="6" fill="#B48CFF"/>
-    <text x="36" y="26" font-family="Inter, -apple-system, sans-serif" font-size="11" fill="#F0F0F5" font-weight="600">Development</text>
-    <text x="192" y="26" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882" text-anchor="end">VS Code, Terminal</text>
+  <!-- 6 category badges (2×3 grid, consistent palette) -->
+  <g transform="translate(16, 56)">
+    <!-- Row 1 -->
+    <rect x="0" y="0" width="200" height="46" rx="6" fill="#121215" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+    <rect x="10" y="17" width="12" height="12" rx="3" fill="#58A6FF"/>
+    <text x="30" y="28" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" fill="#EDEDF5" font-weight="600">Development</text>
+    <text x="192" y="28" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" fill="#5C5C66" text-anchor="end">VS Code, Terminal</text>
 
-    <rect x="210" y="0" width="200" height="44" rx="6" ry="6" fill="rgba(0,188,212,0.08)" stroke="rgba(0,188,212,0.2)" stroke-width="1" filter="url(#shadow)"/>
-    <circle cx="230" cy="22" r="6" fill="#00BCD4"/>
-    <text x="246" y="26" font-family="Inter, -apple-system, sans-serif" font-size="11" fill="#F0F0F5" font-weight="600">Creative &amp; Design</text>
-    <text x="402" y="26" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882" text-anchor="end">Figma, Blender, GIMP</text>
+    <rect x="216" y="0" width="200" height="46" rx="6" fill="#121215" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+    <rect x="226" y="17" width="12" height="12" rx="3" fill="#22C55E"/>
+    <text x="246" y="28" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" fill="#EDEDF5" font-weight="600">Creative &amp; Design</text>
+    <text x="408" y="28" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" fill="#5C5C66" text-anchor="end">Figma, Blender</text>
 
-    <rect x="210" y="52" width="200" height="44" rx="6" ry="6" fill="rgba(76,175,80,0.08)" stroke="rgba(76,175,80,0.2)" stroke-width="1" filter="url(#shadow)"/>
-    <circle cx="230" cy="74" r="6" fill="#4CAF50"/>
-    <text x="246" y="78" font-family="Inter, -apple-system, sans-serif" font-size="11" fill="#F0F0F5" font-weight="600">Office &amp; Writing</text>
-    <text x="402" y="78" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882" text-anchor="end">Obsidian, Word, Docs</text>
+    <rect x="432" y="0" width="200" height="46" rx="6" fill="#121215" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+    <rect x="442" y="17" width="12" height="12" rx="3" fill="#58A6FF"/>
+    <text x="462" y="28" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" fill="#EDEDF5" font-weight="600">Office &amp; Writing</text>
+    <text x="624" y="28" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" fill="#5C5C66" text-anchor="end">Obsidian, Docs</text>
 
-    <rect x="0" y="52" width="200" height="44" rx="6" ry="6" fill="rgba(255,193,7,0.08)" stroke="rgba(255,193,7,0.2)" stroke-width="1" filter="url(#shadow)"/>
-    <circle cx="20" cy="74" r="6" fill="#FFC107"/>
-    <text x="36" y="78" font-family="Inter, -apple-system, sans-serif" font-size="11" fill="#F0F0F5" font-weight="600">Communication</text>
-    <text x="192" y="78" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882" text-anchor="end">Slack, Discord, Email</text>
+    <!-- Row 2 -->
+    <rect x="0" y="62" width="200" height="46" rx="6" fill="#121215" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+    <rect x="10" y="79" width="12" height="12" rx="3" fill="#22C55E"/>
+    <text x="30" y="90" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" fill="#EDEDF5" font-weight="600">Communication</text>
+    <text x="192" y="90" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" fill="#5C5C66" text-anchor="end">Slack, Discord</text>
 
-    <rect x="420" y="0" width="200" height="44" rx="6" ry="6" fill="rgba(255,82,82,0.08)" stroke="rgba(255,82,82,0.2)" stroke-width="1" filter="url(#shadow)"/>
-    <circle cx="440" cy="22" r="6" fill="#FF5252"/>
-    <text x="456" y="26" font-family="Inter, -apple-system, sans-serif" font-size="11" fill="#F0F0F5" font-weight="600">Entertainment</text>
-    <text x="612" y="26" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882" text-anchor="end">Spotify, YouTube, Games</text>
+    <rect x="216" y="62" width="200" height="46" rx="6" fill="#121215" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+    <rect x="226" y="79" width="12" height="12" rx="3" fill="#58A6FF"/>
+    <text x="246" y="90" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" fill="#EDEDF5" font-weight="600">Entertainment</text>
+    <text x="408" y="90" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" fill="#5C5C66" text-anchor="end">YouTube, Spotify</text>
 
-    <rect x="420" y="52" width="200" height="44" rx="6" ry="6" fill="rgba(144,164,174,0.08)" stroke="rgba(144,164,174,0.2)" stroke-width="1" filter="url(#shadow)"/>
-    <circle cx="440" cy="74" r="6" fill="#90A4AE"/>
-    <text x="456" y="78" font-family="Inter, -apple-system, sans-serif" font-size="11" fill="#F0F0F5" font-weight="600">Utility</text>
-    <text x="612" y="78" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882" text-anchor="end">Settings, Finder, System</text>
+    <rect x="432" y="62" width="200" height="46" rx="6" fill="#121215" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+    <rect x="442" y="79" width="12" height="12" rx="3" fill="#22C55E"/>
+    <text x="462" y="90" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" fill="#EDEDF5" font-weight="600">Utility</text>
+    <text x="624" y="90" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" fill="#5C5C66" text-anchor="end">Settings, System</text>
   </g>
 
-  <!-- Confidence tiers -->
-  <rect x="16" y="130" width="668" height="1" fill="rgba(255,255,255,0.06)"/>
+  <!-- Divider -->
+  <line x1="16" y1="184" x2="664" y2="184" stroke="rgba(255,255,255,0.06)"/>
 
-  <text x="24" y="152" font-family="Inter, -apple-system, sans-serif" font-size="11" fill="#9696A0" font-weight="500">CONFIDENCE TIERS</text>
+  <!-- Confidence tiers (5 steps, horizontal) -->
+  <text x="24" y="206" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="10" fill="#94949E" font-weight="600">CONFIDENCE TIERS</text>
 
-  <!-- Tier 1: Override -->
-  <rect x="24" y="164" width="120" height="28" rx="4" ry="4" fill="rgba(76,175,80,0.12)" stroke="rgba(76,175,80,0.25)" stroke-width="1"/>
-  <text x="84" y="183" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#4CAF50" text-anchor="middle" font-weight="600">Override</text>
+  <g transform="translate(24, 218)">
+    <rect x="0" y="0" width="110" height="26" rx="4" fill="rgba(34,197,94,0.08)" stroke="rgba(34,197,94,0.20)" stroke-width="1"/>
+    <text x="55" y="17" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" fill="#22C55E" text-anchor="middle" font-weight="600">Override</text>
 
-  <line x1="144" y1="178" x2="164" y2="178" stroke="#4CAF50" stroke-opacity="0.3" stroke-width="1"/>
+    <rect x="120" y="0" width="110" height="26" rx="4" fill="rgba(34,197,94,0.08)" stroke="rgba(34,197,94,0.20)" stroke-width="1"/>
+    <text x="175" y="17" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" fill="#22C55E" text-anchor="middle" font-weight="600">Desktop</text>
 
-  <!-- Tier 2: Desktop -->
-  <rect x="168" y="164" width="120" height="28" rx="4" ry="4" fill="rgba(76,175,80,0.12)" stroke="rgba(76,175,80,0.25)" stroke-width="1"/>
-  <text x="228" y="183" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#4CAF50" text-anchor="middle" font-weight="600">Desktop</text>
+    <rect x="240" y="0" width="110" height="26" rx="4" fill="rgba(88,166,255,0.08)" stroke="rgba(88,166,255,0.20)" stroke-width="1"/>
+    <text x="295" y="17" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" fill="#58A6FF" text-anchor="middle" font-weight="600">Semantic</text>
 
-  <line x1="288" y1="178" x2="308" y2="178" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+    <rect x="360" y="0" width="110" height="26" rx="4" fill="rgba(88,166,255,0.06)" stroke="rgba(88,166,255,0.12)" stroke-width="1"/>
+    <text x="415" y="17" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" fill="#58A6FF" text-anchor="middle" font-weight="600">Inferred</text>
 
-  <!-- Tier 3: Semantic -->
-  <rect x="312" y="164" width="120" height="28" rx="4" ry="4" fill="rgba(88,166,255,0.1)" stroke="rgba(88,166,255,0.2)" stroke-width="1"/>
-  <text x="372" y="183" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#58A6FF" text-anchor="middle" font-weight="600">Semantic</text>
-
-  <line x1="432" y1="178" x2="452" y2="178" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
-
-  <!-- Tier 4: Inferred -->
-  <rect x="456" y="164" width="100" height="28" rx="4" ry="4" fill="rgba(255,193,7,0.1)" stroke="rgba(255,193,7,0.2)" stroke-width="1"/>
-  <text x="506" y="183" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#FFC107" text-anchor="middle" font-weight="600">Inferred</text>
-
-  <line x1="556" y1="178" x2="576" y2="178" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
-
-  <!-- Tier 5: Fallback -->
-  <rect x="580" y="164" width="100" height="28" rx="4" ry="4" fill="rgba(150,150,160,0.1)" stroke="rgba(150,150,160,0.2)" stroke-width="1"/>
-  <text x="630" y="183" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#9696A0" text-anchor="middle" font-weight="600">Fallback</text>
-
-  <text x="24" y="212" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">
-    <tspan fill="#4CAF50" font-weight="600">Override</tspan> — user-defined in app_categories.json  &#x2022; 
-    <tspan fill="#4CAF50" font-weight="600">Desktop</tspan> — XDG .desktop metadata (OS ground truth)  &#x2022; 
-    <tspan fill="#58A6FF" font-weight="600">Semantic</tspan> — keyword match in app name/ID  &#x2022; 
-    <tspan fill="#FFC107" font-weight="600">Inferred</tspan> — browser inherits anchor app  &#x2022; 
-    <tspan fill="#9696A0" font-weight="600">Fallback</tspan> — defaults to Utility
-  </text>
+    <rect x="480" y="0" width="110" height="26" rx="4" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+    <text x="535" y="17" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9" fill="#5C5C66" text-anchor="middle" font-weight="600">Fallback</text>
+  </g>
 </svg>
