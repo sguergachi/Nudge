@@ -62,10 +62,15 @@ jobs:
         run: choco install innosetup -y --no-progress
 
       - name: Build Windows installer
+        shell: pwsh
         run: |
-          $version = Select-String -Path "NudgeCrossPlatform\nudge-tray.cs" -Pattern 'const string VERSION = "(\d+\.\d+\.\d+)"' | ForEach-Object { $_.Matches.Groups[1].Value }
-          Write-Host "Building installer for version $version"
+          $env:Path = "C:\Program Files (x86)\Inno Setup 6;$env:Path"
+          iscc --version
+          $version = Select-String -Path "NudgeCrossPlatform\nudge-tray.cs" -Pattern 'const string VERSION = "([.\d]+)"' | ForEach-Object { $_.Matches.Groups[1].Value }
+          if (-not $version) { Write-Error "Failed to extract version"; exit 1 }
+          Write-Host "Building installer for v$version"
           iscc /DMyAppVersion=$version "NudgeCrossPlatform\assets\windows\setup.iss"
+          if ($LASTEXITCODE -ne 0) { Write-Error "iscc failed"; exit 1 }
           Get-ChildItem "dist" -Filter "Nudge-Setup-*.exe"
 
       - uses: actions/upload-artifact@v4
