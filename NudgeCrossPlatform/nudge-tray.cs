@@ -21,7 +21,9 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+#if !WINDOWS
 using Tmds.DBus.Protocol;
+#endif
 
 using NudgeCore;
 
@@ -1511,6 +1513,7 @@ namespace NudgeTray
         // LINUX NOTIFICATIONS (Native Tmds.DBus.Protocol with resident:true hint)
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+#if !WINDOWS
         private static async void ShowDbusNotification()
         {
             Console.WriteLine("[DEBUG] ShowDbusNotification called (native DBus)");
@@ -1636,6 +1639,7 @@ namespace NudgeTray
                 }
             }).ConfigureAwait(false);
         }
+#endif
 
         private static void ShowFallbackNotification()
         {

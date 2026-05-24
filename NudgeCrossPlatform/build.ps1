@@ -279,8 +279,15 @@ $buildJobs += Start-Job { dotnet build nudge-tray.csproj -c Release -f "net10.0-
 $buildJobs += Start-Job { dotnet build ../TrayIconTest/TrayIconTest.csproj -c Release --no-restore --nologo -m -v quiet }
 
 Wait-Job $buildJobs | Out-Null
-$jobResults = Receive-Job $buildJobs
+$failedJobs = $buildJobs | Where-Object { $_.State -ne 'Completed' -or $_.ChildJobs[0].JobStateInfo.State -eq 'Failed' }
+$jobOutput = Receive-Job $buildJobs 2>&1
 Remove-Job $buildJobs
+
+if ($failedJobs) {
+    Write-Err "[ERROR] One or more build jobs failed:"
+    $jobOutput | ForEach-Object { Write-Host $_ }
+    exit 1
+}
 
 Write-Success "  [OK] Build completed"
 

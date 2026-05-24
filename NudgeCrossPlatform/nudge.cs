@@ -48,9 +48,11 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+#if !WINDOWS
 using Tmds.DBus.Protocol;
 using WaylandDotnet;
 using WaylandDotnet.Staging;
+#endif
 using NudgeCore;
 using NudgeTray;
 
@@ -113,6 +115,7 @@ sealed class Nudge
     static bool _forceTrainedModel;
     static bool _mlAvailable;
 
+#if !WINDOWS
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // KWIN WINDOW TRACKER — KWin script + D-Bus listener for KDE Wayland focus
     //
@@ -1052,6 +1055,7 @@ publish();
         private static string ExtractQuotedString(string input) =>
             NudgeCoreLogic.ExtractQuotedString(input);
     }
+#endif
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // WINDOWS PLATFORM SERVICE — Win32 idle + foreground detection

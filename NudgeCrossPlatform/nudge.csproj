@@ -15,7 +15,11 @@
     <Compile Include="NudgeJsonContext.cs" />
   </ItemGroup>
 
-  <ItemGroup>
+  <PropertyGroup Condition="'$(OS)' == 'Windows_NT'">
+    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(OS)' != 'Windows_NT'">
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.92.0" />
     <ProjectReference Include="../../WaylandDotnet/WaylandDotnet/WaylandDotnet.csproj" />
   </ItemGroup>
