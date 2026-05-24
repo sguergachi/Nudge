@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 260" width="700" height="260">
+  <defs>
+    <filter id="shadow" x="-5%" y="-5%" width="115%" height="115%">
+      <feDropShadow dx="0" dy="2" stdDeviation="6" flood-color="#000" flood-opacity="0.2"/>
+    </filter>
+    <marker id="arrowR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#58A6FF" fill-opacity="0.5"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="700" height="260" rx="12" ry="12" fill="#121214"/>
+  <rect x="0.5" y="0.5" width="699" height="259" rx="11.5" ry="11.5" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+
+  <text x="24" y="30" font-family="Inter, -apple-system, sans-serif" font-size="13" fill="#F0F0F5" font-weight="700">Prediction Flow</text>
+  <text x="24" y="46" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#787882">How the AI Brain decides when to check in</text>
+
+  <!-- Stage 1: Feature Vector -->
+  <rect x="24" y="70" width="150" height="102" rx="8" ry="8" fill="#1C1C20" stroke="rgba(88,166,255,0.12)" stroke-width="1" filter="url(#shadow)"/>
+  <text x="99" y="92" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#58A6FF" text-anchor="middle" font-weight="600">FEATURE VECTOR</text>
+  <line x1="36" y1="100" x2="162" y2="100" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+  <text x="36" y="115" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">&#8226; App category</text>
+  <text x="36" y="127" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">&#8226; Idle ratio</text>
+  <text x="36" y="139" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">&#8226; Switch velocity</text>
+  <text x="36" y="151" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">&#8226; Anchor return</text>
+  <text x="36" y="163" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">&#8226; Domain signals</text>
+  <text x="99" y="163" font-family="Inter, -apple-system, sans-serif" font-size="7.5" fill="#58A6FF" text-anchor="middle">+14 temporal</text>
+
+  <!-- Arrow -->
+  <line x1="174" y1="121" x2="200" y2="121" stroke="#58A6FF" stroke-opacity="0.4" stroke-width="1.5" marker-end="url(#arrowR)"/>
+
+  <!-- Stage 2: AI Brain -->
+  <rect x="204" y="70" width="140" height="102" rx="8" ry="8" fill="#1C1C20" stroke="rgba(180,140,255,0.12)" stroke-width="1" filter="url(#shadow)"/>
+  <text x="274" y="92" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#B48CFF" text-anchor="middle" font-weight="600">AI BRAIN</text>
+  <line x1="216" y1="100" x2="332" y2="100" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+  <text x="216" y="115" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">&#8226; Personal model</text>
+  <text x="216" y="127" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">&#8226; Trained on your YES/NO</text>
+  <text x="216" y="139" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">&#8226; Compares to past patterns</text>
+  <text x="216" y="151" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">&#8226; Produces confidence score</text>
+  <text x="216" y="163" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">&#8226; Retrains automatically</text>
+
+  <!-- Arrow (split) -->
+  <line x1="344" y1="100" x2="370" y2="100" stroke="#58A6FF" stroke-opacity="0.4" stroke-width="1.5" marker-end="url(#arrowR)"/>
+  <line x1="344" y1="140" x2="370" y2="140" stroke="#58A6FF" stroke-opacity="0.2" stroke-width="1" stroke-dasharray="3,3"/>
+
+  <!-- Stage 3: Decision -->
+  <rect x="374" y="60" width="150" height="60" rx="8" ry="8" fill="rgba(76,175,80,0.06)" stroke="rgba(76,175,80,0.2)" stroke-width="1" filter="url(#shadow)"/>
+  <text x="449" y="82" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#4CAF50" text-anchor="middle" font-weight="600">CONFIDENCE HIGH</text>
+  <text x="449" y="100" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#A0A0AA" text-anchor="middle">Drift pattern matched</text>
+  <text x="449" y="112" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#58A6FF" text-anchor="middle">&rarr; Triggers check-in</text>
+
+  <rect x="374" y="128" width="150" height="60" rx="8" ry="8" fill="rgba(150,150,160,0.06)" stroke="rgba(150,150,160,0.15)" stroke-width="1" filter="url(#shadow)"/>
+  <text x="449" y="150" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#9696A0" text-anchor="middle" font-weight="600">CONFIDENCE LOW</text>
+  <text x="449" y="168" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#A0A0AA" text-anchor="middle">Productive rhythm detected</text>
+  <text x="449" y="180" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882" text-anchor="middle">&rarr; Stays silent</text>
+
+  <!-- Arrow from decision to check-in -->
+  <line x1="524" y1="90" x2="550" y2="90" stroke="#4CAF50" stroke-opacity="0.4" stroke-width="1.5" marker-end="url(#arrowR)"/>
+
+  <!-- Stage 4: Check-in -->
+  <rect x="554" y="70" width="130" height="102" rx="8" ry="8" fill="#1C1C20" stroke="rgba(76,175,80,0.12)" stroke-width="1" filter="url(#shadow)"/>
+  <text x="619" y="92" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#4CAF50" text-anchor="middle" font-weight="600">CHECK-IN</text>
+  <line x1="566" y1="100" x2="672" y2="100" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+  <text x="566" y="115" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">&#8226; YES/NO question</text>
+  <text x="566" y="127" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">&#8226; Keyboard shortcuts</text>
+  <text x="566" y="139" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">&#8226; Auto-dismisses</text>
+  <text x="566" y="151" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">&#8226; Feeds back to model</text>
+
+  <!-- Feedback loop arrow -->
+  <path d="M 619 172 L 619 200 L 99 200 L 99 172" fill="none" stroke="rgba(88,166,255,0.2)" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#arrowR)"/>
+  <text x="360" y="214" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="rgba(88,166,255,0.4)" text-anchor="middle">Your YES/NO feeds back into the model &rarr; next prediction is sharper</text>
+</svg>

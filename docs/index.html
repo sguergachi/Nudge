@@ -111,117 +111,73 @@
     </div>
   </div>
 
-  <!-- ═══ Showcase: Harvest Engine ═══ -->
+  <!-- ═══ Showcase: Harvest Engine + Sensor Fusion ═══ -->
   <section class="section">
     <div class="container">
-      <div class="showcase-grid" style="margin-bottom: 48px;">
+      <div class="showcase-grid">
         <div class="showcase-visual">
           <img src="screenshots/analytics_alltime.png" alt="Nudge analytics dashboard showing all-time data">
         </div>
         <div class="showcase-text">
           <div class="section-label">Harvest Engine</div>
-          <h3>What's running on your machine. In real time.</h3>
-          <p>
-            The <strong>Nudge Harvest Engine</strong> is a sensor fusion system that continuously observes three things: which application is in focus, whether you're idle, and what domain you're on if you're in a browser. Every observation is graded for reliability — <strong>Trusted</strong> when it comes from a direct compositor API, <strong>Usable</strong> when the category is uncertain, and <strong>Poor</strong> when it had to fall back to a heuristic scan. This quality score tells the AI exactly how much weight to give each reading.
-          </p>
-          <p>
-            Raw signals flow into a rolling window that tracks your behaviour over the last several minutes: how often you switch apps, how many distinct programs you've used, what percentage of time you've spent in each one, and how often you return to your primary tool (your <em>anchor app</em>). These behavioural patterns are compressed into <strong>21 features</strong> — a concise numeric fingerprint of your current focus state that the AI evaluates every 60 seconds.
-          </p>
+          <h3>Sensor fusion that sees your focus.</h3>
+          <p>The Harvest Engine observes three signals — app focus, idle time, and browser domain — grades each for reliability, and rolls them into a 21-feature fingerprint of your attention. No screenshots, no keystrokes, no cloud.</p>
           <ul class="showcase-features">
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Three raw signals: app focus, idle time, and browser domain — nothing else
-            </li>
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Every reading graded Trusted / Usable / Poor so the model weighs it correctly
-            </li>
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              21-feature fingerprint extracted from rolling behavioural patterns
-            </li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Three raw signals, one privacy-respecting pipeline</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Every reading graded Trusted / Usable / Poor</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>21 features extracted from rolling behaviour patterns</li>
           </ul>
         </div>
       </div>
-
-      <!-- Sensor Fusion Infographic -->
-      <div class="showcase-visual" style="max-width: 800px; margin: 0 auto;">
-        <img src="screenshots/sensor-fusion.svg" alt="Nudge Sensor Fusion Pipeline diagram" style="width: 100%; height: auto; border-radius: 12px; filter: drop-shadow(0 12px 48px rgba(0,0,0,0.5));">
+      <div class="showcase-visual" style="max-width: 800px; margin: 48px auto 0;">
+        <img src="screenshots/sensor-fusion.svg" alt="Sensor Fusion Pipeline diagram" style="width: 100%; height: auto; border-radius: 12px; filter: drop-shadow(0 12px 48px rgba(0,0,0,0.5));">
       </div>
     </div>
   </section>
 
-  <!-- ═══ Showcase: App Categories ═══ -->
+  <!-- ═══ Showcase: Categories + AI Brain + Check-in ═══ -->
   <section class="section" style="padding-top: 0;">
     <div class="container">
-      <div class="showcase-grid reverse">
+      <div class="showcase-grid">
         <div class="showcase-visual">
-          <img src="screenshots/analytics_ai_brain.png" alt="Nudge AI Brain analytics tab showing app categories">
+          <img src="screenshots/categories.svg" alt="App category classification chart" style="width: 100%; height: auto; border-radius: 12px; filter: drop-shadow(0 12px 48px rgba(0,0,0,0.5));">
         </div>
         <div class="showcase-text">
           <div class="section-label">Smart Categorisation</div>
-          <h3>It knows the difference between coding and scrolling.</h3>
-          <p>
-            Every application and browser domain Nudge observes is automatically classified into one of <strong>six categories</strong>: <em>Development</em>, <em>Creative &amp; Design</em>, <em>Office &amp; Writing</em>, <em>Communication</em>, <em>Entertainment</em>, or <em>Utility</em>. The classification uses multiple confidence tiers — <strong>Override</strong> (user-defined), <strong>Desktop</strong> (OS ground truth from the installed application metadata), <strong>Semantic</strong> (keyword matching in the app name or ID), <strong>Inferred</strong> (browser tabs inherit the anchor app's category), and <strong>Fallback</strong> (defaults to Utility when nothing matches).
-          </p>
-          <p>
-            This category system is how Nudge understands context. An hour in VS Code categorised as <em>Development</em> reads differently from an hour in Slack categorised as <em>Communication</em>. When the AI sees you spending time in <em>Entertainment</em> apps mid-morning, that signal — combined with your switch velocity and idle ratio — pushes the prediction toward "drifting." The categories give the model the contextual awareness to distinguish deep work from genuine distraction, tailored to how <em>you</em> actually use your machine.
-          </p>
+          <h3>Knows the difference between coding and scrolling.</h3>
+          <p>Every app and browser domain is classified into one of six categories using a five-tier confidence system — from OS-level ground truth down to sensible defaults. Browser tabs inherit the anchor app's category, so research on documentation doesn't get flagged as distraction.</p>
           <ul class="showcase-features">
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Six categories: Development, Creative, Office, Communication, Entertainment, Utility
-            </li>
-            <li>
-              <svg viewBox="0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Five-tier confidence: Override > Desktop > Semantic > Inferred > Fallback
-            </li>
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Browser tabs inherit anchor app category — no misclassification when you're working
-            </li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Six categories: Development, Creative, Office, Communication, Entertainment, Utility</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Five confidence tiers: Override &gt; Desktop &gt; Semantic &gt; Inferred &gt; Fallback</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Browser tabs inherit anchor — no misclassification during work</li>
           </ul>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- ═══ Showcase: AI Brain ═══ -->
+  <!-- ═══ Showcase: AI Brain + Prediction Flow ═══ -->
   <section class="section" style="padding-top: 0;">
     <div class="container">
       <div class="showcase-grid reverse">
         <div class="showcase-visual">
-          <img src="screenshots/analytics_ai_brain.png" alt="Nudge AI Brain analytics tab">
+          <img src="screenshots/ai-brain-flow.svg" alt="AI Brain prediction flow diagram" style="width: 100%; height: auto; border-radius: 12px; filter: drop-shadow(0 12px 48px rgba(0,0,0,0.5));">
         </div>
         <div class="showcase-text">
           <div class="section-label">AI Brain</div>
           <h3>Learns you. Not people like you.</h3>
-          <p>
-            The <strong>AI Brain</strong> is a model built exclusively from your YES/NO answers — it has never seen another person's data. Every check-in feeds your personal model: it maps the current feature vector (your app category, idle ratio, switch velocity, anchor return behaviour, browser domain signals, and 14 other temporal features) against whether you responded <em>focused</em> or <em>drifting</em>. Over time it learns that a morning in VS Code with low switch frequency and no idle time means you're locked in, while rapid switches through Communication and Entertainment apps mid-afternoon is a reliable drift signature.
-          </p>
-          <p>
-            When the 21-feature vector is evaluated, the Brain produces a confidence score. If that score crosses a high conviction threshold, it triggers a check-in. Below that threshold it stays silent — even if you're technically in an Entertainment app, the model accounts for context (maybe it's your lunch break, or you often work with music playing). This means the Brain adapts to your actual workflow rather than applying rigid rules. It won't bother you when you're deep in flow, but it will catch the moments when you've genuinely lost the plot.
-          </p>
+          <p>A model built exclusively from your YES/NO answers. It compares the current 21-feature snapshot against patterns it has seen before. High confidence in drift? Triggers a check-in. Productive rhythm detected? Stays silent. Every response sharpens the next prediction.</p>
           <ul class="showcase-features">
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Personal model — your data never mixes with anyone else's
-            </li>
-            <li>
-              <svg viewBox="0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Combines category, switch velocity, idle ratio, anchor return, and domain signals
-            </li>
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              High conviction threshold — no false alarms, no interruptions during flow
-            </li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Your data never mixes with anyone else's</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Combines category, switch velocity, idle, anchor return, domain signals</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>High conviction threshold — no false alarms during deep flow</li>
           </ul>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- ═══ Showcase: Check-in & Settings ═══ -->
+  <!-- ═══ Showcase: Check-in ═══ -->
   <section class="section" style="padding-top: 0;">
     <div class="container">
       <div class="showcase-grid">
@@ -229,24 +185,13 @@
           <img src="screenshots/settings.png" alt="Nudge settings window">
         </div>
         <div class="showcase-text">
-          <div class="section-label">Full control</div>
-          <h3>A gentle nudge when it matters. Full control when you need it.</h3>
-          <p>
-            When the AI Brain detects you're drifting, a small check-in window appears with a simple question: still focused? Two buttons — YES and NO. Keyboard shortcuts let you answer without touching the mouse. If you don't respond, the window quietly dismisses itself. The settings panel gives you full command: turn the AI on or off, set how often you want to be checked, manage sound preferences, and see how the model is doing — how many samples it's collected and how accurate it's become at reading your patterns.
-          </p>
+          <div class="section-label">Check-in &amp; Settings</div>
+          <h3>Simple question. Full control.</h3>
+          <p>A small window asks "still focused?" — YES or NO. Keyboard shortcuts let you answer without the mouse. Leave it and it dismisses. The settings panel lets you toggle AI, adjust check frequency, and monitor model accuracy.</p>
           <ul class="showcase-features">
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Fades in when it matters, dismisses silently if you're busy
-            </li>
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Answer with a click or a keyboard shortcut — your choice
-            </li>
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Toggle AI, adjust check frequency, monitor model accuracy — all from one panel
-            </li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Fades in when it matters, dismisses if you're busy</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Click or keyboard shortcut — your choice</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Toggle AI, interval, sound, and live model stats in one panel</li>
           </ul>
         </div>
       </div>
@@ -266,22 +211,22 @@
         <div class="step-card">
           <div class="step-number">1</div>
           <h3>Sense</h3>
-          <p>The <strong>Harvest Engine</strong> continuously observes what's on your screen — which application is active, how long you've been there, whether you've stepped away, and what website you're on if you're in a browser. Every observation is tagged with a confidence score so the system knows how reliable it is. No screenshots, no recordings, no keystroke logs — just the name of what's in focus.</p>
+          <p>The Harvest Engine observes your active app, idle time, and browser domain. Every reading is graded for reliability. No screenshots, no keystrokes, no cloud.</p>
         </div>
         <div class="step-card">
           <div class="step-number">2</div>
           <h3>Classify</h3>
-          <p>Every app and browser domain is automatically tagged with a <strong>category</strong> — Development, Creative, Office, Communication, Entertainment, or Utility — using a five-tier confidence system. The OS metadata is the most reliable signal, followed by keyword patterns in the app name, then inference from your anchor app if you're in a browser. This means Nudge knows the difference between you coding in VS Code (Development), answering a message in Slack (Communication), and watching YouTube (Entertainment), without you having to configure anything.</p>
+          <p>Every app is tagged with a category — Development, Creative, Office, Communication, Entertainment, or Utility — using a five-tier confidence system from OS metadata down to sensible defaults.</p>
         </div>
         <div class="step-card">
           <div class="step-number">3</div>
           <h3>Fuse &amp; Predict</h3>
-          <p>The category, idle ratio, switch frequency, anchor return behaviour, and domain signals are compressed into a <strong>21-feature fingerprint</strong> of your current focus state. The AI Brain evaluates this fingerprint against everything it has learned from your previous YES/NO responses. If the pattern matches one it has seen before when you said you were drifting, and conviction is high, it signals a check-in. If it sees a productive rhythm — even in a category that might look distracting out of context — it stays silent.</p>
+          <p>Category, idle, switch velocity, anchor return, and domain signals become a 21-feature snapshot. The AI Brain compares it against patterns from your previous YES/NO answers and decides with high conviction whether you're drifting.</p>
         </div>
         <div class="step-card">
           <div class="step-number">4</div>
           <h3>Nudge</h3>
-          <p>A small, unobtrusive window appears and asks a simple question: <em>still focused?</em> YES keeps you moving, NO logs the drift. If you're in the middle of something, keyboard shortcuts let you answer without leaving your flow. Leave it unanswered and it quietly disappears on its own. Every response feeds back into the model, making the next prediction sharper. Over time, Nudge learns exactly when to speak up and when to stay silent.</p>
+          <p>A small window asks "still focused?" — YES or NO. Keyboard shortcuts keep you in flow. Unanswered, it dismisses. Every response feeds back, sharpening the next prediction.</p>
         </div>
       </div>
     </div>
