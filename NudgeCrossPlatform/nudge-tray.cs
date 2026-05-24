@@ -2333,7 +2333,7 @@ namespace NudgeTray
                     Width = 0,
                     Height = 0,
                     Topmost = false,
-                    SystemDecorations = SystemDecorations.None
+                    WindowDecorations = Avalonia.Controls.WindowDecorations.None
                 };
             }
 
