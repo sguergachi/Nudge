@@ -42,14 +42,14 @@ jobs:
       - name: Publish self-contained Windows binaries
         working-directory: NudgeCrossPlatform
         run: |
-          dotnet publish nudge.csproj        -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o dist/win-x64 --nologo
-          dotnet publish nudge-notify.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o dist/win-x64 --nologo
-          dotnet publish nudge-tray.csproj   -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -f net10.0-windows10.0.17763.0 -p:SkipBuildNudgeDaemon=true -o dist/win-x64 --nologo
+          dotnet publish nudge.csproj        -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o ../dist/win-x64 --nologo
+          dotnet publish nudge-notify.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o ../dist/win-x64 --nologo
+          dotnet publish nudge-tray.csproj   -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -f net10.0-windows10.0.17763.0 -p:SkipBuildNudgeDaemon=true -o ../dist/win-x64 --nologo
 
       - name: Package Windows artifacts
         shell: pwsh
         run: |
-          $dist = "NudgeCrossPlatform/dist/win-x64"
+          $dist = "dist/win-x64"
           Copy-Item "NudgeCrossPlatform/model_inference.py"       $dist
           Copy-Item "NudgeCrossPlatform/train_model.py"           $dist
           Copy-Item "NudgeCrossPlatform/background_trainer.py"    $dist
@@ -66,7 +66,7 @@ jobs:
           $version = Select-String -Path "NudgeCrossPlatform\nudge-tray.cs" -Pattern 'const string VERSION = "(\d+\.\d+\.\d+)"' | ForEach-Object { $_.Matches.Groups[1].Value }
           Write-Host "Building installer for version $version"
           iscc /DMyAppVersion=$version "NudgeCrossPlatform\assets\windows\setup.iss"
-          Get-ChildItem "NudgeCrossPlatform\dist\" -Filter "Nudge-Setup-*.exe"
+          Get-ChildItem "dist" -Filter "Nudge-Setup-*.exe"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -76,7 +76,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: nudge-win-installer
-          path: NudgeCrossPlatform\dist\Nudge-Setup-*.exe
+          path: dist\Nudge-Setup-*.exe
 
   build-linux:
     needs: check-version
