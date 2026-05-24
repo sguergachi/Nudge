@@ -12,9 +12,4 @@
     <Compile Include="nudge-notify_build.cs" />
     <Compile Include="NudgeCore.TestableLogic.cs" />
   </ItemGroup>
-
-  <ItemGroup Condition="'$(OS)' != 'Windows_NT'">
-    <PackageReference Include="Tmds.DBus.Protocol" Version="0.92.0" />
-    <ProjectReference Include="../WaylandDotnet/WaylandDotnet/WaylandDotnet.csproj" />
-  </ItemGroup>
 </Project>
