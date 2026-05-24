@@ -1,9 +1,12 @@
 ; Nudge Windows Installer — Inno Setup
 ; Run from repo root: iscc "assets\windows\setup.iss"
+; Override version: iscc /DMyAppVersion=2.0.0 "assets\windows\setup.iss"
 ; Requires: dist\win-x64\ from build.ps1 -Platform
 
-#define MyAppName "Nudge"
+#ifndef MyAppVersion
 #define MyAppVersion "1.5.0"
+#endif
+#define MyAppName "Nudge"
 #define MyAppPublisher "Nudge"
 #define MyAppURL "https://github.com/sguergachi/Nudge"
 #define MyAppExeName "nudge-tray.exe"

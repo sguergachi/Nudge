@@ -14,11 +14,9 @@
 <body>
 
 <nav>
-  <div class="container wide">
+  <div class="container">
     <div class="nav-inner">
-      <span class="logo">
-        Nudge
-      </span>
+      <span class="logo">Nudge</span>
       <ul class="nav-links">
         <li><a href="#how-it-works">How it works</a></li>
         <li><a href="#features">Features</a></li>
@@ -31,7 +29,7 @@
 
 <section class="hero">
   <div class="hero-bg"></div>
-  <div class="container wide">
+  <div class="container">
     <div class="hero-inner">
       <div class="hero-content">
         <div class="hero-label">Free &middot; Open source &middot; Private</div>
@@ -48,54 +46,66 @@
         <p class="hero-footnote">Free forever &mdash; no account, no signup, no strings attached</p>
       </div>
       <div class="hero-visual">
-        <div class="mockup-stack">
-          <div class="mockup mockup-back">
-            <img src="screenshots/analytics_today.png" alt="Nudge analytics dashboard">
-          </div>
-          <div class="mockup mockup-front">
-            <div class="mockup-inner">
-              <img src="screenshots/notification_active.png" alt="Nudge focus check notification">
-            </div>
-          </div>
-        </div>
+        <img src="screenshots/notification_active.png" alt="Nudge notification: Still focused? YES / NO" class="hero-shot">
       </div>
     </div>
   </div>
 </section>
 
-<section class="section" id="how-it-works">
+<section class="section section-dim" id="how-it-works">
   <div class="container">
     <h2 class="section-label">How it works</h2>
     <div class="steps">
       <div class="step">
-        <div class="step-visual">
+        <div class="step-img">
           <img src="screenshots/tray-menu.svg" alt="Nudge in system tray">
         </div>
-        <div class="step-body">
+        <div class="step-text">
           <span class="step-number">01</span>
           <h3>Watches your desktop</h3>
           <p>Sits quietly in your system tray. Samples your foreground app, idle time, and browser domain once per second. No screenshots. No keystrokes. No network calls.</p>
         </div>
       </div>
       <div class="step">
-        <div class="step-visual">
-          <img src="screenshots/categories.svg" alt="App categories diagram">
+        <div class="step-img">
+          <img src="screenshots/categories.svg" alt="App categories">
         </div>
-        <div class="step-body">
+        <div class="step-text">
           <span class="step-number">02</span>
           <h3>Learns your patterns</h3>
           <p>Every app is classified into a category — Development, Creative, Office, Communication, Entertainment, Utility. A local AI model compares each moment against your past YES/NO responses and gets sharper with every answer.</p>
         </div>
       </div>
       <div class="step">
-        <div class="step-visual">
-          <img src="screenshots/notification.svg" alt="Notification example">
+        <div class="step-img">
+          <img src="screenshots/notification.svg" alt="Notification">
         </div>
-        <div class="step-body">
+        <div class="step-text">
           <span class="step-number">03</span>
           <h3>Asks one question</h3>
           <p>A small window appears with two buttons: YES or NO. Keyboard shortcuts so you never leave your flow. Auto-dismisses after 30 seconds. Every answer trains the model further.</p>
         </div>
+      </div>
+    </div>
+        <span class="step-number">01</span>
+        <h3>Watches your desktop</h3>
+        <p>Sits quietly in your system tray. Samples your foreground app, idle time, and browser domain once per second. No screenshots. No keystrokes. No network calls.</p>
+      </div>
+      <div class="step">
+        <div class="step-img">
+          <img src="screenshots/categories.svg" alt="App categories">
+        </div>
+        <span class="step-number">02</span>
+        <h3>Learns your patterns</h3>
+        <p>Every app is classified into a category — Development, Creative, Office, Communication, Entertainment, Utility. A local AI model compares each moment against your past YES/NO responses and gets sharper with every answer.</p>
+      </div>
+      <div class="step">
+        <div class="step-img">
+          <img src="screenshots/notification.svg" alt="Notification">
+        </div>
+        <span class="step-number">03</span>
+        <h3>Asks one question</h3>
+        <p>A small window appears with two buttons: YES or NO. Keyboard shortcuts so you never leave your flow. Auto-dismisses after 30 seconds. Every answer trains the model further.</p>
       </div>
     </div>
   </div>
@@ -123,7 +133,7 @@
       <div class="feature">
         <div class="feature-dot" style="background: #22C55E;"></div>
         <h3>Live analytics</h3>
-        <p>Track your focus trends over time from the system tray. Daily, weekly, and monthly breakdowns of what you classified as productive vs. not. </p>
+        <p>Track your focus trends over time from the system tray. Daily, weekly, and monthly breakdowns of what you classified as productive vs. not.</p>
       </div>
       <div class="feature">
         <div class="feature-dot" style="background: #58A6FF;"></div>
@@ -192,11 +202,11 @@
     <div class="cta">
       <div class="cta-badge">Free forever</div>
       <h2 class="cta-heading">Try Nudge on your machine</h2>
-      <p class="cta-desc">Download, extract, and run. No installation, no dependencies, no account needed. Linux or Windows, it's that simple.</p>
+      <p class="cta-desc">Download, run the installer — done. No dependencies, no account needed. Linux users: extract then run the install script. That's it.</p>
       <div class="download-group">
-        <a class="btn btn-primary btn-dl" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip">
+        <a class="btn btn-primary btn-dl" href="https://github.com/sguergachi/Nudge/releases/latest/download/Nudge-Setup-1.5.0.exe">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="4" y1="8" x2="20" y2="8"/><line x1="8" y1="4" x2="8" y2="20"/></svg>
-          <span class="dl-text"><span class="dl-label">Windows</span><span class="dl-fmt">nudge-win-x64.zip</span></span>
+          <span class="dl-text"><span class="dl-label">Windows Installer</span><span class="dl-fmt">Nudge-Setup-1.5.0.exe</span></span>
           <span class="dl-arrow">&rarr;</span>
         </a>
         <a class="btn btn-secondary btn-dl" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-x64.tar.gz">
@@ -213,11 +223,11 @@
           <span class="tb-title">terminal</span>
         </div>
         <div class="terminal-body">
-          <div class="terminal-line"><span class="prompt">$</span> tar -xzf nudge-linux-x64.tar.gz</div>
-          <div class="terminal-line"><span class="prompt">$</span> cd linux &amp;&amp; ./install-linux-app.sh</div>
-          <div class="terminal-line"><span class="prompt">$</span> ./nudge-tray</div>
+          <div class="terminal-line"><span class="prompt">$</span> tar -xzf nudge-linux-x64.tar.gz &amp;&amp; cd linux</div>
+          <div class="terminal-line"><span class="prompt">$</span> ./install-linux-app.sh</div>
+          <div class="terminal-line"><span class="prompt">$</span> nudge-tray</div>
           <div class="terminal-line terminal-line-dim">harvest daemon started</div>
-          <div class="terminal-line terminal-line-dim">ML inference on 127.0.0.1:45002 (waiting for 100 samples)</div>
+          <div class="terminal-line terminal-line-dim">ML inference on 127.0.0.1:45002 (auto-installs Python deps)</div>
         </div>
       </div>
       <p class="cta-footnote">
@@ -225,7 +235,7 @@
         &middot;
         <a href="https://github.com/sguergachi/Nudge">View source</a>
         &middot;
-        ML features need <code class="inline-code">pip install scikit-learn joblib</code>
+        ML features auto-install Python dependencies on first launch &mdash; no manual setup needed
       </p>
     </div>
   </div>
