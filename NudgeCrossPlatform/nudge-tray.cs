@@ -79,6 +79,7 @@ namespace NudgeTray
         static bool _verifyAnalyticsScrollOnStartup;
         static int _analyticsScrollVerificationAttempts;
         static bool _uiAuditMode;
+        static bool _uiAudit2x;
         static string _uiAuditOutputDir = "";
 
         // Common tray icon for all platforms
@@ -218,6 +219,10 @@ namespace NudgeTray
                         _uiAuditOutputDir = args[i + 1];
                         i++;
                     }
+                }
+                else if (args[i] == "--ui-audit-2x")
+                {
+                    _uiAudit2x = true;
                 }
             }
 
@@ -428,10 +433,15 @@ namespace NudgeTray
                     Console.WriteLine($"[UI-AUDIT] SKIP {filename} — zero bounds");
                     return;
                 }
-                using var bmp = new RenderTargetBitmap(new PixelSize(w, h), new Vector(96, 96));
+
+                int scale = _uiAudit2x ? 2 : 1;
+                var pxSize = new PixelSize(w * scale, h * scale);
+                var dpi = new Vector(96 * scale, 96 * scale);
+
+                using var bmp = new RenderTargetBitmap(pxSize, dpi);
                 bmp.Render(window);
                 bmp.Save(path);
-                Console.WriteLine($"[UI-AUDIT] Captured {filename} ({w}×{h})");
+                Console.WriteLine($"[UI-AUDIT] Captured {filename} ({w}×{h} @{scale}x)");
             }
             catch (Exception ex)
             {
@@ -989,15 +999,21 @@ namespace NudgeTray
         {
             try
             {
-                // First check Python version compatibility
-                if (!CheckPythonVersion())
+                Console.WriteLine("  Checking Python...");
+                string systemPython = FindPython();
+
+                // Create/reuse user-level venv at ~/.nudge/venv/
+                if (PlatformConfig.EnsureVenv(systemPython))
                 {
-                    return false;
+                    string venvPy = PlatformConfig.VenvPythonPath;
+                    if (File.Exists(venvPy))
+                        Console.WriteLine($"  ✓ User venv ready");
                 }
 
-                Console.WriteLine("  Checking Python dependencies...");
+                string python = FindPython(); // returns venv Python if available
+                Console.WriteLine($"  Using Python: {python}");
 
-                // Check if required packages are installed
+                // Check if required packages are installed inside the venv
                 var requiredPackages = new[] { "sklearn", "joblib", "pandas", "numpy" };
                 bool allInstalled = true;
 
@@ -1007,7 +1023,7 @@ namespace NudgeTray
                     {
                         StartInfo = new ProcessStartInfo
                         {
-                            FileName = FindPython(),
+                            FileName = python,
                             Arguments = $"-c \"import {package}\"",
                             RedirectStandardOutput = true,
                             RedirectStandardError = true,
@@ -1058,109 +1074,59 @@ namespace NudgeTray
                     return false;
                 }
 
-                var installProcess = new Process
+                // Install into venv — no --user / --break-system-packages needed
+                if (!RunPipInstall(python, selectedRequirementsPath, 180_000))
                 {
-                    StartInfo = new ProcessStartInfo
+                    // Try minimal fallback
+                    if (selectedRequirementsPath != requirementsFiles[2] && File.Exists(requirementsFiles[2]))
                     {
-                        FileName = FindPython(),
-                        Arguments = PlatformConfig.PipInstallArgs(selectedRequirementsPath),
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    }
-                };
-
-                installProcess.OutputDataReceived += (s, e) =>
-                {
-                    if (!string.IsNullOrEmpty(e.Data))
-                    {
-                        Console.WriteLine($"    {e.Data}");
-                    }
-                };
-
-                installProcess.ErrorDataReceived += (s, e) =>
-                {
-                    if (!string.IsNullOrEmpty(e.Data))
-                    {
-                        Console.WriteLine($"    {e.Data}");
-                    }
-                };
-
-                installProcess.Start();
-                installProcess.BeginOutputReadLine();
-                installProcess.BeginErrorReadLine();
-                installProcess.WaitForExit(180000); // 3 minutes for installation
-
-                if (installProcess.ExitCode == 0)
-                {
-                    Console.WriteLine("  ✓ Python dependencies installed successfully");
-                    return true;
-                }
-                else
-                {
-                    // Try fallback to minimal requirements if full install failed
-                    if (selectedRequirementsPath != requirementsFiles[2])
-                    {
-                        Console.WriteLine("  ⚠ Full dependencies failed, trying minimal requirements...");
-                        string minimalPath = requirementsFiles[2];
-
-                        if (File.Exists(minimalPath))
+                        Console.WriteLine("  ⚠ Full dependencies failed, trying minimal...");
+                        if (RunPipInstall(python, requirementsFiles[2], 120_000))
                         {
-                            var fallbackProcess = new Process
-                            {
-                                StartInfo = new ProcessStartInfo
-                                {
-                                    FileName = FindPython(),
-                                    Arguments = PlatformConfig.PipInstallArgs(minimalPath),
-                                    RedirectStandardOutput = true,
-                                    RedirectStandardError = true,
-                                    UseShellExecute = false,
-                                    CreateNoWindow = true
-                                }
-                            };
-
-                            fallbackProcess.OutputDataReceived += (s, e) =>
-                            {
-                                if (!string.IsNullOrEmpty(e.Data))
-                                {
-                                    Console.WriteLine($"    {e.Data}");
-                                }
-                            };
-
-                            fallbackProcess.ErrorDataReceived += (s, e) =>
-                            {
-                                if (!string.IsNullOrEmpty(e.Data))
-                                {
-                                    Console.WriteLine($"    {e.Data}");
-                                }
-                            };
-
-                            fallbackProcess.Start();
-                            fallbackProcess.BeginOutputReadLine();
-                            fallbackProcess.BeginErrorReadLine();
-                            fallbackProcess.WaitForExit(120000);
-
-                            if (fallbackProcess.ExitCode == 0)
-                            {
-                                Console.WriteLine("  ✓ Minimal dependencies installed (ML features limited)");
-                                return true;
-                            }
+                            Console.WriteLine("  ✓ Minimal dependencies installed (ML features limited)");
+                            return true;
                         }
                     }
 
                     Console.WriteLine("  ✗ Failed to install Python dependencies");
                     Console.WriteLine("  Please try installing manually:");
-                    string pipFlag = OperatingSystem.IsWindows() ? "--user" : "--break-system-packages";
-                    Console.WriteLine($"    python -m pip install {pipFlag} -r \"{selectedRequirementsPath}\"");
+                    Console.WriteLine($"    {python} -m pip install -r \"{selectedRequirementsPath}\"");
                     return false;
                 }
+
+                Console.WriteLine("  ✓ Python dependencies installed successfully");
+                return true;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"  ⚠ Error checking dependencies: {ex.Message}");
                 return false;
             }
+        }
+
+        static bool RunPipInstall(string python, string reqPath, int timeoutMs)
+        {
+            var proc = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = python,
+                    Arguments = $"-m pip install -r \"{reqPath}\"",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                }
+            };
+
+            proc.OutputDataReceived += (s, e) => { if (!string.IsNullOrEmpty(e.Data)) Console.WriteLine($"    {e.Data}"); };
+            proc.ErrorDataReceived += (s, e) => { if (!string.IsNullOrEmpty(e.Data)) Console.WriteLine($"    {e.Data}"); };
+
+            proc.Start();
+            proc.BeginOutputReadLine();
+            proc.BeginErrorReadLine();
+            proc.WaitForExit(timeoutMs);
+            return proc.ExitCode == 0;
         }
 
         static void StartMLServices()

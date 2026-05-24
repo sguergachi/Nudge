@@ -50,9 +50,12 @@ jobs:
         shell: pwsh
         run: |
           $dist = "NudgeCrossPlatform/dist/win"
-          Copy-Item "NudgeCrossPlatform/model_inference.py"   $dist
-          Copy-Item "NudgeCrossPlatform/train_model.py"       $dist
-          Copy-Item "NudgeCrossPlatform/background_trainer.py" $dist
+          Copy-Item "NudgeCrossPlatform/model_inference.py"       $dist
+          Copy-Item "NudgeCrossPlatform/train_model.py"           $dist
+          Copy-Item "NudgeCrossPlatform/background_trainer.py"    $dist
+          Copy-Item "NudgeCrossPlatform/requirements-cpu.txt"     $dist
+          Copy-Item "NudgeCrossPlatform/requirements.txt"         $dist
+          Copy-Item "NudgeCrossPlatform/assets/windows/nudge.ico" $dist
           Compress-Archive -Path "$dist/*" -DestinationPath "nudge-win-x64.zip" -Force
 
       - uses: actions/upload-artifact@v4
@@ -105,10 +108,12 @@ jobs:
           dist=dist/linux
           
           # Copy supporting files
-          cp model_inference.py    "$dist/"
-          cp train_model.py        "$dist/"
-          cp background_trainer.py "$dist/"
-          cp install-linux-app.sh  "$dist/"
+          cp model_inference.py       "$dist/"
+          cp train_model.py           "$dist/"
+          cp background_trainer.py    "$dist/"
+          cp requirements-cpu.txt     "$dist/"
+          cp requirements.txt         "$dist/"
+          cp install-linux-app.sh     "$dist/"
           
           # Set execute permissions
           chmod +x "$dist/nudge" "$dist/nudge-notify" "$dist/nudge-tray" "$dist/install-linux-app.sh"
@@ -151,15 +156,19 @@ jobs:
           ## Install
 
           ### Windows
-          1. Download **nudge-win-x64.zip** and extract it
+          1. Download **Nudge-Setup-*.exe** (installer) or **nudge-win-x64.zip** (portable)
           2. Run **nudge-tray.exe**
 
           ### Linux
-          1. Download **nudge-linux-x64.tar.gz** and extract it: `tar -xzf nudge-linux-x64.tar.gz`
-          2. Run `./install-linux-app.sh` to register the desktop entry, then launch **nudge-tray**
+          1. Download **nudge-linux-x64.tar.gz** and extract: `tar -xzf nudge-linux-x64.tar.gz`
+          2. Run `./install-linux-app.sh` to register the desktop entry
+          3. Launch **nudge-tray** from your app menu
 
-          ### ML features (optional)
-          Install Python dependencies: `pip install scikit-learn joblib pandas numpy`
+          ### ML features
+          When you enable ML mode (in Settings or via `--ml`), Nudge automatically:
+          - Creates a Python virtual environment in `~/.nudge/venv/`
+          - Installs scikit-learn, joblib, pandas, and numpy
+          - No manual pip install needed
 
           ---
           **Feedback?** [Open an issue](https://github.com/sguergachi/Nudge/issues/new) — every report shapes what gets built next.
