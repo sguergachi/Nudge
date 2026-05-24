@@ -129,17 +129,30 @@ jobs:
           cp requirements-cpu.txt     "$dist/"
           cp requirements.txt         "$dist/"
           cp install-linux-app.sh     "$dist/"
+          cp assets/linux/nudge.svg   "$dist/nudge.svg" || true
           
           # Set execute permissions
           chmod +x "$dist/nudge" "$dist/nudge-notify" "$dist/nudge-tray" "$dist/install-linux-app.sh"
           
-          # Create tarball in repo root
+          # Create portable tarball
           tar -czf ../nudge-linux-x64.tar.gz -C dist linux
+          
+          # Create self-extracting installer (.run)
+          cp nudge-linux-installer.sh ../nudge-linux-installer.run
+          tar -czf /tmp/nudge-payload.tar.gz -C dist linux
+          cat /tmp/nudge-payload.tar.gz >> ../nudge-linux-installer.run
+          chmod +x ../nudge-linux-installer.run
+          rm /tmp/nudge-payload.tar.gz
 
       - uses: actions/upload-artifact@v4
         with:
           name: nudge-linux-x64
           path: nudge-linux-x64.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nudge-linux-installer
+          path: nudge-linux-installer.run
 
   release:
     needs: [check-version, build-windows, build-linux]
@@ -165,6 +178,10 @@ jobs:
         with:
           name: nudge-win-installer
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: nudge-linux-installer
+
       - name: Tag and publish release
         run: |
           git config user.name  "github-actions[bot]"
@@ -172,6 +189,7 @@ jobs:
           git tag "v$VERSION"
           git push origin "v$VERSION"
           SETUP_EXE=$(ls Nudge-Setup-*.exe | head -1)
+          LINUX_INSTALLER=$(ls nudge-linux-installer.run | head -1)
           cat > release-notes.md << 'NOTES'
           ## Install
 
@@ -197,5 +215,6 @@ jobs:
             --title "Nudge v$VERSION" \
             --notes-file release-notes.md \
             "$SETUP_EXE" \
+            "$LINUX_INSTALLER" \
             nudge-win-x64.zip \
             nudge-linux-x64.tar.gz
