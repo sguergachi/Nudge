@@ -1,0 +1,146 @@
+name: Release
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      should_release: ${{ steps.ver.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-tags: true
+
+      - name: Extract version and check if release needed
+        id: ver
+        run: |
+          VERSION=$(grep -oP 'const string VERSION = "\K[^"]+' NudgeCrossPlatform/nudge-tray.cs)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if git ls-remote --tags origin "refs/tags/v$VERSION" | grep -q "v$VERSION"; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "Tag v$VERSION already exists — skipping release."
+          else
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "New version v$VERSION — will create release."
+          fi
+
+  build-windows:
+    needs: check-version
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Publish self-contained Windows binaries
+        working-directory: NudgeCrossPlatform
+        run: |
+          dotnet publish nudge.csproj        -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o dist/win --nologo
+          dotnet publish nudge-notify.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o dist/win --nologo
+          dotnet publish nudge-tray.csproj   -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -f net10.0-windows10.0.17763.0 -p:SkipBuildNudgeDaemon=true -o dist/win --nologo
+
+      - name: Package Windows artifacts
+        shell: pwsh
+        run: |
+          $dist = "NudgeCrossPlatform/dist/win"
+          Copy-Item "NudgeCrossPlatform/model_inference.py"   $dist
+          Copy-Item "NudgeCrossPlatform/train_model.py"       $dist
+          Copy-Item "NudgeCrossPlatform/background_trainer.py" $dist
+          Compress-Archive -Path "$dist/*" -DestinationPath "nudge-win-x64.zip" -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nudge-win-x64
+          path: nudge-win-x64.zip
+
+  build-linux:
+    needs: check-version
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clone WaylandDotnet sibling repo
+        run: git clone https://github.com/sguergachi/WaylandDotnet.git "${{ github.workspace }}/../WaylandDotnet"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Publish self-contained Linux binaries
+        working-directory: NudgeCrossPlatform
+        run: |
+          dotnet publish nudge.csproj        -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -o dist/linux --nologo
+          dotnet publish nudge-notify.csproj -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -o dist/linux --nologo
+          dotnet publish nudge-tray.csproj   -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -f net10.0 -p:SkipBuildNudgeDaemon=true -o dist/linux --nologo
+
+      - name: Package Linux artifacts
+        run: |
+          dist=NudgeCrossPlatform/dist/linux
+          cp NudgeCrossPlatform/model_inference.py    "$dist/"
+          cp NudgeCrossPlatform/train_model.py        "$dist/"
+          cp NudgeCrossPlatform/background_trainer.py "$dist/"
+          cp NudgeCrossPlatform/install-linux-app.sh  "$dist/"
+          chmod +x "$dist/nudge" "$dist/nudge-notify" "$dist/nudge-tray" "$dist/install-linux-app.sh"
+          tar -czf nudge-linux-x64.tar.gz -C NudgeCrossPlatform/dist linux
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nudge-linux-x64
+          path: nudge-linux-x64.tar.gz
+
+  release:
+    needs: [check-version, build-windows, build-linux]
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.check-version.outputs.version }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: nudge-win-x64
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: nudge-linux-x64
+
+      - name: Tag and publish release
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
+          gh release create "v$VERSION" \
+            --title "Nudge v$VERSION" \
+            --notes "$(cat <<'EOF'
+## Install
+
+### Windows
+1. Download **nudge-win-x64.zip** and extract it
+2. Run **nudge-tray.exe**
+
+### Linux
+1. Download **nudge-linux-x64.tar.gz** and extract it: `tar -xzf nudge-linux-x64.tar.gz`
+2. Run `./install-linux-app.sh` to register the desktop entry, then launch **nudge-tray**
+
+### ML features (optional)
+Install Python dependencies: `pip install scikit-learn joblib pandas numpy`
+
+---
+**Feedback?** [Open an issue](https://github.com/sguergachi/Nudge/issues/new) — every report shapes what gets built next.
+EOF
+)" \
+            nudge-win-x64.zip \
+            nudge-linux-x64.tar.gz
