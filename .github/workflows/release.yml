@@ -68,7 +68,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Clone WaylandDotnet sibling repo
-        run: git clone https://github.com/sguergachi/WaylandDotnet.git "${{ github.workspace }}/../WaylandDotnet"
+        run: git clone https://github.com/sguergachi/WaylandDotnet.git "${{ github.workspace }}/WaylandDotnet"
 
       - uses: actions/setup-dotnet@v4
         with:
