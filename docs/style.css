@@ -196,7 +196,6 @@ nav {
 /* ── Hero visual ────────────────────────────────── */
 
 .hero-visual {
-  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -207,19 +206,7 @@ nav {
   max-width: 420px;
   border-radius: 10px;
   display: block;
-  position: relative;
-  z-index: 2;
-}
-
-.hero-shot-shadow {
-  position: absolute;
-  inset: 0;
-  border-radius: 10px;
-  background: radial-gradient(ellipse at center, rgba(88,166,255,0.08) 0%, transparent 60%);
-  transform: scale(1.05);
-  filter: blur(24px);
-  z-index: 1;
-  pointer-events: none;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06);
 }
 
 /* ── Buttons ────────────────────────────────────── */
