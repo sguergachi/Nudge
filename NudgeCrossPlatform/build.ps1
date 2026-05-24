@@ -82,25 +82,64 @@ function Install-Dotnet10 {
 
 function Ensure-Dotnet10 {
     $dotnetVersion = ""
+    $dotnetAvailable = $false
 
     if (Get-Command dotnet -ErrorAction SilentlyContinue) {
         $dotnetVersion = (dotnet --version 2>&1 | Out-String).Trim()
+        $dotnetAvailable = $dotnetVersion -match '^\d+\.\d+\.\d+'
     }
 
-    if (-not $dotnetVersion) {
-        if ($SkipDeps) {
-            Write-Err ".NET SDK 10.0+ is required but dotnet is not installed."
-            exit 1
+    if (-not $dotnetAvailable) {
+        # dotnet --version may fail due to global.json requiring a newer SDK.
+        # Fall back to --list-sdks to find the highest installed version.
+        try {
+            $sdkOutput = dotnet --list-sdks 2>&1 | Out-String
+            $versions = @()
+            $sdkOutput -split "`n" | ForEach-Object {
+                if ($_ -match '^(\d+\.\d+\.\d+)') {
+                    $versions += [version]$matches[1]
+                }
+            }
+            if ($versions.Count -gt 0) {
+                $highest = ($versions | Sort-Object -Descending)[0]
+                $dotnetVersion = $highest.ToString()
+                $dotnetAvailable = $true
+            }
         }
-
-        Write-Warn "[WARN] .NET SDK not found"
-        Install-Dotnet10
-        $dotnetVersion = (dotnet --version 2>&1 | Out-String).Trim()
+        catch { }
     }
 
+    if ($dotnetAvailable) {
+        $major = [int]($dotnetVersion.Split('.')[0])
+        if ($major -ge $DotnetMajorRequired) {
+            Write-Success "[OK] .NET SDK ready"
+            Write-Host "  Version: $dotnetVersion" -ForegroundColor DarkGray
+            return
+        }
+    }
+
+    if ($SkipDeps) {
+        Write-Err ".NET SDK $DotnetMajorRequired.0+ is required but not found."
+        if (Get-Command dotnet -ErrorAction SilentlyContinue) {
+            dotnet --list-sdks 2>&1 | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+        }
+        exit 1
+    }
+
+    Write-Warn "[WARN] .NET SDK 10 not found"
+    Install-Dotnet10
+
+    $dotnetVersion = (dotnet --version 2>&1 | Out-String).Trim()
+    if ($dotnetVersion -notmatch '^\d+\.\d+\.\d+') {
+        Write-Err "Failed to install .NET SDK $DotnetMajorRequired.0+."
+        if (Get-Command dotnet -ErrorAction SilentlyContinue) {
+            dotnet --list-sdks 2>&1 | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+        }
+        exit 1
+    }
     $major = [int]($dotnetVersion.Split('.')[0])
     if ($major -lt $DotnetMajorRequired) {
-        Write-Err "Found .NET SDK $dotnetVersion, but Nudge now requires .NET SDK 10.0+."
+        Write-Err "Installed .NET SDK $dotnetVersion is too old. $DotnetMajorRequired.0+ required."
         exit 1
     }
 
@@ -273,10 +312,10 @@ Invoke-Dotnet @("restore", "../TrayIconTest/TrayIconTest.csproj", "--nologo")
 
 Write-Host "  Building projects in parallel..." -ForegroundColor DarkGray
 $buildJobs = @()
-$buildJobs += Start-Job { dotnet build nudge.csproj -c Release -f "net10.0" --no-restore --nologo -m -v quiet }
-$buildJobs += Start-Job { dotnet build nudge-notify.csproj -c Release -f "net10.0" --no-restore --nologo -m -v quiet }
-$buildJobs += Start-Job { dotnet build nudge-tray.csproj -c Release -f "net10.0-windows10.0.17763.0" --no-restore --nologo -m -v quiet }
-$buildJobs += Start-Job { dotnet build ../TrayIconTest/TrayIconTest.csproj -c Release --no-restore --nologo -m -v quiet }
+$buildJobs += Start-Job -WorkingDirectory $PSScriptRoot { dotnet build nudge.csproj -c Release -f "net10.0" --no-restore --nologo -m -v quiet }
+$buildJobs += Start-Job -WorkingDirectory $PSScriptRoot { dotnet build nudge-notify.csproj -c Release -f "net10.0" --no-restore --nologo -m -v quiet }
+$buildJobs += Start-Job -WorkingDirectory $PSScriptRoot { dotnet build nudge-tray.csproj -c Release -f "net10.0-windows10.0.17763.0" --no-restore --nologo -m -v quiet }
+$buildJobs += Start-Job -WorkingDirectory $PSScriptRoot { dotnet build ../TrayIconTest/TrayIconTest.csproj -c Release --no-restore --nologo -m -v quiet }
 
 Wait-Job $buildJobs | Out-Null
 $failedJobs = $buildJobs | Where-Object { $_.State -ne 'Completed' -or $_.ChildJobs[0].JobStateInfo.State -eq 'Failed' }
