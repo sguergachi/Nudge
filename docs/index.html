@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nudge — desktop attention state estimation</title>
-  <meta name="description" content="21-feature sensor fusion pipeline → local scikit-learn binary classifier → conscious interrupt at ≥98% drift confidence. No cloud, no accounts, no telemetry.">
+  <title>Nudge — Still focused?</title>
+  <meta name="description" content="Nudge learns your work patterns and asks 'still focused?' at exactly the right moment. Free, private, and runs entirely on your machine.">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='2' width='28' height='28' rx='4' fill='%23121214' stroke='rgba(255,255,255,0.16)' stroke-width='1'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='16' fill='%2358A6FF' text-anchor='middle' font-weight='800'%3EN%3C/text%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,7 +20,8 @@
       Nudge
     </span>
     <ul class="nav-links">
-      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#how-it-works">How it works</a></li>
+      <li><a href="#features">Features</a></li>
       <li><a href="#download">Download</a></li>
       <li><a href="https://github.com/sguergachi/Nudge" target="_blank">GitHub</a></li>
     </ul>
@@ -30,60 +31,142 @@
 <section class="hero">
   <div class="container">
     <div class="hero-content">
-      <h1>Desktop attention state estimation.</h1>
+      <div class="hero-badge">Free &middot; Open source &middot; Private</div>
+      <h1>Still focused?</h1>
       <p class="hero-subtitle">
-        21-feature snapshots evaluated at 60s intervals against a
-        local <code>scikit-learn</code> binary classifier trained on
-        your YES/NO response history. Inference via TCP
-        <code>127.0.0.1:45002</code>. Interrupt at &ge;98% drift
-        confidence, or fall back to variable-interval sampling.
+        Nudge learns your daily work patterns — what you run, how you switch
+        between apps, when you tend to drift — and asks "still focused?" at
+        exactly the right moment. No timers. No cloud. No noise.
       </p>
-      <div class="hero-meta">
-        <span class="meta-item">github.com/sguergachi/Nudge</span>
-        <span class="meta-item">MIT license</span>
-        <span class="meta-item">Windows + Linux</span>
-      </div>
       <div class="hero-actions">
         <a class="btn btn-primary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip">Download for Windows</a>
         <a class="btn btn-secondary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-x64.tar.gz">Download for Linux</a>
       </div>
+      <p class="hero-footnote">Free &mdash; no account, no signup, no strings</p>
     </div>
-    <div class="hero-diagram">
-      <img src="screenshots/sensor-fusion.svg" alt="Sensor fusion pipeline diagram">
+    <div class="hero-visual">
+      <img src="screenshots/notification_active.png" alt="Nudge notification" class="hero-screenshot">
     </div>
   </div>
 </section>
 
-<section class="section" id="architecture">
+<section class="section" id="how-it-works">
   <div class="container">
-    <h2 class="section-heading">Pipeline</h2>
+    <h2 class="section-heading">How it works</h2>
+    <div class="steps">
+      <div class="step-card">
+        <div class="step-card-visual">
+          <img src="screenshots/tray-menu.svg" alt="Nudge tray menu">
+        </div>
+        <div class="step-card-body">
+          <span class="step-num">01</span>
+          <h3>Runs in your system tray</h3>
+          <p>Nudge sits quietly in your notification area. It samples your foreground app, idle time, and browser domain once per second. No screenshots. No keystrokes. No network.</p>
+        </div>
+      </div>
+      <div class="step-card">
+        <div class="step-card-visual">
+          <img src="screenshots/categories.svg" alt="App category classification">
+        </div>
+        <div class="step-card-body">
+          <span class="step-num">02</span>
+          <h3>Learns your patterns</h3>
+          <p>Every app is sorted into a category — Development, Creative, Office, Communication, Entertainment, Utility. A local AI compares each moment against your past YES/NO responses. The more you use it, the smarter it gets.</p>
+        </div>
+      </div>
+      <div class="step-card">
+        <div class="step-card-visual">
+          <img src="screenshots/notification.svg" alt="Nudge notification">
+        </div>
+        <div class="step-card-body">
+          <span class="step-num">03</span>
+          <h3>Asks one question</h3>
+          <p>A small window appears: "Still focused?" YES or NO. Keyboard shortcuts so you never leave your flow. Auto-dismisses after 30 seconds. Every answer trains the model further.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-alt" id="features">
+  <div class="container">
+    <h2 class="section-heading section-heading-plain">Everything you need, nothing you don't</h2>
+    <div class="features">
+      <div class="feature">
+        <div class="feature-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </div>
+        <h3>Adaptive timing</h3>
+        <p>Nudge doesn't use fixed timers. It waits until your attention pattern shifts — then asks. Sometimes that's 5 minutes, sometimes 40. It adjusts to how you actually work.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+        </div>
+        <h3>On-device AI</h3>
+        <p>No cloud dependency. A scikit-learn classifier trains locally on your responses and runs inferences over TCP. Your data never leaves <code>~/.nudge/</code>.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <h3>Keyboard-friendly</h3>
+        <p>Ctrl+Shift+Y for YES, Ctrl+Shift+N for NO. The notification auto-dismisses after 30 seconds. You never have to touch the mouse.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        </div>
+        <h3>Live analytics</h3>
+        <p>Track your focus trends over time. See daily, weekly, and monthly breakdowns of what you classified as productive vs. not — all from your system tray.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
+        <h3>Your data stays yours</h3>
+        <p>No accounts. No telemetry. No network calls from the daemon. Everything lives in <code>~/.nudge/</code> and never leaves. Open source, MIT licensed.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </div>
+        <h3>Cross-platform</h3>
+        <p>Windows 10/11 and Linux (KDE, GNOME, Sway, Cinnamon). Works on both Wayland and X11. Self-contained binaries — no runtime installation needed.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-tech">
+  <div class="container">
+    <div class="tech-header">
+      <h2 class="section-heading">Under the hood</h2>
+      <p class="tech-desc">A four-stage pipeline. Every piece runs locally.</p>
+    </div>
     <div class="timeline">
       <div class="tl-step">
         <div class="tl-marker"></div>
         <div class="tl-body">
           <div class="step-label">Signal acquisition</div>
           <div class="step-desc">
-            Foreground application, idle duration, window title, and
-            compositor metadata sampled at 1 Hz. Browser domain extracted
-            from window title when a browser is focused. No screenshots,
-            no keystroke logging, no network egress.
+            Foreground app, idle duration, window title, and compositor metadata sampled at 1 Hz.
+            Browser domain extracted from window title when a browser is focused.
           </div>
           <div class="step-specs">
             <span>Source: KWin Script / X11 EWMH / Sway IPC / Win32</span>
-            <span>Quality: Trusted | Usable | Poor</span>
+            <span>Quality: Trusted &middot; Usable &middot; Poor</span>
           </div>
         </div>
       </div>
       <div class="tl-step">
         <div class="tl-marker"></div>
         <div class="tl-body">
-          <div class="step-label">Feature extraction</div>
+          <div class="step-label">Classification</div>
           <div class="step-desc">
-            Each signal classified into one of six categories (Development,
-            Creative, Office, Communication, Entertainment, Utility) at
-            five confidence tiers — from OS ground truth to sensible defaults.
-            A rolling 300 s window tracks switch counts, distinct apps,
-            application share, and anchor-return events.
+            Every app and domain tagged as Development, Creative, Office, Communication,
+            Entertainment, or Utility at one of five confidence tiers. A rolling 300 s window
+            tracks switch frequency, app diversity, and anchor-return events.
           </div>
           <div class="step-specs">
             <span>Output: 21-dimensional feature vector</span>
@@ -96,109 +179,91 @@
         <div class="tl-body">
           <div class="step-label">Inference</div>
           <div class="step-desc">
-            Vector evaluated against a <code>scikit-learn</code> classifier
-            served over TCP <code>127.0.0.1:45002</code>. Requires 100 training
-            samples before the model activates; retrained by a background
-            process at 50+ new samples via 300 s polling.
+            21-feature snapshot evaluated against a scikit-learn classifier served over
+            TCP 127.0.0.1:45002. Requires 100 training samples; retrains at 50+ new
+            samples via 300 s polling.
           </div>
           <div class="step-specs">
             <span>Threshold: &ge;98% confidence</span>
-            <span>Interval: 60 s</span>
+            <span>Check interval: 60 s</span>
           </div>
         </div>
       </div>
       <div class="tl-step">
         <div class="tl-marker"></div>
         <div class="tl-body">
-          <div class="step-label">Conscious interrupt</div>
+          <div class="step-label">Interrupt</div>
           <div class="step-desc">
-            A floating window with a single binary choice: YES or NO.
-            Keyboard shortcuts (<code>Ctrl+Shift+Y</code> / <code>Ctrl+Shift+N</code>).
-            30 s auto-dismiss. Every response is appended to the
-            training set and triggers the next retrain cycle.
+            Custom Avalonia overlay with a binary choice: YES or NO.
+            Keyboard shortcuts (Ctrl+Shift+Y / Ctrl+Shift+N). 30 s auto-dismiss.
+            Every response appended to the training set.
           </div>
           <div class="step-specs">
-            <span>Window: custom Avalonia overlay</span>
             <span>IPC: UDP 127.0.0.1:45001</span>
+            <span>Model: scikit-learn (Python)</span>
           </div>
         </div>
       </div>
     </div>
-  </div>
-</section>
-
-<section class="section section-alt">
-  <div class="container">
-    <div class="specs-grid">
-      <div class="spec-block">
-        <div class="spec-label">Stack</div>
-        <ul class="spec-list">
-          <li>Harvest daemon: C# / .NET 10</li>
-          <li>UI: Avalonia (tray + notification)</li>
-          <li>Classifier: scikit-learn (Python)</li>
-          <li>IPC: TCP 45002 / UDP 45001</li>
-        </ul>
-      </div>
-      <div class="spec-block">
-        <div class="spec-label">Privacy</div>
-        <ul class="spec-list">
-          <li>All data in <code>~/.nudge/</code></li>
-          <li>No accounts, no telemetry</li>
-          <li>No network calls from daemon</li>
-          <li>Open source (MIT)</li>
-        </ul>
-      </div>
-      <div class="spec-block">
-        <div class="spec-label">Supported</div>
-        <ul class="spec-list">
-          <li>Windows 10 / 11</li>
-          <li>Linux: KDE, GNOME, Sway, Cinnamon</li>
-          <li>Wayland + X11</li>
-          <li>x86_64 only</li>
-        </ul>
-      </div>
+    <div class="tech-diagram">
+      <img src="screenshots/sensor-fusion.svg" alt="Sensor fusion pipeline diagram">
     </div>
   </div>
 </section>
 
-<section class="section" id="download">
+<section class="section section-alt" id="download">
   <div class="container">
-    <h2 class="section-heading">Download</h2>
-    <p class="section-sub">Self-contained binaries. No .NET runtime required. No installation.</p>
-    <div class="download-links">
-      <a class="download-link" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip">
-        <span class="dl-os">Windows</span>
-        <span class="dl-fmt">nudge-win-x64.zip</span>
-        <span class="dl-action">Download &rarr;</span>
-      </a>
-      <a class="download-link" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-x64.tar.gz">
-        <span class="dl-os">Linux</span>
-        <span class="dl-fmt">nudge-linux-x64.tar.gz</span>
-        <span class="dl-action">Download &rarr;</span>
-      </a>
+    <div class="cta">
+      <div class="cta-badge">Free forever</div>
+      <h2 class="cta-heading">Try Nudge on your machine</h2>
+      <p class="cta-text">
+        Download, extract, and run. No installation, no dependencies, no account.
+        Linux or Windows, it's that simple.
+      </p>
+      <div class="download-links">
+        <a class="download-link" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip">
+          <span class="dl-os">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="4" y1="8" x2="20" y2="8"/><line x1="8" y1="4" x2="8" y2="20"/></svg>
+            Windows
+          </span>
+          <span class="dl-meta">
+            <span class="dl-fmt">nudge-win-x64.zip</span>
+            <span class="dl-action">Download &rarr;</span>
+          </span>
+        </a>
+        <a class="download-link" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-x64.tar.gz">
+          <span class="dl-os">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M3 21v-2a7 7 0 0 1 7-7h4a7 7 0 0 1 7 7v2"/></svg>
+            Linux
+          </span>
+          <span class="dl-meta">
+            <span class="dl-fmt">nudge-linux-x64.tar.gz</span>
+            <span class="dl-action">Download &rarr;</span>
+          </span>
+        </a>
+      </div>
+      <div class="terminal">
+        <div class="terminal-line"><span class="prompt">$</span> tar -xzf nudge-linux-x64.tar.gz</div>
+        <div class="terminal-line"><span class="prompt">$</span> cd linux &amp;&amp; ./install-linux-app.sh</div>
+        <div class="terminal-line"><span class="prompt">$</span> ./nudge-tray</div>
+        <div class="terminal-line terminal-line-dim">harvest daemon started</div>
+        <div class="terminal-line terminal-line-dim">ML inference on 127.0.0.1:45002 (waiting for 100 samples)</div>
+      </div>
+      <p class="cta-footnote">
+        <a href="https://github.com/sguergachi/Nudge/releases/latest">See all releases</a>
+        &middot;
+        <a href="https://github.com/sguergachi/Nudge">View source</a>
+        &middot;
+        ML features need <code>pip install scikit-learn joblib</code>
+      </p>
     </div>
-    <div class="terminal">
-      <div class="terminal-line"><span class="prompt">$</span> tar -xzf nudge-linux-x64.tar.gz</div>
-      <div class="terminal-line"><span class="prompt">$</span> cd linux &amp;&amp; ./install-linux-app.sh</div>
-      <div class="terminal-line"><span class="prompt">$</span> ./nudge-tray</div>
-      <div class="terminal-line terminal-line-dim">[2026-05-24 14:32:01] harvest daemon started</div>
-      <div class="terminal-line terminal-line-dim">[2026-05-24 14:32:01] ML inference on 127.0.0.1:45002</div>
-      <div class="terminal-line terminal-line-dim">[2026-05-24 14:33:01] next check in 60 s</div>
-    </div>
-    <p class="download-footnote">
-      <a href="https://github.com/sguergachi/Nudge/releases/latest">All releases</a>
-      &middot;
-      <a href="https://github.com/sguergachi/Nudge">Source code</a>
-      &middot;
-      Requires <code>pip install scikit-learn joblib</code> for ML features
-    </p>
   </div>
 </section>
 
 <footer>
   <div class="container">
     <div class="footer-meta">
-      <span>&copy; Nudge &mdash; MIT License</span>
+      <span>Nudge &mdash; Free &amp; open source</span>
       <span><a href="https://github.com/sguergachi/Nudge">GitHub</a></span>
       <span><a href="https://github.com/sguergachi/Nudge/issues/new">Feedback</a></span>
     </div>
