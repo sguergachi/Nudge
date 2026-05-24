@@ -29,10 +29,33 @@ using System.Text.Json;
 
 namespace NudgeTray
 {
-    public class CustomNotificationWindow : Window
+    public sealed class CustomNotificationWindow : Window
     {
         private const string CONFIG_FILE = "nudge-notification-config.json";
         private const int AUTO_DISMISS_SECONDS = 30;
+
+        // ── Color constants ───────────────────────────────────────────────────
+        private static readonly Color BgWindow = Color.FromArgb(250, 18, 18, 20);
+        private static readonly Color TitleText = Color.FromRgb(160, 160, 170);
+        private static readonly Color MessageText = Color.FromRgb(232, 232, 238);
+        private static readonly Color TimerStroke = Color.FromArgb(160, 150, 150, 165);
+        private static readonly Color TimerText = Color.FromArgb(200, 180, 180, 190);
+        private static readonly Color PauseIconFill = Color.FromArgb(160, 150, 150, 165);
+        private static readonly Color UrgentRed = Color.FromArgb(210, 255, 80, 80);
+        private static readonly Color WarmAmber = Color.FromArgb(170, 255, 150, 80);
+        private static readonly Color CalmNeutral = Color.FromArgb(160, 150, 150, 165);
+        private static readonly Color ActiveGlow = Color.FromArgb(70, 88, 166, 255);
+        private static readonly Color InactiveBorder = Color.FromArgb(40, 255, 255, 255);
+        private static readonly Color BtnYesBase = Color.FromRgb(88, 166, 255);
+        private static readonly Color BtnYesHover = Color.FromRgb(108, 186, 255);
+        private static readonly Color BtnYesPressed = Color.FromRgb(60, 130, 220);
+        private static readonly Color BtnNoBase = Color.FromRgb(52, 52, 58);
+        private static readonly Color BtnNoHover = Color.FromRgb(64, 64, 70);
+        private static readonly Color BtnNoPressed = Color.FromRgb(35, 35, 40);
+        private static readonly Color NoBtnText = Color.FromRgb(210, 210, 220);
+        private static readonly Color NoBtnBorder = Color.FromArgb(40, 255, 255, 255);
+        private static readonly Color ShadowColor = Color.FromArgb(50, 0, 0, 0);
+        private static readonly Color GlowColor = Color.FromArgb(45, 88, 166, 255);
         private Point? _dragStartPosition;
         private bool _isDragging;
         private Action<bool?>? _onResponse; // Nullable bool: true=YES, false=NO, null=auto-dismissed
@@ -83,8 +106,8 @@ namespace NudgeTray
             // Main container — card owns its own margin for drop shadow bleed
             _mainBorder = new Border
             {
-                Background = new SolidColorBrush(Color.FromArgb(250, 18, 18, 20)),
-                CornerRadius = new CornerRadius(8),
+                Background = new SolidColorBrush(BgWindow),
+                CornerRadius = new CornerRadius(12),
                 Padding = new Thickness(16),
                 Margin = new Thickness(10, 8, 10, 12), // Space for shadow bleed
                 ClipToBounds = false,
@@ -95,10 +118,10 @@ namespace NudgeTray
                         Spread = -2,
                         OffsetX = 0,
                         OffsetY = 4,
-                        Color = Color.FromArgb(50, 0, 0, 0)
+                        Color = ShadowColor
                     }
                 ),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
+                BorderBrush = new SolidColorBrush(InactiveBorder),
                 BorderThickness = new Thickness(1),
                 RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative)
             };
@@ -147,7 +170,8 @@ namespace NudgeTray
                 Text = string.IsNullOrEmpty(_appName) ? "Nudge" : $"Nudge  >  {_appName}",
                 FontSize = 10,
                 FontWeight = FontWeight.Normal,
-                Foreground = new SolidColorBrush(Color.FromRgb(120, 120, 130)),
+                Foreground = new SolidColorBrush(TitleText),
+                TextTrimming = TextTrimming.CharacterEllipsis,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -180,7 +204,7 @@ namespace NudgeTray
             {
                 Width = 18,
                 Height = 18,
-                Stroke = new SolidColorBrush(Color.FromArgb(160, 150, 150, 165)),
+                Stroke = new SolidColorBrush(TimerStroke),
                 StrokeThickness = 1.5,
                 StartAngle = -90, // Start at top (12 o'clock)
                 SweepAngle = 360, // Full circle initially
@@ -195,7 +219,7 @@ namespace NudgeTray
                 Text = $"{AUTO_DISMISS_SECONDS}",
                 FontSize = 8,
                 FontWeight = FontWeight.Normal,
-                Foreground = new SolidColorBrush(Color.FromArgb(170, 150, 150, 165)),
+                Foreground = new SolidColorBrush(TimerText),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -214,13 +238,13 @@ namespace NudgeTray
             {
                 Width = 2.5, Height = 8,
                 CornerRadius = new CornerRadius(1.25),
-                Background = new SolidColorBrush(Color.FromArgb(160, 150, 150, 165))
+                Background = new SolidColorBrush(PauseIconFill)
             });
             _pauseIconView.Children.Add(new Border
             {
                 Width = 2.5, Height = 8,
                 CornerRadius = new CornerRadius(1.25),
-                Background = new SolidColorBrush(Color.FromArgb(160, 150, 150, 165))
+                Background = new SolidColorBrush(PauseIconFill)
             });
 
             timerContainer.Children.Add(_backgroundArc);
@@ -238,7 +262,7 @@ namespace NudgeTray
                 Text = "Were you productive?",
                 FontSize = 14,
                 FontWeight = FontWeight.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(232, 232, 238)),
+                Foreground = new SolidColorBrush(MessageText),
                 TextAlignment = TextAlignment.Left,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 Margin = new Thickness(0, 8, 0, 12) // 8px below title, 12px above buttons
@@ -255,9 +279,11 @@ namespace NudgeTray
             var yesButton = CreateStyledButton(
                 "Yes",
                 "Y",
-                Color.FromRgb(88, 166, 255),
-                Color.FromRgb(108, 186, 255),
-                () => HandleResponse(true)
+                BtnYesBase,
+                BtnYesHover,
+                BtnYesPressed,
+                () => HandleResponse(true),
+                tabIndex: 0
             );
             Grid.SetColumn(yesButton, 0);
 
@@ -265,10 +291,12 @@ namespace NudgeTray
             var noButton = CreateStyledButton(
                 "No",
                 "N",
-                Color.FromRgb(52, 52, 58),
-                Color.FromRgb(64, 64, 70),
+                BtnNoBase,
+                BtnNoHover,
+                BtnNoPressed,
                 () => HandleResponse(false),
-                false
+                false,
+                tabIndex: 1
             );
             Grid.SetColumn(noButton, 2);
 
@@ -284,21 +312,21 @@ namespace NudgeTray
             Content = _mainBorder;
         }
 
-        private static StackPanel CreateStyledButton(string mainText, string shortcutText, Color baseColor, Color hoverColor, Action onClick, bool isPrimary = true)
+        private static StackPanel CreateStyledButton(string mainText, string shortcutText, Color baseColor, Color hoverColor, Color pressedColor, Action onClick, bool isPrimary = true, int tabIndex = 0)
         {
-            // Create border for rounded corners - Fluent Design System
             var border = new Border
             {
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 Height = 32,
-                CornerRadius = new CornerRadius(4), // Fluent: 4px for in-page elements (buttons)
+                CornerRadius = new CornerRadius(4),
                 Background = new SolidColorBrush(baseColor),
                 BorderBrush = isPrimary
                     ? Brushes.Transparent
-                    : new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
+                    : new SolidColorBrush(NoBtnBorder),
                 BorderThickness = new Thickness(1),
                 Cursor = new Cursor(StandardCursorType.Hand),
-                Padding = new Thickness(12, 0, 12, 0) // Fluent: 12px horizontal padding
+                Padding = new Thickness(12, 0, 12, 0),
+                RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative)
             };
 
             var button = new Button
@@ -309,13 +337,15 @@ namespace NudgeTray
                 Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
                 Cursor = new Cursor(StandardCursorType.Hand),
-                Padding = new Thickness(0)
+                Padding = new Thickness(0),
+                Focusable = true,
+                TabIndex = tabIndex
             };
 
             var buttonContent = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                Spacing = 8, // Fluent: 8px spacing between text elements
+                Spacing = 8,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -327,11 +357,10 @@ namespace NudgeTray
                 FontWeight = FontWeight.Medium,
                 Foreground = isPrimary
                     ? Brushes.White
-                    : new SolidColorBrush(Color.FromRgb(200, 200, 210)),
+                    : new SolidColorBrush(NoBtnText),
                 VerticalAlignment = VerticalAlignment.Center
             };
 
-            // Keyboard key badge — dark overlay on primary (visible on blue), light overlay on secondary
             var keyBadge = new Border
             {
                 Background = new SolidColorBrush(
@@ -359,7 +388,7 @@ namespace NudgeTray
             button.Content = buttonContent;
             border.Child = button;
 
-            // Hover effects - subtle
+            // Hover effects
             border.PointerEntered += (s, e) =>
             {
                 border.Background = new SolidColorBrush(hoverColor);
@@ -370,6 +399,19 @@ namespace NudgeTray
             {
                 border.Background = new SolidColorBrush(baseColor);
                 border.RenderTransform = new ScaleTransform(1.0, 1.0);
+            };
+
+            // Pressed state
+            border.PointerPressed += (s, e) =>
+            {
+                border.Background = new SolidColorBrush(pressedColor);
+                border.RenderTransform = new ScaleTransform(0.98, 0.98);
+            };
+
+            border.PointerReleased += (s, e) =>
+            {
+                border.Background = new SolidColorBrush(hoverColor);
+                border.RenderTransform = new ScaleTransform(1.02, 1.02);
             };
 
             button.Click += (s, e) => onClick();
@@ -623,15 +665,15 @@ namespace NudgeTray
 
                     if (_remainingSeconds <= 3)
                     {
-                        _progressArc.Stroke = new SolidColorBrush(Color.FromArgb(210, 255, 80, 80)); // Urgent red
+                        _progressArc.Stroke = new SolidColorBrush(UrgentRed);
                     }
                     else if (_remainingSeconds <= 5)
                     {
-                        _progressArc.Stroke = new SolidColorBrush(Color.FromArgb(170, 255, 150, 80)); // Warm amber
+                        _progressArc.Stroke = new SolidColorBrush(WarmAmber);
                     }
                     else
                     {
-                        _progressArc.Stroke = new SolidColorBrush(Color.FromArgb(160, 150, 150, 165)); // Calm neutral
+                        _progressArc.Stroke = new SolidColorBrush(CalmNeutral);
                     }
                 }
 
@@ -642,15 +684,15 @@ namespace NudgeTray
 
                     if (_remainingSeconds <= 3)
                     {
-                        _countdownText.Foreground = new SolidColorBrush(Color.FromArgb(210, 255, 80, 80));
+                        _countdownText.Foreground = new SolidColorBrush(UrgentRed);
                     }
                     else if (_remainingSeconds <= 5)
                     {
-                        _countdownText.Foreground = new SolidColorBrush(Color.FromArgb(170, 255, 150, 80));
+                        _countdownText.Foreground = new SolidColorBrush(WarmAmber);
                     }
                     else
                     {
-                        _countdownText.Foreground = new SolidColorBrush(Color.FromArgb(170, 150, 150, 165));
+                        _countdownText.Foreground = new SolidColorBrush(TimerText);
                     }
                 }
 
@@ -745,18 +787,17 @@ namespace NudgeTray
             if (active)
             {
                 // Focused: drop shadow + subtle blue glow on the card border — signals keyboard is active
-                _mainBorder.BorderBrush = new SolidColorBrush(Color.FromArgb(70, 88, 166, 255));
+                _mainBorder.BorderBrush = new SolidColorBrush(ActiveGlow);
                 _mainBorder.BoxShadow = new BoxShadows(
-                    new BoxShadow { Blur = 12, Spread = -2, OffsetX = 0, OffsetY = 4, Color = Color.FromArgb(50, 0, 0, 0) },
-                    new[] { new BoxShadow { Blur = 10, Spread = 0, OffsetX = 0, OffsetY = 0, Color = Color.FromArgb(45, 88, 166, 255) } }
+                    new BoxShadow { Blur = 12, Spread = -2, OffsetX = 0, OffsetY = 4, Color = ShadowColor },
+                    new[] { new BoxShadow { Blur = 10, Spread = 0, OffsetX = 0, OffsetY = 0, Color = GlowColor } }
                 );
             }
             else
             {
-                // Unfocused: restore default border and drop shadow only
-                _mainBorder.BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255));
+                _mainBorder.BorderBrush = new SolidColorBrush(InactiveBorder);
                 _mainBorder.BoxShadow = new BoxShadows(
-                    new BoxShadow { Blur = 12, Spread = -2, OffsetX = 0, OffsetY = 4, Color = Color.FromArgb(50, 0, 0, 0) }
+                    new BoxShadow { Blur = 12, Spread = -2, OffsetX = 0, OffsetY = 4, Color = ShadowColor }
                 );
             }
         }

@@ -61,16 +61,7 @@ namespace NudgeTray
         // Model lives in user data dir so it survives binary updates
         static readonly string _modelDirPath = Path.Combine(PlatformConfig.DataDirectory, "model");
 
-        // Locate the venv Python: check next to binary first (release), then 3 levels up (dev).
-        static string FindPython()
-        {
-            var local = Path.Combine(_baseDir, "venv", "bin", "python");
-            if (File.Exists(local)) return local;
-            var srcDir = Path.GetFullPath(Path.Combine(_baseDir, "..", "..", ".."));
-            var dev    = Path.Combine(srcDir, "venv", "bin", "python");
-            if (File.Exists(dev)) return dev;
-            return PlatformConfig.PythonCommand;
-        }
+        static string FindPython() => PlatformConfig.FindPython(_baseDir);
 
         // Locate a Python script: check next to binary first, then 3 levels up (dev).
         static string FindScript(string name)
@@ -93,15 +84,25 @@ namespace NudgeTray
         static SettingsWindow? _settingsWindow;
         static NativeMenuItem? _statusItem;
         static NativeMenuItem? _updateItem;
+        internal static bool _useNativeTray;
 
 #if WINDOWS
         [DllImport("kernel32.dll")]
-        static extern bool AttachConsole(int dwProcessId);
+        internal static extern bool AttachConsole(int dwProcessId);
 
         [DllImport("user32.dll")]
-        static extern bool SetForegroundWindow(IntPtr hWnd);
+        internal static extern bool SetForegroundWindow(IntPtr hWnd);
 
-        const int ATTACH_PARENT_PROCESS = -1;
+        [DllImport("user32.dll")]
+        internal static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+        [DllImport("user32.dll")]
+        internal static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
+        internal const int GWL_EXSTYLE = -20;
+        internal const int WS_EX_APPWINDOW = 0x00040000;
+        internal const int WS_EX_TOOLWINDOW = 0x00000080;
+        internal const int ATTACH_PARENT_PROCESS = -1;
 #endif
 
         [STAThread]
@@ -522,6 +523,16 @@ namespace NudgeTray
 
         static void CreateTrayIcon()
         {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                // On Windows, use native Win32 tray icon instead of Avalonia's buggy one
+                // (Avalonia's TrayIcon shows right-click menu at wrong position as a white box).
+                // NativeTray is initialized when the hidden window HWND becomes available.
+                _useNativeTray = true;
+                Console.WriteLine("[INFO] Will create native Win32 tray icon when window opens");
+                return;
+            }
+
             try
             {
 
@@ -533,7 +544,6 @@ namespace NudgeTray
                     Menu = CreateAvaloniaMenu()
                 };
 
-                // Add left-click handler for analytics window
                 _trayIcon.Clicked += OnTrayIconClicked;
 
                 // Register the tray icon with the Application
@@ -559,6 +569,59 @@ namespace NudgeTray
                 // Don't throw - allow app to continue without tray icon
                 Console.WriteLine("[WARN] Continuing without tray icon - notifications will still work");
             }
+        }
+
+        internal static void InitializeNativeTray()
+        {
+#if WINDOWS
+            if (!NativeTray.Initialize())
+            {
+                Console.WriteLine("[ERROR] Failed to initialize native tray icon");
+                return;
+            }
+
+            Console.WriteLine("[INFO] ✓ Native Win32 tray icon created");
+            Console.WriteLine("[INFO]   • Left-click: Open Analytics Dashboard");
+            Console.WriteLine("[INFO]   • Right-click: Native context menu");
+
+            NativeTray.LeftClicked += () => OnTrayIconClicked(null, EventArgs.Empty);
+            NativeTray.AnalyticsClicked += () =>
+            {
+                try { OnTrayIconClicked(null, EventArgs.Empty); }
+                catch (Exception ex) { Console.WriteLine($"[ERROR] Analytics handler failed: {ex.Message}"); }
+            };
+            NativeTray.SettingsClicked += () =>
+            {
+                try { ShowSettingsWindow(); }
+                catch (Exception ex) { Console.WriteLine($"[ERROR] Settings handler failed: {ex.Message}"); }
+            };
+            NativeTray.FeedbackClicked += () =>
+            {
+                try
+                {
+                    Process.Start(new ProcessStartInfo(
+                        "https://github.com/sguergachi/Nudge/issues/new") { UseShellExecute = true });
+                }
+                catch (Exception ex) { Console.WriteLine($"[ERROR] Could not open feedback URL: {ex.Message}"); }
+            };
+            NativeTray.UpdatesClicked += () =>
+            {
+                try
+                {
+                    Process.Start(new ProcessStartInfo(
+                        "https://github.com/sguergachi/Nudge/releases/latest") { UseShellExecute = true });
+                }
+                catch (Exception ex) { Console.WriteLine($"[ERROR] Could not open releases URL: {ex.Message}"); }
+            };
+            NativeTray.QuitClicked += () =>
+            {
+                try { HandleQuitClicked(); }
+                catch (Exception ex) { Console.WriteLine($"[ERROR] Quit handler failed: {ex.Message}"); }
+            };
+
+            // Initial status text
+            NativeTray.SetStatusText(GetMenuStatusText());
+#endif
         }
 
 #if WINDOWS
@@ -638,6 +701,10 @@ namespace NudgeTray
                 {
                     if (_statusItem != null)
                         _statusItem.Header = GetMenuStatusText();
+#if WINDOWS
+                    if (NativeTray.IsInitialized)
+                        NativeTray.SetStatusText(GetMenuStatusText());
+#endif
                 };
                 countdownTimer.Start();
 
@@ -842,6 +909,10 @@ namespace NudgeTray
                     {
                         if (_updateItem != null)
                             _updateItem.Header = $"Update available: {tag} ↗";
+#if WINDOWS
+                        if (NativeTray.IsInitialized)
+                            NativeTray.SetUpdateText($"Update available: {tag} ↗");
+#endif
                     });
                 }
             }
@@ -984,13 +1055,12 @@ namespace NudgeTray
                     return false;
                 }
 
-                // Try to install with --break-system-packages for system Python
                 var installProcess = new Process
                 {
                     StartInfo = new ProcessStartInfo
                     {
-                        FileName = "/home/sammy/Dev/Nudge/NudgeCrossPlatform/venv/bin/python",
-                        Arguments = $"-m pip install --break-system-packages -r \"{selectedRequirementsPath}\"",
+                        FileName = FindPython(),
+                        Arguments = PlatformConfig.PipInstallArgs(selectedRequirementsPath),
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
                         UseShellExecute = false,
@@ -1039,7 +1109,7 @@ namespace NudgeTray
                                 StartInfo = new ProcessStartInfo
                                 {
                                     FileName = FindPython(),
-                                    Arguments = $"-m pip install --break-system-packages -r \"{minimalPath}\"",
+                                    Arguments = PlatformConfig.PipInstallArgs(minimalPath),
                                     RedirectStandardOutput = true,
                                     RedirectStandardError = true,
                                     UseShellExecute = false,
@@ -1078,7 +1148,8 @@ namespace NudgeTray
 
                     Console.WriteLine("  ✗ Failed to install Python dependencies");
                     Console.WriteLine("  Please try installing manually:");
-                    Console.WriteLine($"    python -m pip install --break-system-packages -r \"{selectedRequirementsPath}\"");
+                    string pipFlag = OperatingSystem.IsWindows() ? "--user" : "--break-system-packages";
+                    Console.WriteLine($"    python -m pip install {pipFlag} -r \"{selectedRequirementsPath}\"");
                     return false;
                 }
             }
@@ -1170,7 +1241,7 @@ namespace NudgeTray
                 {
                     StartInfo = new ProcessStartInfo
                     {
-                        FileName = "/home/sammy/Dev/Nudge/NudgeCrossPlatform/venv/bin/python",
+                        FileName = FindPython(),
                         Arguments = trainerArgs,
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
@@ -1848,6 +1919,10 @@ namespace NudgeTray
                 _trayIcon.IsVisible = false;
                 _trayIcon.Dispose();
             }
+#if WINDOWS
+            if (NativeTray.IsInitialized)
+                NativeTray.RemoveIcon();
+#endif
 
             Console.WriteLine("✓ Shutdown complete");
             Console.WriteLine("[INFO] Exiting nudge-tray...");
@@ -1921,35 +1996,48 @@ namespace NudgeTray
 
             if (_statusItem != null)
                 _statusItem.Header = GetMenuStatusText();
+#if WINDOWS
+            if (NativeTray.IsInitialized)
+                NativeTray.SetStatusText(GetMenuStatusText());
+#endif
         }
 
-        public static void RestartWithML()
+        public static bool RestartWithML()
         {
-            Console.WriteLine("[INFO] Restarting with ML enabled...");
-
-            // Enable ML and persist the choice immediately
-            _mlEnabled = true;
-            SaveSettings();
-
-            // Clean up existing processes
-            CleanupOldProcesses();
-
-            // Start ML services
-            StartMLServices();
-
-            // Restart nudge process with ML flag
-            if (_nudgeProcess != null && !_nudgeProcess.HasExited)
+            try
             {
-                try
-                {
-                    _nudgeProcess.Kill(entireProcessTree: true);
-                    _nudgeProcess.WaitForExit(2000);
-                }
-                catch { }
-            }
+                Console.WriteLine("[INFO] Restarting with ML enabled...");
 
-            StartNudge(_intervalMinutes);
-            Console.WriteLine("[INFO] ML mode enabled and nudge restarted");
+                // Enable ML and persist the choice immediately
+                _mlEnabled = true;
+                SaveSettings();
+
+                // Clean up existing processes
+                CleanupOldProcesses();
+
+                // Start ML services
+                StartMLServices();
+
+                // Restart nudge process with ML flag
+                if (_nudgeProcess != null && !_nudgeProcess.HasExited)
+                {
+                    try
+                    {
+                        _nudgeProcess.Kill(entireProcessTree: true);
+                        _nudgeProcess.WaitForExit(2000);
+                    }
+                    catch { }
+                }
+
+                StartNudge(_intervalMinutes);
+                Console.WriteLine("[INFO] ML mode enabled and nudge restarted");
+                return _mlEnabled;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] Failed to enable ML: {ex.Message}");
+                return false;
+            }
         }
 
         internal static string CurrentVersion => VERSION;
@@ -1980,7 +2068,7 @@ namespace NudgeTray
 
         // Cache for trainer_meta.json to avoid re-reading on every refresh
         private static DateTime _lastMetaWrite;
-        private static DateTime _cachedTrained = DateTime.MinValue;
+        private static DateTime _cachedTrained;
         private static int _cachedTrainedCount;
         private static float _cachedAccuracy = -1f;
         private static int _cachedModelVersion;
@@ -1994,8 +2082,8 @@ namespace NudgeTray
         public static float PreviousAccuracy = -1f;
         public static string Architecture = "";
         public static string LastError    = "";
-        public static DateTime LastChecked = DateTime.MinValue;
-        public static DateTime LastTrained = DateTime.MinValue;
+        public static DateTime LastChecked;
+        public static DateTime LastTrained;
         public static float TrainingProgress = -1f;
 
         public static void ParseLine(string raw)
@@ -2324,7 +2412,7 @@ namespace NudgeTray
                 // - Windows: provides the HWND that receives tray icon callback messages
                 //   (WM_CONTEXTMENU for right-click, WM_APP for notifications).
                 //   Without it, right-click menu won't appear.
-                desktop.MainWindow = new Window
+                var mainWindow = new Window
                 {
                     IsVisible = false,
                     ShowInTaskbar = false,
@@ -2335,6 +2423,37 @@ namespace NudgeTray
                     Topmost = false,
                     WindowDecorations = Avalonia.Controls.WindowDecorations.None
                 };
+
+#if WINDOWS
+                // Hide from Alt+Tab by overriding the extended window style.
+                // ShowInTaskbar=false removes WS_EX_APPWINDOW but doesn't prevent
+                // Alt+Tab appearance on all Windows versions. WS_EX_TOOLWINDOW
+                // explicitly excludes the window from the task switcher.
+                mainWindow.Opened += (_, _) =>
+                {
+                    try
+                    {
+                        var h = mainWindow.TryGetPlatformHandle()?.Handle;
+                        if (h.HasValue && h.Value != 0)
+                        {
+                            var hwnd = h.Value;
+                            var exStyle = Program.GetWindowLong(hwnd, Program.GWL_EXSTYLE);
+                            exStyle &= ~Program.WS_EX_APPWINDOW;
+                            exStyle |= Program.WS_EX_TOOLWINDOW;
+                            _ = Program.SetWindowLong(hwnd, Program.GWL_EXSTYLE, exStyle);
+                        }
+                    }
+                    catch { }
+
+                    // Initialize native Win32 tray icon (replaces Avalonia's broken one)
+                    if (Program._useNativeTray)
+                    {
+                        Program.InitializeNativeTray();
+                    }
+                };
+#endif
+
+                desktop.MainWindow = mainWindow;
             }
 
             base.OnFrameworkInitializationCompleted();

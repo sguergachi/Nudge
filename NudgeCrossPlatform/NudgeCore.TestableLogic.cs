@@ -196,8 +196,8 @@ internal sealed class ActivityFeatureTracker
     private readonly Queue<ActivitySample> _samples = new();
     private string _lastFocusKey = "";
     private string _lastTitle = "";
-    private DateTime _focusedSince = DateTime.MinValue;
-    private DateTime _titleSince = DateTime.MinValue;
+        private DateTime _focusedSince;
+        private DateTime _titleSince;
 
     public ActivityTickResult Capture(DateTime now, WindowObservation window, IdleObservation idle)
     {
@@ -668,6 +668,33 @@ internal static class PlatformConfig
     public static string WhichCommand => IsWindows ? "where" : "which";
 
     public static string PythonCommand => IsWindows ? "python" : "python3";
+
+    /// <summary>Returns platform-appropriate pip install arguments for a requirements file.</summary>
+    public static string PipInstallArgs(string requirementsPath)
+    {
+        string extra = IsWindows ? "--user" : "--break-system-packages";
+        return $"-m pip install {extra} -r \"{requirementsPath}\"";
+    }
+
+    /// <summary>Find a working Python: check local venv, dev venv, then system Python.</summary>
+    public static string FindPython(string baseDir)
+    {
+        if (IsWindows)
+        {
+            var local = Path.Combine(baseDir, "venv", "Scripts", "python.exe");
+            if (File.Exists(local)) return local;
+            var srcDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", ".."));
+            var dev = Path.Combine(srcDir, "venv", "Scripts", "python.exe");
+            if (File.Exists(dev)) return dev;
+            return "py";
+        }
+        var localNix = Path.Combine(baseDir, "venv", "bin", "python");
+        if (File.Exists(localNix)) return localNix;
+        var srcDirNix = Path.GetFullPath(Path.Combine(baseDir, "..", "..", ".."));
+        var devNix = Path.Combine(srcDirNix, "venv", "bin", "python");
+        if (File.Exists(devNix)) return devNix;
+        return PythonCommand;
+    }
 
     public static string DotnetCommand => IsWindows ? "dotnet.exe" : "dotnet";
 

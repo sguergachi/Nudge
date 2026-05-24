@@ -4,7 +4,7 @@ using Xunit;
 
 namespace NudgeCrossPlatform.Tests;
 
-public class NudgeWindowsPlatformTests
+public sealed class NudgeWindowsPlatformTests
 {
     // ── Win32 surface under test ──────────────────────────────────────────────
 
@@ -54,9 +54,10 @@ public class NudgeWindowsPlatformTests
         if (!OperatingSystem.IsWindows()) return;
 
         var hwnd = GetForegroundWindow();
-        GetWindowThreadProcessId(hwnd, out uint pid);
+        uint threadId = GetWindowThreadProcessId(hwnd, out uint pid);
 
         Assert.True(pid > 0);
+        Assert.True(threadId > 0);
     }
 
     [Fact]

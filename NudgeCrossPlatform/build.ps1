@@ -318,15 +318,18 @@ Invoke-Dotnet @("restore", "nudge-tray.csproj", "--nologo")
 Invoke-Dotnet @("restore", "NudgeCrossPlatform.Tests/NudgeCrossPlatform.Tests.csproj", "--nologo")
 
 Write-Host "  Building projects in parallel..." -ForegroundColor DarkGray
-$buildJobs = @()
-$buildJobs += Start-Job -ArgumentList $PSScriptRoot { param($d) Set-Location $d; dotnet build nudge.csproj -c Release -f "net10.0" --no-restore --nologo -m -v quiet }
-$buildJobs += Start-Job -ArgumentList $PSScriptRoot { param($d) Set-Location $d; dotnet build nudge-notify.csproj -c Release -f "net10.0" --no-restore --nologo -m -v quiet }
-$buildJobs += Start-Job -ArgumentList $PSScriptRoot { param($d) Set-Location $d; dotnet build nudge-tray.csproj -c Release -f "net10.0-windows10.0.17763.0" --no-restore --nologo -m -v quiet }
-Wait-Job $buildJobs | Out-Null
-$failedJobs = $buildJobs | Where-Object { $_.State -ne 'Completed' -or $_.ChildJobs[0].JobStateInfo.State -eq 'Failed' }
-$jobOutput = Receive-Job $buildJobs 2>&1
-Remove-Job $buildJobs
-if ($failedJobs) { Write-Err "[ERROR] Build jobs failed:"; $jobOutput | ForEach-Object { Write-Host $_ }; exit 1 }
+$buildProcs = @(
+    (Start-Process -FilePath "dotnet" -ArgumentList @("build", "nudge.csproj", "-c", "Release", "-f", "net10.0", "--no-restore", "--nologo", "-m", "-v", "quiet") -NoNewWindow -PassThru),
+    (Start-Process -FilePath "dotnet" -ArgumentList @("build", "nudge-notify.csproj", "-c", "Release", "-f", "net10.0", "--no-restore", "--nologo", "-m", "-v", "quiet") -NoNewWindow -PassThru),
+    (Start-Process -FilePath "dotnet" -ArgumentList @("build", "nudge-tray.csproj", "-c", "Release", "-f", "net10.0-windows10.0.17763.0", "--no-restore", "--nologo", "-m", "-v", "quiet") -NoNewWindow -PassThru)
+)
+$buildProcs | Wait-Process
+$failedProcs = $buildProcs | Where-Object { $_.ExitCode -ne 0 }
+if ($failedProcs) {
+    Write-Err "[ERROR] Build failed:"
+    $failedProcs | ForEach-Object { Write-Host "  $($_.StartInfo.FileName) $($_.StartInfo.Arguments) exited with code $($_.ExitCode)" -ForegroundColor Red }
+    exit 1
+}
 Write-Success "  [OK] Build completed"
 
 if (-not $SkipTests) {

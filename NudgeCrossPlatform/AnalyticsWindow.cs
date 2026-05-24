@@ -25,12 +25,13 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading.Tasks;
 
 using NudgeCore;
 
 namespace NudgeTray
 {
-    public class AnalyticsWindow : Window
+    public sealed class AnalyticsWindow : Window
     {
         private enum DetailViewType
         {
@@ -61,6 +62,7 @@ namespace NudgeTray
         private bool _aiTabActive;
         private Border? _aiLiveTab;
         private DispatcherTimer? _aiLiveRefreshTimer;
+        private int _lastAiEventCount;
 
         // Pin (always-on-top) state
         private bool _isPinned;
@@ -69,11 +71,6 @@ namespace NudgeTray
         // AI Brain tab collapse state — survives refreshes
         private static bool _sensorSignalsOpen;
         private static bool _trainingDetailsOpen;
-
-        // AI Brain persistent panel — keeps animated timers alive across 10s refreshes
-        private StackPanel? _aiBrainPanel;
-        private bool _aiBrainNeedsRebuild;
-        private bool _lastAIBrainIsTraining;
 
         // Fluent Design System Colors - matching CustomNotification
         private static readonly Color BackgroundColor = Color.FromRgb(18, 18, 20);
@@ -90,9 +87,31 @@ namespace NudgeTray
         private static readonly Color UnproductiveRed = Color.FromRgb(244, 67, 54);
 
         // AI Status Colors
-        private static readonly Color AIStatusActive = Color.FromRgb(76, 175, 80);  // Green
-        private static readonly Color AIStatusLearning = Color.FromRgb(255, 193, 7);  // Amber
-        private static readonly Color AIStatusInactive = Color.FromRgb(150, 150, 160);  // Gray
+        private static readonly Color AIStatusActive = Color.FromRgb(76, 175, 80);
+        private static readonly Color AIStatusLearning = Color.FromRgb(255, 193, 7);
+        private static readonly Color AIStatusInactive = Color.FromRgb(150, 150, 160);
+
+        // ── String constants (DRY) ───────────────────────────────────────────
+        private const string StrWaitingFirstCheck = "Waiting for first check…";
+        private const string StrWaitingFirstAICheck = "Waiting for first AI check…";
+        private const string StrCheckingNow = "Checking now…";
+        private const string StrEnableAI = "Enable AI";
+        private const string StrActive = "Active";
+        private const string StrDetails = "Details";
+        private const string StrNotificationsActive = "Notifications are active. Click to pause.";
+        private const string StrSensorSignalsOpen = "▾ Sensor Signals";
+        private const string StrSensorSignalsClosed = "▸ Sensor Signals";
+        private const string StrChevronOpen = "▾";
+        private const string StrChevronClosed = "▸";
+        private const string StrPinIcon = "⊙";
+        private const string StrProductive = "productive";
+        private const string StrNotProductive = "not productive";
+        private const string StrNudgedAction = "nudged";
+        private const string StrSkippedAction = "skipped";
+        private const string StrTabToday = "Today";
+        private const string StrTabThisWeek = "This Week";
+        private const string StrTabThisMonth = "This Month";
+        private const string StrTabAllTime = "All Time";
 
         public enum TimeFilter
         {
@@ -132,29 +151,38 @@ namespace NudgeTray
             // Live AI Brain tab refresh — only runs when AI tab is active
             _aiLiveRefreshTimer = new DispatcherTimer
             {
-                Interval = TimeSpan.FromSeconds(2)
+                Interval = TimeSpan.FromSeconds(5)
             };
             _aiLiveRefreshTimer.Tick += (s, e) =>
             {
-                if (_aiTabActive) RefreshContent();
+                if (_aiTabActive)
+                {
+                    int eventCount = LiveAIState.GetRecent().Count;
+                    if (eventCount != _lastAiEventCount)
+                    {
+                        _lastAiEventCount = eventCount;
+                        RefreshContent();
+                    }
+                }
             };
 
-    // Position near bottom-right (typical tray icon location)
-    var screen = Screens.Primary;
-    if (screen != null)
-    {
-        var workingArea = screen.WorkingArea;
-        var scale = RenderScaling;
-        Position = new PixelPoint(
-            workingArea.Right - (int)(420 * scale + 20 * scale),
-            workingArea.Bottom - (int)(640 * scale + 20 * scale)
-        );
-    }
-    else
-    {
-        WindowStartupLocation = WindowStartupLocation.Manual;
-        Position = new PixelPoint(100, 100);
-    }
+        }
+
+        protected override void OnOpened(EventArgs e)
+        {
+            base.OnOpened(e);
+            PositionNearBottomRight();
+        }
+
+        private void PositionNearBottomRight()
+        {
+            var screen = Screens.Primary;
+            if (screen == null) return;
+            double scale = RenderScaling;
+            Position = new PixelPoint(
+                screen.WorkingArea.Right - (int)(Width * scale + 20 * scale),
+                screen.WorkingArea.Bottom - (int)(Height * scale + 20 * scale)
+            );
         }
 
         protected override void OnClosed(EventArgs e)
@@ -328,10 +356,10 @@ namespace NudgeTray
             };
 
             // Left: time-filter tabs
-            _todayTab = CreateTab("Today", true);
-            _weekTab = CreateTab("This Week", false);
-            _monthTab = CreateTab("This Month", false);
-            _allTimeTab = CreateTab("All Time", false);
+            _todayTab = CreateTab(StrTabToday, true);
+            _weekTab = CreateTab(StrTabThisWeek, false);
+            _monthTab = CreateTab(StrTabThisMonth, false);
+            _allTimeTab = CreateTab(StrTabAllTime, false);
 
             var leftTabs = new StackPanel
             {
@@ -411,10 +439,10 @@ namespace NudgeTray
 
                 TimeFilter newFilter = label switch
                 {
-                    "Today" => TimeFilter.Today,
-                    "This Week" => TimeFilter.ThisWeek,
-                    "This Month" => TimeFilter.ThisMonth,
-                    "All Time" => TimeFilter.AllTime,
+                    StrTabToday => TimeFilter.Today,
+                    StrTabThisWeek => TimeFilter.ThisWeek,
+                    StrTabThisMonth => TimeFilter.ThisMonth,
+                    StrTabAllTime => TimeFilter.AllTime,
                     _ => TimeFilter.Today
                 };
 
@@ -430,6 +458,15 @@ namespace NudgeTray
             };
 
             border.Child = button;
+
+            ToolTip.SetTip(border, label switch
+            {
+                StrTabToday => "Show today's activity",
+                StrTabThisWeek => "Show this week's activity",
+                StrTabThisMonth => "Show this month's activity",
+                StrTabAllTime => "Show all activity since Nudge started",
+                _ => label
+            });
 
             // Hover effect for inactive tabs
             if (!isActive)
@@ -521,12 +558,13 @@ namespace NudgeTray
                 }
             };
 
+            ToolTip.SetTip(border, "Live AI predictions, confidence scores, and ML training status");
+
             button.Click += (s, e) =>
             {
                 _aiTabActive = true;
                 _activeDetailView = DetailViewType.None;
                 _contentScrollOffset = 0;
-                _aiBrainNeedsRebuild = true;
                 UpdateTabStyles();
                 RefreshContent();
                 _aiLiveRefreshTimer?.Start();
@@ -548,7 +586,7 @@ namespace NudgeTray
         }
 
         /// <summary>Builds the entire AI Brain tab content panel.</summary>
-        private StackPanel CreateAILiveView()
+        private static StackPanel CreateAILiveView()
         {
             var panel = new StackPanel { Spacing = 10 };
 
@@ -666,7 +704,8 @@ namespace NudgeTray
                     FontWeight = FontWeight.Medium,
                     Cursor = new Cursor(StandardCursorType.Hand),
                     CornerRadius = new CornerRadius(5),
-                    IsEnabled = !isTraining
+                    IsEnabled = !isTraining,
+                    Opacity = isTraining ? 0.5 : 1.0
                 };
                 ToolTip.SetTip(trainNowBtn, "Force an immediate training run using current data");
                 trainNowBtn.Click += (s, e) => Program.TriggerTrainingNow();
@@ -741,14 +780,23 @@ namespace NudgeTray
                         Margin = new Thickness(0, 2, 0, 0),
                         ClipToBounds = true
                     };
-                    var fill = new Border
+                    var fillGrid = new Grid();
+                    if (trainingProgress >= 0.995)
+                    {
+                        fillGrid.ColumnDefinitions = new ColumnDefinitions("*");
+                    }
+                    else
+                    {
+                        double rem = 1.0 - trainingProgress;
+                        fillGrid.ColumnDefinitions = new ColumnDefinitions($"{trainingProgress * 100:F1}*,{rem * 100:F1}*");
+                    }
+                    fillGrid.Children.Add(new Border
                     {
                         Background = new SolidColorBrush(PrimaryBlue),
-                        CornerRadius = new CornerRadius(2),
-                        HorizontalAlignment = HorizontalAlignment.Left,
-                        Width = trainingProgress * 400
-                    };
-                    barBg.Child = fill;
+                        CornerRadius = new CornerRadius(2, 0, 0, 2),
+                        HorizontalAlignment = HorizontalAlignment.Stretch
+                    });
+                    barBg.Child = fillGrid;
                     panel.Children.Add(barBg);
                 }
                 else
@@ -889,7 +937,7 @@ namespace NudgeTray
                 // Toggle row: "▸ Details" / "▾ Details"
                 var chevron = new TextBlock
                 {
-                    Text = _trainingDetailsOpen ? "▾" : "▸",
+                    Text = _trainingDetailsOpen ? StrChevronOpen : StrChevronClosed,
                     FontSize = 9,
                     Foreground = new SolidColorBrush(TextTertiary),
                     VerticalAlignment = VerticalAlignment.Center,
@@ -905,7 +953,7 @@ namespace NudgeTray
                 toggleRow.Children.Add(chevron);
                 toggleRow.Children.Add(new TextBlock
                 {
-                    Text = "Details",
+                    Text = StrDetails,
                     FontSize = 9,
                     Foreground = new SolidColorBrush(TextTertiary),
                     VerticalAlignment = VerticalAlignment.Center
@@ -915,7 +963,7 @@ namespace NudgeTray
                 {
                     _trainingDetailsOpen = !detailPanel.IsVisible;
                     detailPanel.IsVisible = _trainingDetailsOpen;
-                    chevron.Text = _trainingDetailsOpen ? "▾" : "▸";
+                    chevron.Text = _trainingDetailsOpen ? StrChevronOpen : StrChevronClosed;
                 };
                 toggleRow.PointerEntered += (s, e) =>
                 {
@@ -948,7 +996,7 @@ namespace NudgeTray
                 };
                 waitPanel.Children.Add(new TextBlock
                 {
-                    Text = "Waiting for first check...",
+                    Text = StrWaitingFirstCheck,
                     FontSize = 12,
                     Foreground = new SolidColorBrush(TextSecondary),
                     HorizontalAlignment = HorizontalAlignment.Center
@@ -967,7 +1015,7 @@ namespace NudgeTray
             double score = latest.Score;
             // Amber for low-confidence predictions, green/red for high-confidence
             Color stateColor = latest.Confidence < 0.5
-                ? Color.FromRgb(255, 193, 7)
+                ? AIStatusLearning
                 : (productive ? ProductiveGreen : UnproductiveRed);
 
             var stack = new StackPanel { Spacing = 8 };
@@ -1086,7 +1134,7 @@ namespace NudgeTray
             {
                 canvas.Children.Add(new TextBlock
                 {
-                    Text = "Waiting for first AI check...",
+                    Text = StrWaitingFirstAICheck,
                     FontSize = 10,
                     Foreground = new SolidColorBrush(TextTertiary)
                 });
@@ -1143,7 +1191,7 @@ namespace NudgeTray
                 double r = isLatest ? dotR + 1.5 : dotR;
 
                 Color dotColor = evt.Confidence < 0.5
-                    ? Color.FromRgb(255, 193, 7)          // amber = uncertain
+                    ? AIStatusLearning          // amber = uncertain
                     : (evt.Productive ? ProductiveGreen : UnproductiveRed);
 
                 // Glow ring for the latest dot
@@ -1195,7 +1243,7 @@ namespace NudgeTray
 
             Color fusionColor = harvest == null         ? TextTertiary
                 : effectiveQuality == "trusted"         ? ProductiveGreen
-                : effectiveQuality == "usable"          ? Color.FromRgb(255, 193, 7)
+                : effectiveQuality == "usable"          ? AIStatusLearning
                                                         : UnproductiveRed;
 
             string qualityLabel = harvest == null            ? "Initializing"
@@ -1305,7 +1353,7 @@ namespace NudgeTray
                     if (harvest.Apps300 > 1)
                         AddFusionRow(signalPanel, "Distinct Apps", $"{harvest.Apps300} apps seen", TextSecondary);
                     if (harvest.Fullscreen == 1)
-                        AddFusionRow(signalPanel, "Fullscreen", "Yes", Color.FromRgb(255, 193, 7));
+                        AddFusionRow(signalPanel, "Fullscreen", "Yes", AIStatusLearning);
                 }
             }
             else
@@ -1321,7 +1369,7 @@ namespace NudgeTray
             // Toggle button for the collapse
             var toggleText = new TextBlock
             {
-                Text       = _sensorSignalsOpen ? "▾ Sensor Signals" : "▸ Sensor Signals",
+                Text       = _sensorSignalsOpen ? StrSensorSignalsOpen : StrSensorSignalsClosed,
                 FontSize   = 10,
                 Foreground = new SolidColorBrush(Color.FromArgb(140, 100, 180, 255)),
                 Cursor     = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
@@ -1337,7 +1385,7 @@ namespace NudgeTray
                 bool nowVisible = !signalPanel.IsVisible;
                 _sensorSignalsOpen = nowVisible;
                 signalPanel.IsVisible = nowVisible;
-                toggleText.Text = nowVisible ? "▾ Sensor Signals" : "▸ Sensor Signals";
+                toggleText.Text = nowVisible ? StrSensorSignalsOpen : StrSensorSignalsClosed;
             };
 
             var outerStack = new StackPanel { Spacing = 0 };
@@ -1446,7 +1494,7 @@ namespace NudgeTray
             "Development"     => (Color.FromArgb(40,  180, 140, 255), Color.FromRgb(180, 140, 255), Color.FromArgb(80, 180, 140, 255)),
             "Creative & Design" => (Color.FromArgb(40, 0, 188, 212),  Color.FromRgb(0, 188, 212),   Color.FromArgb(80, 0, 188, 212)),
             "Office & Writing"  => (Color.FromArgb(40, 76, 175, 80),  Color.FromRgb(76, 175, 80),   Color.FromArgb(80, 76, 175, 80)),
-            "Communication"   => (Color.FromArgb(40,  255, 193, 7),   Color.FromRgb(255, 193, 7),   Color.FromArgb(80, 255, 193, 7)),
+            "Communication"   => (Color.FromArgb(40,  255, 193, 7),   AIStatusLearning,   Color.FromArgb(80, 255, 193, 7)),
             "Entertainment"   => (Color.FromArgb(40,  255, 82, 82),   Color.FromRgb(255, 82, 82),   Color.FromArgb(80, 255, 82, 82)),
             "Work"            => (Color.FromArgb(40,  76, 175, 80),   Color.FromRgb(76, 175, 80),   Color.FromArgb(80, 76, 175, 80)),
             "AFK"             => (Color.FromArgb(40,  150, 150, 160), Color.FromRgb(150, 150, 160), Color.FromArgb(80, 150, 150, 160)),
@@ -1579,7 +1627,7 @@ namespace NudgeTray
             const long totalInterval = 60;
 
             Color mlColor = latest == null ? TextTertiary
-                : latest.Confidence < 0.5 ? Color.FromRgb(255, 193, 7)
+                : latest.Confidence < 0.5 ? AIStatusLearning
                 : latest.Productive       ? ProductiveGreen
                                           : UnproductiveRed;
 
@@ -1597,10 +1645,10 @@ namespace NudgeTray
             });
             var cdLabel = new TextBlock
             {
-                Text = "Waiting for first check…",
+                Text = StrWaitingFirstCheck,
                 FontSize = 10,
                 Foreground = new SolidColorBrush(TextTertiary),
-                HorizontalAlignment = HorizontalAlignment.Right,
+                HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center
             };
             Grid.SetColumn(cdLabel, 1);
@@ -1669,9 +1717,12 @@ namespace NudgeTray
                 long nowSec = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                 long secLeft = nextAt > 0 ? Math.Max(0, nextAt - nowSec) : 0;
 
-                cdLabel.Text = nextAt == 0 ? "Waiting for first check…"
-                    : secLeft == 0 ? "Checking now…"
+                cdLabel.Text = nextAt == 0 ? StrWaitingFirstCheck
+                    : secLeft == 0 ? StrCheckingNow
                     : $"{secLeft / 60}:{secLeft % 60:D2} until next check";
+                cdLabel.HorizontalAlignment = nextAt == 0
+                    ? HorizontalAlignment.Left
+                    : HorizontalAlignment.Right;
             };
             updateCountdown();
 
@@ -1708,7 +1759,7 @@ namespace NudgeTray
                 });
                 scoreStack.Children.Add(new TextBlock
                 {
-                    Text = latest.Productive ? "productive" : "not productive",
+                    Text = latest.Productive ? StrProductive : StrNotProductive,
                     FontSize = 9,
                     FontWeight = FontWeight.Medium,
                     Foreground = new SolidColorBrush(mlColor),
@@ -1734,91 +1785,6 @@ namespace NudgeTray
         }
 
         /// <summary>Progress bar counting down to the next AI check.</summary>
-        private static Border CreateCountdownCard()
-        {
-            long nextCheckAt = LiveAIState.NextCheckAt;
-            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            const long totalInterval = 60;
-
-            long secondsLeft = nextCheckAt > 0 ? Math.Max(0, nextCheckAt - now) : 0;
-            long elapsed = totalInterval - secondsLeft;
-            double progress = nextCheckAt > 0
-                ? Math.Min(1.0, Math.Max(0.0, (double)elapsed / totalInterval))
-                : 0;
-
-            string countdownText = nextCheckAt == 0
-                ? "Waiting for first check..."
-                : secondsLeft == 0 ? "Checking now..."
-                : $"{secondsLeft / 60}:{secondsLeft % 60:D2} until next check";
-
-            var panel = new StackPanel { Spacing = 6 };
-
-            var labelRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-            labelRow.Children.Add(new TextBlock
-            {
-                Text = "Next AI Check",
-                FontSize = 11,
-                FontWeight = FontWeight.Medium,
-                Foreground = new SolidColorBrush(TextSecondary),
-                VerticalAlignment = VerticalAlignment.Center
-            });
-            var cdTb = new TextBlock
-            {
-                Text = countdownText,
-                FontSize = 10,
-                Foreground = new SolidColorBrush(TextTertiary),
-                HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            Grid.SetColumn(cdTb, 1);
-            labelRow.Children.Add(cdTb);
-            panel.Children.Add(labelRow);
-
-            var barBg = new Border
-            {
-                Height = 4,
-                CornerRadius = new CornerRadius(2),
-                Background = new SolidColorBrush(ProgressBarBg),
-                ClipToBounds = true
-            };
-            var barGrid = new Grid();
-            if (progress >= 0.995)
-            {
-                barGrid.ColumnDefinitions = new ColumnDefinitions("*");
-                barGrid.Children.Add(new Border
-                {
-                    Background = new SolidColorBrush(PrimaryBlue),
-                    CornerRadius = new CornerRadius(2),
-                    HorizontalAlignment = HorizontalAlignment.Stretch
-                });
-            }
-            else if (progress > 0.005)
-            {
-                double rem = 1.0 - progress;
-                barGrid.ColumnDefinitions = new ColumnDefinitions($"{progress * 100:F1}*,{rem * 100:F1}*");
-                var fill = new Border
-                {
-                    Background = new SolidColorBrush(PrimaryBlue),
-                    CornerRadius = new CornerRadius(2, 0, 0, 2),
-                    HorizontalAlignment = HorizontalAlignment.Stretch
-                };
-                Grid.SetColumn(fill, 0);
-                barGrid.Children.Add(fill);
-            }
-            barBg.Child = barGrid;
-            panel.Children.Add(barBg);
-
-            return new Border
-            {
-                Background = new SolidColorBrush(SurfaceColor),
-                CornerRadius = new CornerRadius(8),
-                Padding = new Thickness(14, 12),
-                BorderBrush = new SolidColorBrush(BorderColor),
-                BorderThickness = new Thickness(1),
-                Child = panel
-            };
-        }
-
         /// <summary>Full-width gradient area chart of prediction history.</summary>
         private static Canvas BuildGradientChart(IReadOnlyList<MLLiveEvent> events)
         {
@@ -1855,7 +1821,7 @@ namespace NudgeTray
             // Faint zone labels
             var prodLabel = new TextBlock
             {
-                Text = "productive",
+                Text = StrProductive,
                 FontSize = 8,
                 Foreground = new SolidColorBrush(Color.FromArgb(40, 76, 175, 80))
             };
@@ -1865,7 +1831,7 @@ namespace NudgeTray
 
             var notProdLabel = new TextBlock
             {
-                Text = "not productive",
+                Text = StrNotProductive,
                 FontSize = 8,
                 Foreground = new SolidColorBrush(Color.FromArgb(40, 244, 67, 54))
             };
@@ -1887,11 +1853,13 @@ namespace NudgeTray
             {
                 var tb = new TextBlock
                 {
-                    Text = "Waiting for first AI check...",
+                    Text = StrWaitingFirstAICheck,
                     FontSize = 10,
-                    Foreground = new SolidColorBrush(TextTertiary)
+                    Foreground = new SolidColorBrush(TextTertiary),
+                    Width = W,
+                    TextAlignment = TextAlignment.Center
                 };
-                Canvas.SetLeft(tb, W / 2 - 90);
+                Canvas.SetLeft(tb, 0);
                 Canvas.SetTop(tb, H / 2 - 7);
                 canvas.Children.Add(tb);
                 return canvas;
@@ -1912,7 +1880,7 @@ namespace NudgeTray
             {
                 var latestEv = pts[pts.Count - 1].ev;
                 Color fillColor = latestEv.Confidence < 0.5
-                    ? Color.FromRgb(255, 193, 7)
+                    ? AIStatusLearning
                     : (latestEv.Productive ? ProductiveGreen : UnproductiveRed);
 
                 var areaGeo = new StreamGeometry();
@@ -1968,7 +1936,7 @@ namespace NudgeTray
                 double r = isLatest ? dotR + 1.5 : dotR;
 
                 Color dotColor = ev.Confidence < 0.5
-                    ? Color.FromRgb(255, 193, 7)
+                    ? AIStatusLearning
                     : (ev.Productive ? ProductiveGreen : UnproductiveRed);
 
                 if (isLatest)
@@ -2115,9 +2083,9 @@ namespace NudgeTray
                     timeTb.Text = DateTimeOffset.FromUnixTimeSeconds(nev.T).LocalDateTime.ToString("t", CultureInfo.CurrentCulture);
                     appTb.Text = nev.App;
                     Color evColor = nev.Confidence < 0.5
-                        ? Color.FromRgb(255, 193, 7)
+                        ? AIStatusLearning
                         : (nev.Productive ? ProductiveGreen : UnproductiveRed);
-                    scoreTb.Text = $"{nev.Score * 100:F0}% · {(nev.Productive ? "productive" : "not productive")}";
+                    scoreTb.Text = $"{nev.Score * 100:F0}% · {(nev.Productive ? StrProductive : StrNotProductive)}";
                     scoreTb.Foreground = new SolidColorBrush(evColor);
 
                     // Position tooltip above the dot, centered horizontally
@@ -2148,19 +2116,19 @@ namespace NudgeTray
         private static Grid CreateTooltipContent(MLLiveEvent evt)
         {
             Color dotColor = evt.Confidence < 0.5
-                ? Color.FromRgb(255, 193, 7)
+                ? AIStatusLearning
                 : (evt.Productive ? ProductiveGreen : UnproductiveRed);
 
             string actionLabel;
             Color actionColor;
             if (evt.Triggered)
             {
-                actionLabel = "nudged";
+                actionLabel = StrNudgedAction;
                 actionColor = UnproductiveRed;
             }
             else
             {
-                actionLabel = "skipped";
+                actionLabel = StrSkippedAction;
                 actionColor = ProductiveGreen;
             }
 
@@ -2201,7 +2169,7 @@ namespace NudgeTray
 
             var scoreTb = new TextBlock
             {
-                Text = $"{evt.Score * 100:F0}% · {(evt.Productive ? "productive" : "not productive")}",
+                Text = $"{evt.Score * 100:F0}% · {(evt.Productive ? StrProductive : StrNotProductive)}",
                 FontSize = 11,
                 Foreground = new SolidColorBrush(dotColor)
             };
@@ -2285,7 +2253,7 @@ namespace NudgeTray
                     FontSize = 10,
                     FontWeight = FontWeight.Medium,
                     Foreground = new SolidColorBrush(
-                        evt.TriggerSource == "int" ? Color.FromRgb(255, 193, 7) : ProductiveGreen),
+                        evt.TriggerSource == "int" ? AIStatusLearning : ProductiveGreen),
                     VerticalAlignment = VerticalAlignment.Center,
                     HorizontalAlignment = HorizontalAlignment.Center
                 };
@@ -2304,7 +2272,7 @@ namespace NudgeTray
 
                 // Score with colored dot
                 Color dotColor = evt.Confidence < 0.5
-                    ? Color.FromRgb(255, 193, 7)
+                    ? AIStatusLearning
                     : (evt.Productive ? ProductiveGreen : UnproductiveRed);
                 var scoreRow = new StackPanel
                 {
@@ -2334,12 +2302,12 @@ namespace NudgeTray
                 Color actionColor;
                 if (evt.Triggered)
                 {
-                    actionLabel = "nudged";
+                    actionLabel = StrNudgedAction;
                     actionColor = UnproductiveRed;
                 }
                 else
                 {
-                    actionLabel = "skipped";
+                    actionLabel = StrSkippedAction;
                     actionColor = ProductiveGreen;
                 }
                 var actionText = new TextBlock
@@ -2422,16 +2390,17 @@ namespace NudgeTray
                 Opacity = 0.55
             });
 
-            panel.Children.Add(new TextBlock
+            var titleText = new TextBlock
             {
                 Text = "Enable AI Predictions",
                 FontSize = 14,
                 FontWeight = FontWeight.SemiBold,
                 Foreground = new SolidColorBrush(TextPrimary),
                 HorizontalAlignment = HorizontalAlignment.Center
-            });
+            };
+            panel.Children.Add(titleText);
 
-            panel.Children.Add(new TextBlock
+            var descText = new TextBlock
             {
                 Text = "AI learns from your Yes/No responses to predict\nwhen you're productive vs distracted.",
                 FontSize = 11,
@@ -2440,11 +2409,12 @@ namespace NudgeTray
                 TextAlignment = TextAlignment.Center,
                 MaxWidth = 240,
                 HorizontalAlignment = HorizontalAlignment.Center
-            });
+            };
+            panel.Children.Add(descText);
 
             var enableBtn = new Button
             {
-                Content = "Enable AI",
+                Content = StrEnableAI,
                 Background = new SolidColorBrush(PrimaryBlue),
                 Foreground = Brushes.White,
                 BorderThickness = new Thickness(0),
@@ -2455,7 +2425,19 @@ namespace NudgeTray
                 HorizontalAlignment = HorizontalAlignment.Center,
                 CornerRadius = new CornerRadius(6)
             };
-            enableBtn.Click += (s, e) => Program.RestartWithML();
+            enableBtn.Click += async (s, e) =>
+            {
+                enableBtn.IsEnabled = false;
+                enableBtn.Content = "Starting AI…";
+                descText.Text = "Installing Python dependencies and starting ML services…";
+                bool success = await Task.Run(() => Program.RestartWithML());
+                if (!success)
+                {
+                    enableBtn.IsEnabled = true;
+                    enableBtn.Content = StrEnableAI;
+                    descText.Text = "Failed to start AI. Check the logs for details.\nAI learns from your Yes/No responses to predict\nwhen you're productive vs distracted.";
+                }
+            };
             panel.Children.Add(enableBtn);
 
             return new Border { Child = panel };
@@ -2505,7 +2487,7 @@ namespace NudgeTray
 
             _pauseToggleText = new TextBlock
             {
-                Text = "Active",
+                Text = StrActive,
                 FontSize = 10,
                 FontWeight = FontWeight.Medium,
                 Foreground = new SolidColorBrush(AIStatusActive),
@@ -2516,7 +2498,7 @@ namespace NudgeTray
 
             ToolTip.SetTip(_pauseToggleBadge, new ToolTip
             {
-                Content = "Notifications are active. Click to pause."
+                Content = StrNotificationsActive
             });
 
             _pauseToggleBadge.PointerEntered += (s, e) => ApplyHover(true);
@@ -2577,13 +2559,13 @@ namespace NudgeTray
             }
             else
             {
-                _pauseToggleText.Text = "Active";
+                _pauseToggleText.Text = StrActive;
                 _pauseToggleText.Foreground = new SolidColorBrush(AIStatusActive);
                 _pauseToggleBadge.Background = new SolidColorBrush(Color.FromArgb(25, 76, 175, 80));
                 _pauseToggleBadge.BorderBrush = new SolidColorBrush(Color.FromArgb(55, 76, 175, 80));
                 ToolTip.SetTip(_pauseToggleBadge, new ToolTip
                 {
-                    Content = "Notifications are active. Click to pause."
+                    Content = StrNotificationsActive
                 });
             }
         }
@@ -2614,7 +2596,7 @@ namespace NudgeTray
 
             _pinIcon = new TextBlock
             {
-                Text = "⊙",
+                Text = StrPinIcon,
                 FontSize = 16,
                 Foreground = new SolidColorBrush(TextSecondary),
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -2628,7 +2610,7 @@ namespace NudgeTray
                 Topmost = _isPinned;
                 if (_pinIcon != null)
                 {
-                    _pinIcon.Text = _isPinned ? "◉" : "⊙";
+                    _pinIcon.Text = _isPinned ? "◉" : StrPinIcon;
                     _pinIcon.Foreground = _isPinned
                         ? new SolidColorBrush(PrimaryBlue)
                         : new SolidColorBrush(TextSecondary);
@@ -2680,8 +2662,9 @@ namespace NudgeTray
             };
 
             button.Content = closeIcon;
-            button.Click += (s, e) => Hide(); // Hide window instead of closing to prevent app shutdown
+            button.Click += (s, e) => Hide();
             border.Child = button;
+            ToolTip.SetTip(border, "Close");
 
             // Hover effects
             border.PointerEntered += (s, e) =>
@@ -2900,7 +2883,7 @@ namespace NudgeTray
             Color productiveValueColor = !hasProductiveData
                 ? TextSecondary
                 : productiveRate >= 60 ? ProductiveGreen
-                : productiveRate >= 30 ? Color.FromRgb(255, 193, 7)
+                : productiveRate >= 30 ? AIStatusLearning
                 : UnproductiveRed;
 
             // Show "<1%" when there is activity but the rate rounds to zero
@@ -3112,7 +3095,7 @@ namespace NudgeTray
                     content = CreateProductivityDetailView();
                     break;
                 default:
-                    title = "Details";
+                    title = StrDetails;
                     content = new TextBlock { Text = "No detail selected." };
                     break;
             }
@@ -3208,7 +3191,7 @@ namespace NudgeTray
 
             Color rateColor = !hasData ? TextSecondary
                 : rate >= 60 ? ProductiveGreen
-                : rate >= 30 ? Color.FromRgb(255, 193, 7)
+                : rate >= 30 ? AIStatusLearning
                 : UnproductiveRed;
 
             var stack = new StackPanel { Spacing = 6 };
@@ -3549,176 +3532,6 @@ namespace NudgeTray
             return panel;
         }
 
-        private Canvas CreateTimelineChart()
-        {
-            if (_data == null || _data.HourlyProductivity.Count == 0)
-                return new Canvas { Height = 200 };
-
-            // Chart dimensions
-            const int chartWidth = 360;
-            const int chartHeight = 180;
-            const int marginBottom = 30;
-            const int marginLeft = 10;
-            const int marginRight = 10;
-
-            var canvas = new Canvas
-            {
-                Width = chartWidth,
-                Height = chartHeight + marginBottom,
-                Background = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255))
-            };
-
-            // Get all hours with activity, sorted
-            var activeHours = _data.HourlyProductivity
-                .Where(h => h.Value.Total > 0)
-                .OrderBy(h => h.Key)
-                .ToList();
-
-            if (activeHours.Count == 0) return canvas;
-
-            // Find max value for scaling
-            int maxValue = activeHours.Max(h => h.Value.Total);
-            if (maxValue == 0) return canvas;
-
-            // Calculate bar width and spacing
-            int barCount = activeHours.Count;
-            double availableWidth = chartWidth - marginLeft - marginRight;
-            double barSpacing = 2;
-            double barWidth = (availableWidth - (barSpacing * (barCount - 1))) / barCount;
-            barWidth = Math.Max(barWidth, 4); // Minimum bar width
-
-            // Draw bars
-            double currentX = marginLeft;
-            foreach (var hourData in activeHours)
-            {
-                int hour = hourData.Key;
-                var stats = hourData.Value;
-
-                // Calculate heights (inverted because canvas Y goes top-down)
-                double productiveHeight = (double)stats.ProductiveCount / maxValue * chartHeight;
-                double unproductiveHeight = (double)stats.UnproductiveCount / maxValue * chartHeight;
-                double totalHeight = productiveHeight + unproductiveHeight;
-
-                // Draw stacked bar (productive on bottom, unproductive on top)
-                if (stats.ProductiveCount > 0)
-                {
-                    var productiveBar = new Border
-                    {
-                        Width = barWidth,
-                        Height = productiveHeight,
-                        Background = new SolidColorBrush(ProductiveGreen),
-                        CornerRadius = new CornerRadius(0)
-                    };
-                    Canvas.SetLeft(productiveBar, currentX);
-                    Canvas.SetTop(productiveBar, chartHeight - totalHeight);
-                    canvas.Children.Add(productiveBar);
-                }
-
-                if (stats.UnproductiveCount > 0)
-                {
-                    var unproductiveBar = new Border
-                    {
-                        Width = barWidth,
-                        Height = unproductiveHeight,
-                        Background = new SolidColorBrush(UnproductiveRed),
-                        CornerRadius = new CornerRadius(0)
-                    };
-                    Canvas.SetLeft(unproductiveBar, currentX);
-                    Canvas.SetTop(unproductiveBar, chartHeight - totalHeight + productiveHeight);
-                    canvas.Children.Add(unproductiveBar);
-                }
-
-                // Hour label below bar
-                var hourLabel = new TextBlock
-                {
-                    Text = $"{hour:D2}",
-                    FontSize = 8,
-                    FontWeight = FontWeight.Normal,
-                    Foreground = new SolidColorBrush(TextSecondary),
-                    TextAlignment = TextAlignment.Center,
-                    Width = barWidth
-                };
-                Canvas.SetLeft(hourLabel, currentX);
-                Canvas.SetTop(hourLabel, chartHeight + 5);
-                canvas.Children.Add(hourLabel);
-
-                currentX += barWidth + barSpacing;
-            }
-
-            // Draw baseline
-            var baseline = new Border
-            {
-                Width = chartWidth - marginLeft - marginRight,
-                Height = 1,
-                Background = new SolidColorBrush(BorderColor)
-            };
-            Canvas.SetLeft(baseline, marginLeft);
-            Canvas.SetTop(baseline, chartHeight);
-            canvas.Children.Add(baseline);
-
-            // Add legend
-            var legendStack = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 16
-            };
-
-            // Productive legend
-            var productiveLegend = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 6
-            };
-            var productiveBox = new Border
-            {
-                Width = 12,
-                Height = 12,
-                Background = new SolidColorBrush(ProductiveGreen),
-                CornerRadius = new CornerRadius(2)
-            };
-            var productiveLabel = new TextBlock
-            {
-                Text = "Productive",
-                FontSize = 9,
-                Foreground = new SolidColorBrush(TextSecondary),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            productiveLegend.Children.Add(productiveBox);
-            productiveLegend.Children.Add(productiveLabel);
-
-            // Unproductive legend
-            var unproductiveLegend = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 6
-            };
-            var unproductiveBox = new Border
-            {
-                Width = 12,
-                Height = 12,
-                Background = new SolidColorBrush(UnproductiveRed),
-                CornerRadius = new CornerRadius(2)
-            };
-            var unproductiveLabel = new TextBlock
-            {
-                Text = "Unproductive",
-                FontSize = 9,
-                Foreground = new SolidColorBrush(TextSecondary),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            unproductiveLegend.Children.Add(unproductiveBox);
-            unproductiveLegend.Children.Add(unproductiveLabel);
-
-            legendStack.Children.Add(productiveLegend);
-            legendStack.Children.Add(unproductiveLegend);
-
-            Canvas.SetLeft(legendStack, marginLeft);
-            Canvas.SetTop(legendStack, chartHeight + 20);
-            canvas.Children.Add(legendStack);
-
-            return canvas;
-        }
-
         private static Grid CreateHourlyBar(int hour, ProductivityStats stats)
         {
             var grid = new Grid
@@ -3817,7 +3630,8 @@ namespace NudgeTray
                 FontSize = 11,
                 FontWeight = FontWeight.Medium,
                 Foreground = new SolidColorBrush(TextPrimary),
-                HorizontalAlignment = HorizontalAlignment.Right
+                HorizontalAlignment = HorizontalAlignment.Right,
+                TextTrimming = TextTrimming.CharacterEllipsis
             };
 
             var percentageText = new TextBlock
@@ -3826,7 +3640,8 @@ namespace NudgeTray
                 FontSize = 9,
                 FontWeight = FontWeight.Normal,
                 Foreground = new SolidColorBrush(TextSecondary),
-                HorizontalAlignment = HorizontalAlignment.Right
+                HorizontalAlignment = HorizontalAlignment.Right,
+                TextTrimming = TextTrimming.CharacterEllipsis
             };
 
             statsStack.Children.Add(statsText);
@@ -3874,7 +3689,11 @@ namespace NudgeTray
             {
                 Text = _currentFilter == TimeFilter.Today
                     ? "Keep using Nudge today to see your analytics"
-                    : "No activity recorded this week yet",
+                    : _currentFilter == TimeFilter.ThisWeek
+                        ? "No activity recorded this week yet"
+                        : _currentFilter == TimeFilter.ThisMonth
+                            ? "No activity recorded this month yet"
+                            : "No activity recorded yet",
                 FontSize = 12,
                 Foreground = new SolidColorBrush(TextTertiary),
                 HorizontalAlignment = HorizontalAlignment.Center
@@ -3996,15 +3815,12 @@ namespace NudgeTray
     // Analytics Data Models and CSV Parsing
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    public class ProductivityStats
+    public sealed class ProductivityStats
     {
         public int ProductiveCount { get; set; }
         public int UnproductiveCount { get; set; }
-        public int Total => ProductiveCount + UnproductiveCount;
-        public double ProductivePercentage => Total > 0 ? (double)ProductiveCount / Total * 100 : 0;
-    }
 
-    public class AnalyticsData
+    public sealed class AnalyticsData
     {
         public Dictionary<string, int> AppUsage { get; set; } = new Dictionary<string, int>();
         public Dictionary<int, ProductivityStats> HourlyProductivity { get; set; } = new Dictionary<int, ProductivityStats>();
