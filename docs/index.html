@@ -48,7 +48,7 @@
         </h1>
 
         <p class="hero-subtitle animate-in animate-in-delay-2">
-          Nudge runs silently in the background and catches distraction the instant it happens — no fixed timers, no schedules, just the moment you need it. All on-device, all private.
+          Nudge runs silently in the background and catches distraction the instant it happens — no fixed timers, no schedules, just the moment you need it. Everything stays on your machine.
         </p>
 
         <div class="hero-actions animate-in animate-in-delay-3">
@@ -87,7 +87,7 @@
         </div>
         <div class="feature-bar-text">
           <h3>Harvest Engine</h3>
-          <p>V2 sensor fusion pipeline — 21 features from app focus, idle time, and browser domain signals</p>
+          <p>Silent sensing layer that watches your attention — app, idle, and browser domain, nothing else</p>
         </div>
       </div>
       <div class="feature-bar-item">
@@ -96,7 +96,7 @@
         </div>
         <div class="feature-bar-text">
           <h3>AI Brain</h3>
-          <p>On-device scikit-learn model — 98% confidence threshold, auto-retrains every 300s</p>
+          <p>Personal model trained only on your responses — knows your patterns, not a generic profile</p>
         </div>
       </div>
       <div class="feature-bar-item">
@@ -105,7 +105,7 @@
         </div>
         <div class="feature-bar-text">
           <h3>Zero data leaves</h3>
-          <p>All data in ~/.nudge/ — no accounts, no telemetry, no cloud dependency</p>
+          <p>Everything stays on your machine — no accounts, no telemetry, no cloud dependency</p>
         </div>
       </div>
     </div>
@@ -122,20 +122,20 @@
           <div class="section-label">Harvest Engine</div>
           <h3>What's running on your machine. In real time.</h3>
           <p>
-            The <strong>Nudge Harvest Engine</strong> is a V2 sensor fusion pipeline that runs every tick. It taps into your desktop environment — KWin script on KDE/Wayland, X11 EWMH properties, Sway IPC, or the Win32 foreground window API — to capture the active window title, process name, and idle state. Browser domains are extracted in real time, and every reading is tagged with a signal quality score (<strong>Trusted</strong>, <strong>Usable</strong>, or <strong>Poor</strong>). All raw observations roll through a 300-second sliding window that tracks switch frequency, distinct app count, per-app time share, and anchor return rate — the foundation of the 21 features that feed the ML pipeline.
+            The <strong>Nudge Harvest Engine</strong> is the sensing layer — it silently observes what's in focus on your desktop and how you're interacting with it. Every tick, it captures which application is active, how long you've been there, whether you're idle, and what domain you're looking at if you're in a browser. It doesn't record your screen, log your keystrokes, or send anything to the cloud. It simply builds a live picture of your attention — what you're doing, for how long, and whether you're engaged or coasting.
           </p>
           <ul class="showcase-features">
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Multi-environment focus detection — KWin, X11, Sway, Wayland, Win32
+              Observes foreground app, idle time, and browser domains — nothing else
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Signal quality graded Trusted / Usable / Poor on every reading
+              Grades every reading by reliability so the model knows when to trust it
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              300-second rolling window: switch counts, distinct apps, app share, anchor return
+              Tracks patterns across a rolling window — switch frequency, time per app, return-to-anchor behaviour
             </li>
           </ul>
         </div>
@@ -154,20 +154,20 @@
           <div class="section-label">AI Brain</div>
           <h3>Learns you. Not people like you.</h3>
           <p>
-            The <strong>AI Brain</strong> is an on-device scikit-learn model that trains exclusively on your labelled YES/NO responses — not a generic dataset from thousands of other users. It consumes the 21-feature ActivityContext vector produced by the Harvest Engine and runs real-time inference over TCP (<code>127.0.0.1:45002</code>). When confidence in a "drifting" prediction crosses <strong>98%</strong>, it fires a check-in. Below that threshold, it logs a low-confidence deferral and continues collecting data. A background trainer re-fits the model whenever 50+ new labelled samples accumulate, running on a 300-second polling loop so the Brain sharpens automatically as you use it.
+            The <strong>AI Brain</strong> is a model built exclusively from your YES/NO answers — it has never seen another person's data. Every time you respond to a check-in, the Brain maps what you were doing at that moment (which app, how long you'd been there, how many times you'd switched recently) against whether you said focused or drifting. Over time it builds a precise picture of your personal focus patterns: the apps where you're always locked in, the hours when you tend to fade, the domains that pull you off course. It won't nudge you unless it's genuinely confident you've drifted.
           </p>
           <ul class="showcase-features">
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Reaches ~80% accuracy after just 50+ labelled YES/NO samples
+              Becomes reliable after about 50 responses — tailored to your specific workflow
             </li>
             <li>
               <svg viewBox="0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              98% confidence threshold — only nudges when the model is sure
+              Only triggers when conviction is high — no annoying false alarms
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Background retrains on 300s loop — no manual training needed
+              Sharpens automatically over time as you provide more feedback
             </li>
           </ul>
         </div>
@@ -184,22 +184,22 @@
         </div>
         <div class="showcase-text">
           <div class="section-label">Full control</div>
-          <h3>A gentle nudge when it matters. Settings when you need them.</h3>
+          <h3>A gentle nudge when it matters. Full control when you need it.</h3>
           <p>
-            When the AI Brain triggers, a custom Avalonia notification window (<strong>340&times;144</strong>) fades in with an acrylic blur effect, a 30-second countdown ring (colour shifts from calm blue through amber to red in the final three seconds), and simple YES/NO buttons backed by <kbd>Ctrl+Shift+Y</kbd> / <kbd>Ctrl+Shift+N</kbd> keyboard shortcuts. Drag the window anywhere — its position is persisted to <code>~/.config/nudge-notification-config.json</code>. The settings window exposes every lever: toggle ML on or off, adjust the check interval, manage notification sounds, and inspect live model stats (samples collected, accuracy, last-trained timestamp).
+            When the AI Brain detects you're drifting, a small check-in window appears with a simple question: still focused? Two buttons — YES and NO. Keyboard shortcuts let you answer without touching the mouse. If you don't respond, the window quietly dismisses itself. The settings panel gives you full command: turn the AI on or off, set how often you want to be checked, manage sound preferences, and see how the model is doing — how many samples it's collected and how accurate it's become at reading your patterns.
           </p>
           <ul class="showcase-features">
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Avalonia notification with acrylic blur, 30s countdown, drag repositioning
+              Fades in when it matters, dismisses silently if you're busy
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              <kbd>Ctrl+Shift+Y</kbd> / <kbd>Ctrl+Shift+N</kbd> — never touch the mouse
+              Answer with a click or a keyboard shortcut — your choice
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              ML toggle, interval control, live accuracy &amp; sample count on the settings panel
+              Toggle AI, adjust check frequency, monitor model accuracy — all from one panel
             </li>
           </ul>
         </div>
@@ -220,22 +220,22 @@
         <div class="step-card">
           <div class="step-number">1</div>
           <h3>Sense</h3>
-          <p>The <strong>Harvest Engine</strong> polls your desktop environment on every tick — KWin script on KDE/Wayland, X11 EWMH properties, Sway IPC, or the Win32 foreground window API. Each reading captures the active window title, process name, idle seconds, and a browser domain if applicable. Every signal is graded <strong>Trusted</strong>, <strong>Usable</strong>, or <strong>Poor</strong> so the pipeline knows exactly how reliable each observation is. No screenshots, no keystrokes, no cloud — just the name of what's in focus.</p>
+          <p>The <strong>Harvest Engine</strong> continuously observes what's on your screen — which application is active, how long you've been there, whether you've stepped away, and what website you're on if you're in a browser. Every observation is tagged with a confidence score so the system knows how reliable it is. No screenshots, no recordings, no keystroke logs — just the name of what's in focus.</p>
         </div>
         <div class="step-card">
           <div class="step-number">2</div>
           <h3>Fuse</h3>
-          <p>Raw readings flow into a <strong>300-second sliding window</strong> that computes switch frequency, distinct app count, per-app time share, and anchor return rate (how often you come back to your primary tool). The fusion layer cross-references idle state against window transitions, extracts browser domains from window titles, and compresses everything into a <strong>21-feature ActivityContext vector</strong> — the single snapshot that the AI Brain evaluates every 60 seconds.</p>
+          <p>Raw observations are combined into a single picture of your attention. The fusion layer tracks how often you switch between apps, how long you spend in each one, whether you keep returning to the same tool, and how your idle time relates to your work rhythm. Browser domains are separated from general app names so an afternoon on documentation reads differently from an afternoon on social media. All of this is distilled into a concise snapshot of what focused looks like for <em>you</em>.</p>
         </div>
         <div class="step-card">
           <div class="step-number">3</div>
           <h3>Predict</h3>
-          <p>The <strong>AI Brain</strong> — an on-device scikit-learn model — runs inference against the feature vector over TCP (<code>127.0.0.1:45002</code>). If confidence that you're drifting crosses <strong>98%</strong>, it fires an ML-triggered snapshot. Below that threshold it logs a low-confidence deferral and lets the interval timer keep running. Productive predictions reset the interval timer entirely. A background trainer automatically re-fits the model on a 300-second loop once 50+ fresh labelled samples have accumulated.</p>
+          <p>The <strong>AI Brain</strong> evaluates that snapshot against everything it has learned from your previous YES/NO responses. If it detects the same pattern it has seen before when you said you were drifting, and it's highly confident in that assessment, it signals a check-in. If it's uncertain or it recognises a productive rhythm, it stays quiet — no dings, no popups, no false alarms. The Brain gets more accurate with every answer you give it.</p>
         </div>
         <div class="step-card">
           <div class="step-number">4</div>
           <h3>Nudge</h3>
-          <p>A custom <strong>Avalonia notification window</strong> (340&times;144) fades in with acrylic blur and a 30-second countdown ring whose colour shifts from calm blue through amber to urgent red. <kbd>Ctrl+Shift+Y</kbd> = productive, <kbd>Ctrl+Shift+N</kbd> = drifting. Drag it anywhere — the position persists. Your answer is written to the HARVEST.CSV log and the next training cycle incorporates it. If the timer expires without a response, the notification auto-dismisses.</p>
+          <p>A small, unobtrusive window appears and asks a simple question: <em>still focused?</em> YES keeps you moving, NO logs the drift. If you're in the middle of something, keyboard shortcuts let you answer without leaving your flow. Leave it unanswered and it quietly disappears on its own. Every response feeds back into the model, making the next prediction sharper. Over time, Nudge learns exactly when to speak up and when to stay silent.</p>
         </div>
       </div>
     </div>
