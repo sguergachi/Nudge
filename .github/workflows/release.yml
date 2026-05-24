@@ -74,27 +74,53 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: Publish self-contained Linux binaries
+      - name: Build and publish Linux binaries
         working-directory: NudgeCrossPlatform
         run: |
-          dotnet publish nudge.csproj        -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -o dist/linux --nologo
-          dotnet publish nudge-notify.csproj -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -o dist/linux --nologo
-          dotnet publish nudge-tray.csproj   -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -f net10.0 -p:SkipBuildNudgeDaemon=true -o dist/linux --nologo
+          # Create output directory
+          mkdir -p dist/linux
+          
+          # Build and publish nudge (daemon)
+          dotnet publish nudge.csproj -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -o bin/Release/net10.0/linux-x64/publish_nudge --nologo
+          
+          # Build and publish nudge-notify
+          dotnet publish nudge-notify.csproj -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -o bin/Release/net10.0/linux-x64/publish_notify --nologo
+          
+          # Build and publish nudge-tray
+          dotnet publish nudge-tray.csproj -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -f net10.0 -p:SkipBuildNudgeDaemon=true -o bin/Release/net10.0/linux-x64/publish_tray --nologo
+          
+          # Copy executables to dist/linux with expected names
+          cp bin/Release/net10.0/linux-x64/publish_nudge/Nudge dist/linux/nudge || cp bin/Release/net10.0/linux-x64/publish_nudge/nudge dist/linux/nudge
+          cp bin/Release/net10.0/linux-x64/publish_notify/NudgeNotify dist/linux/nudge-notify || cp bin/Release/net10.0/linux-x64/publish_notify/nudge-notify dist/linux/nudge-notify
+          cp bin/Release/net10.0/linux-x64/publish_tray/NudgeTray dist/linux/nudge-tray || cp bin/Release/net10.0/linux-x64/publish_tray/nudge-tray dist/linux/nudge-tray
+          
+          # Copy DLL files for runtime
+          find bin/Release/net10.0/linux-x64/publish_nudge -name "*.dll" -exec cp {} dist/linux/ \;
+          find bin/Release/net10.0/linux-x64/publish_notify -name "*.dll" -exec cp {} dist/linux/ \;
+          find bin/Release/net10.0/linux-x64/publish_tray -name "*.dll" -exec cp {} dist/linux/ \;
 
       - name: Package Linux artifacts
+        working-directory: NudgeCrossPlatform
         run: |
-          dist=NudgeCrossPlatform/dist/linux
-          cp NudgeCrossPlatform/model_inference.py    "$dist/"
-          cp NudgeCrossPlatform/train_model.py        "$dist/"
-          cp NudgeCrossPlatform/background_trainer.py "$dist/"
-          cp NudgeCrossPlatform/install-linux-app.sh  "$dist/"
+          dist=dist/linux
+          
+          # Copy supporting files
+          cp ../model_inference.py    "$dist/"
+          cp ../train_model.py        "$dist/"
+          cp ../background_trainer.py "$dist/"
+          cp ../install-linux-app.sh  "$dist/"
+          
+          # Set execute permissions
           chmod +x "$dist/nudge" "$dist/nudge-notify" "$dist/nudge-tray" "$dist/install-linux-app.sh"
+          
+          # Create tarball
+          cd ..
           tar -czf nudge-linux-x64.tar.gz -C NudgeCrossPlatform/dist linux
 
       - uses: actions/upload-artifact@v4
         with:
           name: nudge-linux-x64
-          path: nudge-linux-x64.tar.gz
+          path: NudgeCrossPlatform/../nudge-linux-x64.tar.gz
 
   release:
     needs: [check-version, build-windows, build-linux]
