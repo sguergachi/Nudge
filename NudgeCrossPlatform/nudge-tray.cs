@@ -288,7 +288,7 @@ namespace NudgeTray
 #endif
                     }
                     CreateTrayIcon();
-                    _ = Task.Run(CheckForUpdateAsync);
+                    Task.Run(CheckForUpdateAsync);
 
                     if (_uiAuditMode)
                     {
