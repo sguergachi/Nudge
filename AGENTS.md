@@ -83,6 +83,35 @@ python3 train_model.py ~/.nudge/HARVEST.CSV --architecture standard
 - Background trainer (`background_trainer.py`) retrains at 50+ new samples, 300s check interval.
 - Data all local in `~/.nudge/`.
 
+## Release pipeline
+
+Releases are automated via `.github/workflows/release.yml`.
+
+**To ship a new version:**
+1. Edit `const string VERSION = "x.y.z"` in `NudgeCrossPlatform/nudge-tray.cs`
+2. Push to `master`
+
+The workflow extracts the version string, checks whether a `v{version}` tag already exists (skips if it does), builds self-contained single-file binaries for `win-x64` and `linux-x64`, and creates a GitHub Release with both archives attached. No manual tagging.
+
+The release binaries are self-contained (no .NET runtime needed by users). The harvest daemon (`nudge`/`nudge.exe`) is published as a self-contained binary too — `nudge-tray` detects and launches it directly. In dev builds (where only `nudge.dll` exists) it falls back to `dotnet nudge.dll`.
+
+**Website:** `docs/index.html` + `docs/style.css` — pure static HTML, hosted via GitHub Pages (enable in repo Settings → Pages → `master`/`docs`). Download buttons point to `releases/latest/download/`.
+
+## Tray menu items
+
+The system tray context menu (built in `CreateAvaloniaMenu()` in `nudge-tray.cs`) contains:
+
+| Item | Behaviour |
+|------|-----------|
+| Status (disabled) | Live countdown to next check |
+| Analytics | Opens Analytics window |
+| Settings | Opens Settings window |
+| Send Feedback | Opens `github.com/sguergachi/Nudge/issues/new` in browser |
+| Check for Updates | Opens releases page; text changes to "Update available: vX.Y.Z ↗" if a newer release is detected on startup |
+| Quit | Stops all subprocesses and exits |
+
+The update check fires once on startup (`Task.Run(CheckForUpdateAsync)` in `AfterSetup`). It calls the GitHub Releases API and compares `tag_name` against `VERSION`.
+
 ## Code quality rules
 
 Zero warning policy on builds. Key suppressible patterns:

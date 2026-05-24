@@ -76,8 +76,12 @@ By default Nudge stores data in `~/.nudge/` on every platform:
 ## Architecture
 
 ```
-nudge-tray (Avalonia GUI)
+nudge-tray (Avalonia GUI — entry point)
 ├── System tray icon + context menu
+│   ├── Status (live countdown)
+│   ├── Analytics, Settings
+│   ├── Send Feedback → opens GitHub Issues
+│   └── Check for Updates → checks GitHub Releases API on startup
 ├── Settings window
 ├── Analytics window
 │   ├── Today / This Week / This Month / All Time tabs
@@ -88,7 +92,9 @@ nudge-tray (Avalonia GUI)
 │       ├── Recent Checks (event log)
 │       └── Model Training (accordion with training details)
 │
-└── nudge subprocess (nudge.dll) — IPC via stdout lines + UDP 45001
+└── nudge subprocess — IPC via stdout lines + UDP 45001
+    │  (launched as self-contained ./nudge binary in release;
+    │   falls back to `dotnet nudge.dll` in dev builds)
     ├── V2 Harvest Engine
     │   ├── ActivityContext (focus source, signal quality, idle, domain)
     │   └── FeatureVectorV2 (21 ML-ready features, 300s rolling windows)
