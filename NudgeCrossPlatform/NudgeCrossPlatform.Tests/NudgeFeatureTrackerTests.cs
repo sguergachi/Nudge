@@ -4,7 +4,7 @@ using NudgeCore;
 
 namespace NudgeCrossPlatform.Tests;
 
-public class NudgeFeatureTrackerTests
+public sealed class NudgeFeatureTrackerTests
 {
     private static WindowObservation Win(string appId, string title = "", string windowId = "w1", string workspaceId = "1") =>
         new(appId, title, windowId, workspaceId, FocusSource.KWinScript, false, 1);

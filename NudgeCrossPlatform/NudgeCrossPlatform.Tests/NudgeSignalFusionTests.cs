@@ -5,7 +5,7 @@ using NudgeCore;
 
 namespace NudgeCrossPlatform.Tests;
 
-public class NudgeSignalFusionTests
+public sealed class NudgeSignalFusionTests
 {
     // ── AppCategoryClassifier ─────────────────────────────────────────────────
 

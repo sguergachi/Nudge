@@ -4,7 +4,7 @@ using NudgeCore;
 
 namespace NudgeCrossPlatform.Tests;
 
-public class NudgeParsingHelpersTests
+public sealed class NudgeParsingHelpersTests
 {
     // ── FormatCountdown ───────────────────────────────────────────────────────
 

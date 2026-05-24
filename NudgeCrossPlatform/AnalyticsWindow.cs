@@ -41,7 +41,7 @@ namespace NudgeTray
             Productivity
         }
 
-        private TimeFilter _currentFilter = TimeFilter.Today;
+        private TimeFilter _currentFilter;
         private AnalyticsData? _data;
         private readonly AnalyticsData? _initialData;
         private Border? _contentViewport;
@@ -3819,6 +3819,9 @@ namespace NudgeTray
     {
         public int ProductiveCount { get; set; }
         public int UnproductiveCount { get; set; }
+        public int Total => ProductiveCount + UnproductiveCount;
+        public double ProductivePercentage => Total > 0 ? (double)ProductiveCount / Total * 100 : 0;
+    }
 
     public sealed class AnalyticsData
     {

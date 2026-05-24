@@ -3,7 +3,7 @@ using NudgeCore;
 
 namespace NudgeCrossPlatform.Tests;
 
-public class NudgeStartupGuardTests
+public sealed class NudgeStartupGuardTests
 {
     [Fact]
     public void ShouldExitForExistingTrayInstance_TrueWhenMutexNotCreated()

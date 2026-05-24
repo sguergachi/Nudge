@@ -134,7 +134,7 @@ sealed class NudgeNotify
         {
             Error("Connection failed");
 
-            if (ex.ErrorCode == 10061 || ex.Message.Contains("refused"))
+            if (ex.ErrorCode == 10061 || ex.Message.Contains("refused", StringComparison.Ordinal))
             {
                 Error("Nudge is not running or not listening on port " + PORT);
                 Console.WriteLine();

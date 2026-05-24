@@ -3,7 +3,7 @@ using NudgeCore;
 
 namespace NudgeCrossPlatform.Tests;
 
-public class NudgeIdleDetectionTests
+public sealed class NudgeIdleDetectionTests
 {
     [Fact]
     public void GetIdleSourceName_Win32LastInput_ReturnsCorrectString()

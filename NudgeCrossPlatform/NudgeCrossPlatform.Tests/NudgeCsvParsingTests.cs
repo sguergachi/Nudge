@@ -4,7 +4,7 @@ using NudgeCore;
 
 namespace NudgeCrossPlatform.Tests;
 
-public class NudgeCsvParsingTests
+public sealed class NudgeCsvParsingTests
 {
     [Fact]
     public void TryParseActivityLogLine_ValidLine_ReturnsEntry()

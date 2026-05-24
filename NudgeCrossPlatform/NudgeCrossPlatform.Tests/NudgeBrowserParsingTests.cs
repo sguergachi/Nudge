@@ -3,7 +3,7 @@ using NudgeCore;
 
 namespace NudgeCrossPlatform.Tests;
 
-public class NudgeBrowserParsingTests
+public sealed class NudgeBrowserParsingTests
 {
     [Theory]
     [InlineData("https://www.github.com/openai/nudge - Google Chrome", "github.com")]

@@ -4,7 +4,7 @@ using NudgeCore;
 
 namespace NudgeCrossPlatform.Tests;
 
-public class NudgeCommandExecutionTests
+public sealed class NudgeCommandExecutionTests
 {
     [Fact]
     public void RunCommand_ReturnsStdout_ForSuccessfulCommand()

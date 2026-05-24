@@ -47,6 +47,8 @@ namespace NudgeTray
     {
         const int UDP_PORT = 45001;
         const string VERSION = "1.5.0";
+        const string NudgeExeName = "nudge";
+        const string NudgeDllName = "nudge.dll";
         static Process? _nudgeProcess;
         static Process? _mlInferenceProcess;
         static Process? _mlTrainerProcess;
@@ -125,9 +127,9 @@ namespace NudgeTray
             {
                 // For DBus exceptions, log and continue - don't crash the app
                 if (e.ExceptionObject is Exception ex &&
-                    (ex.ToString().Contains("DBus") ||
-                     ex.ToString().Contains("Tmds.DBus") ||
-                     ex.ToString().Contains("TaskCanceledException")))
+                    (ex.ToString().Contains("DBus", StringComparison.Ordinal) ||
+                     ex.ToString().Contains("Tmds.DBus", StringComparison.Ordinal) ||
+                     ex.ToString().Contains("TaskCanceledException", StringComparison.Ordinal)))
                 {
                     Console.WriteLine($"[WARN] DBus exception caught (expected on Linux): {ex.Message}");
                     Console.WriteLine($"[INFO] Application continuing normally...");
@@ -148,9 +150,9 @@ namespace NudgeTray
                 // Handle DBus-related task exceptions gracefully
                 // Note: e.Exception is AggregateException, so check string representation for inner types
                 var exceptionStr = e.Exception.ToString();
-                if (exceptionStr.Contains("DBus") ||
-                    exceptionStr.Contains("Tmds.DBus") ||
-                    exceptionStr.Contains("TaskCanceledException"))
+                if (exceptionStr.Contains("DBus", StringComparison.Ordinal) ||
+                    exceptionStr.Contains("Tmds.DBus", StringComparison.Ordinal) ||
+                    exceptionStr.Contains("TaskCanceledException", StringComparison.Ordinal))
                 {
                     Console.WriteLine($"[WARN] DBus task exception (handled): {e.Exception.Message}");
                 }
@@ -166,8 +168,8 @@ namespace NudgeTray
             {
                 // Silently suppress DBus-related exceptions (expected on Linux when DBus services unavailable)
                 if (e.Exception != null &&
-                    (e.Exception.ToString().Contains("DBus") ||
-                     e.Exception.ToString().Contains("Tmds.DBus")))
+                    (e.Exception.ToString().Contains("DBus", StringComparison.Ordinal) ||
+                     e.Exception.ToString().Contains("Tmds.DBus", StringComparison.Ordinal)))
                 {
                     // Suppressed - these are expected and handled gracefully
                 }
@@ -935,7 +937,7 @@ namespace NudgeTray
                         var psi = new ProcessStartInfo
                         {
                             FileName = "taskkill",
-                            Arguments = "/F /IM nudge.exe /T",
+                            Arguments = $"/F /IM {NudgeExeName}{(PlatformConfig.IsWindows ? ".exe" : "")} /T",
                             CreateNoWindow = true
                         };
                         Process.Start(psi)?.WaitForExit(2000);
@@ -1365,8 +1367,8 @@ namespace NudgeTray
             try
             {
                 // Prefer self-contained binary (release); fall back to dotnet dll (dev build)
-                string nudgeExe = Path.Combine(_baseDir, PlatformConfig.IsWindows ? "nudge.exe" : "nudge");
-                string nudgeDllPath = Path.Combine(_baseDir, "nudge.dll");
+                string nudgeExe = Path.Combine(_baseDir, PlatformConfig.IsWindows ? $"{NudgeExeName}.exe" : NudgeExeName);
+                string nudgeDllPath = Path.Combine(_baseDir, NudgeDllName);
                 bool useExe = File.Exists(nudgeExe);
                 if (!useExe && !File.Exists(nudgeDllPath))
                 {
@@ -2171,7 +2173,7 @@ namespace NudgeTray
             }
 
             // [trainer] Nothing to do.
-            if (raw.Contains("[trainer] Nothing to do"))
+            if (raw.Contains("[trainer] Nothing to do", StringComparison.Ordinal))
             {
                 lock (_lock) { IsTraining = false; TrainingProgress = -1f; }
             }
@@ -2293,11 +2295,7 @@ namespace NudgeTray
 
         static LiveAIState()
         {
-            string nudgeDir = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                ".nudge");
-            System.IO.Directory.CreateDirectory(nudgeDir);
-            _historyFile = System.IO.Path.Combine(nudgeDir, "prediction_history.json");
+            _historyFile = System.IO.Path.Combine(PlatformConfig.DataDirectory, "prediction_history.json");
             LoadFromDisk();
         }
 

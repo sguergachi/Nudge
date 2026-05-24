@@ -3,7 +3,7 @@ using NudgeCore;
 
 namespace NudgeCrossPlatform.Tests;
 
-public class NudgeCliParserTests
+public sealed class NudgeCliParserTests
 {
     // ── nudge arg parser ──────────────────────────────────────────────────────
 

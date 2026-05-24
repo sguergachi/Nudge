@@ -147,7 +147,7 @@ sealed class Nudge
         private readonly object _lock = new();
         private string _cachedApp = "";
         private string _cachedTitle = "";
-        private DateTime _lastUpdate = DateTime.MinValue;
+        private DateTime _lastUpdate;
         private volatile bool _ready;
 
         public string Path => DBusObjectPath;
@@ -417,10 +417,10 @@ publish();
         private string _compositor = "";
         private string _cachedApp = "";
         private string _cachedTitle = "";
-        private DateTime _appCacheExpiry = DateTime.MinValue;
+        private DateTime _appCacheExpiry;
         private int _cachedIdle;
-        private DateTime _idleCacheExpiry = DateTime.MinValue;
-        private IdleSource _lastIdleSource = IdleSource.Unknown;
+        private DateTime _idleCacheExpiry;
+        private IdleSource _lastIdleSource;
         private KWinWindowTracker? _kwinTracker;
         private WaylandIdleMonitor? _waylandIdle;
 
@@ -506,11 +506,11 @@ publish();
                 return "sway";
 
             var desktop = Environment.GetEnvironmentVariable("XDG_CURRENT_DESKTOP");
-            if (desktop?.Contains("GNOME") == true)
+            if (desktop?.Contains("GNOME", StringComparison.Ordinal) == true)
                 return "gnome";
-            if (desktop?.Contains("KDE") == true)
+            if (desktop?.Contains("KDE", StringComparison.Ordinal) == true)
                 return "kde";
-            if (desktop?.Contains("X-Cinnamon") == true)
+            if (desktop?.Contains("X-Cinnamon", StringComparison.Ordinal) == true)
                 return "cinnamon";
 
             // Fallback: check for cinnamon-session process
@@ -1430,7 +1430,7 @@ publish();
                 if (!string.IsNullOrEmpty(_currentApp))
                 {
                     // Reuse the shared format string to keep the hot path quiet on allocations.
-                    Dim(string.Format(null, LogAppSwitchComposite, _currentApp, app));
+                    Dim(string.Format(CultureInfo.InvariantCulture, LogAppSwitchComposite, _currentApp, app));
                 }
                 _currentApp = app;
                 _currentTitle = title;
@@ -1988,7 +1988,7 @@ publish();
                 }
             }
         }
-        catch (SocketException ex) when (ex.ErrorCode == 10048 || ex.Message.Contains("already in use"))
+        catch (SocketException ex) when (ex.ErrorCode == 10048 || ex.Message.Contains("already in use", StringComparison.Ordinal))
         {
             Error($"UDP port {UDP_PORT} is already in use");
             Error("Another instance of Nudge may be running");

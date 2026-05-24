@@ -1239,7 +1239,7 @@ internal static class AppCategoryClassifier
         }
 
         DesktopSearchPaths = [.. paths];
-        _inferredCachePath = Path.Combine(home, ".nudge", "inferred_categories.json");
+        _inferredCachePath = Path.Combine(PlatformConfig.DataDirectory, "inferred_categories.json");
     }
 
     public static (AppCategory Category, CategoryConfidence Confidence) Classify(string appId, string title, AppCategory anchorCategory = AppCategory.Unknown)
@@ -1504,8 +1504,7 @@ internal static class AppCategoryClassifier
             // Load user overrides: ~/.nudge/app_categories.json (highest confidence)
             try
             {
-                string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                string overridesPath = Path.Combine(home, ".nudge", "app_categories.json");
+                string overridesPath = Path.Combine(PlatformConfig.DataDirectory, "app_categories.json");
                 if (File.Exists(overridesPath))
                 {
                     var overrides = JsonSerializer.Deserialize<Dictionary<string, string>>(
@@ -1733,7 +1732,7 @@ internal static class NudgeCoreLogic
         }
         catch
         {
-            if (json.Contains("\"focused\":true"))
+            if (json.Contains("\"focused\":true", StringComparison.Ordinal))
             {
                 string app = "unknown";
                 string title = "";
