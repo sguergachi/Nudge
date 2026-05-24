@@ -77,10 +77,10 @@
   <text x="630" y="183" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#9696A0" text-anchor="middle" font-weight="600">Fallback</text>
 
   <text x="24" y="212" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">
-    <tspan fill="#4CAF50" font-weight="600">Override</tspan> — user-defined in app_categories.json &nbsp;&#8226;&nbsp;
-    <tspan fill="#4CAF50" font-weight="600">Desktop</tspan> — XDG .desktop metadata (OS ground truth) &nbsp;&#8226;&nbsp;
-    <tspan fill="#58A6FF" font-weight="600">Semantic</tspan> — keyword match in app name/ID &nbsp;&#8226;&nbsp;
-    <tspan fill="#FFC107" font-weight="600">Inferred</tspan> — browser inherits anchor app &nbsp;&#8226;&nbsp;
+    <tspan fill="#4CAF50" font-weight="600">Override</tspan> — user-defined in app_categories.json  &#x2022; 
+    <tspan fill="#4CAF50" font-weight="600">Desktop</tspan> — XDG .desktop metadata (OS ground truth)  &#x2022; 
+    <tspan fill="#58A6FF" font-weight="600">Semantic</tspan> — keyword match in app name/ID  &#x2022; 
+    <tspan fill="#FFC107" font-weight="600">Inferred</tspan> — browser inherits anchor app  &#x2022; 
     <tspan fill="#9696A0" font-weight="600">Fallback</tspan> — defaults to Utility
   </text>
 </svg>

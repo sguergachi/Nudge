@@ -53,7 +53,7 @@
   <rect x="24" y="112" width="20" height="20" rx="4" ry="4" fill="rgba(88,166,255,0.12)"/>
   <text x="30" y="126" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#58A6FF" text-anchor="middle" font-weight="600">A</text>
   <text x="52" y="122" font-family="Inter, -apple-system, sans-serif" font-size="10" fill="#F0F0F5" font-weight="600">App Focus</text>
-  <text x="24" y="144" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">Window title &middot; Process name</text>
+  <text x="24" y="144" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">Window title &#xB7; Process name</text>
   <text x="24" y="156" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">Browser domain extracted</text>
 
   <!-- Signal 2: Idle State -->
@@ -69,8 +69,8 @@
   <rect x="24" y="248" width="20" height="20" rx="4" ry="4" fill="rgba(255,193,7,0.12)"/>
   <text x="30" y="262" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#FFC107" text-anchor="middle" font-weight="600">W</text>
   <text x="52" y="258" font-family="Inter, -apple-system, sans-serif" font-size="10" fill="#F0F0F5" font-weight="600">Window Transitions</text>
-  <text x="24" y="280" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">Switch frequency &middot; App count</text>
-  <text x="24" y="292" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">Time per app &middot; Anchor return</text>
+  <text x="24" y="280" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">Switch frequency &#xB7; App count</text>
+  <text x="24" y="292" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882">Time per app &#xB7; Anchor return</text>
 
   <!-- ===== COLUMN 2: FUSION ENGINE ===== -->
   <rect x="286" y="60" width="130" height="32" rx="6" ry="6" fill="#1C1C20" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
@@ -101,7 +101,7 @@
   <rect x="298" y="208" width="106" height="40" rx="6" ry="6" fill="rgba(255,255,255,0.04)"/>
   <text x="351" y="224" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#9696A0" text-anchor="middle" font-weight="500">PATTERN EXTRACTION</text>
   <text x="305" y="240" font-family="Inter, -apple-system, sans-serif" font-size="7.5" fill="#787882">Switch counts</text>
-  <text x="305" y="249" font-family="Inter, -apple-system, sans-serif" font-size="7.5" fill="#787882">Distinct apps &middot; App share</text>
+  <text x="305" y="249" font-family="Inter, -apple-system, sans-serif" font-size="7.5" fill="#787882">Distinct apps &#xB7; App share</text>
   <text x="305" y="258" font-family="Inter, -apple-system, sans-serif" font-size="7.5" fill="#787882">Anchor return rate</text>
 
   <!-- Signal quality legend -->

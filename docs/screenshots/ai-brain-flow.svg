@@ -45,12 +45,12 @@
   <rect x="374" y="60" width="150" height="60" rx="8" ry="8" fill="rgba(76,175,80,0.06)" stroke="rgba(76,175,80,0.2)" stroke-width="1" filter="url(#shadow)"/>
   <text x="449" y="82" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#4CAF50" text-anchor="middle" font-weight="600">CONFIDENCE HIGH</text>
   <text x="449" y="100" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#A0A0AA" text-anchor="middle">Drift pattern matched</text>
-  <text x="449" y="112" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#58A6FF" text-anchor="middle">&rarr; Triggers check-in</text>
+  <text x="449" y="112" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#58A6FF" text-anchor="middle">&#x2192; Triggers check-in</text>
 
   <rect x="374" y="128" width="150" height="60" rx="8" ry="8" fill="rgba(150,150,160,0.06)" stroke="rgba(150,150,160,0.15)" stroke-width="1" filter="url(#shadow)"/>
   <text x="449" y="150" font-family="Inter, -apple-system, sans-serif" font-size="9" fill="#9696A0" text-anchor="middle" font-weight="600">CONFIDENCE LOW</text>
   <text x="449" y="168" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#A0A0AA" text-anchor="middle">Productive rhythm detected</text>
-  <text x="449" y="180" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882" text-anchor="middle">&rarr; Stays silent</text>
+  <text x="449" y="180" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="#787882" text-anchor="middle">&#x2192; Stays silent</text>
 
   <!-- Arrow from decision to check-in -->
   <line x1="524" y1="90" x2="550" y2="90" stroke="#4CAF50" stroke-opacity="0.4" stroke-width="1.5" marker-end="url(#arrowR)"/>
@@ -66,5 +66,5 @@
 
   <!-- Feedback loop arrow -->
   <path d="M 619 172 L 619 200 L 99 200 L 99 172" fill="none" stroke="rgba(88,166,255,0.2)" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#arrowR)"/>
-  <text x="360" y="214" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="rgba(88,166,255,0.4)" text-anchor="middle">Your YES/NO feeds back into the model &rarr; next prediction is sharper</text>
+  <text x="360" y="214" font-family="Inter, -apple-system, sans-serif" font-size="8" fill="rgba(88,166,255,0.4)" text-anchor="middle">Your YES/NO feeds back into the model &#x2192; next prediction is sharper</text>
 </svg>
