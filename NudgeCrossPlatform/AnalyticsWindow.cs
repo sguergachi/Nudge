@@ -156,6 +156,12 @@ namespace NudgeTray
             }
         }
 
+        protected override void OnClosed(EventArgs e)
+        {
+            _aiLiveRefreshTimer?.Stop();
+            base.OnClosed(e);
+        }
+
         private void LoadDataAndDisplay()
         {
             try

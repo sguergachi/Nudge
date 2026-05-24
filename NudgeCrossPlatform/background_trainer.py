@@ -13,6 +13,7 @@ import os
 import sys
 import time
 import json
+import tempfile
 import argparse
 
 # Add the script's own directory to sys.path so train_model can be imported
@@ -70,8 +71,11 @@ def _save_meta(model_dir: str, sample_count: int, accuracy: float,
         'n_productive': n_productive,
         'n_unproductive': n_unproductive,
     }
-    with open(os.path.join(model_dir, 'trainer_meta.json'), 'w') as f:
-        json.dump(meta, f)
+    dest = os.path.join(model_dir, 'trainer_meta.json')
+    with tempfile.NamedTemporaryFile(mode='w', dir=model_dir, suffix='.tmp', delete=False) as tf:
+        json.dump(meta, tf)
+        tmp = tf.name
+    os.replace(tmp, dest)
 
 
 def _run_training(csv_path: str, model_dir: str, sample_count: int,
@@ -115,8 +119,8 @@ def _run_training(csv_path: str, model_dir: str, sample_count: int,
                 meta = json.load(f)
                 n_productive = meta.get('n_productive', 0)
                 n_unproductive = meta.get('n_unproductive', 0)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f'[trainer] warn: could not read prior state/meta: {e}', file=sys.stderr, flush=True)
 
         _save_meta(model_dir, sample_count, accuracy, model_version, n_productive, n_unproductive)
         print(f'[trainer] Done. accuracy={accuracy:.3f} version={model_version}', flush=True)
@@ -146,7 +150,7 @@ def _generate_seed_data(csv_path: str, target_samples: int,
                         seed_dir: str | None = None) -> str | None:
     """Generate synthetic seed data for model bootstrapping.
 
-    Creates labeled V2-schema data and merges it with any existing real data
+    Creates labeled V3-schema data and merges it with any existing real data
     from HARVEST.CSV. If HARVEST.CSV doesn't exist yet, just creates the seed
     file from scratch.
 
@@ -190,8 +194,8 @@ def _cleanup_temp(path: str | None) -> None:
     if path and os.path.exists(path) and ('.seed_' in path or '.merged_' in path):
         try:
             os.remove(path)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f'[trainer] warn: could not remove temp file {path}: {e}', file=sys.stderr, flush=True)
 
 
 def main() -> None:

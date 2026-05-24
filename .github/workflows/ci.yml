@@ -25,6 +25,37 @@ jobs:
         working-directory: NudgeCrossPlatform
         run: dotnet test NudgeCrossPlatform.Tests/NudgeCrossPlatform.Tests.csproj --nologo -v quiet
 
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: Nudge
+
+      - uses: actions/checkout@v4
+        with:
+          repository: IrishBruse/WaylandDotnet
+          path: WaylandDotnet
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        working-directory: Nudge/NudgeCrossPlatform
+        run: |
+          dotnet restore nudge.csproj --nologo
+          dotnet restore nudge-notify.csproj --nologo
+          dotnet restore nudge-tray.csproj --nologo
+
+      - name: Build
+        working-directory: Nudge/NudgeCrossPlatform
+        run: |
+          dotnet build nudge.csproj        -c Release -f net10.0  --no-restore --nologo
+          dotnet build nudge-notify.csproj -c Release -f net10.0  --no-restore --nologo
+          dotnet build nudge-tray.csproj   -c Release -f net10.0  --no-restore --nologo
+
   build-windows:
     runs-on: windows-latest
 

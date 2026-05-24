@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate V2-schema synthetic productivity data for model pre-training.
+Generate V3-schema synthetic productivity data for model pre-training.
 
 Creates labeled training data with realistic feature distributions based on
 app categories, time-of-day, and work/eve/weekend patterns. The synthetic data
@@ -207,11 +207,11 @@ def _adjust_weights(categories, weights, hour, is_weekend):
 
 
 def generate_sample_data(num_samples=500, output_file='/tmp/HARVEST.CSV'):
-    """Generate synthetic V2/V3-schema productivity data for model pre-training.
+    """Generate synthetic V3-schema productivity data for model pre-training.
 
     Produces labeled data with realistic feature distributions conditioned on
     app categories, time-of-day, and work/eve/weekend patterns. The data is
-    schema-compatible with train_model.py's V2 feature pipeline.
+    schema-compatible with train_model.py's V3 feature pipeline.
 
     Args:
         num_samples: Number of synthetic rows to generate (default: 500).
@@ -227,7 +227,7 @@ def generate_sample_data(num_samples=500, output_file='/tmp/HARVEST.CSV'):
     now = time_mod.time()
     window_start = now - 14 * 86400
 
-    print(f'Generating {num_samples} V2-schema samples across 14-day window...')
+    print(f'Generating {num_samples} V3-schema samples across 14-day window...')
 
     prod_count = 0
     unprod_count = 0
@@ -364,7 +364,7 @@ def generate_sample_data(num_samples=500, output_file='/tmp/HARVEST.CSV'):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description='Generate V2-schema synthetic productivity data')
+        description='Generate V3-schema synthetic productivity data')
     parser.add_argument('--samples', type=int, default=500,
                         help='Number of samples (default: 500)')
     parser.add_argument('--output', default='/tmp/HARVEST.CSV',

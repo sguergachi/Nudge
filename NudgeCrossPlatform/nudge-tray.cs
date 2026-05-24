@@ -504,7 +504,6 @@ namespace NudgeTray
 
         static void HandleQuitClicked()
         {
-            Console.WriteLine("[DEBUG] Quit clicked from context menu");
             Quit();
         }
 
@@ -526,7 +525,6 @@ namespace NudgeTray
         {
             try
             {
-                Console.WriteLine($"[DEBUG] Creating tray icon for {(PlatformConfig.IsWindows ? "Windows" : "Linux")}...");
 
                 _trayIcon = new TrayIcon
                 {
@@ -573,7 +571,6 @@ namespace NudgeTray
                 // ToastNotificationManagerCompat handles COM registration automatically
                 ToastNotificationManagerCompat.OnActivated += OnNotificationActivated;
 
-                Console.WriteLine("[DEBUG] Toast notification handler registered");
             }
             catch (Exception ex)
             {
@@ -585,7 +582,6 @@ namespace NudgeTray
         {
             try
             {
-                Console.WriteLine("[DEBUG] Notification button clicked");
 
                 // Parse the action argument from toast arguments
                 var args = ToastArguments.Parse(e.Argument);
@@ -593,17 +589,14 @@ namespace NudgeTray
                 if (args.Contains("action"))
                 {
                     var action = args["action"];
-                    Console.WriteLine($"[DEBUG] Action: {action}");
 
                     if (action == "yes")
                     {
-                        Console.WriteLine("[DEBUG] User clicked YES from notification");
                         _waitingForResponse = false;
                         SendResponse(true);
                     }
                     else if (action == "no")
                     {
-                        Console.WriteLine("[DEBUG] User clicked NO from notification");
                         _waitingForResponse = false;
                         SendResponse(false);
                     }
@@ -620,7 +613,6 @@ namespace NudgeTray
         {
             try
             {
-                Console.WriteLine("[DEBUG] Creating menu...");
                 var menu = new NativeMenu();
 
                 // Status item - show next snapshot time
@@ -640,7 +632,6 @@ namespace NudgeTray
                     IsEnabled = false
                 };
                 menu.Add(_statusItem);
-                Console.WriteLine("[DEBUG] Added status item");
 
                 // Tick every second to keep the countdown live
                 var countdownTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -653,7 +644,6 @@ namespace NudgeTray
 
                 // Separator before quit option
                 menu.Add(new NativeMenuItemSeparator());
-                Console.WriteLine("[DEBUG] Added separator");
 
                 // Analytics option
                 var analyticsItem = new NativeMenuItem { Header = "📊 Analytics" };
@@ -661,7 +651,6 @@ namespace NudgeTray
                 {
                     try
                     {
-                        Console.WriteLine("[DEBUG] Analytics menu item clicked");
                         OnTrayIconClicked(s, e);
                     }
                     catch (Exception ex)
@@ -670,7 +659,6 @@ namespace NudgeTray
                     }
                 };
                 menu.Add(analyticsItem);
-                Console.WriteLine("[DEBUG] Added analytics item");
 
                 // Separator
                 menu.Add(new NativeMenuItemSeparator());
@@ -697,7 +685,6 @@ namespace NudgeTray
                 {
                     try
                     {
-                        Console.WriteLine("[DEBUG] Quit menu item clicked");
                         HandleQuitClicked();
                     }
                     catch (Exception ex)
@@ -706,9 +693,7 @@ namespace NudgeTray
                     }
                 };
                 menu.Add(quitItem);
-                Console.WriteLine("[DEBUG] Added quit item");
 
-                Console.WriteLine("[DEBUG] Menu created successfully");
                 return menu;
             }
             catch (Exception ex)
@@ -734,7 +719,6 @@ namespace NudgeTray
         {
             try
             {
-                Console.WriteLine("[DEBUG] Tray icon clicked - showing analytics window");
 
                 // Show analytics window on UI thread
                 Dispatcher.UIThread.Post(() =>
@@ -810,7 +794,6 @@ namespace NudgeTray
         {
             try
             {
-                Console.WriteLine("[DEBUG] Cleaning up old processes...");
 
                 if (PlatformConfig.IsWindows)
                 {
@@ -854,13 +837,11 @@ namespace NudgeTray
                 }
 
                 // Wait longer for processes to cleanup
-                Console.WriteLine("[DEBUG] Waiting for processes to terminate...");
                 Thread.Sleep(1000);
-                Console.WriteLine("[DEBUG] Cleanup complete");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[DEBUG] Cleanup warning: {ex.Message}");
+                Console.WriteLine($"[WARN] Cleanup warning: {ex.Message}");
             }
         }
 
@@ -1391,7 +1372,6 @@ namespace NudgeTray
             // Don't show notification if paused — auto-respond SKIP instead
             if (_notificationsPaused)
             {
-                Console.WriteLine("[DEBUG] Notifications paused — auto-responding SKIP");
                 SendSkip();
                 return;
             }
@@ -1399,7 +1379,6 @@ namespace NudgeTray
             // Don't show notification if already waiting for a response
             if (_waitingForResponse)
             {
-                Console.WriteLine("[DEBUG] Skipping notification - already waiting for response");
                 return;
             }
 
@@ -1420,7 +1399,6 @@ namespace NudgeTray
         {
             try
             {
-                Console.WriteLine("[DEBUG] ShowCustomNotification called");
 
                 _waitingForResponse = true;
 
@@ -1446,7 +1424,6 @@ namespace NudgeTray
                             }
                             else
                             {
-                                Console.WriteLine("[DEBUG] Notification auto-dismissed - no response sent");
                             }
 
                             // Don't refresh menu after response - not necessary and can cause crashes on Linux
@@ -1482,7 +1459,6 @@ namespace NudgeTray
         {
             try
             {
-                Console.WriteLine("[DEBUG] ShowWindowsNotification called (native toast with Toolkit)");
 
                 _waitingForResponse = true;
 
@@ -1516,7 +1492,6 @@ namespace NudgeTray
 #if !WINDOWS
         private static async void ShowDbusNotification()
         {
-            Console.WriteLine("[DEBUG] ShowDbusNotification called (native DBus)");
 
             // Run DBus operations without capturing Avalonia synchronization context
             // This prevents DBus from trying to use Avalonia dispatcher during cleanup
@@ -1567,7 +1542,6 @@ namespace NudgeTray
                         (Tmds.DBus.Protocol.Message m, object? s) => m.GetBodyReader().ReadUInt32(),
                         null);
 
-                    Console.WriteLine($"[DEBUG] Notification ID: {notificationId}");
 
                     // Listen for ActionInvoked signal
                     var actionMatchRule = new MatchRule
@@ -1590,13 +1564,12 @@ namespace NudgeTray
                         {
                             if (ex != null)
                             {
-                                Console.WriteLine($"[DEBUG] Action listener error: {ex.Message}");
+                                Console.WriteLine($"[WARN] Action listener error: {ex.Message}");
                                 return;
                             }
 
                             if (signal.id == notificationId)
                             {
-                                Console.WriteLine($"[DEBUG] Action invoked: {signal.actionKey}");
 
                                 if (signal.actionKey == "yes")
                                 {
@@ -1619,17 +1592,15 @@ namespace NudgeTray
                     );
 
                     // Keep connection alive until cancelled
-                    Console.WriteLine("[DEBUG] Waiting for notification interaction (60s timeout)...");
                     await Task.Delay(-1, cancellationSource.Token).ContinueWith(_ => { });
                 }
                 catch (TaskCanceledException)
                 {
-                    Console.WriteLine("[DEBUG] DBus notification cancelled (expected during cleanup)");
                     // Swallow cancellation exceptions - these are expected
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[DEBUG] Native DBus notification failed: {ex.Message}");
+                    Console.WriteLine($"[WARN] Native DBus notification failed: {ex.Message}");
                     // Don't rethrow - just log and continue
                 }
                 finally
@@ -1705,7 +1676,7 @@ namespace NudgeTray
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[DEBUG] Could not restore focus to '{appName}': {ex.Message}");
+                Console.WriteLine($"[WARN] Could not restore focus to '{appName}': {ex.Message}");
             }
         }
 
@@ -1749,7 +1720,7 @@ namespace NudgeTray
 
         public static void Quit()
         {
-            Console.WriteLine("[DEBUG] Quit() called - shutting down Nudge...");
+            Console.WriteLine("[INFO] Quit() called - shutting down Nudge...");
 
             // Stop ML services
             if (_mlInferenceProcess != null && !_mlInferenceProcess.HasExited)
@@ -1777,8 +1748,8 @@ namespace NudgeTray
             // Stop main nudge process
             if (_nudgeProcess != null && !_nudgeProcess.HasExited)
             {
-                Console.WriteLine($"[DEBUG] Nudge process PID: {_nudgeProcess.Id}");
-                Console.WriteLine("[DEBUG] Attempting to kill nudge process...");
+                Console.WriteLine($"[INFO] Nudge process PID: {_nudgeProcess.Id}");
+                Console.WriteLine("[INFO] Attempting to kill nudge process...");
 
                 try
                 {
@@ -1787,7 +1758,7 @@ namespace NudgeTray
 
                     if (_nudgeProcess.HasExited)
                     {
-                        Console.WriteLine($"[DEBUG] Nudge process terminated (exit code: {_nudgeProcess.ExitCode})");
+                        Console.WriteLine($"[INFO] Nudge process terminated (exit code: {_nudgeProcess.ExitCode})");
                     }
                     else
                     {
@@ -1805,7 +1776,7 @@ namespace NudgeTray
             }
             else
             {
-                Console.WriteLine("[DEBUG] Nudge process already exited or null");
+                Console.WriteLine("[INFO] Nudge process already exited or null");
             }
 
             if (_trayIcon != null)
@@ -1815,7 +1786,7 @@ namespace NudgeTray
             }
 
             Console.WriteLine("✓ Shutdown complete");
-            Console.WriteLine("[DEBUG] Exiting nudge-tray...");
+            Console.WriteLine("[INFO] Exiting nudge-tray...");
 
             if (_singleInstanceMutex != null)
             {
