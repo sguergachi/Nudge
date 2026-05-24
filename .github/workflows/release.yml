@@ -64,25 +64,21 @@ jobs:
       - name: Build Windows installer
         shell: pwsh
         run: |
-          Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1" -ErrorAction SilentlyContinue
-          refreshenv 2>$null
-          $iscc = Get-Command iscc -ErrorAction SilentlyContinue
-          if (-not $iscc) {
-            $candidates = @(
-              "$env:ChocolateyInstall\bin\iscc.exe",
-              "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
-              "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
-            )
-            $isccPath = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-            if (-not $isccPath) { Write-Error "iscc not found"; exit 1 }
-            $env:Path = "$(Split-Path $isccPath);$env:Path"
-          }
-          iscc --version
+          $env:Path = "$env:ChocolateyInstall\bin;$env:Path"
+          Write-Host "Checking iscc..."
+          $isccExe = (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source
+          if (-not $isccExe) { $isccExe = "$env:ChocolateyInstall\bin\iscc.exe" }
+          if (-not (Test-Path $isccExe)) { Write-Error "iscc.exe not found at $isccExe"; exit 1 }
+          Write-Host "  iscc: $isccExe"
+          & $isccExe --version
+          Write-Host "Extracting version..."
           $version = Select-String -Path "NudgeCrossPlatform\nudge-tray.cs" -Pattern 'const string VERSION = "([.\d]+)"' | ForEach-Object { $_.Matches.Groups[1].Value }
           if (-not $version) { Write-Error "Failed to extract version"; exit 1 }
-          Write-Host "Building installer for v$version"
-          iscc /DMyAppVersion=$version "NudgeCrossPlatform\assets\windows\setup.iss"
-          if ($LASTEXITCODE -ne 0) { Write-Error "iscc failed"; exit 1 }
+          Write-Host "  version: $version"
+          Write-Host "Running Inno Setup compiler..."
+          & $isccExe /DMyAppVersion=$version "NudgeCrossPlatform\assets\windows\setup.iss"
+          if ($LASTEXITCODE -ne 0) { Write-Error "iscc failed (exit $LASTEXITCODE)"; exit 1 }
+          Write-Host "Checking output..."
           Get-ChildItem "dist" -Filter "Nudge-Setup-*.exe"
 
       - uses: actions/upload-artifact@v4
