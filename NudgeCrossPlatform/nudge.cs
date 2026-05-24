@@ -1076,20 +1076,45 @@ publish();
 
         public (string app, string title) GetForegroundAppWithTitle()
         {
-            return ("unknown", "");
+            var hwnd = GetForegroundWindow();
+            if (hwnd == IntPtr.Zero)
+                return ("unknown", "");
+
+            var sb = new StringBuilder(512);
+            var len = GetWindowText(hwnd, sb, sb.Capacity);
+            var title = len > 0 ? sb.ToString() : "";
+
+            GetWindowThreadProcessId(hwnd, out uint pid);
+            try
+            {
+                using var proc = Process.GetProcessById((int)pid);
+                return (proc.ProcessName.ToLowerInvariant(), title);
+            }
+            catch
+            {
+                return ("unknown", title);
+            }
         }
 
         public int GetIdleTime()
         {
-            if (!PlatformConfig.IsWindows) return 0;
             LASTINPUTINFO info = new();
             info.cbSize = Marshal.SizeOf<LASTINPUTINFO>();
             if (GetLastInputInfo(ref info))
-                return (int)(Environment.TickCount - info.dwTime);
+                return (int)(Environment.TickCount64 - info.dwTime);
             return 0;
         }
 
         public void Dispose() { }
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 
         [DllImport("user32.dll")]
         private static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
