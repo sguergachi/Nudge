@@ -100,8 +100,8 @@ jobs:
           find bin/Release/net10.0/linux-x64/publish_tray -name "*.dll" -exec cp {} dist/linux/ \;
 
       - name: Package Linux artifacts
-        working-directory: NudgeCrossPlatform
         run: |
+          cd NudgeCrossPlatform
           dist=dist/linux
           
           # Copy supporting files
@@ -113,13 +113,13 @@ jobs:
           # Set execute permissions
           chmod +x "$dist/nudge" "$dist/nudge-notify" "$dist/nudge-tray" "$dist/install-linux-app.sh"
           
-          # Create tarball
+          # Create tarball in repo root
           tar -czf ../nudge-linux-x64.tar.gz -C dist linux
 
       - uses: actions/upload-artifact@v4
         with:
           name: nudge-linux-x64
-          path: NudgeCrossPlatform/nudge-linux-x64.tar.gz
+          path: nudge-linux-x64.tar.gz
 
   release:
     needs: [check-version, build-windows, build-linux]
