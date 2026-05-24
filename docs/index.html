@@ -31,22 +31,21 @@
   <div class="container tight">
     <h1>Still&nbsp;focused?</h1>
     <p class="hero-desc">
-      Nudge watches your desktop activity, learns your attention patterns, and asks "still focused?"
-      at exactly the right moment — using a local AI model that runs entirely on your machine.
+      Local AI that learns your attention patterns and asks at the right moment.
+      No cloud. No timers. No noise.
     </p>
     <div class="hero-actions">
       <a class="btn btn-primary" href="https://github.com/sguergachi/Nudge/releases/latest/download/Nudge-Setup-1.5.0.exe">Download for Windows</a>
       <a class="btn btn-secondary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-x64.tar.gz">Download for Linux</a>
     </div>
-    <p class="hero-footnote">Free &middot; Open source &middot; No cloud &middot; No account</p>
-
+    <p class="hero-footnote">Free &middot; Open source &middot; No account needed</p>
     <div class="hero-media">
       <img src="screenshots/notification_active.png" alt="Nudge notification: Still focused? YES / NO" class="hero-shot">
     </div>
   </div>
 </section>
 
-<!-- ═══ Powered by sophisticated tech ═══ -->
+<!-- ═══ How it works ═══ -->
 <section class="section" id="how-it-works">
   <div class="container">
     <div class="section-header">
@@ -58,21 +57,39 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         </div>
         <h3>Sensor fusion pipeline</h3>
-        <p>The harvest engine samples your foreground app, idle time, and browser domain at 1&thinsp;Hz. Three raw signals are fused into a 21-dimension feature vector — capturing switch velocity, distinct-app count, and anchor-return events over a rolling 300-second window. Every app is classified into one of six categories at five confidence tiers.</p>
+        <p class="pillar-short">Three raw signals fused into a 21-dimension feature vector.</p>
+        <ul class="pillar-details">
+          <li>Samples foreground app, idle duration &amp; browser domain at 1&thinsp;Hz</li>
+          <li>Rolling 300&thinsp;s window captures switch velocity &amp; anchor-return events</li>
+          <li>6 app categories at 5 confidence tiers (Override &rarr; Fallback)</li>
+          <li>Sources: KWin Script, X11 EWMH, Sway IPC, Win32</li>
+        </ul>
       </div>
       <div class="pillar">
         <div class="pillar-icon">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
         </div>
         <h3>On-device AI model</h3>
-        <p>A scikit-learn binary classifier evaluates each snapshot against your personal YES/NO response history — not a generic population model. Inference runs locally over TCP 127.0.0.1:45002 with sub-100ms latency. Requires just 100 training samples to activate; retrains automatically every 50 new responses.</p>
+        <p class="pillar-short">Personal scikit-learn classifier trained on your YES/NO history.</p>
+        <ul class="pillar-details">
+          <li>Binary inference over TCP 127.0.0.1:45002 at sub-100ms latency</li>
+          <li>Activates after 100 training samples; retrains at every 50 new responses</li>
+          <li>Adaptive architecture: lightweight (&lt;200 samples), standard (200+)</li>
+          <li>No cloud &mdash; model weights and training data stay in <code>~/.nudge/</code></li>
+        </ul>
       </div>
       <div class="pillar">
         <div class="pillar-icon">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         </div>
         <h3>Adaptive interrupt timing</h3>
-        <p>No fixed schedule. The model interrupts only when it detects drift at &ge;98% confidence — otherwise it stays silent or falls back to variable-interval sampling. A single notification appears: YES or NO. Keyboard shortcuts (Ctrl+Shift+Y / Ctrl+Shift+N) keep you in flow. Every answer sharpens the next prediction.</p>
+        <p class="pillar-short">No fixed schedule &mdash; the model decides when to check in.</p>
+        <ul class="pillar-details">
+          <li>Fires at &ge;98% drift confidence; stays silent when you're productive</li>
+          <li>Below threshold &rarr; falls back to variable-interval sampling (5&ndash;10 min)</li>
+          <li>Ctrl+Shift+Y / Ctrl+Shift+N respond without leaving the keyboard</li>
+          <li>30s auto-dismiss &mdash; every answer feeds back and sharpens the model</li>
+        </ul>
       </div>
     </div>
   </div>
@@ -87,33 +104,45 @@
     <div class="features">
       <div class="feature">
         <div class="feature-dot"></div>
-        <h3>Your model, not someone else's</h3>
-        <p>Trained exclusively on your responses. No pre-trained population model. It knows what distraction looks like for <em>you</em> — and gets sharper with every answer.</p>
+        <div>
+          <h3>Your model, not someone else's</h3>
+          <p>Trained exclusively on your responses. No pre-trained population model. It learns what distraction looks like for <em>you</em> &mdash; and gets sharper with every answer.</p>
+        </div>
       </div>
       <div class="feature">
         <div class="feature-dot"></div>
-        <h3>Zero data leaves your machine</h3>
-        <p>All training data, model weights, and config stay in <code>~/.nudge/</code>. No cloud endpoints exist in the codebase. No telemetry, no accounts, no signup.</p>
+        <div>
+          <h3>Zero data leaves your machine</h3>
+          <p>All data, model weights, and config stay in <code>~/.nudge/</code>. No cloud endpoints exist in the codebase. No telemetry, no accounts, no signup.</p>
+        </div>
       </div>
       <div class="feature">
         <div class="feature-dot"></div>
-        <h3>Every response retrains the model</h3>
-        <p>Each YES or NO you give becomes a training sample. The model retrains automatically — getting sharper with every interaction. No manual retraining needed.</p>
+        <div>
+          <h3>Every response retrains the model</h3>
+          <p>A background process polls for new samples every 300&thinsp;s. At 50+ new responses, the model retrains automatically. No manual steps.</p>
+        </div>
       </div>
       <div class="feature">
         <div class="feature-dot"></div>
-        <h3>Keyboard-first design</h3>
-        <p><code>Ctrl+Shift+Y</code> for YES, <code>Ctrl+Shift+N</code> for NO. The notification auto-dismisses after 30 seconds. Your hands never leave the keyboard.</p>
+        <div>
+          <h3>Keyboard-first design</h3>
+          <p><code>Ctrl+Shift+Y</code> / <code>Ctrl+Shift+N</code> respond instantly. Notification auto-dismisses after 30&thinsp;s. Your hands never leave the keyboard.</p>
+        </div>
       </div>
       <div class="feature">
         <div class="feature-dot"></div>
-        <h3>Cross-platform</h3>
-        <p>Windows 10/11 and Linux — KDE, GNOME, Sway, Cinnamon. Works on both Wayland and X11. Self-contained binary, no runtime install required.</p>
+        <div>
+          <h3>Cross-platform</h3>
+          <p>Windows 10/11, Linux (KDE, GNOME, Sway, Cinnamon). Wayland + X11. Self-contained binary &mdash; no runtime install required.</p>
+        </div>
       </div>
       <div class="feature">
         <div class="feature-dot"></div>
-        <h3>Open source (MIT)</h3>
-        <p>Every line is on GitHub. Auditable, forkable, improvable. Free forever — no subscription, no premium tier.</p>
+        <div>
+          <h3>Open source (MIT)</h3>
+          <p>Every line on GitHub. Auditable, forkable, improvable. Free forever &mdash; no subscription, no premium tier.</p>
+        </div>
       </div>
     </div>
   </div>
@@ -138,16 +167,14 @@
     </div>
     <div class="terminal">
       <div class="terminal-bar">
-        <span class="tb-dot tb-dot-r"></span>
-        <span class="tb-dot tb-dot-y"></span>
-        <span class="tb-dot tb-dot-g"></span>
+        <span class="tb-dot tb-dot-r"></span><span class="tb-dot tb-dot-y"></span><span class="tb-dot tb-dot-g"></span>
         <span class="tb-title">terminal</span>
       </div>
       <div class="terminal-body">
         <div class="terminal-line"><span class="prompt">$</span> tar -xzf nudge-linux-x64.tar.gz &amp;&amp; cd linux</div>
         <div class="terminal-line"><span class="prompt">$</span> ./install-linux-app.sh</div>
         <div class="terminal-line"><span class="prompt">$</span> nudge-tray</div>
-        <div class="terminal-line terminal-line-dim">harvest daemon started · ML inference on 127.0.0.1:45002</div>
+        <div class="terminal-line terminal-line-dim">harvest daemon started &middot; ML inference on 127.0.0.1:45002</div>
       </div>
     </div>
     <p class="cta-footnote">
