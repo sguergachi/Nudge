@@ -3,6 +3,7 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>Nudge</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <ShebangSource>nudge.cs</ShebangSource>
     <ShebangBuildSource>nudge_build.cs</ShebangBuildSource>
@@ -16,5 +17,6 @@
 
   <ItemGroup>
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.92.0" />
+    <ProjectReference Include="../../WaylandDotnet/WaylandDotnet/WaylandDotnet.csproj" />
   </ItemGroup>
 </Project>

@@ -70,6 +70,11 @@ namespace NudgeTray
         private static bool _sensorSignalsOpen;
         private static bool _trainingDetailsOpen;
 
+        // AI Brain persistent panel — keeps animated timers alive across 10s refreshes
+        private StackPanel? _aiBrainPanel;
+        private bool _aiBrainNeedsRebuild;
+        private bool _lastAIBrainIsTraining;
+
         // Fluent Design System Colors - matching CustomNotification
         private static readonly Color BackgroundColor = Color.FromRgb(18, 18, 20);
         private static readonly Color SurfaceColor = Color.FromRgb(28, 28, 32);
@@ -127,7 +132,7 @@ namespace NudgeTray
             // Live AI Brain tab refresh — only runs when AI tab is active
             _aiLiveRefreshTimer = new DispatcherTimer
             {
-                Interval = TimeSpan.FromSeconds(10)
+                Interval = TimeSpan.FromSeconds(2)
             };
             _aiLiveRefreshTimer.Tick += (s, e) =>
             {
@@ -502,7 +507,7 @@ namespace NudgeTray
                 Padding = new Thickness(0),
                 Content = new TextBlock
                 {
-                    Text = "AI",
+                    Text = "AI Brain",
                     FontSize = 11,
                     FontWeight = FontWeight.Medium,
                     Foreground = new SolidColorBrush(TextSecondary)
@@ -514,6 +519,7 @@ namespace NudgeTray
                 _aiTabActive = true;
                 _activeDetailView = DetailViewType.None;
                 _contentScrollOffset = 0;
+                _aiBrainNeedsRebuild = true;
                 UpdateTabStyles();
                 RefreshContent();
                 _aiLiveRefreshTimer?.Start();
@@ -535,7 +541,7 @@ namespace NudgeTray
         }
 
         /// <summary>Builds the entire AI Brain tab content panel.</summary>
-        private static StackPanel CreateAILiveView()
+        private StackPanel CreateAILiveView()
         {
             var panel = new StackPanel { Spacing = 10 };
 
@@ -549,17 +555,27 @@ namespace NudgeTray
             var latest = events.Count > 0 ? events[events.Count - 1] : null;
 
             // ── Live app focus ────────────────────────────────────────────────────
-            panel.Children.Add(CreateLiveFocusCard(latest));
+            var focusCard = CreateLiveFocusCard(latest);
+            focusCard.Tag = "ai_focus_card";
+            panel.Children.Add(focusCard);
 
             // ── Prediction History (countdown + score + chart merged) ─────────────
-            panel.Children.Add(CreatePredictionHistorySection(events, latest));
+            var predSection = CreatePredictionHistorySection(events, latest);
+            predSection.Tag = "ai_prediction_section";
+            panel.Children.Add(predSection);
 
             // ── Recent events log ─────────────────────────────────────────────────
             if (events.Count > 0)
-                panel.Children.Add(CreateSection("Recent Checks", CreateEventsLog(events)));
+            {
+                var eventsSection = CreateSection("Recent Checks", CreateEventsLog(events));
+                eventsSection.Tag = "ai_events_section";
+                panel.Children.Add(eventsSection);
+            }
 
             // ── Training status ───────────────────────────────────────────────────
-            panel.Children.Add(CreateSection("Model Training", CreateTrainingView()));
+            var trainingSection = CreateSection("Model Training", CreateTrainingView());
+            trainingSection.Tag = "ai_training_section";
+            panel.Children.Add(trainingSection);
 
             return panel;
         }
@@ -591,6 +607,11 @@ namespace NudgeTray
                 statusColor = ProductiveGreen;
                 statusText  = "Up to date";
             }
+            else if (sampleCount >= minSamples && lastTrained != DateTime.MinValue)
+            {
+                statusColor = AIStatusLearning;
+                statusText  = "Waiting to retrain…";
+            }
             else if (sampleCount >= minSamples)
             {
                 statusColor = AIStatusLearning;
@@ -608,7 +629,7 @@ namespace NudgeTray
                 headerGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
                 headerGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
 
-                var statusStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+                var statusStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Tag = "training_status_row" };
                 statusStack.Children.Add(new Border
                 {
                     Width = 8, Height = 8,
@@ -767,8 +788,11 @@ namespace NudgeTray
                     {
                         Background = new SolidColorBrush(PrimaryBlue),
                         CornerRadius = new CornerRadius(2),
-                        HorizontalAlignment = HorizontalAlignment.Left
+                        HorizontalAlignment = HorizontalAlignment.Stretch
                     };
+                    var fillScale = new ScaleTransform { ScaleX = 0 };
+                    fill.RenderTransform = fillScale;
+                    fill.RenderTransformOrigin = new RelativePoint(0, 0.5, RelativeUnit.Relative);
                     barBg.Child = fill;
 
                     var countdownLabel = new TextBlock
@@ -786,8 +810,7 @@ namespace NudgeTray
                     {
                         double elapsed = (DateTime.Now - anchor).TotalSeconds;
                         double p = Math.Min(1.0, Math.Max(0.0, elapsed / checkIntervalSec));
-                        double w = barBg.Bounds.Width;
-                        if (w > 0) fill.Width = p * w;
+                        fillScale.ScaleX = p;
 
                         double rem = Math.Max(0, checkIntervalSec - elapsed);
                         countdownLabel.Text = rem > 1
@@ -1546,17 +1569,7 @@ namespace NudgeTray
         /// </summary>
         private static Border CreatePredictionHistorySection(IReadOnlyList<MLLiveEvent> events, MLLiveEvent? latest)
         {
-            long nextCheckAt = LiveAIState.NextCheckAt;
-            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             const long totalInterval = 60;
-            long secondsLeft = nextCheckAt > 0 ? Math.Max(0, nextCheckAt - now) : 0;
-            long elapsed = totalInterval - secondsLeft;
-            double progress = nextCheckAt > 0
-                ? Math.Min(1.0, Math.Max(0.0, (double)elapsed / totalInterval))
-                : 0;
-            string countdownText = nextCheckAt == 0 ? "Waiting for first check…"
-                : secondsLeft == 0 ? "Checking now…"
-                : $"{secondsLeft / 60}:{secondsLeft % 60:D2} until next check";
 
             Color mlColor = latest == null ? TextTertiary
                 : latest.Confidence < 0.5 ? Color.FromRgb(255, 193, 7)
@@ -1567,10 +1580,9 @@ namespace NudgeTray
 
             // ── Header row: title + countdown text ───────────────────────────
             var headerGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-            string titleText = "Prediction History";
             headerGrid.Children.Add(new TextBlock
             {
-                Text = titleText,
+                Text = "Prediction History",
                 FontSize = 11,
                 FontWeight = FontWeight.Medium,
                 Foreground = new SolidColorBrush(TextSecondary),
@@ -1578,7 +1590,7 @@ namespace NudgeTray
             });
             var cdLabel = new TextBlock
             {
-                Text = countdownText,
+                Text = "Waiting for first check…",
                 FontSize = 10,
                 Foreground = new SolidColorBrush(TextTertiary),
                 HorizontalAlignment = HorizontalAlignment.Right,
@@ -1597,40 +1609,69 @@ namespace NudgeTray
                 ClipToBounds = true,
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
-            if (nextCheckAt > 0 && secondsLeft == 0)
+            Action rebuildProgressBar = () =>
             {
-                // Indeterminate bouncing bar while checking now
-                barContainer.Child = CreateIndeterminateBar();
-            }
-            else
-            {
-                var barGrid = new Grid();
-                if (progress >= 0.995)
+                long nextAt = LiveAIState.NextCheckAt;
+                long nowSec = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                long secLeft = nextAt > 0 ? Math.Max(0, nextAt - nowSec) : 0;
+                long secDone = totalInterval - secLeft;
+                double prog = nextAt > 0
+                    ? Math.Min(1.0, Math.Max(0.0, (double)secDone / totalInterval))
+                    : 0;
+
+                if (nextAt > 0 && secLeft == 0)
                 {
-                    barGrid.ColumnDefinitions = new ColumnDefinitions("*");
-                    barGrid.Children.Add(new Border
-                    {
-                        Background = new SolidColorBrush(PrimaryBlue),
-                        CornerRadius = new CornerRadius(2),
-                        HorizontalAlignment = HorizontalAlignment.Stretch
-                    });
+                    barContainer.Child = CreateIndeterminateBar();
                 }
-                else if (progress > 0.005)
+                else
                 {
-                    double rem = 1.0 - progress;
-                    barGrid.ColumnDefinitions = new ColumnDefinitions($"{progress * 100:F1}*,{rem * 100:F1}*");
-                    var fill = new Border
+                    var barGrid = new Grid();
+                    if (prog >= 0.995)
                     {
-                        Background = new SolidColorBrush(PrimaryBlue),
-                        CornerRadius = new CornerRadius(2, 0, 0, 2),
-                        HorizontalAlignment = HorizontalAlignment.Stretch
-                    };
-                    Grid.SetColumn(fill, 0);
-                    barGrid.Children.Add(fill);
+                        barGrid.ColumnDefinitions = new ColumnDefinitions("*");
+                        barGrid.Children.Add(new Border
+                        {
+                            Background = new SolidColorBrush(PrimaryBlue),
+                            CornerRadius = new CornerRadius(2),
+                            HorizontalAlignment = HorizontalAlignment.Stretch
+                        });
+                    }
+                    else if (prog > 0.005)
+                    {
+                        double rem = 1.0 - prog;
+                        barGrid.ColumnDefinitions = new ColumnDefinitions($"{prog * 100:F1}*,{rem * 100:F1}*");
+                        var fill = new Border
+                        {
+                            Background = new SolidColorBrush(PrimaryBlue),
+                            CornerRadius = new CornerRadius(2, 0, 0, 2),
+                            HorizontalAlignment = HorizontalAlignment.Stretch
+                        };
+                        Grid.SetColumn(fill, 0);
+                        barGrid.Children.Add(fill);
+                    }
+                    barContainer.Child = barGrid;
                 }
-                barContainer.Child = barGrid;
-            }
+            };
+            rebuildProgressBar();
             panel.Children.Add(barContainer);
+
+            // ── Live countdown update every second (text only) ───────────────
+            Action updateCountdown = () =>
+            {
+                long nextAt = LiveAIState.NextCheckAt;
+                long nowSec = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                long secLeft = nextAt > 0 ? Math.Max(0, nextAt - nowSec) : 0;
+
+                cdLabel.Text = nextAt == 0 ? "Waiting for first check…"
+                    : secLeft == 0 ? "Checking now…"
+                    : $"{secLeft / 60}:{secLeft % 60:D2} until next check";
+            };
+            updateCountdown();
+
+            var countdownTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            countdownTimer.Tick += (_, _) => updateCountdown();
+            countdownTimer.Start();
+            barContainer.Unloaded += (_, _) => countdownTimer.Stop();
 
             // ── Latest score row ──────────────────────────────────────────────
             if (latest != null)
@@ -2121,6 +2162,8 @@ namespace NudgeTray
                 statusLabel = " · ✓ confirmed";
             else if (evt.AiCorrect == false)
                 statusLabel = " · ✗ rejected";
+            else if (evt.Triggered)
+                statusLabel = " · ⏸ skipped";
 
             var tipGrid = new Grid
             {
@@ -2214,7 +2257,7 @@ namespace NudgeTray
                 var evt = events[i];
                 var row = new Grid
                 {
-                    ColumnDefinitions = new ColumnDefinitions("34,*,46,40,28")
+                    ColumnDefinitions = new ColumnDefinitions("34,32,*,46,40,28")
                 };
 
                 // Time
@@ -2228,6 +2271,19 @@ namespace NudgeTray
                 };
                 Grid.SetColumn(timeText, 0);
 
+                // Trigger source
+                var sourceText = new TextBlock
+                {
+                    Text = evt.TriggerSource == "int" ? "INT" : "AI",
+                    FontSize = 10,
+                    FontWeight = FontWeight.Medium,
+                    Foreground = new SolidColorBrush(
+                        evt.TriggerSource == "int" ? Color.FromRgb(255, 193, 7) : ProductiveGreen),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    HorizontalAlignment = HorizontalAlignment.Center
+                };
+                Grid.SetColumn(sourceText, 1);
+
                 // App name
                 var appText = new TextBlock
                 {
@@ -2237,7 +2293,7 @@ namespace NudgeTray
                     VerticalAlignment = VerticalAlignment.Center,
                     TextTrimming = TextTrimming.CharacterEllipsis
                 };
-                Grid.SetColumn(appText, 1);
+                Grid.SetColumn(appText, 2);
 
                 // Score with colored dot
                 Color dotColor = evt.Confidence < 0.5
@@ -2264,7 +2320,7 @@ namespace NudgeTray
                     Foreground = new SolidColorBrush(TextSecondary),
                     VerticalAlignment = VerticalAlignment.Center
                 });
-                Grid.SetColumn(scoreRow, 2);
+                Grid.SetColumn(scoreRow, 3);
 
                 // Action label
                 string actionLabel;
@@ -2288,26 +2344,29 @@ namespace NudgeTray
                     HorizontalAlignment = HorizontalAlignment.Right,
                     VerticalAlignment = VerticalAlignment.Center
                 };
-                Grid.SetColumn(actionText, 3);
+                Grid.SetColumn(actionText, 4);
 
-                // Response icon (✓ = AI correct, ✗ = AI wrong)
+                // Response icon (✓ = AI correct, ✗ = AI wrong, ⏸ = skipped)
                 var respText = new TextBlock
                 {
                     Text = evt.AiCorrect == true ? "✓"
                          : evt.AiCorrect == false ? "✗"
+                         : evt.Triggered ? "⏸"
                          : "",
                     FontSize = 11,
                     FontWeight = FontWeight.Medium,
                     Foreground = new SolidColorBrush(
                         evt.AiCorrect == true ? ProductiveGreen
                         : evt.AiCorrect == false ? UnproductiveRed
+                        : evt.Triggered ? AIStatusInactive
                         : Colors.Transparent),
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center
                 };
-                Grid.SetColumn(respText, 4);
+                Grid.SetColumn(respText, 5);
 
                 row.Children.Add(timeText);
+                row.Children.Add(sourceText);
                 row.Children.Add(appText);
                 row.Children.Add(scoreRow);
                 row.Children.Add(actionText);
@@ -2984,6 +3043,8 @@ namespace NudgeTray
                     return "M12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22C6.47,22 2,17.5 2,12A10,10 0 0,1 12,2M12.5,7V12.25L17,14.92L16.25,16.15L11,13V7H12.5Z";
                 case "star": // Star/Achievement icon
                     return "M12,17.27L18.18,21L16.54,13.97L22,9.24L14.81,8.62L12,2L9.19,8.62L2,9.24L7.45,13.97L5.82,21L12,17.27Z";
+                case "trend": // Trending up arrow — used for productive %
+                    return "M16,6L18.29,8.29L13.41,13.17L9.41,9.17L2,16.59L3.41,18L9.41,12L13.41,16L19.71,9.71L22,12V6H16Z";
                 case "apps": // Apps/Application icon
                     return "M16,20H20V16H16M16,14H20V10H16M10,8H14V4H10M16,8H20V4H16M10,14H14V10H10M4,14H8V10H4M4,20H8V16H4M10,20H14V16H10M4,8H8V4H4V8Z";
                 case "chart": // Chart/Stats icon

@@ -60,13 +60,15 @@ def _load_meta(model_dir: str) -> dict:
 
 
 def _save_meta(model_dir: str, sample_count: int, accuracy: float,
-               model_version: int = 0) -> None:
+               model_version: int = 0, n_productive: int = 0, n_unproductive: int = 0) -> None:
     os.makedirs(model_dir, exist_ok=True)
     meta = {
         'trained_at': time.time(),
         'sample_count': sample_count,
         'accuracy': round(accuracy, 4),
         'model_version': model_version,
+        'n_productive': n_productive,
+        'n_unproductive': n_unproductive,
     }
     with open(os.path.join(model_dir, 'trainer_meta.json'), 'w') as f:
         json.dump(meta, f)
@@ -82,7 +84,7 @@ def _choose_architecture(sample_count: int) -> str:
 
 def _run_training(csv_path: str, model_dir: str, sample_count: int) -> bool:
     try:
-        from train_model import train_modern  # type: ignore
+        from train_model import train_modern, load_and_prepare_data  # type: ignore
 
         arch = _choose_architecture(sample_count)
         print(f'[trainer] Training {arch} model on {sample_count} samples...', flush=True)
@@ -97,16 +99,22 @@ def _run_training(csv_path: str, model_dir: str, sample_count: int) -> bool:
             cpu_only=True,
         )
 
-        # Read model version written by train_modern
+        # Read model version and class counts
         model_version = 0
+        n_productive = 0
+        n_unproductive = 0
         try:
             with open(os.path.join(model_dir, 'trainer_state.json'), 'r') as f:
                 state = json.load(f)
                 model_version = state.get('training_count', 0)
+            with open(os.path.join(model_dir, 'trainer_meta.json'), 'r') as f:
+                meta = json.load(f)
+                n_productive = meta.get('n_productive', 0)
+                n_unproductive = meta.get('n_unproductive', 0)
         except Exception:
             pass
 
-        _save_meta(model_dir, sample_count, accuracy, model_version)
+        _save_meta(model_dir, sample_count, accuracy, model_version, n_productive, n_unproductive)
         print(f'[trainer] Done. accuracy={accuracy:.3f} version={model_version}', flush=True)
         return True
 

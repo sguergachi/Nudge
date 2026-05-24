@@ -8,6 +8,9 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System.Runtime.CompilerServices;
+
+[assembly: InternalsVisibleTo("NudgeCrossPlatform.Tests")]
 
 namespace NudgeCore;
 
@@ -84,10 +87,12 @@ internal enum IdleSource
 {
     Unknown,
     Win32LastInput,
-    WaylandExtIdleNotify,
+    KdeKwinIdle,
     FreedesktopScreenSaver,
     GnomeIdleMonitor,
-    X11Xprintidle
+    X11Xprintidle,
+    LogindIdleHint,
+    WaylandExtIdleNotify
 }
 
 internal enum SignalQuality
@@ -209,6 +214,13 @@ internal sealed class ActivityFeatureTracker
         if (_titleSince == DateTime.MinValue || !string.Equals(title, _lastTitle, StringComparison.Ordinal))
             _titleSince = now;
 
+        var signalQuality = DetermineSignalQuality(window, appId, title);
+        // Override to poor if the user is afk (idle > AfkThresholdMs)
+        if (idle.IdleMs >= AfkThresholdMs)
+        {
+            signalQuality = SignalQuality.Poor;
+        }
+
         var context = new ActivityContext(
             FocusedAppId: appId,
             FocusedTitle: title,
@@ -221,7 +233,7 @@ internal sealed class ActivityFeatureTracker
             MappedToplevelCount: Math.Max(0, window.MappedToplevelCount),
             ActiveWorkspaceId: workspaceId,
             FocusSource: window.FocusSource,
-            SignalQuality: DetermineSignalQuality(window, appId, title),
+            SignalQuality: signalQuality,
             FullscreenFlag: window.Fullscreen ? 1 : 0);
 
         _samples.Enqueue(new ActivitySample(now, focusKey, appId, domain, workspaceId));
@@ -717,7 +729,7 @@ internal static class BrowserDetector
         "confluence.atlassian.com", "copilot.microsoft.com", "discord.com", "docs.google.com",
         "drive.google.com", "ebay.com", "facebook.com", "figma.com", "github.com",
         "gitlab.com", "instagram.com", "jira.atlassian.com", "linear.app", "linkedin.com",
-        "localhost", "mail.google.com", "meet.google.com", "netflix.com", "news.ycombinator.com",
+        "mail.google.com", "meet.google.com", "netflix.com", "news.ycombinator.com",
         "notion.so", "office.com", "outlook.office.com", "reddit.com", "slack.com",
         "stackoverflow.com", "stackexchange.com", "tiktok.com", "twitch.tv", "x.com",
         "youtube.com", "zoom.us"
@@ -887,7 +899,7 @@ internal static class BrowserDetector
                 break;
 
             int end = start;
-            while (end < title.Length && !IsTokenSeparator(title[end]))
+            while (end < title.Length && !IsTokenSeparatorBoundary(title, end))
                 end++;
 
             if (TryNormalizeDomain(title[start..end], out domain))
@@ -909,14 +921,31 @@ internal static class BrowserDetector
         while (start < title.Length)
         {
             while (start < title.Length && IsSegmentSeparator(title[start]))
+            {
+                // Hyphen within alphanumeric context is part of a word, not a separator
+                if (title[start] == '-' && start > 0 && start + 1 < title.Length && 
+                    char.IsLetterOrDigit(title[start - 1]) && char.IsLetterOrDigit(title[start + 1]))
+                {
+                    start++;
+                    continue;
+                }
                 start++;
+            }
 
             if (start >= title.Length)
                 break;
 
             int end = start;
-            while (end < title.Length && !IsSegmentSeparator(title[end]))
+            while (end < title.Length)
+            {
+                if (IsSegmentSeparator(title[end]) && !(title[end] == '-' && 
+                    end > 0 && end + 1 < title.Length && 
+                    char.IsLetterOrDigit(title[end - 1]) && char.IsLetterOrDigit(title[end + 1])))
+                {
+                    break;
+                }
                 end++;
+            }
 
             var candidate = TrimToken(title[start..end]);
             if (TryMatchKnownSiteAlias(candidate, out domain) || TryNormalizeDomain(candidate, out domain))
@@ -1020,8 +1049,9 @@ internal static class BrowserDetector
 
     private static bool IsLikelyDomain(ReadOnlySpan<char> value)
     {
+        // localhost is explicitly excluded - not a valid productivity domain
         if (value.Equals("localhost", StringComparison.OrdinalIgnoreCase))
-            return true;
+            return false;
 
         if (value.Length < 4 || value.Length > 100)
             return false;
@@ -1074,9 +1104,21 @@ internal static class BrowserDetector
 
     private static bool IsSegmentSeparator(char c) => c is '|' or '-' or '—' or '–' or '·' or '•';
 
-    private static bool IsTokenSeparator(char c) => c is ' ' or '\t' or '-' or '—' or '–' or '|' or '\\' or '·' or '•';
+    private static bool IsTokenSeparator(char c) => c is ' ' or '\t' or '—' or '–' or '|' or '\\' or '·' or '•';
 
-    private static bool IsTrimCharacter(char c) => c is ' ' or '\t' or '-' or '—' or '–' or '|' or '/' or '\\' or '[' or ']' or '(' or ')' or '{' or '}' or '<' or '>' or ',' or ';' or ':' or '!' or '?' or '"' or '\'' or '`';
+    private static bool IsTokenSeparatorBoundary(ReadOnlySpan<char> text, int index)
+    {
+        // A hyphen is a separator only when surrounded by spaces (like " - ") to preserve hyphenated domains
+        if (index < text.Length && text[index] == '-')
+        {
+            bool leftSpace = index > 0 && char.IsWhiteSpace(text[index - 1]);
+            bool rightSpace = index + 1 < text.Length && char.IsWhiteSpace(text[index + 1]);
+            return leftSpace && rightSpace;
+        }
+        return IsTokenSeparator(text[index]);
+    }
+
+    private static bool IsTrimCharacter(char c) => c is ' ' or '\t' or '—' or '–' or '|' or '/' or '\\' or '[' or ']' or '(' or ')' or '{' or '}' or '<' or '>' or ',' or ';' or ':' or '!' or '?' or '"' or '\'' or '`';
 }
 
 internal static class AppCategoryClassifier
@@ -1133,8 +1175,8 @@ internal static class AppCategoryClassifier
     [
         (["konsole", "kitty", "alacritty", "wezterm", "tilix", "hyper", "xterm", "urxvt",
           "neovim", "codium", "helix", "sublime", "antigravity",
-          "term", "terminal", "shell", "editor", "ide", "code", "git", "debug", "sql", "database", "diff"], AppCategory.Development),
-        (["blender", "gimp", "krita", "inkscape", "darktable", "rawtherapee", "kdenlive", "pitivi",
+          "shell", "git", "debug", "sql", "database", "diff", "term", "terminal", "code"], AppCategory.Development),
+        (["openshot", "blender", "gimp", "krita", "inkscape", "darktable", "rawtherapee", "kdenlive", "pitivi",
           "obs", "audacity", "ardour", "resolve",
           "paint", "draw", "sketch", "design", "cad", "render", "synth", "studio"], AppCategory.Creative),
         (["libreoffice", "writer", "calc", "impress", "okular", "evince", "mupdf", "zathura",
@@ -1835,10 +1877,12 @@ internal static class NudgeCoreLogic
     internal static string GetIdleSourceName(IdleSource source) => source switch
     {
         IdleSource.Win32LastInput => "win32_last_input",
+        IdleSource.KdeKwinIdle => "kde_kwin_idle",
         IdleSource.WaylandExtIdleNotify => "wayland_ext_idle_notify",
         IdleSource.FreedesktopScreenSaver => "freedesktop_screensaver",
         IdleSource.GnomeIdleMonitor => "gnome_idle_monitor",
         IdleSource.X11Xprintidle => "x11_xprintidle",
+        IdleSource.LogindIdleHint => "logind_idle_hint",
         _ => "unknown"
     };
 
@@ -1934,7 +1978,7 @@ internal static class NudgeCoreLogic
                value.Equals("Productivity Check", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool TryGetCsvField(ReadOnlySpan<char> line, int fieldIndex, out ReadOnlySpan<char> field)
+    internal static bool TryGetCsvField(ReadOnlySpan<char> line, int fieldIndex, out ReadOnlySpan<char> field)
     {
         int currentField = 0;
         int start = 0;
@@ -1975,7 +2019,21 @@ internal static class NudgeCoreLogic
     {
         field = field.Trim();
         if (field.Length >= 2 && field[0] == '"' && field[^1] == '"')
+        {
+            // Remove the outer quotes
             field = field[1..^1];
+            
+            // Check for and unescape escaped quotes ("" -> ")
+            for (int i = 0; i < field.Length - 1; i++)
+            {
+                if (field[i] == '"' && field[i + 1] == '"')
+                {
+                    // Found an escaped quote, we need to create a new string to unescape
+                    var unescaped = field.ToString().Replace("\"\"", "\"");
+                    return unescaped.AsSpan();
+                }
+            }
+        }
 
         return field;
     }

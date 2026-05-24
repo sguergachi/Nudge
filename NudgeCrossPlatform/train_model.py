@@ -143,7 +143,7 @@ def load_and_prepare_data(csv_file):
     if prod == 0 or unprod == 0:
         raise ValueError('Need both productive AND unproductive examples')
 
-    return X, y, feature_cols, schema_version
+    return X, y, feature_cols, schema_version, prod, unprod
 
 
 def _build_model(architecture: str) -> GradientBoostingClassifier:
@@ -167,7 +167,7 @@ def train_modern(csv_file, model_dir='./model', architecture='standard',
     """
     print(f'Architecture: {architecture}')
 
-    X, y, feature_cols, schema_version = load_and_prepare_data(csv_file)
+    X, y, feature_cols, schema_version, prod, unprod = load_and_prepare_data(csv_file)
 
     scaler   = StandardScaler()
     X_scaled = scaler.fit_transform(X)
@@ -214,6 +214,8 @@ def train_modern(csv_file, model_dir='./model', architecture='standard',
         'trained_at':     datetime.now().isoformat(),
         'architecture':   architecture,
         'n_samples':      len(X),
+        'n_productive':   prod,
+        'n_unproductive': unprod,
         'accuracy':       round(accuracy, 4),
         'model_version':  model_version,
     }

@@ -84,10 +84,10 @@ to the interval timer.
 
 | Prediction | Confidence | Action |
 |---|---|---|
-| Not productive (0) | Any | **TRIGGER nudge** immediately |
+| Not productive (0) | >= 98% | **TRIGGER nudge** immediately |
+| Not productive (0) | < 98% | **DEFER** to interval-based fallback (does not reset interval timer) |
 | Productive (1) | Any | **SKIP** nudge, reset interval timer |
 | Model unavailable | — | Fall back to interval-based |
-| Low confidence | — | Fall back to interval-based |
 | Signal poor / AFK | — | Skip ML, let interval handle |
 
 ### Code Flow
@@ -111,11 +111,27 @@ static bool ShouldTriggerSnapshot(string app, int idle, int attention, ActivityT
     if (prediction == null || !prediction.ModelAvailable)
         return true;                                        // fallback to interval
 
-    if (prediction.Prediction == 0)                         // NOT productive
-        return true;                                        // TRIGGER nudge
+    // ── NOT productive ──────────────────────────────
+    if (prediction.Prediction == 0)
+    {
+        if (prediction.Confidence >= ML_CONFIDENCE_THRESHOLD)   // >= 98%
+        {
+            // HIGH confidence NOT productive → trigger!
+            _mlTriggeredSnapshots++;
+            return true;                                    // TRIGGER nudge
+        }
 
-    // Prediction == 1 → productive
+        // Low confidence NOT productive → defer to interval
+        // Note: interval timer is NOT reset, so an interval-based
+        // snapshot may still fire when its random timer expires.
+        _mlLowConfidence = true;
+        return false;                                       // let interval handle
+    }
+
+    // ── Productive ──────────────────────────────────
+    // Prediction == 1 → productive, skip nudge entirely
     _productivityConfirmed = true;
+    _mlSkippedAlerts++;
     return false;                                           // skip, reset interval
 }
 ```
@@ -174,7 +190,7 @@ A nudge will **not** fire when:
 | `ML_CHECK_INTERVAL_MS` | 60,000 ms | ML prediction frequency |
 | `RESPONSE_TIMEOUT_MS` | 60,000 ms | Max wait for user response |
 | `AUTO_DISMISS_SECONDS` | 30 s | Notification auto-close |
-| `ML_CONFIDENCE_THRESHOLD` | 0.98 | Reserved for future use |
+| `ML_CONFIDENCE_THRESHOLD` | 0.98 | Minimum confidence to trigger on NOT productive predictions |
 
 ## IPC Protocol
 

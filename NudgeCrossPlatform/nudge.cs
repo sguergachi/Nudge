@@ -49,22 +49,19 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Tmds.DBus.Protocol;
-
+using WaylandDotnet;
+using WaylandDotnet.Staging;
 using NudgeCore;
 using NudgeTray;
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// PLATFORM SERVICE IMPLEMENTATIONS
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-namespace Nudge;
-
 interface IPlatformService
 {
+    string PlatformName { get; }
+    IdleSource LastIdleSource { get; }
+    bool Initialize();
     string GetForegroundApp();
     (string app, string title) GetForegroundAppWithTitle();
     int GetIdleTime();
-    string PlatformName { get; }
 }
 
 sealed class Nudge
@@ -73,24 +70,9 @@ sealed class Nudge
     // VERSION & CONSTANTS
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    const string VERSION = "1.4.0";
-    const int CYCLE_MS = 1000;           // 1 second monitoring cycle
-    const int UDP_PORT = 45001;          // UDP listener port
-    const int RESPONSE_TIMEOUT_MS = 60000; // 60 seconds to respond
-    const int ACTIVITY_LOG_INTERVAL_MS = 60 * 1000;  // Log activity every 1 minute
-
-    static int SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;  // Random 5-10 minutes (configurable)
-    static bool _customInterval;  // Track if user specified custom interval
-
-    // ML-powered adaptive notifications
-    const int ML_CHECK_INTERVAL_MS = 60 * 1000;  // Check ML every 1 minute
-    const double ML_CONFIDENCE_THRESHOLD = 0.98;  // 98% confidence required
-    const int MIN_SAMPLES_THRESHOLD = 100;  // Minimum samples before using trained model
-    const string ML_HOST = "127.0.0.1";
-    const int ML_PORT = 45002;
-    static bool _mlEnabled;
-    static bool _mlAvailable;
-    static bool _forceTrainedModel;  // Force use of trained model even if below threshold
+    const string ProgramVersion = "2.0.4";
+    const string VersionSuffix = "dev";
+    static readonly string VERSION = $"{ProgramVersion}-{VersionSuffix}";
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // ANSI COLORS - Professional terminal output
@@ -98,157 +80,50 @@ sealed class Nudge
 
     static class Color
     {
-        public const string RESET = "\u001b[0m";
-        public const string BOLD = "\u001b[1m";
-        public const string DIM = "\u001b[2m";
-
-        public const string RED = "\u001b[31m";
-        public const string GREEN = "\u001b[32m";
-        public const string YELLOW = "\u001b[33m";
-        public const string BLUE = "\u001b[34m";
+        public const string RESET   = "\u001b[0m";
+        public const string BOLD    = "\u001b[1m";
+        public const string DIM     = "\u001b[2m";
+        public const string RED     = "\u001b[31m";
+        public const string GREEN   = "\u001b[32m";
+        public const string YELLOW  = "\u001b[33m";
+        public const string CYAN    = "\u001b[36m";
         public const string MAGENTA = "\u001b[35m";
-        public const string CYAN = "\u001b[36m";
-        public const string WHITE = "\u001b[37m";
-
-        public const string BRED = "\u001b[1;31m";      // Bold red
-        public const string BGREEN = "\u001b[1;32m";    // Bold green
-        public const string BYELLOW = "\u001b[1;33m";   // Bold yellow
-        public const string BCYAN = "\u001b[1;36m";     // Bold cyan
+        public const string BRED    = "\u001b[1;31m";
+        public const string BGREEN  = "\u001b[1;32m";
+        public const string BYELLOW = "\u001b[1;33m";
+        public const string BCYAN   = "\u001b[1;36m";
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // WINDOWS API - P/Invoke declarations for Windows-specific functionality
+    // CONSTANTS
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    [StructLayout(LayoutKind.Sequential)]
-    struct LASTINPUTINFO
-    {
-        public uint cbSize;
-        public uint dwTime;
-    }
-
-    [DllImport("user32.dll", SetLastError = true)]
-    static extern IntPtr GetForegroundWindow();
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    static extern int GetWindowText(IntPtr hWnd, [Out] char[] text, int count);
-
-    [DllImport("user32.dll")]
-    static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
-
-    [DllImport("kernel32.dll")]
-    static extern uint GetTickCount();
-
-    [DllImport("user32.dll")]
-    static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+    const int CYCLE_MS = 1000;
+    const int UDP_PORT = 45001;
+    const int RESPONSE_TIMEOUT_MS = 60000;
+    const double ML_CONFIDENCE_THRESHOLD = 0.98;
+    const int MIN_SAMPLES_THRESHOLD = 100;
+    const int ML_CHECK_INTERVAL_MS = 60000;
+    const int ACTIVITY_LOG_INTERVAL_MS = 60000;
+    const string ML_HOST = "127.0.0.1";
+    const int ML_PORT = 45002;
+    static int SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;
+    static bool _customInterval;
+    static bool _mlEnabled;
+    static bool _forceTrainedModel;
+    static bool _mlAvailable;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // PLATFORM SERVICE IMPLEMENTATIONS
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    sealed class WindowsPlatformService : IPlatformService
-    {
-        private string _cachedApp = "";
-        private string _cachedTitle = "";
-        private DateTime _appCacheExpiry = DateTime.MinValue;
-        private int _cachedIdle;
-        private DateTime _idleCacheExpiry = DateTime.MinValue;
-
-        public string PlatformName => "Windows";
-
-        public string GetForegroundApp()
-        {
-            var (app, title) = GetForegroundAppWithTitle();
-            return app;
-        }
-
-        public (string app, string title) GetForegroundAppWithTitle()
-        {
-            if (DateTime.Now < _appCacheExpiry)
-                return (_cachedApp, _cachedTitle);
-
-            try
-            {
-                IntPtr hwnd = GetForegroundWindow();
-                if (hwnd == IntPtr.Zero)
-                    return ("unknown", "");
-
-                _ = GetWindowThreadProcessId(hwnd, out uint processId);
-                string? processName = null;
-                try
-                {
-                    using var process = Process.GetProcessById((int)processId);
-                    processName = process.ProcessName;
-                }
-                catch { }
-
-                const int nChars = 1024;
-                var buff = new char[nChars];
-                string title = "";
-                int length = GetWindowText(hwnd, buff, nChars);
-                if (length > 0)
-                {
-                    title = new string(buff, 0, length);
-                }
-
-                string fallbackApp = !string.IsNullOrWhiteSpace(title)
-                    ? title
-                    : processName?.Trim() ?? "unknown";
-                string app = BrowserDetector.IsBrowser(processName)
-                    ? BrowserDetector.GetAppAndSite(processName, title)
-                    : fallbackApp;
-
-                _cachedApp = app;
-                _cachedTitle = title;
-                _appCacheExpiry = DateTime.Now.AddMilliseconds(500);
-                return (app, title);
-            }
-            catch
-            {
-                return ("unknown", "");
-            }
-        }
-
-        public int GetIdleTime()
-        {
-            if (DateTime.Now < _idleCacheExpiry)
-                return _cachedIdle;
-
-            try
-            {
-                LASTINPUTINFO lastInputInfo = new LASTINPUTINFO();
-                lastInputInfo.cbSize = (uint)Marshal.SizeOf(lastInputInfo);
-
-                if (GetLastInputInfo(ref lastInputInfo))
-                {
-                    uint idleTime = GetTickCount() - lastInputInfo.dwTime;
-                    _cachedIdle = (int)idleTime;
-                    _idleCacheExpiry = DateTime.Now.AddMilliseconds(100);
-                    return _cachedIdle;
-                }
-
-                return 0;
-            }
-            catch
-            {
-                return 0;
-            }
-        }
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // KWIN WINDOW TRACKER
+    // KWIN WINDOW TRACKER — KWin script + D-Bus listener for KDE Wayland focus
     //
-    // Invisible active-window detection for KDE Plasma 6 (X11 + Wayland).
+    // Writes a KWin script to ~/.local/share/kwin/scripts/nudge-window-tracker/
+    // that listens for windowActivated and captionChanged events, then publishes
+    // (app, title) to a D-Bus method "Update" on org.nudge.WindowTracker.
+    // This class owns that bus name, handles incoming Updates, and caches the
+    // latest (app, title, updatedAt) for idle calculation.
     //
-    // We auto-install a tiny KWin script under ~/.local/share/kwin/scripts/.
-    // The script subscribes to workspace.windowActivated and on every change
-    // calls (fire-and-forget) `org.nudge.WindowTracker.Update(app, title)` over
-    // the session bus. This Nudge process owns that bus name and caches the
-    // value, which GetKDEFocusedAppWithTitle reads.
-    //
-    // Crucially: NO interactive D-Bus calls. `org.kde.KWin.queryWindowInfo` is
-    // banned — it triggers a crosshair window-picker.
+    // Used as the primary KDE Wayland detection path in LinuxPlatformService,
+    // falling back to xprop on XWayland only when the tracker isn't ready.
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     sealed class KWinWindowTracker : IPathMethodHandler, IDisposable
@@ -287,6 +162,15 @@ sealed class Nudge
             lock (_lock) return (_cachedApp, _cachedTitle, _lastUpdate);
         }
 
+        public int GetIdleMs()
+        {
+            lock (_lock)
+            {
+                if (_lastUpdate == DateTime.MinValue) return -1;
+                return Math.Max(0, (int)(DateTime.UtcNow - _lastUpdate).TotalMilliseconds);
+            }
+        }
+
         public ValueTask HandleMethodAsync(MethodContext context)
         {
             var msg = context.Request;
@@ -304,9 +188,8 @@ sealed class Nudge
                         _lastUpdate = DateTime.UtcNow;
                     }
                 }
-                catch { /* malformed payload; ignore */ }
+                catch { }
             }
-            // KWin's callDBus is fire-and-forget (NoReplyExpected). Skip the reply.
             return ValueTask.CompletedTask;
         }
 
@@ -373,7 +256,6 @@ sealed class Nudge
             var qdbus = ResolveQdbus();
             if (string.IsNullOrEmpty(qdbus)) return;
 
-            // Reload to pick up any script content change. Unload errors are non-fatal.
             RunCommand(qdbus,
                 $"org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript {PluginName}");
             RunCommand(qdbus,
@@ -388,7 +270,7 @@ sealed class Nudge
         ""Id"": ""nudge-window-tracker"",
         ""Name"": ""Nudge Window Tracker"",
         ""Description"": ""Publishes the active window's app id and title to org.nudge.WindowTracker on the session bus, for the Nudge productivity tracker. Invisible: no UI."",
-        ""Version"": ""1.0"",
+        ""Version"": ""1.1"",
         ""EnabledByDefault"": true,
         ""ServiceTypes"": [""KWin/Script""]
     },
@@ -398,16 +280,23 @@ sealed class Nudge
 ";
 
         private const string MainJs = @"// Auto-installed by Nudge. Publishes active window info via D-Bus.
-// Fully passive: just listens to KWin's windowActivated signal.
+// Fully passive: listens to windowActivated + captionChanged for idle tracking.
+var _trackedWin = null;
+
 function publish() {
     try {
         var w = workspace.activeWindow;
-        if (!w) {
-            callDBus(""org.nudge.WindowTracker"", ""/"", ""org.nudge.WindowTracker"", ""Update"", """", """");
-            return;
+        if (w !== _trackedWin) {
+            if (_trackedWin) {
+                try { _trackedWin.captionChanged.disconnect(publish); } catch (e) {}
+            }
+            _trackedWin = w;
+            if (w) {
+                try { w.captionChanged.connect(publish); } catch (e) {}
+            }
         }
-        var cls = (w.resourceClass || """").toString();
-        var title = (w.caption || """").toString();
+        var cls = (w && w.resourceClass) ? w.resourceClass.toString() : """";
+        var title = (w && w.caption) ? w.caption.toString() : """";
         callDBus(""org.nudge.WindowTracker"", ""/"", ""org.nudge.WindowTracker"", ""Update"", cls, title);
     } catch (e) {
         print(""nudge-window-tracker error: "" + e);
@@ -421,6 +310,106 @@ publish();
 ";
     }
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // WAYLAND IDLE MONITOR — ext-idle-notify-v1 native idle detection
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    sealed class WaylandIdleMonitor : IDisposable
+    {
+        private WlDisplay? _display;
+        private ExtIdleNotifierV1? _notifier;
+        private ExtIdleNotificationV1? _notification;
+        private WlSeat? _seat;
+        private readonly Stopwatch _idleSw = new();
+        private bool _disposed;
+        private Thread? _dispatchThread;
+
+        public bool IsAvailable => _notifier != null;
+        public int LastIdleMs => _idleSw.IsRunning ? (int)_idleSw.ElapsedMilliseconds : 0;
+
+        public bool Initialize()
+        {
+            try
+            {
+                _display = WlDisplay.Connect();
+                var registry = _display.GetRegistry();
+
+                registry.OnGlobal += (name, interfaceName, version) =>
+                {
+                    if (interfaceName == ExtIdleNotifierV1.InterfaceName)
+                        _notifier = registry.Bind<ExtIdleNotifierV1>((uint)name, version);
+                    else if (interfaceName == WlSeat.InterfaceName)
+                        _seat = registry.Bind<WlSeat>((uint)name, version);
+                };
+
+                _display.Roundtrip();
+
+                if (_notifier == null || _seat == null)
+                {
+                    _display = null;
+                    return false;
+                }
+
+                _notification = _notifier.GetIdleNotification(0, _seat);
+
+                Console.Error.WriteLine($"[wayland-idle] using ext-idle-notify-v1 (seat: {_seat.Handle})");
+
+                _notification.OnIdled += () =>
+                {
+                    _idleSw.Restart();
+                };
+
+                _notification.OnResumed += () =>
+                {
+                    _idleSw.Reset();
+                };
+
+                _dispatchThread = new Thread(DispatchLoop)
+                {
+                    IsBackground = true,
+                    Name = "wayland-dispatch"
+                };
+                _dispatchThread.Start();
+
+                return true;
+            }
+            catch
+            {
+                Dispose();
+                return false;
+            }
+        }
+
+        private void DispatchLoop()
+        {
+            try
+            {
+                while (!_disposed && _display != null)
+                    _display.Dispatch();
+            }
+            catch
+            {
+                // Thread exit on disposal
+            }
+        }
+
+        public void Dispose()
+        {
+            _disposed = true;
+            _notification?.Destroy();
+            _notifier?.Destroy();
+            if (_display != null)
+                DisplayDisconnect(_display.Handle);
+        }
+
+        [DllImport("libwayland-client.so.0", EntryPoint = "wl_display_disconnect")]
+        private static extern void DisplayDisconnect(IntPtr display);
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // LINUX PLATFORM SERVICE — Focus + idle detection per compositor
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
     sealed class LinuxPlatformService : IPlatformService, IDisposable
     {
         private string _compositor = "";
@@ -429,13 +418,16 @@ publish();
         private DateTime _appCacheExpiry = DateTime.MinValue;
         private int _cachedIdle;
         private DateTime _idleCacheExpiry = DateTime.MinValue;
+        private IdleSource _lastIdleSource = IdleSource.Unknown;
         private KWinWindowTracker? _kwinTracker;
+        private WaylandIdleMonitor? _waylandIdle;
 
         private static readonly char[] Separators = [' ', '\n', '\r', '\t'];
 
         public void Dispose()
         {
             _kwinTracker?.Dispose();
+            _waylandIdle?.Dispose();
         }
 
         private static readonly FrozenSet<string> SystemProcessNames = new[]
@@ -459,6 +451,7 @@ publish();
         private static readonly byte[] DisplayBytes = "DISPLAY="u8.ToArray();
 
         public string PlatformName => _compositor;
+        public IdleSource LastIdleSource => _lastIdleSource;
 
         public bool Initialize()
         {
@@ -478,6 +471,18 @@ publish();
             if (!string.IsNullOrEmpty(cmd) && !CommandExists(cmd))
             {
                 return false;
+            }
+
+            // Try ext-idle-notify-v1 first (works across compositors that support it)
+            _waylandIdle = new WaylandIdleMonitor();
+            if (_waylandIdle.Initialize())
+            {
+                Console.Error.WriteLine($"[linux-platform] wayland idle: ext-idle-notify-v1 available");
+            }
+            else
+            {
+                Console.Error.WriteLine($"[linux-platform] wayland idle: ext-idle-notify-v1 not advertised");
+                _waylandIdle = null;
             }
 
             if (_compositor == "kde")
@@ -553,10 +558,41 @@ publish();
             if (DateTime.Now < _idleCacheExpiry)
                 return _cachedIdle;
 
-            // Try multiple methods for cross-compositor support
-            int idle = GetFreedesktopIdleTime();
+            int idle;
+
+            // Primary: ext-idle-notify-v1 (native Wayland, cross-compositor).
+            // When available, this is the authoritative source — it tracks
+            // actual seat input (mouse + keyboard), not window switches.
+            if (_waylandIdle != null && _waylandIdle.IsAvailable)
+            {
+                idle = _waylandIdle.LastIdleMs;
+                _lastIdleSource = IdleSource.WaylandExtIdleNotify;
+                _cachedIdle = idle;
+                _idleCacheExpiry = DateTime.Now.AddMilliseconds(100);
+                return idle;
+            }
+
+            // On KDE Wayland, GetSessionIdleTime is not supported.
+            // Use the KWin script tracker: it timestamps every windowActivated
+            // and captionChanged event, so idle = time since last such event.
+            // Only used when ext-idle-notify is unavailable on the compositor.
+            if (_compositor == "kde" && _kwinTracker != null && _kwinTracker.IsReady)
+            {
+                idle = _kwinTracker.GetIdleMs();
+                if (idle >= 0)
+                {
+                    _lastIdleSource = IdleSource.KdeKwinIdle;
+                    _cachedIdle = idle;
+                    _idleCacheExpiry = DateTime.Now.AddMilliseconds(100);
+                    return idle;
+                }
+            }
+
+            // Standard cross-compositor methods
+            idle = GetFreedesktopIdleTime();
             if (idle > 0)
             {
+                _lastIdleSource = IdleSource.FreedesktopScreenSaver;
                 _cachedIdle = idle;
                 _idleCacheExpiry = DateTime.Now.AddMilliseconds(100);
                 return idle;
@@ -565,6 +601,7 @@ publish();
             idle = GetGnomeIdleTime();
             if (idle > 0)
             {
+                _lastIdleSource = IdleSource.GnomeIdleMonitor;
                 _cachedIdle = idle;
                 _idleCacheExpiry = DateTime.Now.AddMilliseconds(100);
                 return idle;
@@ -573,11 +610,24 @@ publish();
             idle = GetX11IdleTime();
             if (idle > 0)
             {
+                _lastIdleSource = IdleSource.X11Xprintidle;
                 _cachedIdle = idle;
                 _idleCacheExpiry = DateTime.Now.AddMilliseconds(100);
                 return idle;
             }
 
+            // Final fallback: logind idle hint (fires at screensaver timeout,
+            // so only catches prolonged idle but better than nothing).
+            idle = GetLogindIdleTime();
+            if (idle > 0)
+            {
+                _lastIdleSource = IdleSource.LogindIdleHint;
+                _cachedIdle = idle;
+                _idleCacheExpiry = DateTime.Now.AddMilliseconds(100);
+                return idle;
+            }
+
+            _lastIdleSource = IdleSource.Unknown;
             return 0;
         }
 
@@ -808,6 +858,38 @@ publish();
             }
         }
 
+        // Queries logind for idle hint. Only fires when the screensaver/power
+        // management considers the session idle (typically 5+ minutes), but
+        // it's a reliable cross-compositor fallback for prolonged AFK periods.
+        private static int GetLogindIdleTime()
+        {
+            try
+            {
+                var output = RunCommand("loginctl", "show-session -p IdleHint -p IdleSinceHint");
+                bool idleHint = false;
+                long idleSinceUs = 0;
+
+                foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (line.StartsWith("IdleHint=yes", StringComparison.OrdinalIgnoreCase))
+                        idleHint = true;
+                    else if (line.StartsWith("IdleSinceHint=", StringComparison.Ordinal) &&
+                             long.TryParse(line["IdleSinceHint=".Length..], out long us))
+                        idleSinceUs = us;
+                }
+
+                if (!idleHint || idleSinceUs == 0) return 0;
+
+                long nowUs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1000L;
+                long idleMs = (nowUs - idleSinceUs) / 1000L;
+                return (int)Math.Max(0, idleMs);
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
         private static string DetectActiveProcessKDE()
         {
             try
@@ -972,6 +1054,50 @@ publish();
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // WINDOWS PLATFORM SERVICE — Win32 idle + foreground detection
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    sealed class WindowsPlatformService : IPlatformService, IDisposable
+    {
+        public string PlatformName => "Windows";
+        public IdleSource LastIdleSource => IdleSource.Win32LastInput;
+
+        public bool Initialize() => true;
+
+        public string GetForegroundApp()
+        {
+            var (app, _) = GetForegroundAppWithTitle();
+            return app;
+        }
+
+        public (string app, string title) GetForegroundAppWithTitle()
+        {
+            return ("unknown", "");
+        }
+
+        public int GetIdleTime()
+        {
+            if (!PlatformConfig.IsWindows) return 0;
+            LASTINPUTINFO info = new();
+            info.cbSize = Marshal.SizeOf<LASTINPUTINFO>();
+            if (GetLastInputInfo(ref info))
+                return (int)(Environment.TickCount - info.dwTime);
+            return 0;
+        }
+
+        public void Dispose() { }
+
+        [DllImport("user32.dll")]
+        private static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
+
+        private struct LASTINPUTINFO
+        {
+            public int cbSize;
+            public uint dwTime;
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // STATE - Application state
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -1001,8 +1127,13 @@ publish();
     static int _mlPredictions;
     static int _mlTriggeredSnapshots;
     static int _mlSkippedAlerts;
+    static int _mlLowConfidenceSkips;
     static int _intervalTriggeredSnapshots;
     static bool _productivityConfirmed;
+    static bool _mlLowConfidence;  // Set when model predicts unproductive below confidence threshold
+    static int _mlSampleCount;     // Cached from trainer_meta.json, refreshed in CheckMLAvailability
+    static int _mlProductiveSamples;
+    static int _mlUnproductiveSamples;
     static List<double> _mlConfidenceScores = new List<double>();
     static long _lastMLTriggerT;  // Unix timestamp of last ML-triggered snapshot (0=none/interval)
 
@@ -1225,20 +1356,6 @@ publish();
         return FocusSource.Unknown;
     }
 
-    static IdleSource GetIdleSource()
-    {
-        if (PlatformConfig.IsWindows)
-            return IdleSource.Win32LastInput;
-
-        string platformName = _platformService?.PlatformName ?? "";
-        if (platformName.Contains("gnome", StringComparison.OrdinalIgnoreCase))
-            return IdleSource.GnomeIdleMonitor;
-        if (string.Equals(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"), "x11", StringComparison.OrdinalIgnoreCase))
-            return IdleSource.X11Xprintidle;
-
-        return IdleSource.Unknown;
-    }
-
     static ActivityTickResult CaptureActivityTick(DateTime now, string app, string title, int idle) =>
         FeatureTracker.Capture(
             now,
@@ -1250,7 +1367,7 @@ publish();
                 FocusSource: GetFocusSource(),
                 Fullscreen: false,
                 MappedToplevelCount: 0),
-            new IdleObservation(idle, GetIdleSource()));
+            new IdleObservation(idle, _platformService?.LastIdleSource ?? IdleSource.Unknown));
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // MAIN LOOP - Core event loop with professional status updates
@@ -1385,7 +1502,7 @@ publish();
                 // Trigger snapshot if:
                 // 1. ML triggered with high confidence (checked every minute)
                 // 2. Interval reached (fallback when ML is disabled or unavailable)
-                bool useIntervalFallback = !_mlEnabled || !_mlAvailable;
+                bool useIntervalFallback = !_mlEnabled || !_mlAvailable || _mlLowConfidence;
                 if (mlTriggered || (useIntervalFallback && intervalReached))
                 {
                     if (mlTriggered)
@@ -1395,10 +1512,27 @@ publish();
                     else if (intervalReached)
                     {
                         _intervalTriggeredSnapshots++;
-                        Info($"  {Color.BYELLOW}⏰ INTERVAL SNAPSHOT{Color.RESET} ({( _mlEnabled ? "ML unavailable" : "ML disabled" )})");
+                        string intervalReason = !_mlEnabled ? "ML disabled"
+                            : _mlLowConfidence ? $"ML below {ML_CONFIDENCE_THRESHOLD*100:F0}% confidence threshold"
+                            : "ML unavailable";
+                        Info($"  {Color.BYELLOW}⏰ INTERVAL SNAPSHOT{Color.RESET} ({intervalReason})");
+
+                        // Broadcast interval-triggered event for Recent Checks display
+                        var intEvt = new MLLiveEvent
+                        {
+                            T             = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                            App           = app,
+                            Score         = 0.5,
+                            Confidence    = 0,
+                            Productive    = false,
+                            Triggered     = true,
+                            TriggerSource = "int"
+                        };
+                        Console.WriteLine($"MLDATA:{JsonSerializer.Serialize(intEvt, NudgeJsonContext.Default.MLLiveEvent)}");
                     }
 
                     TakeSnapshot(app, title, idle, _attentionSpanMs, tick);
+                    _mlLowConfidence = false;
                     elapsed = 0;
                     mlElapsed = 0;
                     SetRandomInterval();  // Set new random interval for next snapshot
@@ -1419,7 +1553,7 @@ publish();
             {
                 lastMinute = currentMinute;
                 int remaining = (SNAPSHOT_INTERVAL_MS - elapsed) / 60000;
-                string mlStatus = _mlEnabled ? (_mlAvailable ? " [ML: active]" : " [ML: fallback]") : "";
+                string mlStatus = _mlEnabled ? (_mlAvailable ? (_mlLowConfidence ? " [ML: low conf]" : " [ML: active]") : " [ML: fallback]") : "";
                 Dim($"  {remaining} min until next snapshot{mlStatus}  ({Color.CYAN}{app}{Color.RESET}, idle: {idle}ms)");
             }
 
@@ -1446,7 +1580,10 @@ publish();
         Console.WriteLine();
         Console.WriteLine($"  {Color.BOLD}ML Triggered Alerts:{Color.RESET}    {_mlTriggeredSnapshots} {Color.DIM}(detected unproductive){Color.RESET}");
         Console.WriteLine($"  {Color.BOLD}ML Skipped Alerts:{Color.RESET}      {_mlSkippedAlerts} {Color.DIM}(detected productive){Color.RESET}");
-        Console.WriteLine($"  {Color.BOLD}Interval Fallbacks:{Color.RESET}     {_intervalTriggeredSnapshots} {Color.DIM}(low confidence){Color.RESET}");
+        Console.WriteLine($"  {Color.BOLD}ML Low-Confidence:{Color.RESET}     {_mlLowConfidenceSkips} {Color.DIM}(deferred to interval){Color.RESET}");
+        Console.WriteLine($"  {Color.BOLD}Interval Fallbacks:{Color.RESET}     {_intervalTriggeredSnapshots} {Color.DIM}(ML disabled/unavailable/low conf){Color.RESET}");
+        Console.WriteLine();
+        Console.WriteLine($"  {Color.BOLD}Training Samples:{Color.RESET}       {_mlSampleCount} total ({_mlProductiveSamples} productive, {_mlUnproductiveSamples} unproductive) {Color.DIM}(min required: {MIN_SAMPLES_THRESHOLD}){Color.RESET}");
         Console.WriteLine();
 
         if (totalMLDecisions > 0)
@@ -1915,6 +2052,10 @@ publish();
                 Success($"✓ ML inference server connected (TCP {ML_HOST}:{ML_PORT})");
                 _mlAvailable = true;
             }
+
+            // Refresh sample count from latest training metadata
+            CheckTrainingProgress();
+
             return true;
         }
         catch
@@ -1926,6 +2067,28 @@ publish();
             }
             return false;
         }
+    }
+
+    static void CheckTrainingProgress()
+    {
+        try
+        {
+            string metaPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".nudge", "model", "trainer_meta.json");
+            if (File.Exists(metaPath))
+            {
+                var json = File.ReadAllText(metaPath);
+                var meta = JsonSerializer.Deserialize(json, NudgeJsonContext.Default.TrainerMeta);
+                if (meta != null)
+                {
+                    _mlSampleCount = meta.SampleCount;
+                    _mlProductiveSamples = meta.NProductive;
+                    _mlUnproductiveSamples = meta.NUnproductive;
+                }
+            }
+        }
+        catch { }
     }
 
     static bool ShouldTriggerSnapshot(string app, int idle, int attention, ActivityTickResult? tick)
@@ -1942,6 +2105,13 @@ publish();
         // ML not available — let the regular interval fallback handle notification timing
         if (!_mlAvailable)
         {
+            return false;
+        }
+
+        // Require minimum training samples before trusting ML predictions
+        if (!_forceTrainedModel && _mlSampleCount < MIN_SAMPLES_THRESHOLD)
+        {
+            Dim($"  ML: {_mlSampleCount} samples < {MIN_SAMPLES_THRESHOLD} minimum — using interval fallback");
             return false;
         }
 
@@ -1984,7 +2154,7 @@ publish();
 
         // ── Broadcast live state to nudge-tray AI Brain tab ──────────────────
         {
-            bool willTrigger = prediction.Prediction == 0;
+            bool willTrigger = prediction.Prediction == 0 && prediction.Confidence >= ML_CONFIDENCE_THRESHOLD;
             bool isProductive = prediction.Prediction == 1;
             // Score: 1.0 = AI very confident you ARE productive; 0.0 = very confident NOT productive
             double productivityScore = isProductive
@@ -1992,12 +2162,13 @@ publish();
                 : (1.0 - prediction.Confidence);
             var liveEvt = new MLLiveEvent
             {
-                T          = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                App        = app,
-                Score      = productivityScore,
-                Confidence = prediction.Confidence,
-                Productive = isProductive,
-                Triggered  = willTrigger
+                T             = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                App           = app,
+                Score         = productivityScore,
+                Confidence    = prediction.Confidence,
+                Productive    = isProductive,
+                Triggered     = willTrigger,
+                TriggerSource = "ai"
             };
             Console.WriteLine($"MLDATA:{JsonSerializer.Serialize(liveEvt, NudgeJsonContext.Default.MLLiveEvent)}");
 
@@ -2006,20 +2177,31 @@ publish();
                 _lastMLTriggerT = liveEvt.T;
         }
 
-        // Trigger based on prediction regardless of confidence
+        // Trigger based on prediction with confidence threshold enforcement
         if (prediction.Prediction == 0)
         {
-            // NOT productive - trigger snapshot!
-            _mlTriggeredSnapshots++;
-            Info($"  {Color.BRED}ML TRIGGER{Color.RESET}: NOT productive (confidence: {Color.BYELLOW}{prediction.Confidence*100:F1}%{Color.RESET}, avg: {avgConfidence*100:F1}%)");
-            Dim($"  {Color.DIM}Stats: {_mlPredictions} predictions, {_mlTriggeredSnapshots} triggered, {_mlSkippedAlerts} skipped{Color.RESET}");
-            return true;
+            if (prediction.Confidence >= ML_CONFIDENCE_THRESHOLD)
+            {
+                // HIGH confidence NOT productive — trigger snapshot!
+                _mlTriggeredSnapshots++;
+                _mlLowConfidence = false;
+                Info($"  {Color.BRED}ML TRIGGER{Color.RESET}: NOT productive (confidence: {Color.BYELLOW}{prediction.Confidence*100:F1}%{Color.RESET}, avg: {avgConfidence*100:F1}%)");
+                Dim($"  {Color.DIM}Stats: {_mlPredictions} predictions, {_mlTriggeredSnapshots} triggered, {_mlSkippedAlerts} skipped{Color.RESET}");
+                return true;
+            }
+
+            // Low confidence NOT productive — defer to interval-based fallback
+            _mlLowConfidence = true;
+            _mlLowConfidenceSkips++;
+            Dim($"  {Color.DIM}ML DEFER{Color.RESET}: NOT productive (confidence: {prediction.Confidence*100:F1}% < {ML_CONFIDENCE_THRESHOLD*100:F0}% threshold) — deferring to interval");
+            return false;
         }
         else
         {
-            // User IS productive - skip snapshot, reset interval
+            // User IS productive — skip snapshot, reset interval
             _mlSkippedAlerts++;
             _productivityConfirmed = true;
+            _mlLowConfidence = false;
             Info($"  {Color.BGREEN}ML SKIP{Color.RESET}: Productive (confidence: {Color.BYELLOW}{prediction.Confidence*100:F1}%{Color.RESET}, avg: {avgConfidence*100:F1}%)");
             Dim($"  {Color.DIM}Stats: {_mlPredictions} predictions, {_mlTriggeredSnapshots} triggered, {_mlSkippedAlerts} skipped{Color.RESET}");
             return false;

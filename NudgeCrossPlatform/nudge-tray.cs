@@ -43,7 +43,7 @@ namespace NudgeTray
     sealed class Program
     {
         const int UDP_PORT = 45001;
-        const string VERSION = "1.4.0";
+        const string VERSION = "1.5.0";
         static Process? _nudgeProcess;
         static Process? _mlInferenceProcess;
         static Process? _mlTrainerProcess;
@@ -1157,6 +1157,8 @@ namespace NudgeTray
                 _mlTrainerProcess.BeginOutputReadLine();
                 _mlTrainerProcess.BeginErrorReadLine();
 
+                TrainerState.RefreshFromCsv();
+
                 Console.WriteLine("  ✓ Background trainer started");
                 Console.WriteLine($"✓ ML services ready (CSV: {csvPath})");
             }
@@ -1229,6 +1231,7 @@ namespace NudgeTray
                 _mlTrainerProcess.BeginOutputReadLine();
                 _mlTrainerProcess.BeginErrorReadLine();
 
+                TrainerState.RefreshFromCsv();
                 _analyticsWindow?.RequestTrainingViewRefresh();
 
                 Console.WriteLine("  ✓ Manual training started");
@@ -1310,7 +1313,12 @@ namespace NudgeTray
                                     e.Data.AsSpan(11),
                                     NudgeJsonContext.Default.MLResponseEvent);
                                 if (resp != null)
+                                {
                                     LiveAIState.UpdateResponse(resp.T, resp.Response);
+                                    // CSV was just written — refresh sample count in AI Brain tab
+                                    TrainerState.RefreshFromCsv();
+                                    _analyticsWindow?.RequestTrainingViewRefresh();
+                                }
                             }
                             catch { /* non-critical, silently ignore parse errors */ }
                         }
@@ -1971,6 +1979,8 @@ namespace NudgeTray
                     LastTrainedCount = int.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
                     MinSamples       = int.Parse(m.Groups[3].Value, System.Globalization.CultureInfo.InvariantCulture);
                     LastChecked      = DateTime.Now;
+                    if (LastTrainedCount > 0 && LastTrained == DateTime.MinValue)
+                        LastTrained = DateTime.Now;
                 }
                 return;
             }

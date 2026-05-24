@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Xunit;
 using NudgeCore;
 
@@ -27,7 +28,7 @@ public class NudgeSignalFusionTests
     [InlineData("konsole", "", AppCategory.Development)]
     [InlineData("alacritty", "", AppCategory.Development)]
     [InlineData("term-emulator", "", AppCategory.Development)]
-    [InlineData("my-ide-tool", "", AppCategory.Development)]
+    [InlineData("code-tool", "", AppCategory.Development)]
     [InlineData("krita-sketch", "", AppCategory.Creative)]
     [InlineData("blender3d", "", AppCategory.Creative)]
     [InlineData("libreoffice-writer", "", AppCategory.Office)]
@@ -289,5 +290,256 @@ public class NudgeSignalFusionTests
         Assert.True(parsed);
         Assert.Equal("Chrome (github.com, docs)", entry.AppName);
         Assert.True(entry.Productive);
+    }
+
+    // ── Semantic rule ordering ────────────────────────────────────────────────
+
+    [Fact]
+    public void TryClassifyFromTokens_TerminalKeyword_ClassifiedAsDevelopment()
+    {
+        // "terminal" sits in the Development rule — first match wins
+        bool matched = AppCategoryClassifier.TryClassifyFromTokens("my-terminal-emulator", "", out var cat);
+        Assert.True(matched);
+        Assert.Equal(AppCategory.Development, cat);
+    }
+
+    [Fact]
+    public void TryClassifyFromTokens_GitKeyword_ClassifiedAsDevelopment()
+    {
+        bool matched = AppCategoryClassifier.TryClassifyFromTokens("gitkraken-client", "", out var cat);
+        Assert.True(matched);
+        Assert.Equal(AppCategory.Development, cat);
+    }
+
+    [Theory]
+    [InlineData("openshot-video-editor", AppCategory.Creative)]
+    [InlineData("my-slack-workspace", AppCategory.Communication)]
+    [InlineData("steam-game-launcher", AppCategory.Entertainment)]
+    public void TryClassifyFromTokens_SecondaryRules_MatchCorrectly(string appId, AppCategory expected)
+    {
+        bool matched = AppCategoryClassifier.TryClassifyFromTokens(appId, "", out var cat);
+        Assert.True(matched);
+        Assert.Equal(expected, cat);
+    }
+
+    // ── Browser anchor fusion edge cases ──────────────────────────────────────
+
+    // Use a fake browser name so we don't depend on installed .desktop files
+    private const string FakeBrowserId = "my-fake-test-browser-x7z";
+
+    [Fact]
+    public void Classify_BrowserWithDevAnchor_InheritsDevCategory()
+    {
+        var (cat, conf) = AppCategoryClassifier.Classify(FakeBrowserId, "", AppCategory.Development);
+        Assert.Equal(AppCategory.Development, cat);
+        Assert.Equal(CategoryConfidence.Inferred, conf);
+    }
+
+    [Fact]
+    public void Classify_BrowserWithCreativeAnchor_InheritsCreativeCategory()
+    {
+        var (cat, conf) = AppCategoryClassifier.Classify(FakeBrowserId, "", AppCategory.Creative);
+        Assert.Equal(AppCategory.Creative, cat);
+        Assert.Equal(CategoryConfidence.Inferred, conf);
+    }
+
+    [Fact]
+    public void Classify_BrowserWithEntertainmentAnchor_DoesNotInheritAnchor()
+    {
+        // Entertainment anchor must NOT be transferred — only Dev/Creative/Office are eligible
+        var (_, conf) = AppCategoryClassifier.Classify(FakeBrowserId, "", AppCategory.Entertainment);
+        Assert.NotEqual(CategoryConfidence.Inferred, conf);
+    }
+
+    [Fact]
+    public void Classify_BrowserWithCommunicationAnchor_DoesNotInheritAnchor()
+    {
+        var (_, conf) = AppCategoryClassifier.Classify(FakeBrowserId, "", AppCategory.Communication);
+        Assert.NotEqual(CategoryConfidence.Inferred, conf);
+    }
+
+    // ── Browser anchor fusion edge cases ──────────────────────────────────────
+    // Test that browser anchor fusion only applies for Dev/Creative/Office anchors
+    [Fact]
+    public void BrowserAnchorFusion_OnlyAppliesForDevCreativeOffice()
+    {
+        var t = new DateTime(2026, 5, 23, 10, 0, 0);
+
+        // Test Entertainment anchor - should NOT transfer
+        var entertainmentTracker = new ActivityFeatureTracker();
+        for (int i = 0; i < 5; i++)
+            entertainmentTracker.Capture(t.AddSeconds(i), 
+                new WindowObservation("spotify", "Spotify", "w1", "1", FocusSource.KWinScript, false, 1), 
+                new IdleObservation(0, IdleSource.Unknown));
+        
+        var entertainmentResult = entertainmentTracker.Capture(
+            t.AddSeconds(6),
+            new WindowObservation("my-browser", "Some Page - MyBrowser", "f1", "1", FocusSource.KWinScript, false, 1),
+            new IdleObservation(0, IdleSource.Unknown));
+            
+        Assert.NotEqual(AppCategory.Entertainment, entertainmentResult.AppCategory);
+        Assert.NotEqual(CategoryConfidence.Inferred, entertainmentResult.AppCategoryConfidence);
+
+        // Test Communication anchor - should NOT transfer
+        var communicationTracker = new ActivityFeatureTracker();
+        for (int i = 0; i < 5; i++)
+            communicationTracker.Capture(t.AddSeconds(i), 
+                new WindowObservation("discord", "Discord", "w1", "1", FocusSource.KWinScript, false, 1), 
+                new IdleObservation(0, IdleSource.Unknown));
+                
+        var communicationResult = communicationTracker.Capture(
+            t.AddSeconds(6),
+            new WindowObservation("my-browser", "Some Page - MyBrowser", "f1", "1", FocusSource.KWinScript, false, 1),
+            new IdleObservation(0, IdleSource.Unknown));
+            
+        Assert.NotEqual(AppCategory.Communication, communicationResult.AppCategory);
+        Assert.NotEqual(CategoryConfidence.Inferred, communicationResult.AppCategoryConfidence);
+
+        // Test Dev anchor - SHOULD transfer
+        var devTracker = new ActivityFeatureTracker();
+        for (int i = 0; i < 5; i++)
+            devTracker.Capture(t.AddSeconds(i), 
+                new WindowObservation("code", "code", "w1", "1", FocusSource.KWinScript, false, 1), 
+                new IdleObservation(0, IdleSource.Unknown));
+                
+        var devResult = devTracker.Capture(
+            t.AddSeconds(6),
+            new WindowObservation("my-browser", "Some Page - MyBrowser", "f1", "1", FocusSource.KWinScript, false, 1),
+            new IdleObservation(0, IdleSource.Unknown));
+            
+        Assert.Equal(AppCategory.Development, devResult.AppCategory);
+        Assert.Equal(CategoryConfidence.Inferred, devResult.AppCategoryConfidence);
+
+        // Test Creative anchor - SHOULD transfer
+        var creativeTracker = new ActivityFeatureTracker();
+        for (int i = 0; i < 5; i++)
+            creativeTracker.Capture(t.AddSeconds(i), 
+                new WindowObservation("gimp", "GIMP", "w1", "1", FocusSource.KWinScript, false, 1), 
+                new IdleObservation(0, IdleSource.Unknown));
+                
+        var creativeResult = creativeTracker.Capture(
+            t.AddSeconds(6),
+            new WindowObservation("my-browser", "Some Page - MyBrowser", "f1", "1", FocusSource.KWinScript, false, 1),
+            new IdleObservation(0, IdleSource.Unknown));
+            
+        Assert.Equal(AppCategory.Creative, creativeResult.AppCategory);
+        Assert.Equal(CategoryConfidence.Inferred, creativeResult.AppCategoryConfidence);
+
+        // Test Office anchor - SHOULD transfer
+        var officeTracker = new ActivityFeatureTracker();
+        for (int i = 0; i < 5; i++)
+            officeTracker.Capture(t.AddSeconds(i), 
+                new WindowObservation("libreoffice", "LibreOffice", "w1", "1", FocusSource.KWinScript, false, 1), 
+                new IdleObservation(0, IdleSource.Unknown));
+                
+        var officeResult = officeTracker.Capture(
+            t.AddSeconds(6),
+            new WindowObservation("my-browser", "Some Page - MyBrowser", "f1", "1", FocusSource.KWinScript, false, 1),
+            new IdleObservation(0, IdleSource.Unknown));
+            
+        Assert.Equal(AppCategory.Office, officeResult.AppCategory);
+        Assert.Equal(CategoryConfidence.Inferred, officeResult.AppCategoryConfidence);
+    }
+
+    // ── FeatureSchema dictionary ──────────────────────────────────────────────
+
+    [Fact]
+    public void FeatureSchema_ToFeatureDictionary_HasExactly26Keys()
+    {
+        var features = new FeatureVector(
+            HourOfDay: 10, DayOfWeek: 1, FocusedAppHash: 0, FocusedDomainHash: 0,
+            IdleMs: 0, FocusedSinceMs: 5000, TitleStabilityMs: 5000,
+            SwitchCount60s: 0, SwitchCount300s: 0, DistinctApps300s: 1,
+            DistinctDomains300s: 0, ReturnedToAnchorApp300s: 0,
+            CurrentAppShare300s: 1.0, CurrentDomainShare300s: 0,
+            BrowserWindowFlag: 0, CommunicationAppFlag: 0,
+            EntertainmentDomainFlag: 0, WorkDomainFlag: 0,
+            AfkFlag: 0, FullscreenFlag: 0, WorkspaceSwitchCount300s: 0,
+            DevAppFlag: 0, CreativeAppFlag: 0, OfficeAppFlag: 0,
+            CommAppFlag: 0, EntAppFlag: 0);
+
+        var dict = FeatureSchema.ToFeatureDictionary(features);
+        Assert.Equal(26, dict.Count);
+    }
+
+    [Fact]
+    public void FeatureSchema_OrderedFeatureNames_HasExactly26Entries()
+    {
+        Assert.Equal(26, FeatureSchema.OrderedFeatureNames.Length);
+    }
+
+    [Fact]
+    public void FeatureSchema_ToFeatureDictionary_ValuesMatchStructFields()
+    {
+        var features = new FeatureVector(
+            HourOfDay: 14, DayOfWeek: 3, FocusedAppHash: 42, FocusedDomainHash: 99,
+            IdleMs: 500, FocusedSinceMs: 10_000, TitleStabilityMs: 8_000,
+            SwitchCount60s: 2, SwitchCount300s: 5, DistinctApps300s: 3,
+            DistinctDomains300s: 1, ReturnedToAnchorApp300s: 1,
+            CurrentAppShare300s: 0.6, CurrentDomainShare300s: 0.4,
+            BrowserWindowFlag: 1, CommunicationAppFlag: 0,
+            EntertainmentDomainFlag: 0, WorkDomainFlag: 1,
+            AfkFlag: 0, FullscreenFlag: 0, WorkspaceSwitchCount300s: 1,
+            DevAppFlag: 0, CreativeAppFlag: 0, OfficeAppFlag: 0,
+            CommAppFlag: 0, EntAppFlag: 0);
+
+        var dict = FeatureSchema.ToFeatureDictionary(features);
+        Assert.Equal(14.0, dict["hour_of_day"]);
+        Assert.Equal(3.0, dict["day_of_week"]);
+        Assert.Equal(42.0, dict["focused_app_hash"]);
+        Assert.Equal(500.0, dict["idle_ms"]);
+        Assert.Equal(5.0, dict["switch_count_300s"]);
+        Assert.Equal(0.6, dict["current_app_share_300s"]);
+        Assert.Equal(1.0, dict["work_domain_flag"]);
+        Assert.Equal(1.0, dict["workspace_switch_count_300s"]);
+    }
+
+    [Fact]
+    public void FeatureSchema_OrderedNames_ContainAllExpectedKeys()
+    {
+        var names = FeatureSchema.OrderedFeatureNames;
+        Assert.Contains("hour_of_day", names);
+        Assert.Contains("day_of_week", names);
+        Assert.Contains("switch_count_60s", names);
+        Assert.Contains("workspace_switch_count_300s", names);
+        Assert.Contains("afk_flag", names);
+        Assert.Contains("fullscreen_flag", names);
+    }
+
+    // ── Group 6: FeatureSchemaV2 determinism tests ────────────────────────
+
+    [Fact]
+    public void FeatureDictionary_OrderIsDeterministic()
+    {
+        // Two calls with same input should return keys in same order
+        var features1 = new FeatureVector(
+            HourOfDay: 10, DayOfWeek: 2, FocusedAppHash: 12345, FocusedDomainHash: 67890,
+            IdleMs: 500, FocusedSinceMs: 10000, TitleStabilityMs: 8000,
+            SwitchCount60s: 3, SwitchCount300s: 7, DistinctApps300s: 2,
+            DistinctDomains300s: 1, ReturnedToAnchorApp300s: 1,
+            CurrentAppShare300s: 0.7, CurrentDomainShare300s: 0.3,
+            BrowserWindowFlag: 1, CommunicationAppFlag: 0,
+            EntertainmentDomainFlag: 0, WorkDomainFlag: 1,
+            AfkFlag: 0, FullscreenFlag: 0, WorkspaceSwitchCount300s: 2,
+            DevAppFlag: 0, CreativeAppFlag: 1, OfficeAppFlag: 0,
+            CommAppFlag: 0, EntAppFlag: 0);
+
+        var dict1 = FeatureSchema.ToFeatureDictionary(features1);
+        var dict2 = FeatureSchema.ToFeatureDictionary(features1);
+
+        // Get the keys in order from both dictionaries
+        var keys1 = dict1.Keys.ToList();
+        var keys2 = dict2.Keys.ToList();
+
+        // They should be identical in order
+        Assert.Equal(keys1.Count, keys2.Count);
+        for (int i = 0; i < keys1.Count; i++)
+        {
+            Assert.Equal(keys1[i], keys2[i]);
+        }
+
+        // Also verify all 26 keys are present
+        Assert.Equal(26, keys1.Count);
+        Assert.Equal(26, keys2.Count);
     }
 }

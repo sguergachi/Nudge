@@ -44,6 +44,8 @@ internal sealed class MLLiveEvent
     public bool? UserResponse { get; set; }
     /// <summary>Whether the AI prediction matched the user's response</summary>
     public bool? AiCorrect { get; set; }
+    /// <summary>Trigger source: "ai" (ML prediction) or "int" (interval-based)</summary>
+    public string TriggerSource { get; set; } = "ai";
 }
 
 /// <summary>
@@ -110,6 +112,10 @@ internal sealed class TrainerMeta
     public double TrainedAt { get; init; }
     /// <summary>Number of samples used in the last training run.</summary>
     public int SampleCount { get; init; }
+    /// <summary>Number of productive (YES) samples in the training set.</summary>
+    public int NProductive { get; init; }
+    /// <summary>Number of unproductive (NO) samples in the training set.</summary>
+    public int NUnproductive { get; init; }
     /// <summary>Accuracy score of the trained model (0-1).</summary>
     public double Accuracy { get; init; }
     /// <summary>Monotonically increasing version number.</summary>
