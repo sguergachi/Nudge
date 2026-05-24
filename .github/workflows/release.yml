@@ -64,7 +64,7 @@ jobs:
       - name: Build Windows installer
         shell: pwsh
         run: |
-          $env:Path = "C:\Program Files (x86)\Inno Setup 6;$env:Path"
+          $env:Path = "C:\ProgramData\chocolatey\bin;$env:Path"
           iscc --version
           $version = Select-String -Path "NudgeCrossPlatform\nudge-tray.cs" -Pattern 'const string VERSION = "([.\d]+)"' | ForEach-Object { $_.Matches.Groups[1].Value }
           if (-not $version) { Write-Error "Failed to extract version"; exit 1 }
