@@ -6,7 +6,7 @@ Trains a GradientBoostingClassifier on labeled harvest data and saves
 the model + scaler to the model directory.
 
 Supports:
-  - 26 V2 features (21 core + 5 app-category flags)
+  - 26 V3 features (21 core + 5 app-category flags)
   - Sample weighting (equal class balance + recency + V1 penalty)
   - Automatic architecture selection based on sample count
 """
@@ -14,6 +14,7 @@ Supports:
 import os
 import sys
 import json
+import tempfile
 import warnings
 import numpy as np
 import pandas as pd
@@ -27,7 +28,7 @@ from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 import joblib
 
-FEATURE_COLUMNS_V2 = [
+FEATURE_COLUMNS_V3 = [
     'hour_of_day',
     'day_of_week',
     'focused_app_hash',
@@ -79,14 +80,23 @@ ARCH_PARAMS = {
 }
 
 
+def _write_json_atomic(path: str, data: dict) -> None:
+    """Write JSON to a temp file then rename — prevents partial writes corrupting live files."""
+    dir_ = os.path.dirname(path) or '.'
+    with tempfile.NamedTemporaryFile(mode='w', dir=dir_, suffix='.tmp', delete=False) as tf:
+        json.dump(data, tf)
+        tmp = tf.name
+    os.replace(tmp, path)
+
+
 def load_and_prepare_data(csv_file):
     """Load and validate harvest CSV."""
     print(f'Loading: {csv_file}')
     df = pd.read_csv(csv_file)
 
-    _v2_cols_present = all(c in df.columns for c in FEATURE_COLUMNS_V2)
+    _v3_cols_present = all(c in df.columns for c in FEATURE_COLUMNS_V3)
 
-    if _v2_cols_present:
+    if _v3_cols_present:
         v1_mask = df['idle_ms'].isna()
         n_migrated = int(v1_mask.sum())
 
@@ -107,11 +117,11 @@ def load_and_prepare_data(csv_file):
         if 'signal_quality' in df.columns:
             df.loc[v1_mask, 'signal_quality'] = 'usable'
 
-        for col in FEATURE_COLUMNS_V2:
+        for col in FEATURE_COLUMNS_V3:
             if col in df.columns:
                 df[col] = df[col].fillna(0)
 
-        feature_cols = FEATURE_COLUMNS_V2
+        feature_cols = FEATURE_COLUMNS_V3
         schema_version = 2
         print(f'   Schema v2 — {len(df)} rows')
 
@@ -246,7 +256,13 @@ def train_modern(csv_file, model_dir='./model', architecture='auto',
     final_model.fit(X_scaled, y, sample_weight=sample_weight)
 
     os.makedirs(model_dir, exist_ok=True)
-    joblib.dump(final_model, os.path.join(model_dir, MODEL_FILE))
+
+    # Write model atomically: temp file → rename so a mid-write crash never corrupts the live model.
+    model_path = os.path.join(model_dir, MODEL_FILE)
+    with tempfile.NamedTemporaryFile(dir=model_dir, suffix='.tmp', delete=False) as tf:
+        tmp_model = tf.name
+    joblib.dump(final_model, tmp_model)
+    os.replace(tmp_model, model_path)
 
     trainer_state_path = os.path.join(model_dir, 'trainer_state.json')
     model_version = 1
@@ -256,13 +272,12 @@ def train_modern(csv_file, model_dir='./model', architecture='auto',
             model_version = state.get('training_count', 0) + 1
     except Exception:
         pass
-    with open(trainer_state_path, 'w') as f:
-        json.dump({
-            'last_trained_samples': len(X),
-            'training_count': model_version,
-            'last_training_time': datetime.now().isoformat(),
-            'architecture': architecture,
-        }, f)
+    _write_json_atomic(trainer_state_path, {
+        'last_trained_samples': len(X),
+        'training_count': model_version,
+        'last_training_time': datetime.now().isoformat(),
+        'architecture': architecture,
+    })
 
     scaler_params = {
         'mean':           scaler.mean_.tolist(),
@@ -278,8 +293,7 @@ def train_modern(csv_file, model_dir='./model', architecture='auto',
         'accuracy_method': 'held_out_test',
         'model_version':  model_version,
     }
-    with open(os.path.join(model_dir, 'scaler.json'), 'w') as f:
-        json.dump(scaler_params, f)
+    _write_json_atomic(os.path.join(model_dir, 'scaler.json'), scaler_params)
 
     print(f'Model saved to: {model_dir}/')
     return final_model, scaler, accuracy
