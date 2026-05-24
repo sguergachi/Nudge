@@ -547,14 +547,15 @@ namespace NudgeTray
                 Console.WriteLine($"[CustomNotification] Failed to load position: {ex.Message}");
             }
 
-            // Default position: bottom-right corner with margin
+            // Default position: bottom-right corner with margin (accounting for screen DPI scaling)
             var screen = Screens.Primary;
             if (screen != null)
             {
-                int x = (int)(screen.WorkingArea.Width - Width - 40);
-                int y = (int)(screen.WorkingArea.Height - Height - 40);
+                double scaling = screen.Scaling;
+                int x = screen.WorkingArea.Right - (int)(Width * scaling + 40 * scaling);
+                int y = screen.WorkingArea.Bottom - (int)(Height * scaling + 40 * scaling);
                 Position = new PixelPoint(x, y);
-                Console.WriteLine($"[CustomNotification] Using default position: ({x}, {y})");
+                Console.WriteLine($"[CustomNotification] Using default position: ({x}, {y}) scaling={scaling}");
             }
         }
 

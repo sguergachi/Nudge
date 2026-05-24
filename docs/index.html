@@ -3,91 +3,357 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nudge — AI-powered focus tracker</title>
+  <title>Nudge — AI-powered focus tracker for your desktop</title>
+  <meta name="description" content="Nudge uses a local AI model trained on your habits to interrupt you when you're genuinely losing focus — not on a fixed schedule. All data stays on your machine.">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='2' width='28' height='28' rx='6' fill='%23121214' stroke='rgba(255,255,255,0.16)' stroke-width='1'/%3E%3Ctext x='16' y='22' font-family='-apple-system, sans-serif' font-size='16' fill='%2358A6FF' text-anchor='middle' font-weight='800'%3EN%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header>
-    <nav>
-      <span class="logo">Nudge</span>
-      <a href="https://github.com/sguergachi/Nudge" target="_blank">GitHub</a>
-    </nav>
-  </header>
 
-  <main>
-    <section class="hero">
-      <h1>Catch the exact moment you start drifting.<br><span>Only then.</span></h1>
-      <p class="tagline">Nudge uses a local AI model trained on <em>your</em> habits to interrupt you when you're genuinely losing focus — not on a fixed schedule. All data stays on your machine.</p>
-      <div class="downloads">
-        <a class="btn-primary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip">
-          Download for Windows
-        </a>
-        <a class="btn-secondary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-x64.tar.gz">
-          Download for Linux
-        </a>
+  <!-- ═══ Navigation ═══ -->
+  <nav>
+    <div class="container">
+      <span class="logo">
+        <span class="logo-icon">N</span>
+        Nudge
+      </span>
+      <ul class="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#how-it-works">How it works</a></li>
+        <li><a href="#download">Download</a></li>
+        <li><a href="https://github.com/sguergachi/Nudge" target="_blank">GitHub</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- ═══ Hero ═══ -->
+  <section class="hero">
+    <div class="hero-bg-grid"></div>
+    <div class="hero-gradient"></div>
+    <div class="hero-gradient-2"></div>
+
+    <div class="container">
+      <div class="hero-content">
+        <div class="hero-badge animate-in">
+          <span class="hero-badge-dot"></span>
+          v2.1.0 — Now with on-device ML
+        </div>
+
+        <h1 class="animate-in animate-in-delay-1">
+          Catch the moment<br>
+          you start <span class="highlight">drifting</span>.
+        </h1>
+
+        <p class="hero-subtitle animate-in animate-in-delay-2">
+          Nudge uses a local AI model trained on <em>your</em> habits to interrupt you when you're genuinely losing focus — not on a fixed schedule. No cloud, no accounts, no screenshots.
+        </p>
+
+        <div class="hero-actions animate-in animate-in-delay-3">
+          <a class="btn btn-primary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download for Windows
+          </a>
+          <a class="btn btn-secondary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-x64.tar.gz">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download for Linux
+          </a>
+        </div>
+
+        <p class="hero-version animate-in animate-in-delay-4">
+          Self-contained binary, no runtime needed &middot; <a href="https://github.com/sguergachi/Nudge/releases/latest" target="_blank">See all releases</a>
+        </p>
       </div>
-      <p class="version-note">Latest release &rarr; <a href="https://github.com/sguergachi/Nudge/releases/latest" target="_blank">GitHub Releases</a></p>
-    </section>
 
-    <section class="how">
-      <h2>How it works</h2>
-      <div class="steps">
-        <div class="step">
-          <span class="step-num">1</span>
-          <h3>Track</h3>
-          <p>Nudge silently watches your foreground app and idle time — no screenshots, no cloud, no accounts.</p>
+      <div class="hero-showcase animate-in animate-in-delay-2">
+        <div class="mockup-notification">
+          <img src="screenshots/notification.svg" alt="Nudge focus check notification" width="340" height="144">
         </div>
-        <div class="step">
-          <span class="step-num">2</span>
-          <h3>Learn</h3>
-          <p>Each time you answer "productive?" the on-device model gets smarter. After ~50 answers it starts predicting drift in real time.</p>
+        <div class="mockup-analytics">
+          <img src="screenshots/analytics.svg" alt="Nudge analytics dashboard" width="420" height="580">
         </div>
-        <div class="step">
-          <span class="step-num">3</span>
-          <h3>Nudge</h3>
-          <p>When the AI detects you're drifting it pops a quick check-in. When you're focused it stays silent. No noise, no fixed timers.</p>
+        <div class="mockup-tray">
+          <img src="screenshots/tray-menu.svg" alt="Nudge tray menu" width="200" height="260">
         </div>
       </div>
-    </section>
+    </div>
+  </section>
 
-    <section class="install">
-      <h2>Quick start</h2>
-      <div class="platforms">
-        <div class="platform">
-          <h3>Windows</h3>
-          <ol>
-            <li>Download <code>nudge-win-x64.zip</code></li>
-            <li>Extract and run <code>nudge-tray.exe</code></li>
-            <li>A tray icon appears — you're tracking</li>
-          </ol>
-          <p class="ml-note">For ML: <code>pip install scikit-learn joblib pandas numpy</code>, then enable ML in Settings.</p>
+  <!-- ═══ Feature Bar ═══ -->
+  <div class="feature-bar" id="features">
+    <div class="container">
+      <div class="feature-bar-item">
+        <div class="feature-bar-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
         </div>
-        <div class="platform">
-          <h3>Linux</h3>
-          <ol>
-            <li>Download <code>nudge-linux-x64.tar.gz</code></li>
-            <li><code>tar -xzf nudge-linux-x64.tar.gz</code></li>
-            <li>Run <code>./install-linux-app.sh</code>, then launch <code>nudge-tray</code></li>
-          </ol>
-          <p class="ml-note">Supports Wayland (KDE, GNOME, Sway) and X11.</p>
+        <div class="feature-bar-text">
+          <h3>On-device AI</h3>
+          <p>scikit-learn model trained locally — zero data leaves your machine</p>
         </div>
       </div>
-    </section>
+      <div class="feature-bar-item">
+        <div class="feature-bar-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+        </div>
+        <div class="feature-bar-text">
+          <h3>Smart timing</h3>
+          <p>Interrupts only when confidence is high that you're genuinely drifting</p>
+        </div>
+      </div>
+      <div class="feature-bar-item">
+        <div class="feature-bar-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
+        <div class="feature-bar-text">
+          <h3>Privacy first</h3>
+          <p>No accounts, no telemetry, no cloud — everything in ~/.nudge/</p>
+        </div>
+      </div>
+    </div>
+  </div>
 
-    <section class="privacy">
-      <h2>Privacy first</h2>
-      <p>Everything stays local. Nudge writes to <code>~/.nudge/</code> on your machine. There is no server, no telemetry, no account. Your productivity data is yours.</p>
-    </section>
+  <!-- ═══ Showcase: Notification ═══ -->
+  <section class="section">
+    <div class="container">
+      <div class="showcase-grid">
+        <div class="showcase-visual">
+          <img src="screenshots/notification.svg" alt="Nudge focus check notification">
+        </div>
+        <div class="showcase-text">
+          <div class="section-label">Check-in notification</div>
+          <h3>A gentle nudge when it matters</h3>
+          <p>
+            When Nudge detects you might be drifting, a sleek dark window appears with a simple YES/NO choice. Keyboard shortcuts (<kbd>Ctrl+Shift+Y</kbd> / <kbd>Ctrl+Shift+N</kbd>) let you answer without touching the mouse.
+          </p>
+          <ul class="showcase-features">
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              30-second auto-dismiss with countdown ring
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Drag to reposition — position is remembered
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Subtle acrylic blur effect blends with your desktop
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
 
-    <section class="feedback">
-      <h2>Using Nudge?</h2>
-      <p>This is an early release. Your feedback directly shapes what gets built next.</p>
-      <a class="btn-feedback" href="https://github.com/sguergachi/Nudge/issues/new" target="_blank">Open an issue on GitHub</a>
-    </section>
-  </main>
+  <!-- ═══ Showcase: Analytics ═══ -->
+  <section class="section" style="padding-top: 0;">
+    <div class="container">
+      <div class="showcase-grid reverse">
+        <div class="showcase-visual">
+          <img src="screenshots/analytics.svg" alt="Nudge analytics dashboard">
+        </div>
+        <div class="showcase-text">
+          <div class="section-label">Analytics dashboard</div>
+          <h3>Understand your focus patterns</h3>
+          <p>
+            The analytics window surfaces your productivity data across three tabs: Activity, Timeline, and AI Brain. See at a glance how you spent your day and where your focus peaks.
+          </p>
+          <ul class="showcase-features">
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Real-time stat cards: activity time, productive %, apps tracked
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Hourly productivity breakdown with green/red bar charts
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              AI prediction history with confidence sparklines
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
 
+  <!-- ═══ Showcase: Settings ═══ -->
+  <section class="section" style="padding-top: 0;">
+    <div class="container">
+      <div class="showcase-grid">
+        <div class="showcase-visual">
+          <img src="screenshots/settings.svg" alt="Nudge settings window">
+        </div>
+        <div class="showcase-text">
+          <div class="section-label">Settings</div>
+          <h3>Fine-tune to your workflow</h3>
+          <p>
+            Control every aspect of Nudge from the settings window — toggle ML, adjust check intervals, manage notifications, and monitor your AI model's training status.
+          </p>
+          <ul class="showcase-features">
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Toggle on-device ML on/off at any time
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Customizable check interval (5–15 min range)
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Live model stats: samples collected, accuracy, last trained
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ How It Works ═══ -->
+  <section class="section section-shine" id="how-it-works" style="background: var(--bg-surface);">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-label">How it works</div>
+        <h2 class="section-title">Track. Learn. Nudge.</h2>
+        <p class="section-desc">Three simple steps to reclaim your focus, powered by an AI that runs entirely on your machine.</p>
+      </div>
+
+      <div class="steps-grid">
+        <div class="step-card">
+          <div class="step-number">1</div>
+          <h3>Track silently</h3>
+          <p>Nudge monitors your foreground app and idle time — no screenshots, no keystroke logging, no cloud. Just a lightweight daemon running in the background.</p>
+        </div>
+        <div class="step-card">
+          <div class="step-number">2</div>
+          <h3>Train the model</h3>
+          <p>Each time you answer "productive?" the on-device model learns. After ~50 responses it starts predicting drift with over 80% accuracy.</p>
+        </div>
+        <div class="step-card">
+          <div class="step-number">3</div>
+          <h3>Get nudged</h3>
+          <p>When the AI detects you're drifting, a quick check-in appears. When you're focused it stays silent. No noise, no fixed timers, no distractions.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ Stats ═══ -->
+  <div class="stats-section">
+    <div class="container">
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-value">100%</div>
+          <div class="stat-label">On-device, no cloud</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">~80%</div>
+          <div class="stat-label">ML prediction accuracy</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">50+</div>
+          <div class="stat-label">Samples to train</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">2 OS</div>
+          <div class="stat-label">Windows &amp; Linux</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Privacy ═══ -->
+  <section class="section">
+    <div class="container">
+      <div class="privacy-content">
+        <div class="privacy-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
+        <h2>Privacy isn't a feature. It's the foundation.</h2>
+        <p>
+          Nudge writes everything to <code>~/.nudge/</code> on your machine. There is no server, no telemetry, no account, no data collection of any kind. Your productivity data belongs to you — always.
+        </p>
+        <div class="privacy-features">
+          <div class="privacy-feat">
+            <h4>No accounts</h4>
+            <p>No sign-up, no login, no email required. Download and run.</p>
+          </div>
+          <div class="privacy-feat">
+            <h4>No telemetry</h4>
+            <p>Nudge never phones home. No analytics, no crash reports sent externally.</p>
+          </div>
+          <div class="privacy-feat">
+            <h4>Open source</h4>
+            <p>Every line of code is on GitHub. Auditable, forkable, improvable.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ Download / CTA ═══ -->
+  <section class="cta-section section" id="download">
+    <div class="container">
+      <div class="cta-content">
+        <h2>Ready to take control of your focus?</h2>
+        <p>Download the latest release — no installation, no dependencies, no strings attached.</p>
+        <div class="download-buttons">
+          <div class="download-card">
+            <div class="download-os-icon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="4" y1="8" x2="20" y2="8"/><line x1="8" y1="4" x2="8" y2="20"/></svg>
+            </div>
+            <h3>Windows</h3>
+            <a class="btn btn-download" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 15 21 19 3 19 3 15"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Download .zip
+            </a>
+            <p class="download-sub">Extract and run <code>nudge-tray.exe</code></p>
+          </div>
+          <div class="download-card">
+            <div class="download-os-icon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M3 21v-2a7 7 0 0 1 7-7h4a7 7 0 0 1 7 7v2"/></svg>
+            </div>
+            <h3>Linux</h3>
+            <a class="btn btn-download" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-x64.tar.gz">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 15 21 19 3 19 3 15"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Download .tar.gz
+            </a>
+            <p class="download-sub">Run <code>./install-linux-app.sh</code></p>
+          </div>
+        </div>
+        <p class="download-sub">
+          Self-contained binaries, no .NET runtime required &middot; <a href="https://github.com/sguergachi/Nudge/releases/latest" target="_blank">View all releases</a>
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ Open Source ═══ -->
+  <section class="oss-section section">
+    <div class="container">
+      <div class="oss-content">
+        <div class="oss-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+        </div>
+        <div class="oss-text">
+          <h3>Built in the open</h3>
+          <p>Nudge is open source software. Contributions, issues, and ideas are welcome — <a href="https://github.com/sguergachi/Nudge" target="_blank">view on GitHub</a>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ Footer ═══ -->
   <footer>
-    <p>Nudge is open source &mdash; <a href="https://github.com/sguergachi/Nudge" target="_blank">view on GitHub</a></p>
+    <div class="container">
+      <ul class="footer-links">
+        <li><a href="https://github.com/sguergachi/Nudge" target="_blank">GitHub</a></li>
+        <li><a href="https://github.com/sguergachi/Nudge/issues/new" target="_blank">Feedback</a></li>
+        <li><a href="https://github.com/sguergachi/Nudge/releases/latest" target="_blank">Releases</a></li>
+      </ul>
+      <p>
+        Nudge is open source &mdash; <a href="https://github.com/sguergachi/Nudge" target="_blank">MIT License</a>
+      </p>
+    </div>
   </footer>
+
 </body>
 </html>

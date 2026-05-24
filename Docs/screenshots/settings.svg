@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 530" width="420" height="530">
+  <defs>
+    <filter id="shadow" x="-5%" y="-5%" width="115%" height="115%">
+      <feDropShadow dx="0" dy="2" stdDeviation="16" flood-color="#000" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <!-- Window shadow -->
+  <rect x="2" y="2" width="420" height="530" rx="14" ry="14" fill="#000" opacity="0.3" filter="url(#shadow)"/>
+
+  <!-- Window background -->
+  <rect x="0" y="0" width="420" height="530" rx="12" ry="12" fill="#121214"/>
+
+  <!-- Border -->
+  <rect x="0.5" y="0.5" width="419" height="529" rx="11.5" ry="11.5" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+
+  <!-- Title -->
+  <text x="20" y="36" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="20" fill="#F0F0F5" font-weight="600">Settings</text>
+
+  <!-- Card 1: General -->
+  <rect x="16" y="60" width="388" height="130" rx="10" ry="10" fill="#1C1C20"/>
+  <text x="28" y="82" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="15" fill="#F0F0F5" font-weight="600">General</text>
+
+  <!-- ML toggle row -->
+  <text x="28" y="112" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" fill="#F0F0F5" font-weight="400">Machine Learning</text>
+  <text x="28" y="128" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="11" fill="#9696A0" font-weight="400">On-device AI that learns your focus patterns</text>
+  <!-- Toggle ON -->
+  <rect x="358" y="98" width="36" height="20" rx="10" ry="10" fill="#58A6FF"/>
+  <circle cx="370" cy="108" r="8" fill="#FFF"/>
+
+  <line x1="28" y1="140" x2="392" y2="140" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+
+  <!-- Interval row -->
+  <text x="28" y="167" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" fill="#F0F0F5" font-weight="400">Check Interval</text>
+  <text x="28" y="183" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="11" fill="#9696A0" font-weight="400">Time between focus checks</text>
+  <rect x="330" y="152" width="62" height="24" rx="5" ry="5" fill="#232328"/>
+  <text x="361" y="169" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="11" fill="#F0F0F5" text-anchor="middle" font-weight="500">8 min</text>
+
+  <!-- Card 2: Notifications -->
+  <rect x="16" y="204" width="388" height="130" rx="10" ry="10" fill="#1C1C20"/>
+  <text x="28" y="226" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="15" fill="#F0F0F5" font-weight="600">Notifications</text>
+
+  <text x="28" y="256" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" fill="#F0F0F5" font-weight="400">Sound</text>
+  <text x="28" y="272" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="11" fill="#9696A0" font-weight="400">Play a sound when a check-in appears</text>
+  <!-- Toggle OFF -->
+  <rect x="358" y="242" width="36" height="20" rx="10" ry="10" fill="#34343A"/>
+  <circle cx="364" cy="252" r="8" fill="#9696A0"/>
+
+<line x1="28" y1="284" x2="392" y2="284" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+
+  <text x="28" y="311" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" fill="#F0F0F5" font-weight="400">Auto-dismiss</text>
+  <text x="28" y="327" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="11" fill="#9696A0" font-weight="400">Close notification after 30 seconds</text>
+  <!-- Toggle ON -->
+  <rect x="358" y="297" width="36" height="20" rx="10" ry="10" fill="#58A6FF"/>
+  <circle cx="370" cy="307" r="8" fill="#FFF"/>
+
+  <!-- Card 3: AI Model -->
+  <rect x="16" y="348" width="388" height="150" rx="10" ry="10" fill="#1C1C20"/>
+  <text x="28" y="370" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="15" fill="#F0F0F5" font-weight="600">AI Model</text>
+
+  <text x="28" y="398" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" fill="#9696A0" font-weight="400">Status</text>
+  <!-- Status dot + text -->
+  <circle cx="248" cy="394" r="4" fill="#4CAF50"/>
+  <text x="258" y="398" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" fill="#4CAF50" font-weight="500">Model Active</text>
+
+  <text x="28" y="426" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" fill="#9696A0" font-weight="400">Samples</text>
+  <text x="248" y="426" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" fill="#F0F0F5" font-weight="600">247</text>
+
+  <text x="28" y="454" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" fill="#9696A0" font-weight="400">Accuracy</text>
+  <text x="248" y="454" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" fill="#F0F0F5" font-weight="600">84%</text>
+
+  <!-- Train Now button -->
+  <rect x="290" y="460" width="100" height="28" rx="5" ry="5" fill="#58A6FF"/>
+  <text x="340" y="479" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="11" fill="#FFF" text-anchor="middle" font-weight="500">Train Now</text>
+</svg>

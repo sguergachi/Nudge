@@ -72,6 +72,11 @@ namespace NudgeTray
         private static bool _sensorSignalsOpen;
         private static bool _trainingDetailsOpen;
 
+        // Countdown / progress bar (kept for timer lifetime across rebuilds)
+        private DispatcherTimer? _countdownTimer;
+        private Border? _progressTrack;
+        private TextBlock? _cdLabel;
+
         // Fluent Design System Colors - matching CustomNotification
         private static readonly Color BackgroundColor = Color.FromRgb(18, 18, 20);
         private static readonly Color SurfaceColor = Color.FromRgb(28, 28, 32);
@@ -172,7 +177,112 @@ namespace NudgeTray
         {
             base.OnOpened(e);
             PositionNearBottomRight();
+            StartCountdown();
         }
+
+        private void StartCountdown()
+        {
+            UpdateCountdown();
+            _countdownTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _countdownTimer.Tick += (_, _) => UpdateCountdown();
+            _countdownTimer.Start();
+        }
+
+        private void UpdateCountdown()
+        {
+            if (_cdLabel == null || _progressTrack == null) return;
+
+            if (Program._notificationsPaused)
+            {
+                SetCountdownText("● Paused", TextSecondary, false);
+                SetProgressBar(0);
+                return;
+            }
+
+            long totalSec;
+            long secLeft;
+            bool isAi;
+
+            if (Program._mlEnabled)
+            {
+                long nextAt = LiveAIState.NextCheckAt;
+                if (nextAt > 0)
+                {
+                    long nowSec = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                    totalSec = 60;
+                    secLeft = Math.Max(0, nextAt - nowSec);
+                    isAi = true;
+                    goto show;
+                }
+            }
+
+            {
+                var nextSnap = Program.GetNextSnapshotTime();
+                if (nextSnap.HasValue)
+                {
+                    var remaining = nextSnap.Value - DateTime.Now;
+                    totalSec = Math.Max(1, (long)TimeSpan.FromMinutes(Program.IntervalMinutes).TotalSeconds);
+                    secLeft = remaining <= TimeSpan.Zero ? 0 : (long)Math.Min(totalSec, remaining.TotalSeconds);
+                    isAi = false;
+                    goto show;
+                }
+            }
+
+            SetCountdownText("waiting for data...", TextSecondary, false);
+            SetProgressBar(0);
+            return;
+
+        show:
+            if (secLeft <= 0)
+            {
+                SetCountdownText("● checking now", PrimaryBlue, false);
+                SetProgressBar(1.0);
+                return;
+            }
+
+            double prog = (double)(totalSec - secLeft) / totalSec;
+            SetProgressBar(Math.Clamp(prog, 0, 1));
+            string prefix = isAi ? "AI check in " : "Snapshot in ";
+            SetCountdownText(prefix + FormatSec(secLeft), PrimaryBlue, true);
+        }
+
+        private void SetCountdownText(string text, Color color, bool medium)
+        {
+            _cdLabel!.Text = text;
+            _cdLabel.Foreground = new SolidColorBrush(color);
+            _cdLabel.FontWeight = medium ? FontWeight.Medium : FontWeight.Normal;
+        }
+
+        private void SetProgressBar(double prog)
+        {
+            _progressTrack!.Background = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255));
+            var barGrid = new Grid();
+            if (prog >= 0.995)
+            {
+                barGrid.ColumnDefinitions = new ColumnDefinitions("*");
+                barGrid.Children.Add(new Border
+                {
+                    Background = new SolidColorBrush(PrimaryBlue),
+                    CornerRadius = new CornerRadius(1),
+                    HorizontalAlignment = HorizontalAlignment.Stretch
+                });
+            }
+            else if (prog > 0.005)
+            {
+                double rem = 1.0 - prog;
+                barGrid.ColumnDefinitions = new ColumnDefinitions($"{prog * 100:F1}*,{rem * 100:F1}*");
+                barGrid.Children.Add(new Border
+                {
+                    Background = new SolidColorBrush(PrimaryBlue),
+                    CornerRadius = new CornerRadius(1, 0, 0, 1),
+                    HorizontalAlignment = HorizontalAlignment.Stretch
+                });
+            }
+            _progressTrack.Child = barGrid;
+        }
+
+        private static string FormatSec(long s) =>
+            s < 60 ? $"{s}s" : $"{s / 60}m {s % 60:D2}s";
 
         private void PositionNearBottomRight()
         {
@@ -188,6 +298,7 @@ namespace NudgeTray
         protected override void OnClosed(EventArgs e)
         {
             _aiLiveRefreshTimer?.Stop();
+            _countdownTimer?.Stop();
             base.OnClosed(e);
         }
 
@@ -395,6 +506,66 @@ namespace NudgeTray
             tabsBar.Child = tabsGrid;
 
             headerStack.Children.Add(topBar);
+
+            // ── Countdown + progress strip ──────────────────────────────────
+            var countdownSection = new Border
+            {
+                Background = new SolidColorBrush(SurfaceColor),
+                Padding = new Thickness(16, 4, 16, 6)
+            };
+            var countdownStack = new StackPanel { Spacing = 4 };
+
+            _progressTrack = new Border
+            {
+                Height = 2,
+                CornerRadius = new CornerRadius(1),
+                Background = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255)),
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            countdownStack.Children.Add(_progressTrack);
+
+            var cdRow = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*")
+            };
+
+            var cdIcon = new TextBlock
+            {
+                Text = "⏱",
+                FontSize = 10,
+                Foreground = new SolidColorBrush(TextSecondary),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 4, 0)
+            };
+            Grid.SetColumn(cdIcon, 0);
+
+            var cdPrefix = new TextBlock
+            {
+                Text = "Next check: ",
+                FontSize = 11,
+                Foreground = new SolidColorBrush(TextSecondary),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(cdPrefix, 1);
+
+            _cdLabel = new TextBlock
+            {
+                Text = "--",
+                FontSize = 11,
+                FontWeight = FontWeight.Medium,
+                Foreground = new SolidColorBrush(PrimaryBlue),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(_cdLabel, 2);
+
+            cdRow.Children.Add(cdIcon);
+            cdRow.Children.Add(cdPrefix);
+            cdRow.Children.Add(_cdLabel);
+            countdownStack.Children.Add(cdRow);
+
+            countdownSection.Child = countdownStack;
+            headerStack.Children.Add(countdownSection);
+
             headerStack.Children.Add(tabsBar);
 
             var headerBorder = new Border

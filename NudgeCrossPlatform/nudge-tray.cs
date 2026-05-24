@@ -57,6 +57,7 @@ namespace NudgeTray
         static bool _forceTrainedModel;
         static DateTime? _nextSnapshotTime;
         static int _intervalMinutes;
+        public static int IntervalMinutes => _intervalMinutes;
         static Mutex? _singleInstanceMutex;
         internal const string SingleInstanceMutexName = NudgeCoreLogic.TraySingleInstanceMutexName;
         static readonly string _baseDir = AppContext.BaseDirectory;
