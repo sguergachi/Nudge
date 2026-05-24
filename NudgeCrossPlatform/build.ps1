@@ -229,42 +229,6 @@ function Invoke-Dotnet {
     }
 }
 
-function Publish-DistBinary {
-    param(
-        [string]$Framework,
-        [string]$Rid,
-        [string]$OutputDir,
-        [string]$ExpectedFile
-    )
-
-    New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
-
-    try {
-        Invoke-Dotnet @(
-            "publish", "nudge-tray.csproj",
-            "-c", "Release",
-            "-f", $Framework,
-            "-r", $Rid,
-            "-o", $OutputDir,
-            "--self-contained",
-            "-p:PublishSingleFile=true",
-            "-p:IncludeNativeLibrariesForSelfExtract=true",
-            "--nologo",
-            "-v", "quiet"
-        )
-
-        if (Test-Path $ExpectedFile) {
-            Write-Success "  [OK] $ExpectedFile"
-        }
-        else {
-            Write-Warn "  [WARN] Publish completed but $ExpectedFile was not produced"
-        }
-    }
-    catch {
-        Write-Warn "  [WARN] Failed to publish $Rid"
-    }
-}
-
 function Verify-Output {
     param([string]$Path)
 
@@ -377,8 +341,34 @@ if ($Platform) {
     Write-Host "==========================================" -ForegroundColor Cyan
     Write-Info "Building platform binaries..."
     Write-Host ""
-    Publish-DistBinary -Framework $WindowsTfm -Rid "win-x64" -OutputDir "dist/win-x64" -ExpectedFile "dist/win-x64/nudge-tray.exe"
-    Publish-DistBinary -Framework $MainTfm -Rid "linux-x64" -OutputDir "dist/linux-x64" -ExpectedFile "dist/linux-x64/nudge-tray"
+
+    function Publish-Dist {
+        param([string]$Rid, [string]$TfmTray, [string]$Dir, [string]$ExeExt)
+        Remove-Item -Path $Dir -Recurse -Force -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Path $Dir -Force | Out-Null
+
+        # Publish each project to temp subdirectories (avoids cross-contamination)
+        Invoke-Dotnet @("publish", "nudge.csproj",        "-c", "Release", "-f", "net10.0", "-r", $Rid, "-o", "$Dir/_.nudge",     "--self-contained", "-p:PublishSingleFile=true", "--nologo", "-v", "quiet")
+        Invoke-Dotnet @("publish", "nudge-notify.csproj", "-c", "Release", "-f", "net10.0", "-r", $Rid, "-o", "$Dir/_.notify",   "--self-contained", "-p:PublishSingleFile=true", "--nologo", "-v", "quiet")
+        Invoke-Dotnet @("publish", "nudge-tray.csproj",   "-c", "Release", "-f", $TfmTray, "-r", $Rid, "-o", "$Dir/_.tray",   "--self-contained", "-p:PublishSingleFile=true", "-p:SkipBuildNudgeDaemon=true", "--nologo", "-v", "quiet")
+
+        # Copy single-file exes + all native assets from tray.d
+        Copy-Item "$Dir/_.nudge/nudge$ExeExt"    $Dir
+        Copy-Item "$Dir/_.notify/nudge-notify$ExeExt" $Dir
+        Copy-Item "$Dir/_.tray/nudge-tray$ExeExt" $Dir
+        Get-ChildItem "$Dir/_.tray" | Where-Object { $_.Name -notlike "nudge-tray*" } | Copy-Item -Destination $Dir -Force
+
+        # Copy Python support files
+        Copy-Item "model_inference.py", "train_model.py", "background_trainer.py", "requirements-cpu.txt", "requirements.txt" -Destination $Dir -Force
+
+        Remove-Item "$Dir/_.nudge", "$Dir/_.notify", "$Dir/_.tray" -Recurse -Force
+        Write-Success "  [OK] $Rid → $Dir"
+    }
+
+    Publish-Dist -Rid "win-x64"  -TfmTray $WindowsTfm -Dir "dist/win-x64"   -ExeExt ".exe"
+    Publish-Dist -Rid "linux-x64" -TfmTray $MainTfm    -Dir "dist/linux-x64" -ExeExt ""
+
+    Write-Success "[OK] Platform binaries complete"
 }
 
 Write-Host ""

@@ -676,9 +676,28 @@ internal static class PlatformConfig
         return $"-m pip install {extra} -r \"{requirementsPath}\"";
     }
 
-    /// <summary>Find a working Python: check local venv, dev venv, then system Python.</summary>
+    /// <summary>User-level venv directory inside DataDirectory.</summary>
+    public static string VenvDirectory => Path.Combine(DataDirectory, "venv");
+
+    /// <summary>Path to the Python executable inside the user-level venv, or empty if not yet created.</summary>
+    public static string VenvPythonPath =>
+        IsWindows
+            ? Path.Combine(VenvDirectory, "Scripts", "python.exe")
+            : Path.Combine(VenvDirectory, "bin", "python");
+
+    /// <summary>Path to the pip executable inside the user-level venv.</summary>
+    public static string VenvPipPath =>
+        IsWindows
+            ? Path.Combine(VenvDirectory, "Scripts", "pip.exe")
+            : Path.Combine(VenvDirectory, "bin", "pip");
+
+    /// <summary>
+    /// Find a working Python: check user-level venv, local venv, dev venv, then system Python.
+    /// After EnsureVenv() has run, this returns the venv Python.
+    /// </summary>
     public static string FindPython(string baseDir)
     {
+        if (File.Exists(VenvPythonPath)) return VenvPythonPath;
         if (IsWindows)
         {
             var local = Path.Combine(baseDir, "venv", "Scripts", "python.exe");
@@ -694,6 +713,49 @@ internal static class PlatformConfig
         var devNix = Path.Combine(srcDirNix, "venv", "bin", "python");
         if (File.Exists(devNix)) return devNix;
         return PythonCommand;
+    }
+
+    /// <summary>
+    /// Creates the user-level venv at <see cref="VenvDirectory"/> if it does not exist.
+    /// Must be called after <see cref="DataDirectory"/> is available.
+    /// Returns true if the venv was created or already exists.
+    /// </summary>
+    public static bool EnsureVenv(string systemPython)
+    {
+        if (File.Exists(VenvPythonPath)) return true;
+        try
+        {
+            Directory.CreateDirectory(VenvDirectory);
+            string args = IsWindows
+                ? $"-m venv \"{VenvDirectory}\""
+                : $"-m venv \"{VenvDirectory}\"";
+            var proc = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = systemPython,
+                    Arguments = args,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                }
+            };
+            proc.Start();
+            proc.WaitForExit(30000);
+            if (proc.ExitCode != 0)
+            {
+                string err = proc.StandardError.ReadToEnd();
+                Console.WriteLine($"[WARN] Failed to create venv: {err.Trim()}");
+                return false;
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[WARN] Failed to create venv: {ex.Message}");
+            return false;
+        }
     }
 
     public static string DotnetCommand => IsWindows ? "dotnet.exe" : "dotnet";
