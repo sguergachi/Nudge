@@ -61,30 +61,34 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
 
-      - name: Build Windows installer
-        shell: pwsh
-        run: |
-          $iscc = Get-ChildItem -Path "C:\Program Files" -Filter "ISCC.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $iscc) { $iscc = Get-ChildItem -Path "$env:ChocolateyInstall" -Filter "ISCC.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 }
-          if (-not $iscc) { Write-Error "ISCC.exe not found"; Get-ChildItem "C:\" -Filter "ISCC.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 5 | ForEach-Object { Write-Host "  Found: $_" }; exit 1 }
-          $isccPath = $iscc.Directory.FullName
-          Write-Host "ISCC: $isccPath\ISCC.exe"
-          $version = Select-String -Path "NudgeCrossPlatform\nudge-tray.cs" -Pattern 'const string VERSION = "([.\d]+)"' | ForEach-Object { $_.Matches.Groups[1].Value }
-          if (-not $version) { Write-Error "Failed to extract version"; exit 1 }
-          Write-Host "Building v$version installer..."
-          & "$isccPath\ISCC.exe" /DMyAppVersion=$version "NudgeCrossPlatform\assets\windows\setup.iss"
-          if ($LASTEXITCODE -ne 0) { Write-Error "iscc failed (exit $LASTEXITCODE)"; exit 1 }
-          Get-ChildItem "dist" -Filter "Nudge-Setup-*.exe"
-
-      - uses: actions/upload-artifact@v4
+      - name: Upload Windows zip
+        uses: actions/upload-artifact@v4
         with:
           name: nudge-win-x64
           path: nudge-win-x64.zip
 
-      - uses: actions/upload-artifact@v4
+      - name: Build Windows installer
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $iscc = Get-ChildItem -Path "C:\Program Files" -Filter "ISCC.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $iscc) { $iscc = Get-ChildItem -Path "$env:ChocolateyInstall" -Filter "ISCC.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 }
+          if (-not $iscc) { Write-Host "ISCC.exe not found — skipping installer"; exit 0 }
+          $isccPath = $iscc.Directory.FullName
+          Write-Host "ISCC: $isccPath\ISCC.exe"
+          $version = Select-String -Path "NudgeCrossPlatform\nudge-tray.cs" -Pattern 'const string VERSION = "([.\d]+)"' | ForEach-Object { $_.Matches.Groups[1].Value }
+          if (-not $version) { Write-Host "Failed to extract version — skipping installer"; exit 0 }
+          Write-Host "Building v$version installer..."
+          & "$isccPath\ISCC.exe" /DMyAppVersion=$version "NudgeCrossPlatform\assets\windows\setup.iss"
+          if ($LASTEXITCODE -ne 0) { Write-Host "iscc failed (exit $LASTEXITCODE) — skipping installer"; exit 0 }
+
+      - name: Upload Windows installer
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
         with:
           name: nudge-win-installer
           path: dist\Nudge-Setup-*.exe
+          if-no-files-found: warn
 
   build-linux:
     needs: check-version
@@ -164,7 +168,7 @@ jobs:
 
   release:
     needs: [check-version, build-windows, build-linux]
-    if: needs.check-version.outputs.should_release == 'true'
+    if: always() && needs.check-version.result == 'success' && needs.check-version.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -175,18 +179,22 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: nudge-win-x64
 
       - uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: nudge-linux-x64
 
       - uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: nudge-win-installer
 
       - uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: nudge-linux-installer
 
@@ -196,8 +204,11 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag "v$VERSION"
           git push origin "v$VERSION"
-          SETUP_EXE=$(ls Nudge-Setup-*.exe | head -1)
-          LINUX_INSTALLER=$(ls nudge-linux-installer.run | head -1)
+          ASSETS=()
+          for f in Nudge-Setup-*.exe nudge-win-x64.zip nudge-linux-installer.run nudge-linux-x64.tar.gz; do
+            [ -f "$f" ] && ASSETS+=("$f")
+          done
+          echo "Release assets: ${ASSETS[*]}"
           cat > release-notes.md << 'NOTES'
           ## Install
 
@@ -206,9 +217,8 @@ jobs:
           2. Run the installer — one click, done
 
           ### Linux
-          1. Download **nudge-linux-x64.tar.gz** and extract: `tar -xzf nudge-linux-x64.tar.gz`
-          2. Run `./install-linux-app.sh` to register the desktop entry
-          3. Launch **nudge-tray** from your app menu
+          1. Download **nudge-linux-installer.run** and run: `chmod +x nudge-linux-installer.run && ./nudge-linux-installer.run`
+          2. Or use **nudge-linux-x64.tar.gz**: extract and run `./install-linux-app.sh`
 
           ### ML features
           When you enable ML mode (in Settings or via `--ml`), Nudge automatically:
@@ -222,7 +232,4 @@ jobs:
           gh release create "v$VERSION" \
             --title "Nudge v$VERSION" \
             --notes-file release-notes.md \
-            "$SETUP_EXE" \
-            "$LINUX_INSTALLER" \
-            nudge-win-x64.zip \
-            nudge-linux-x64.tar.gz
+            "${ASSETS[@]}"
