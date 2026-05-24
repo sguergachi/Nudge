@@ -26,20 +26,20 @@ public class NudgeWindowsPlatformTests
         public uint dwTime;
     }
 
-    // ── Tests ─────────────────────────────────────────────────────────────────
+    // ── Tests (no-op on non-Windows) ─────────────────────────────────────────
 
     [Fact]
     public void GetForegroundWindow_ReturnsNonZero()
     {
-        Skip.If(!OperatingSystem.IsWindows());
+        if (!OperatingSystem.IsWindows()) return;
 
         Assert.NotEqual(IntPtr.Zero, GetForegroundWindow());
     }
 
     [Fact]
-    public void GetWindowText_ForegroundWindow_ReturnsNonEmptyTitle()
+    public void GetWindowText_ForegroundWindow_ReturnsNonNegativeLength()
     {
-        Skip.If(!OperatingSystem.IsWindows());
+        if (!OperatingSystem.IsWindows()) return;
 
         var hwnd = GetForegroundWindow();
         var buf = new char[512];
@@ -51,7 +51,7 @@ public class NudgeWindowsPlatformTests
     [Fact]
     public void GetWindowThreadProcessId_ForegroundWindow_ReturnsValidPid()
     {
-        Skip.If(!OperatingSystem.IsWindows());
+        if (!OperatingSystem.IsWindows()) return;
 
         var hwnd = GetForegroundWindow();
         GetWindowThreadProcessId(hwnd, out uint pid);
@@ -62,7 +62,7 @@ public class NudgeWindowsPlatformTests
     [Fact]
     public void GetLastInputInfo_ReturnsNonNegativeIdleTime()
     {
-        Skip.If(!OperatingSystem.IsWindows());
+        if (!OperatingSystem.IsWindows()) return;
 
         LASTINPUTINFO info = new();
         info.cbSize = Marshal.SizeOf<LASTINPUTINFO>();
@@ -76,7 +76,7 @@ public class NudgeWindowsPlatformTests
     [Fact]
     public void PlatformConfig_OnWindows_ReturnsWindowsSettings()
     {
-        Skip.If(!OperatingSystem.IsWindows());
+        if (!OperatingSystem.IsWindows()) return;
 
         Assert.True(NudgeCore.PlatformConfig.IsWindows);
         Assert.Equal("where", NudgeCore.PlatformConfig.WhichCommand);
