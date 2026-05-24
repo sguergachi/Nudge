@@ -19,7 +19,6 @@
       <span class="logo">Nudge</span>
       <ul class="nav-links">
         <li><a href="#how-it-works">How it works</a></li>
-        <li><a href="#features">Features</a></li>
         <li><a href="#download">Download</a></li>
         <li><a href="https://github.com/sguergachi/Nudge" class="nav-github" target="_blank">GitHub</a></li>
       </ul>
@@ -31,59 +30,65 @@
   <div class="hero-bg"></div>
   <div class="container">
     <div class="hero-inner">
-      <div class="hero-content">
-        <div class="hero-label">Free &middot; Open source &middot; Private</div>
-        <h1>Still&nbsp;focused?</h1>
-        <p class="hero-desc">
-          Nudge learns how you work — the apps you use, how you switch between
-          them, when you tend to drift — and asks "still focused?" at exactly
-          the right moment. No timers. No cloud. No noise.
-        </p>
-        <div class="hero-actions">
-          <a class="btn btn-primary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip">Download for Windows</a>
-          <a class="btn btn-secondary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-installer.run">Download for Linux</a>
-        </div>
-        <p class="hero-footnote">Free forever &mdash; no account, no signup, no strings attached</p>
+      <h1>Still&nbsp;focused?</h1>
+      <p class="hero-desc">
+        Nudge runs a sensor fusion pipeline that tracks your desktop attention signal
+        — foreground app, idle time, browser domain — at 1&thinsp;Hz. A local
+        scikit-learn classifier evaluates 21-feature snapshots against your response
+        history and interrupts only when it detects drift at &ge;98% confidence.
+        No cloud. No fixed timers. No telemetry.
+      </p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="https://github.com/sguergachi/Nudge/releases/latest/download/Nudge-Setup-1.5.0.exe">Download for Windows</a>
+        <a class="btn btn-secondary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-x64.tar.gz">Download for Linux</a>
       </div>
-      <div class="hero-visual">
-        <img src="screenshots/notification_active.png" alt="Nudge notification: Still focused? YES / NO" class="hero-shot">
-      </div>
+      <p class="hero-footnote">Free forever &middot; no account &middot; MIT licensed</p>
     </div>
   </div>
 </section>
 
-<section class="section section-dim" id="how-it-works">
+<section class="section" id="how-it-works">
   <div class="container">
     <h2 class="section-label">How it works</h2>
-    <div class="steps">
-      <div class="step">
-        <div class="step-img">
-          <img src="screenshots/tray-menu.svg" alt="Nudge in system tray">
+    <div class="hw-grid">
+      <div class="hw-item">
+        <div class="hw-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         </div>
-        <div class="step-text">
-          <span class="step-number">01</span>
-          <h3>Watches your desktop</h3>
-          <p>Sits quietly in your system tray. Samples your foreground app, idle time, and browser domain once per second. No screenshots. No keystrokes. No network calls.</p>
-        </div>
-      </div>
-      <div class="step">
-        <div class="step-img">
-          <img src="screenshots/categories.svg" alt="App categories">
-        </div>
-        <div class="step-text">
-          <span class="step-number">02</span>
-          <h3>Learns your patterns</h3>
-          <p>Every app is classified into a category — Development, Creative, Office, Communication, Entertainment, Utility. A local AI model compares each moment against your past YES/NO responses and gets sharper with every answer.</p>
+        <div>
+          <h3>Sensor&nbsp;fusion pipeline</h3>
+          <p>Harvest engine samples foreground app, idle duration, window title, and compositor metadata at 1&thinsp;Hz. Three raw signals fused into a 21-dimension feature vector with 5-tier category confidence. Rolling 300&thinsp;s windows capture switch velocity, distinct-app count, and anchor-return events.</p>
+          <div class="hw-spec">Sources: KWin Script · X11 EWMH · Sway IPC · Win32 · browser domain extraction</div>
         </div>
       </div>
-      <div class="step">
-        <div class="step-img">
-          <img src="screenshots/notification.svg" alt="Notification">
+      <div class="hw-item">
+        <div class="hw-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
         </div>
-        <div class="step-text">
-          <span class="step-number">03</span>
-          <h3>Asks one question</h3>
-          <p>A small window appears with two buttons: YES or NO. Keyboard shortcuts so you never leave your flow. Auto-dismisses after 30 seconds. Every answer trains the model further.</p>
+        <div>
+          <h3>On-device ML&nbsp;inference</h3>
+          <p>Local scikit-learn binary classifier — RandomForest or LogisticRegression depending on training volume. Evaluates every 60&thinsp;s against your YES/NO response history over TCP 127.0.0.1:45002. Requires 100 samples to activate. Background trainer retriggers at 50+ new responses with 300&thinsp;s polling.</p>
+          <div class="hw-spec">Threshold: ≥98% confidence · sub-100ms latency · retrains automatically</div>
+        </div>
+      </div>
+      <div class="hw-item">
+        <div class="hw-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <div>
+          <h3>Adaptive interrupt&nbsp;timing</h3>
+          <p>No fixed schedule — the model decides. High-confidence drift match fires an Avalonia overlay with a single binary choice: YES or NO. Keyboard shortcuts (Ctrl+Shift+Y / Ctrl+Shift+N) keep you in flow. Auto-dismiss after 30&thinsp;s. Every response feeds back into the training set. Below the 98% confidence threshold, the system defers to variable-interval fallback.</p>
+          <div class="hw-spec">IPC: UDP 127.0.0.1:45001 · 30s auto-dismiss · retrain loop</div>
+        </div>
+      </div>
+      <div class="hw-item">
+        <div class="hw-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
+        <div>
+          <h3>Privacy-first&nbsp;architecture</h3>
+          <p>No cloud endpoints exist in the codebase. All training data, model weights, and configuration live in <code>~/.nudge/</code>. Zero network egress from the daemon. No accounts, no signup, no telemetry of any kind. Open source (MIT) — fully auditable and forkable.</p>
+          <div class="hw-spec">Data: ~/.nudge/ · Model: scikit-learn · License: MIT · 5 desktop environments</div>
         </div>
       </div>
     </div>
@@ -92,105 +97,50 @@
 
 <section class="section section-dark" id="features">
   <div class="container">
-    <h2 class="section-label">Features</h2>
-    <div class="features">
-      <div class="feature">
-        <div class="feature-dot" style="background: #58A6FF;"></div>
-        <h3>Adaptive timing</h3>
-        <p>No fixed timers. Nudge waits until your attention pattern shifts — then asks. Sometimes that's 5 minutes, sometimes 40. It adjusts to how you actually work.</p>
+    <h2 class="section-label">At a glance</h2>
+    <div class="glance-grid">
+      <div>
+        <h4>6 app categories</h4>
+        <p>Development · Creative · Office · Communication · Entertainment · Utility</p>
       </div>
-      <div class="feature">
-        <div class="feature-dot" style="background: #22C55E;"></div>
-        <h3>On-device AI</h3>
-        <p>A scikit-learn classifier trains locally on your responses and runs inference over TCP. Your data never leaves <code class="inline-code">~/.nudge/</code>. No cloud dependency.</p>
+      <div>
+        <h4>5 confidence tiers</h4>
+        <p>Override → Desktop → Semantic → Inferred → Fallback</p>
       </div>
-      <div class="feature">
-        <div class="feature-dot" style="background: #58A6FF;"></div>
-        <h3>Keyboard-first</h3>
-        <p><code class="inline-code">Ctrl+Shift+Y</code> for YES, <code class="inline-code">Ctrl+Shift+N</code> for NO. The notification auto-dismisses. You never have to touch the mouse.</p>
+      <div>
+        <h4>21-feature vector</h4>
+        <p>App category · idle ratio · switch velocity · anchor return · domain signals + 14 temporal</p>
       </div>
-      <div class="feature">
-        <div class="feature-dot" style="background: #22C55E;"></div>
-        <h3>Live analytics</h3>
-        <p>Track your focus trends over time from the system tray. Daily, weekly, and monthly breakdowns of what you classified as productive vs. not.</p>
+      <div>
+        <h4>Windows + Linux</h4>
+        <p>KDE · GNOME · Sway · Cinnamon · Win32 · Wayland + X11</p>
       </div>
-      <div class="feature">
-        <div class="feature-dot" style="background: #58A6FF;"></div>
-        <h3>Your data stays yours</h3>
-        <p>No accounts. No telemetry. No network calls from the daemon. Everything lives in <code class="inline-code">~/.nudge/</code> and never leaves. MIT licensed.</p>
+      <div>
+        <h4>Response-driven training</h4>
+        <p>100-sample minimum · retrains at 50+ new responses · model sharpens over time</p>
       </div>
-      <div class="feature">
-        <div class="feature-dot" style="background: #22C55E;"></div>
-        <h3>Cross-platform</h3>
-        <p>Windows 10/11 and Linux (KDE, GNOME, Sway, Cinnamon). Wayland and X11. Self-contained binaries — no runtime required.</p>
+      <div>
+        <h4>Self-contained binary</h4>
+        <p>No .NET runtime required · single-file publish · Python deps auto-installed</p>
       </div>
     </div>
   </div>
 </section>
 
-<section class="section" id="tech">
-  <div class="container">
-    <div class="tech-grid">
-      <div class="tech-content">
-        <h2 class="section-label">Under the hood</h2>
-        <p class="tech-summary">A four-stage pipeline. Every piece runs locally.</p>
-        <div class="tech-steps">
-          <div class="tech-step">
-            <div class="ts-dot"></div>
-            <div class="ts-body">
-              <div class="ts-title">Signal acquisition</div>
-              <p>Foreground app, idle duration, window title, and compositor metadata at 1 Hz. Browser domain extracted from window title.</p>
-              <div class="ts-specs">KWin Script &middot; X11 EWMH &middot; Sway IPC &middot; Win32</div>
-            </div>
-          </div>
-          <div class="tech-step">
-            <div class="ts-dot"></div>
-            <div class="ts-body">
-              <div class="ts-title">Classification</div>
-              <p>Every app and domain tagged into 6 categories at 5 confidence tiers. A rolling 300 s window tracks switches, diversity, and anchor-return events.</p>
-              <div class="ts-specs">21-feature vector &middot; 300 s rolling window</div>
-            </div>
-          </div>
-          <div class="tech-step">
-            <div class="ts-dot"></div>
-            <div class="ts-body">
-              <div class="ts-title">Inference</div>
-              <p>Snapshot evaluated against a scikit-learn classifier on TCP 127.0.0.1:45002. Requires 100 training samples; retrains at 50+ new samples.</p>
-              <div class="ts-specs">&ge;98% confidence threshold &middot; 60 s check interval</div>
-            </div>
-          </div>
-          <div class="tech-step">
-            <div class="ts-dot"></div>
-            <div class="ts-body">
-              <div class="ts-title">Interrupt</div>
-              <p>Custom Avalonia overlay: YES or NO. Ctrl+Shift+Y / Ctrl+Shift+N. 30 s auto-dismiss. Every response trains the model.</p>
-              <div class="ts-specs">UDP 127.0.0.1:45001 &middot; scikit-learn (Python)</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="tech-diagram">
-        <img src="screenshots/sensor-fusion.svg" alt="Sensor fusion pipeline diagram">
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="section section-dark" id="download">
+<section class="section" id="download">
   <div class="container">
     <div class="cta">
-      <div class="cta-badge">Free forever</div>
       <h2 class="cta-heading">Try Nudge on your machine</h2>
-      <p class="cta-desc">Download the installer, run it — done. No dependencies, no account needed. That's it.</p>
+      <p class="cta-desc">Free and open source. No account, no telemetry, no strings.</p>
       <div class="download-group">
         <a class="btn btn-primary btn-dl" href="https://github.com/sguergachi/Nudge/releases/latest/download/Nudge-Setup-1.5.0.exe">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="4" y1="8" x2="20" y2="8"/><line x1="8" y1="4" x2="8" y2="20"/></svg>
-          <span class="dl-text"><span class="dl-label">Windows Installer</span><span class="dl-fmt">Nudge-Setup-1.5.0.exe</span></span>
+          <span class="dl-text"><span class="dl-label">Windows</span><span class="dl-fmt">Nudge-Setup-1.5.0.exe</span></span>
           <span class="dl-arrow">&rarr;</span>
         </a>
-        <a class="btn btn-secondary btn-dl" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-installer.run">
+        <a class="btn btn-secondary btn-dl" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-x64.tar.gz">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M3 21v-2a7 7 0 0 1 7-7h4a7 7 0 0 1 7 7v2"/></svg>
-          <span class="dl-text"><span class="dl-label">Linux Installer</span><span class="dl-fmt">nudge-linux-installer.run</span></span>
+          <span class="dl-text"><span class="dl-label">Linux</span><span class="dl-fmt">nudge-linux-x64.tar.gz</span></span>
           <span class="dl-arrow">&rarr;</span>
         </a>
       </div>
@@ -202,19 +152,16 @@
           <span class="tb-title">terminal</span>
         </div>
         <div class="terminal-body">
-          <div class="terminal-line"><span class="prompt">$</span> chmod +x nudge-linux-installer.run</div>
-          <div class="terminal-line"><span class="prompt">$</span> ./nudge-linux-installer.run</div>
-          <div class="terminal-line terminal-line-dim">Extracting... ✓ Extracted to /tmp/nudge-install</div>
-          <div class="terminal-line terminal-line-dim">✓ Binaries installed to ~/.local/share/nudge</div>
-          <div class="terminal-line terminal-line-dim">✓ Desktop entry created</div>
+          <div class="terminal-line"><span class="prompt">$</span> tar -xzf nudge-linux-x64.tar.gz &amp;&amp; cd linux</div>
+          <div class="terminal-line"><span class="prompt">$</span> ./install-linux-app.sh</div>
+          <div class="terminal-line"><span class="prompt">$</span> nudge-tray</div>
+          <div class="terminal-line terminal-line-dim">harvest daemon started · ML inference on 127.0.0.1:45002</div>
         </div>
       </div>
       <p class="cta-footnote">
-        <a href="https://github.com/sguergachi/Nudge/releases/latest">See all releases</a>
+        <a href="https://github.com/sguergachi/Nudge/releases/latest">All releases</a>
         &middot;
-        <a href="https://github.com/sguergachi/Nudge">View source</a>
-        &middot;
-        ML features auto-install Python dependencies on first launch &mdash; no manual setup needed
+        <a href="https://github.com/sguergachi/Nudge">Source code</a>
       </p>
     </div>
   </div>
