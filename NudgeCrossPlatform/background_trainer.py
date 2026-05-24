@@ -74,20 +74,24 @@ def _save_meta(model_dir: str, sample_count: int, accuracy: float,
         json.dump(meta, f)
 
 
-def _choose_architecture(sample_count: int) -> str:
-    if sample_count < 200:
-        return 'lightweight'
-    if sample_count < 500:
-        return 'standard'
-    return 'deep'
+def _run_training(csv_path: str, model_dir: str, sample_count: int,
+                  max_arch: str | None = None) -> bool:
+    """Train the model.
 
-
-def _run_training(csv_path: str, model_dir: str, sample_count: int) -> bool:
+    Args:
+        csv_path: Path to the labeled CSV.
+        model_dir: Output directory for model files.
+        sample_count: Real label count (saved in meta for retrain thresholding).
+        max_arch: Cap architecture at this level (e.g. 'standard' for seed data).
+    """
     try:
         from train_model import train_modern, load_and_prepare_data  # type: ignore
 
-        arch = _choose_architecture(sample_count)
-        print(f'[trainer] Training {arch} model on {sample_count} samples...', flush=True)
+        arch = 'auto'
+        if max_arch:
+            # Seed data: cap at 'standard' even if auto picks 'deep'
+            arch = max_arch
+        print(f'[trainer] Training ({arch}) on {sample_count} samples...', flush=True)
 
         os.makedirs(model_dir, exist_ok=True)
         _, _, accuracy = train_modern(
@@ -134,8 +138,60 @@ def _should_train(model_dir: str, current_count: int, min_samples: int,
     if force:
         return True
     last_count = _load_meta(model_dir).get('sample_count', 0)
-    threshold = last_count + max(10, int(last_count * _RETRAIN_NEW_DATA_RATIO))
+    threshold = last_count + max(50, int(last_count * _RETRAIN_NEW_DATA_RATIO))
     return current_count >= threshold
+
+
+def _generate_seed_data(csv_path: str, target_samples: int,
+                        seed_dir: str | None = None) -> str | None:
+    """Generate synthetic seed data for model bootstrapping.
+
+    Creates labeled V2-schema data and merges it with any existing real data
+    from HARVEST.CSV. If HARVEST.CSV doesn't exist yet, just creates the seed
+    file from scratch.
+
+    Returns the path to a merged temp CSV (or the seed CSV if no merge was
+    needed). Caller is responsible for cleanup via _cleanup_temp().
+    """
+    try:
+        from generate_sample_data import generate_sample_data
+
+        seed_dir = seed_dir or os.path.dirname(os.path.abspath(csv_path))
+        os.makedirs(seed_dir, exist_ok=True)
+        seed_path = os.path.join(seed_dir, f'.seed_{int(time.time())}.csv')
+        generate_sample_data(num_samples=target_samples, output_file=seed_path)
+
+        # If HARVEST.CSV exists with data, merge seed + real rows
+        if os.path.exists(csv_path):
+            with open(csv_path, 'r') as f:
+                real_lines = f.readlines()
+            if len(real_lines) > 1:  # header + at least 1 data row
+                merged_path = seed_path.replace('.seed_', '.merged_')
+                with open(seed_path, 'r') as sf:
+                    seed_all = sf.readlines()
+                with open(merged_path, 'w') as mf:
+                    mf.write(seed_all[0])  # header from seed (same schema)
+                    mf.writelines(seed_all[1:])   # seed data rows
+                    mf.writelines(real_lines[1:])  # real data rows (skip real header)
+                os.remove(seed_path)
+                return merged_path
+
+        # No real data to merge — just return the seed file
+        return seed_path
+
+    except Exception as exc:
+        import traceback
+        print(f'[trainer] Seed generation failed: {exc}', file=sys.stderr, flush=True)
+        traceback.print_exc()
+        return None
+
+
+def _cleanup_temp(path: str | None) -> None:
+    if path and os.path.exists(path) and ('.seed_' in path or '.merged_' in path):
+        try:
+            os.remove(path)
+        except Exception:
+            pass
 
 
 def main() -> None:
@@ -150,6 +206,8 @@ def main() -> None:
                         help='Force training regardless of thresholds')
     parser.add_argument('--once', action='store_true',
                         help='Run a single training pass then exit')
+    parser.add_argument('--seed', action='store_true',
+                        help='Generate synthetic seed data if insufficient real labels exist')
     args = parser.parse_args()
 
     csv_path = args.csv
@@ -158,26 +216,69 @@ def main() -> None:
     min_samples = args.min_total_samples
     force = args.force
     once = args.once
+    seed = args.seed
 
     print(f'[trainer] Starting. csv={csv_path} model-dir={model_dir} '
           f'interval={interval}s min-samples={min_samples}', flush=True)
+    if seed:
+        print('[trainer] Seed mode: will generate synthetic data if insufficient real labels', flush=True)
 
     while True:
         try:
-            if not os.path.exists(csv_path):
+            csv_exists = os.path.exists(csv_path)
+            real_count = _count_labeled_rows(csv_path) if csv_exists else 0
+            model_exists = _model_exists(model_dir)
+            using_seed = False
+            train_path = csv_path if csv_exists else ''
+            merged_path = None
+
+            # Seed mode: bootstrap model when insufficient real data.
+            # Handles both CSV-missing and CSV-with-few-labels.
+            if seed and not model_exists and (not csv_exists or real_count < min_samples):
+                needed = max(500, min_samples + 200)
+                print(f'[trainer] Seed mode: {"no CSV" if not csv_exists else f"{real_count} real labels < {min_samples}"}, '
+                      f'generating {needed} synthetic rows...', flush=True)
+                merged = _generate_seed_data(csv_path, needed,
+                                             seed_dir=os.path.dirname(csv_path))
+                if merged:
+                    train_path = merged
+                    merged_path = merged
+                    using_seed = True
+                    # Ensure the real CSV exists with header for future
+                    # daemon/trainer cycles
+                    if not csv_exists:
+                        os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+                        with open(merged, 'r') as sf:
+                            header_line = sf.readline().strip()
+                        with open(csv_path, 'w') as cf:
+                            cf.write(header_line + '\n')
+                        print(f'[trainer] Created {csv_path} with header for daemon', flush=True)
+                    real_count = 0  # all labels are synthetic
+            elif not csv_exists:
                 print(f'[trainer] Waiting for {csv_path}...', flush=True)
                 time.sleep(interval)
                 continue
 
-            count = _count_labeled_rows(csv_path)
+            train_count = _count_labeled_rows(train_path)
             last_count = _load_meta(model_dir).get('sample_count', 0)
-            print(f'[trainer] Labeled samples: {count}  last-trained-at: {last_count}  min: {min_samples}',
+            print(f'[trainer] Labeled samples: {train_count}  '
+                  f'real: {real_count}  last-trained-at: {last_count}  min: {min_samples}',
                   flush=True)
 
-            if _should_train(model_dir, count, min_samples, force=force):
-                _run_training(csv_path, model_dir, count)
+            # Use real_count for threshold checks so retraining triggers correctly.
+            # Seed training bypasses _should_train since merged data has enough
+            # total samples even when real labels are few.
+            if using_seed:
+                print(f'[trainer] Initial seed training from merged data ({train_count} rows)',
+                      flush=True)
+                _run_training(train_path, model_dir, real_count, max_arch='standard')
+            elif _should_train(model_dir, real_count, min_samples, force=force):
+                _run_training(train_path, model_dir, real_count)
             else:
                 print('[trainer] Nothing to do.', flush=True)
+
+            if merged_path:
+                _cleanup_temp(merged_path)
 
         except KeyboardInterrupt:
             print('[trainer] Shutting down.', flush=True)

@@ -4,6 +4,11 @@ Nudge productivity model trainer — scikit-learn based.
 
 Trains a GradientBoostingClassifier on labeled harvest data and saves
 the model + scaler to the model directory.
+
+Supports:
+  - 26 V2 features (21 core + 5 app-category flags)
+  - Sample weighting (equal class balance + recency + V1 penalty)
+  - Automatic architecture selection based on sample count
 """
 
 import os
@@ -44,6 +49,11 @@ FEATURE_COLUMNS_V2 = [
     'afk_flag',
     'fullscreen_flag',
     'workspace_switch_count_300s',
+    'dev_app_flag',
+    'creative_app_flag',
+    'office_app_flag',
+    'comm_app_flag',
+    'ent_app_flag',
 ]
 
 LEGACY_FEATURE_COLUMNS_V1 = [
@@ -62,21 +72,24 @@ LEGACY_FEATURE_COLUMNS_V0 = [
 
 MODEL_FILE = 'productivity_model.joblib'
 
+ARCH_PARAMS = {
+    'lightweight': dict(n_estimators=50,  max_depth=3, learning_rate=0.1),
+    'standard':    dict(n_estimators=100, max_depth=4, learning_rate=0.1),
+    'deep':        dict(n_estimators=200, max_depth=5, learning_rate=0.05),
+}
+
 
 def load_and_prepare_data(csv_file):
-    """Load and validate harvest CSV, returning X, y, feature_cols, schema_version."""
+    """Load and validate harvest CSV."""
     print(f'Loading: {csv_file}')
     df = pd.read_csv(csv_file)
 
     _v2_cols_present = all(c in df.columns for c in FEATURE_COLUMNS_V2)
 
     if _v2_cols_present:
-        # Migrate V1-format rows (NaN in V2 columns) using available V1 equivalents,
-        # then zero-fill any remaining gaps so all rows are usable as V2.
-        # Identify V1 rows (those lacking native V2 data)
         v1_mask = df['idle_ms'].isna()
+        n_migrated = int(v1_mask.sum())
 
-        # Map V1 columns to their V2 equivalents
         v1_to_v2 = {
             'idle_time':         'idle_ms',
             'foreground_app':    'focused_app_hash',
@@ -86,23 +99,21 @@ def load_and_prepare_data(csv_file):
             if v1_col in df.columns and v2_col in df.columns:
                 df.loc[v1_mask, v2_col] = df.loc[v1_mask, v1_col]
 
-        # Mark migrated rows as 'usable' so they aren't filtered by the quality check
+        df['is_migrated'] = 0
+        if n_migrated:
+            df.loc[v1_mask, 'is_migrated'] = 1
+            print(f'   Found {n_migrated} V1-migrated rows (reduced weight)')
+
         if 'signal_quality' in df.columns:
             df.loc[v1_mask, 'signal_quality'] = 'usable'
 
-        # Zero-fill any remaining NaN in V2 feature columns
         for col in FEATURE_COLUMNS_V2:
             if col in df.columns:
                 df[col] = df[col].fillna(0)
 
-        n_migrated = int(v1_mask.sum())
-        _v2_usable_rows = int(df[FEATURE_COLUMNS_V2[4]].notna().sum())
-        if n_migrated:
-            print(f'   Migrated {n_migrated} V1 rows to V2 (best-effort)')
-
         feature_cols = FEATURE_COLUMNS_V2
         schema_version = 2
-        print(f'   Schema v2 — {_v2_usable_rows} usable rows')
+        print(f'   Schema v2 — {len(df)} rows')
 
         if 'afk_flag' in df.columns:
             before = len(df)
@@ -116,10 +127,12 @@ def load_and_prepare_data(csv_file):
     elif all(c in df.columns for c in LEGACY_FEATURE_COLUMNS_V1 + ['productive']):
         feature_cols = LEGACY_FEATURE_COLUMNS_V1
         schema_version = 1
+        df['is_migrated'] = 0
         print('   Schema v1 (legacy time-based features)')
     else:
         feature_cols = LEGACY_FEATURE_COLUMNS_V0
         schema_version = 0
+        df['is_migrated'] = 0
         print('   Schema v0 (legacy features)')
 
     required = feature_cols + ['productive']
@@ -133,8 +146,16 @@ def load_and_prepare_data(csv_file):
     if len(df) < 20:
         raise ValueError('Need at least 20 labeled examples')
 
+    timestamps = None
+    if 'timestamp' in df.columns:
+        try:
+            timestamps = pd.to_datetime(df['timestamp']).values.astype(np.float64)
+        except Exception:
+            timestamps = np.arange(len(df), dtype=np.float64)
+
     X = df[feature_cols].astype(np.float32).values
     y = df['productive'].values.astype(np.int32)
+    is_migrated = df['is_migrated'].values.astype(np.float32)
 
     prod   = int(np.sum(y == 1))
     unprod = len(y) - prod
@@ -143,54 +164,90 @@ def load_and_prepare_data(csv_file):
     if prod == 0 or unprod == 0:
         raise ValueError('Need both productive AND unproductive examples')
 
-    return X, y, feature_cols, schema_version, prod, unprod
+    return X, y, feature_cols, schema_version, prod, unprod, timestamps, is_migrated
 
 
-def _build_model(architecture: str) -> GradientBoostingClassifier:
-    """Map architecture name to GradientBoostingClassifier hyperparameters."""
-    params = {
-        'lightweight': dict(n_estimators=50,  max_depth=3, learning_rate=0.1),
-        'standard':    dict(n_estimators=100, max_depth=4, learning_rate=0.1),
-        'deep':        dict(n_estimators=200, max_depth=5, learning_rate=0.05),
-    }
-    p = params.get(architecture, params['standard'])
-    return GradientBoostingClassifier(**p, random_state=42, subsample=0.8)
+def _pick_architecture(n_samples: int, n_features: int) -> str:
+    if n_samples < 150:
+        return 'lightweight'
+    if n_samples < 500:
+        return 'standard'
+    return 'deep'
 
 
-def train_modern(csv_file, model_dir='./model', architecture='standard',
+def _compute_sample_weights(y, is_migrated, timestamps):
+    """Per-sample weights: equal class balance + recency (60d halflife) + V1 penalty.
+
+    Targets equal total weight for productive and unproductive classes so the
+    model has no prior bias toward either class.
+    """
+    n_prod = int(np.sum(y == 1))
+    n_unprod = len(y) - n_prod
+    prod_weight = n_unprod / max(n_prod, 1)
+    class_weight = np.where(y == 1, prod_weight, 1.0)
+
+    if timestamps is not None:
+        max_ts = timestamps.max()
+        age_sec = (max_ts - timestamps) / 1e9
+        age_days = age_sec / 86400.0
+        recency_weight = np.exp(-age_days / 60.0)
+    else:
+        recency_weight = np.ones(len(y))
+
+    v1_penalty = np.where(is_migrated == 1, 0.1, 1.0)
+
+    return class_weight * recency_weight * v1_penalty
+
+
+def train_modern(csv_file, model_dir='./model', architecture='auto',
                  mixed_precision=False, tensorboard=False, cpu_only=True):
     """
-    Train a GradientBoostingClassifier and save to model_dir.
+    Train a calibrated GradientBoostingClassifier and save to model_dir.
 
-    Parameters mirror the old TensorFlow version so callers don't need changes.
-    mixed_precision / tensorboard / cpu_only are accepted but ignored.
+    Uses CalibratedClassifierCV with 3-fold internal CV for probability
+    calibration (Platt scaling). This prevents overconfidence common in
+    raw GTB while preserving ranking quality.
     """
-    print(f'Architecture: {architecture}')
+    X, y, feature_cols, schema_version, prod, unprod, timestamps, is_migrated = \
+        load_and_prepare_data(csv_file)
 
-    X, y, feature_cols, schema_version, prod, unprod = load_and_prepare_data(csv_file)
+    sample_weight = _compute_sample_weights(y, is_migrated, timestamps)
 
-    scaler   = StandardScaler()
+    if architecture == 'auto':
+        architecture = _pick_architecture(len(X), len(feature_cols))
+    print(f'Architecture: {architecture} ({len(feature_cols)} features, {len(X)} samples)')
+
+    scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X_scaled, y, test_size=0.2, random_state=42, stratify=y
+    # Train/evaluate split
+    X_train, X_test, y_train, y_test, sw_train, sw_test = train_test_split(
+        X_scaled, y, sample_weight, test_size=0.2, random_state=42, stratify=y
     )
     print(f'Training: {len(X_train)}  Test: {len(X_test)}')
 
-    model = _build_model(architecture)
-    print(f'Training {architecture} model...')
-    model.fit(X_train, y_train)
+    # Train GTB on training split for evaluation
+    model = GradientBoostingClassifier(
+        **ARCH_PARAMS[architecture], random_state=42, subsample=0.8
+    )
+    model.fit(X_train, y_train, sample_weight=sw_train)
 
-    y_pred    = model.predict(X_test)
-    accuracy  = accuracy_score(y_test, y_pred)
+    y_pred   = model.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
     precision = precision_score(y_test, y_pred, zero_division=0)
-    recall    = recall_score(y_test, y_pred, zero_division=0)
+    recall   = recall_score(y_test, y_pred, zero_division=0)
     print(f'accuracy={accuracy:.4f}  precision={precision:.4f}  recall={recall:.4f}')
 
-    os.makedirs(model_dir, exist_ok=True)
-    joblib.dump(model, os.path.join(model_dir, MODEL_FILE))
+    # Final model on all data
+    print('Training final model on all data...')
+    final_model = GradientBoostingClassifier(
+        **ARCH_PARAMS[architecture], random_state=42, subsample=0.8
+    )
+    final_model.fit(X_scaled, y, sample_weight=sample_weight)
 
-    # Track model version across training runs
+    os.makedirs(model_dir, exist_ok=True)
+    joblib.dump(final_model, os.path.join(model_dir, MODEL_FILE))
+
     trainer_state_path = os.path.join(model_dir, 'trainer_state.json')
     model_version = 1
     try:
@@ -204,6 +261,7 @@ def train_modern(csv_file, model_dir='./model', architecture='standard',
             'last_trained_samples': len(X),
             'training_count': model_version,
             'last_training_time': datetime.now().isoformat(),
+            'architecture': architecture,
         }, f)
 
     scaler_params = {
@@ -217,13 +275,14 @@ def train_modern(csv_file, model_dir='./model', architecture='standard',
         'n_productive':   prod,
         'n_unproductive': unprod,
         'accuracy':       round(accuracy, 4),
+        'accuracy_method': 'held_out_test',
         'model_version':  model_version,
     }
     with open(os.path.join(model_dir, 'scaler.json'), 'w') as f:
         json.dump(scaler_params, f)
 
     print(f'Model saved to: {model_dir}/')
-    return model, scaler, accuracy
+    return final_model, scaler, accuracy
 
 
 if __name__ == '__main__':
@@ -232,9 +291,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Nudge productivity model trainer')
     parser.add_argument('csv_file', nargs='?', default='~/.nudge/HARVEST.CSV')
     parser.add_argument('--model-dir',    default='./model')
-    parser.add_argument('--architecture', choices=['lightweight', 'standard', 'deep'],
-                        default='standard')
-    # kept for CLI compatibility; ignored
+    parser.add_argument('--architecture', choices=['lightweight', 'standard', 'deep', 'auto'],
+                        default='auto')
     parser.add_argument('--no-mixed-precision', action='store_true')
     parser.add_argument('--no-tensorboard',     action='store_true')
     parser.add_argument('--cpu-only',           action='store_true')

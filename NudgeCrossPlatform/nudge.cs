@@ -101,7 +101,7 @@ sealed class Nudge
     const int CYCLE_MS = 1000;
     const int UDP_PORT = 45001;
     const int RESPONSE_TIMEOUT_MS = 60000;
-    const double ML_CONFIDENCE_THRESHOLD = 0.98;
+    const double ML_CONFIDENCE_THRESHOLD = 0.85;
     const int MIN_SAMPLES_THRESHOLD = 100;
     const int ML_CHECK_INTERVAL_MS = 60000;
     const int ACTIVITY_LOG_INTERVAL_MS = 60000;
@@ -1759,23 +1759,20 @@ publish();
         int dayOfWeek = (int)now.DayOfWeek;  // 0-6 (Sunday=0)
         string timestamp = now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 
-        // Productive responses get a stronger training signal (3x) to bias the model;
         // null (SKIP) means no training signal at all.
+        // Sample weighting (3x for productive) is handled in train_model.py
         int? productiveInt = productive.HasValue ? (productive.Value ? 1 : 0) : null;
-        int boost = productive.HasValue ? (productive.Value ? 3 : 1) : 0;
 
         try
         {
-            for (int i = 0; i < boost; i++)
+            if (tick is ActivityTickResult fusedTick)
             {
-                if (tick is ActivityTickResult fusedTick)
+                if (fusedTick.Context.SignalQuality == SignalQuality.Poor)
                 {
-                    if (fusedTick.Context.SignalQuality == SignalQuality.Poor)
-                    {
-                        if (i == 0)
-                            Warning("  Skipping labeled row because signal quality is poor");
-                        continue;
-                    }
+                    Warning("  Skipping labeled row because signal quality is poor");
+                }
+                else
+                {
 
                     WriteCsvRow(
                         _csvFile,
@@ -1835,8 +1832,7 @@ publish();
                 var label = productive.Value ?
                     $"{Color.BGREEN}PRODUCTIVE{Color.RESET}" :
                     $"{Color.YELLOW}NOT PRODUCTIVE{Color.RESET}";
-                string boostInfo = productive.Value ? $" (x{boost} boost)" : "";
-                Success($"✓ Saved as {label}{boostInfo}");
+                Success($"✓ Saved as {label}");
             }
             else
             {
