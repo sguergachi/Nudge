@@ -97,7 +97,7 @@ nudge-tray (Avalonia GUI — entry point)
     │   falls back to `dotnet nudge.dll` in dev builds)
     ├── V2 Harvest Engine
     │   ├── ActivityContext (focus source, signal quality, idle, domain)
-    │   └── FeatureVectorV2 (21 ML-ready features, 300s rolling windows)
+    │   └── FeatureVectorV2 (26 ML-ready features, 300s rolling windows)
     ├── ML check every 60s → TCP 127.0.0.1:45002
     └── Fallback: random 5–10 min snapshot interval
 ```
@@ -130,7 +130,7 @@ Signal quality colors in the AI Brain tab:
 Nudge uses a **scikit-learn** classifier served over TCP at `127.0.0.1:45002`.
 
 Every 60 seconds:
-1. V2 engine produces 21 features from current context
+1. V2 engine produces 26 features from current context
 2. Features sent to inference server via TCP
 3. Server returns `prediction` (0=not productive, 1=productive) + `confidence`
 4. If not-productive + confidence ≥ threshold → nudge fires immediately

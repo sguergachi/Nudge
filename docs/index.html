@@ -57,7 +57,7 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         </div>
         <h3>Sensor fusion pipeline</h3>
-        <p class="pillar-short">Three raw signals fused into a 21-dimension feature vector.</p>
+        <p class="pillar-short">Three raw signals fused into a 26-dimension feature vector.</p>
         <ul class="pillar-details">
           <li>Samples foreground app, idle duration &amp; browser domain at 1&thinsp;Hz</li>
           <li>Rolling 300&thinsp;s window captures switch velocity &amp; anchor-return events</li>
@@ -145,6 +145,124 @@
         </div>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- ═══ Dimensions ═══ -->
+<section class="section section-dark dims-section">
+  <div class="container">
+    <details class="dims">
+      <summary class="dims-toggle">
+        <span>Explore the full 26-dimension feature vector</span>
+        <svg class="dims-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </summary>
+      <div class="dims-grid">
+        <div class="dim">
+          <div class="dim-label"><span>HourOfDay</span> <span class="dim-cat">temporal</span></div>
+          <p>0&ndash;23 hour of the active timestamp</p>
+        </div>
+        <div class="dim">
+          <div class="dim-label"><span>DayOfWeek</span> <span class="dim-cat">temporal</span></div>
+          <p>0 (Sunday) &ndash; 6 (Saturday) of the active timestamp</p>
+        </div>
+        <div class="dim">
+          <div class="dim-label"><span>FocusedAppHash</span> <span class="dim-cat">identity</span></div>
+          <p>Stable hash of the foreground application process name</p>
+        </div>
+        <div class="dim">
+          <div class="dim-label"><span>FocusedDomainHash</span> <span class="dim-cat">identity</span></div>
+          <p>Stable hash of the extracted browser domain, or 0 if not a browser</p>
+        </div>
+        <div class="dim">
+          <div class="dim-label"><span>IdleMs</span> <span class="dim-cat">activity</span></div>
+          <p>Milliseconds since last user input event</p>
+        </div>
+        <div class="dim">
+          <div class="dim-label"><span>FocusedSinceMs</span> <span class="dim-cat">duration</span></div>
+          <p>Milliseconds the current app has been continuously focused</p>
+        </div>
+        <div class="dim">
+          <div class="dim-label"><span>TitleStabilityMs</span> <span class="dim-cat">duration</span></div>
+          <p>Milliseconds since the window title last changed</p>
+        </div>
+        <div class="dim">
+          <div class="dim-label"><span>SwitchCount60s</span> <span class="dim-cat">switching</span></div>
+          <p>Number of foreground app switches in the last 60 s</p>
+        </div>
+        <div class="dim">
+          <div class="dim-label"><span>SwitchCount300s</span> <span class="dim-cat">switching</span></div>
+          <p>Number of foreground app switches in the last 300 s</p>
+        </div>
+        <div class="dim">
+          <div class="dim-label"><span>DistinctApps300s</span> <span class="dim-cat">switching</span></div>
+          <p>Number of distinct applications seen in the last 300 s</p>
+        </div>
+        <div class="dim">
+          <div class="dim-label"><span>DistinctDomains300s</span> <span class="dim-cat">switching</span></div>
+          <p>Number of distinct browser domains in the last 300 s</p>
+        </div>
+        <div class="dim">
+          <div class="dim-label"><span>ReturnedToAnchorApp300s</span> <span class="dim-cat">switching</span></div>
+          <p>1 if the user returned to their primary anchor app, else 0</p>
+        </div>
+        <div class="dim">
+          <div class="dim-label"><span>CurrentAppShare300s</span> <span class="dim-cat">share</span></div>
+          <p>Proportion (0&ndash;1) of the last 300 s spent in the current app</p>
+        </div>
+        <div class="dim">
+          <div class="dim-label"><span>CurrentDomainShare300s</span> <span class="dim-cat">share</span></div>
+          <p>Proportion (0&ndash;1) of the last 300 s spent on the current domain</p>
+        </div>
+        <div class="dim">
+          <div class="dim-label"><span>WorkspaceSwitchCount300s</span> <span class="dim-cat">workspace</span></div>
+          <p>Number of virtual-desktop switches in the last 300 s (KDE/GNOME)</p>
+        </div>
+        <div class="dim">
+          <div class="dim-label"><span>BrowserWindowFlag</span> <span class="dim-cat">flag</span></div>
+          <p>1 if the foreground app is a known browser</p>
+        </div>
+        <div class="dim">
+          <div class="dim-label"><span>FullscreenFlag</span> <span class="dim-cat">flag</span></div>
+          <p>1 if the foreground window is fullscreen</p>
+        </div>
+        <div class="dim">
+          <div class="dim-label"><span>AfkFlag</span> <span class="dim-cat">flag</span></div>
+          <p>1 if no user input has been detected for 30+ s</p>
+        </div>
+        <div class="dim">
+          <div class="dim-label"><span>DevAppFlag</span> <span class="dim-cat">category</span></div>
+          <p>1 if foreground app is classified as Development</p>
+        </div>
+        <div class="dim">
+          <div class="dim-label"><span>CreativeAppFlag</span> <span class="dim-cat">category</span></div>
+          <p>1 if foreground app is classified as Creative &amp; Design</p>
+        </div>
+        <div class="dim">
+          <div class="dim-label"><span>OfficeAppFlag</span> <span class="dim-cat">category</span></div>
+          <p>1 if foreground app is classified as Office &amp; Writing</p>
+        </div>
+        <div class="dim">
+          <div class="dim-label"><span>CommAppFlag</span> <span class="dim-cat">category</span></div>
+          <p>1 if foreground app is classified as Communication</p>
+        </div>
+        <div class="dim">
+          <div class="dim-label"><span>EntAppFlag</span> <span class="dim-cat">category</span></div>
+          <p>1 if foreground app is classified as Entertainment</p>
+        </div>
+        <div class="dim">
+          <div class="dim-label"><span>CommunicationAppFlag</span> <span class="dim-cat">domain</span></div>
+          <p>1 if the browser domain is classified as Communication</p>
+        </div>
+        <div class="dim">
+          <div class="dim-label"><span>EntertainmentDomainFlag</span> <span class="dim-cat">domain</span></div>
+          <p>1 if the browser domain is classified as Entertainment</p>
+        </div>
+        <div class="dim">
+          <div class="dim-label"><span>WorkDomainFlag</span> <span class="dim-cat">domain</span></div>
+          <p>1 if the browser domain is classified as Work-related</p>
+        </div>
+      </div>
+    </details>
   </div>
 </section>
 

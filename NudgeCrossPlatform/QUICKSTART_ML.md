@@ -57,7 +57,7 @@ Interval-only (no --ml)
   Ask every 5–10 minutes regardless of what you're doing.
 
 ML mode (--ml)
-  Every 60s → run inference on 21 V2 Harvest Engine features
+  Every 60s → run inference on 26 V2 Harvest Engine features
   ├─ High confidence NOT productive → nudge now (skip the wait)
   ├─ High confidence productive     → skip nudge entirely
   └─ Low confidence                 → fall back to 5–10 min interval

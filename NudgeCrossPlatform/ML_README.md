@@ -27,7 +27,7 @@ This creates a personalized feedback loop that improves over time as the model l
 │                                                                  │
 │  V2 Harvest Engine                                               │
 │  ├─ ActivityContext (focus source, signal quality, domain, …)    │
-│  └─ FeatureVectorV2 (21 features, 300s rolling windows)          │
+│  └─ FeatureVectorV2 (26 features, 300s rolling windows)          │
 │                                                                  │
 │  Every 60s ──────────────────────────────────────────────────►  │
 │                                          ML Inference Service    │

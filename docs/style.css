@@ -182,6 +182,60 @@ nav .container {
 .feature p { font-size: 0.84rem; color: var(--text-dim); line-height: 1.65; }
 .feature p code { font-size: 0.9em; }
 
+/* ── Dimensions (collapsible) ────────────────────── */
+
+.dims-section { padding-top: 0; border-top: none; margin-top: -20px; }
+
+.dims {
+  max-width: 900px; margin: 0 auto;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--bg); overflow: hidden;
+}
+
+.dims-toggle {
+  list-style: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 16px 24px; user-select: none;
+  font-size: 0.85rem; font-weight: 600; color: var(--text);
+  transition: background 0.15s;
+}
+
+.dims-toggle::-webkit-details-marker { display: none; }
+.dims-toggle:hover { background: rgba(255,255,255,0.02); }
+
+.dims-toggle span { letter-spacing: -0.01em; }
+
+.dims-chevron { color: var(--text-dim); transition: transform 0.2s; }
+details[open] .dims-chevron { transform: rotate(180deg); }
+
+.dims-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
+  background: var(--border); border-top: 1px solid var(--border);
+}
+
+.dim {
+  background: var(--bg); padding: 16px 18px;
+}
+
+.dim-label {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+}
+
+.dim-label span:first-child {
+  font-family: var(--font-mono); font-size: 0.72rem;
+  color: var(--accent); font-weight: 500;
+}
+
+.dim-cat {
+  font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em;
+  font-family: var(--font-mono); color: var(--text-muted);
+  padding: 1px 5px; background: var(--bg-alt); border-radius: 3px;
+}
+
+.dim p {
+  font-size: 0.75rem; color: var(--text-muted); line-height: 1.5;
+}
+
 /* ── Download ────────────────────────────────────── */
 
 .container.tight { max-width: 600px; }
@@ -257,6 +311,8 @@ footer .container {
 
   .pillars { grid-template-columns: 1fr; gap: 40px; max-width: 480px; margin: 0 auto; }
   .pillar-details { align-self: center; max-width: 360px; }
+
+  .dims-grid { grid-template-columns: 1fr 1fr; }
 
   .features { grid-template-columns: 1fr; gap: 28px; }
   .download-group { flex-direction: column; }

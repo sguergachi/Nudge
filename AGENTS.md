@@ -57,7 +57,7 @@ YES/NO responses flow back via UDP `127.0.0.1:45001`.
 
 ### V2 Harvest Engine
 
-`NudgeCore.TestableLogic.cs` builds an `ActivityContext` each tick from: focus source (KWin Script/X11 EWMH/Sway IPC/Wayland protocol), signal quality (`Trusted`/`Usable`/`Poor`), browser domain extraction, and 300s rolling windows (switch counts, distinct apps, app share, anchor return). Produces 21 ML features.
+`NudgeCore.TestableLogic.cs` builds an `ActivityContext` each tick from: focus source (KWin Script/X11 EWMH/Sway IPC/Wayland protocol), signal quality (`Trusted`/`Usable`/`Poor`), browser domain extraction, and 300s rolling windows (switch counts, distinct apps, app share, anchor return). Produces 26 ML features.
 
 ## Alert logic
 
