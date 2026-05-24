@@ -36,16 +36,16 @@
       <div class="hero-content">
         <div class="hero-badge animate-in">
           <span class="hero-badge-dot"></span>
-          v2.1.0 — Now with on-device ML
+          v1.5.0 — Nudge Harvest Engine + AI Brain
         </div>
 
         <h1 class="animate-in animate-in-delay-1">
-          Catch the moment<br>
-          you start <span class="highlight">drifting</span>.
+          Catches distraction<br>
+          the moment it <span class="highlight">starts</span>.
         </h1>
 
         <p class="hero-subtitle animate-in animate-in-delay-2">
-          Nudge uses a local AI model trained on <em>your</em> habits to interrupt you when you're genuinely losing focus — not on a fixed schedule. No cloud, no accounts, no screenshots.
+          Nudge uses a local AI model trained on <em>your</em> habits to interrupt you when you're genuinely losing focus — not on a fixed schedule. Powered by the <strong>Nudge Harvest Engine</strong> with signal fusion technology and a personalized <strong>AI Brain</strong> that learns how you work and when you get distracted. No cloud, no accounts, no screenshots.
         </p>
 
         <div class="hero-actions animate-in animate-in-delay-3">
@@ -66,10 +66,10 @@
 
       <div class="hero-showcase animate-in animate-in-delay-2">
         <div class="mockup-notification">
-          <img src="screenshots/notification.svg" alt="Nudge focus check notification" width="340" height="144">
+          <img src="screenshots/notification_active.png" alt="Nudge focus check notification" width="340" height="144">
         </div>
         <div class="mockup-analytics">
-          <img src="screenshots/analytics.svg" alt="Nudge analytics dashboard" width="420" height="580">
+          <img src="screenshots/analytics_today.png" alt="Nudge analytics dashboard" width="420" height="640">
         </div>
         <div class="mockup-tray">
           <img src="screenshots/tray-menu.svg" alt="Nudge tray menu" width="200" height="260">
@@ -83,11 +83,11 @@
     <div class="container">
       <div class="feature-bar-item">
         <div class="feature-bar-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
         </div>
         <div class="feature-bar-text">
-          <h3>On-device AI</h3>
-          <p>scikit-learn model trained locally — zero data leaves your machine</p>
+          <h3>Harvest Engine</h3>
+          <p>Signal fusion technology that senses your focus from foreground apps, domains, and idle time</p>
         </div>
       </div>
       <div class="feature-bar-item">
@@ -95,8 +95,8 @@
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
         </div>
         <div class="feature-bar-text">
-          <h3>Smart timing</h3>
-          <p>Interrupts only when confidence is high that you're genuinely drifting</p>
+          <h3>AI Brain</h3>
+          <p>Personalized ML model trained on your habits — learns how you work and when you get distracted</p>
         </div>
       </div>
       <div class="feature-bar-item">
@@ -105,37 +105,37 @@
         </div>
         <div class="feature-bar-text">
           <h3>Privacy first</h3>
-          <p>No accounts, no telemetry, no cloud — everything in ~/.nudge/</p>
+          <p>No accounts, no telemetry, no cloud — everything stays in ~/.nudge/ on your machine</p>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ═══ Showcase: Notification ═══ -->
+  <!-- ═══ Showcase: Harvest Engine ═══ -->
   <section class="section">
     <div class="container">
       <div class="showcase-grid">
         <div class="showcase-visual">
-          <img src="screenshots/notification.svg" alt="Nudge focus check notification">
+          <img src="screenshots/analytics_alltime.png" alt="Nudge analytics dashboard showing all-time data">
         </div>
         <div class="showcase-text">
-          <div class="section-label">Check-in notification</div>
-          <h3>A gentle nudge when it matters</h3>
+          <div class="section-label">Harvest Engine</div>
+          <h3>Signal fusion that understands your workflow</h3>
           <p>
-            When Nudge detects you might be drifting, a sleek dark window appears with a simple YES/NO choice. Keyboard shortcuts (<kbd>Ctrl+Shift+Y</kbd> / <kbd>Ctrl+Shift+N</kbd>) let you answer without touching the mouse.
+            The <strong>Nudge Harvest Engine</strong> is a V2 sensor fusion pipeline that builds a rich <strong>ActivityContext</strong> every tick. It fuses signals from your focus source (KWin Script on KDE/Wayland, X11 EWMH, Sway IPC, or Win32), signal quality assessment, browser domain extraction, and rolling 300-second windows to produce 21 ML features.
           </p>
           <ul class="showcase-features">
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              30-second auto-dismiss with countdown ring
+              Multi-source focus detection — KWin, X11, Sway, Wayland, Win32
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Drag to reposition — position is remembered
+              Signal quality scores: Trusted, Usable, Poor
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Subtle acrylic blur effect blends with your desktop
+              Rolling window analytics: switch counts, distinct apps, app share, anchor return
             </li>
           </ul>
         </div>
@@ -143,31 +143,31 @@
     </div>
   </section>
 
-  <!-- ═══ Showcase: Analytics ═══ -->
+  <!-- ═══ Showcase: AI Brain ═══ -->
   <section class="section" style="padding-top: 0;">
     <div class="container">
       <div class="showcase-grid reverse">
         <div class="showcase-visual">
-          <img src="screenshots/analytics.svg" alt="Nudge analytics dashboard">
+          <img src="screenshots/analytics_ai_brain.png" alt="Nudge AI Brain analytics tab">
         </div>
         <div class="showcase-text">
-          <div class="section-label">Analytics dashboard</div>
-          <h3>Understand your focus patterns</h3>
+          <div class="section-label">AI Brain</div>
+          <h3>A model tailored to you — personally</h3>
           <p>
-            The analytics window surfaces your productivity data across three tabs: Activity, Timeline, and AI Brain. See at a glance how you spent your day and where your focus peaks.
+            The <strong>AI Brain</strong> is an on-device scikit-learn model that trains exclusively on your data. Each time you answer a check-in, it learns your unique focus patterns — which apps help you concentrate, what times of day you're most productive, and when you typically drift off task.
           </p>
           <ul class="showcase-features">
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Real-time stat cards: activity time, productive %, apps tracked
+              Reaches ~80% accuracy after just 50+ labeled samples
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Hourly productivity breakdown with green/red bar charts
+              Interrupts only when confidence exceeds 98% — no false alarms
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              AI prediction history with confidence sparklines
+              Background trainer retrains automatically as new samples arrive
             </li>
           </ul>
         </div>
@@ -175,31 +175,31 @@
     </div>
   </section>
 
-  <!-- ═══ Showcase: Settings ═══ -->
+  <!-- ═══ Showcase: Check-in & Settings ═══ -->
   <section class="section" style="padding-top: 0;">
     <div class="container">
       <div class="showcase-grid">
         <div class="showcase-visual">
-          <img src="screenshots/settings.svg" alt="Nudge settings window">
+          <img src="screenshots/settings.png" alt="Nudge settings window">
         </div>
         <div class="showcase-text">
-          <div class="section-label">Settings</div>
-          <h3>Fine-tune to your workflow</h3>
+          <div class="section-label">Full control</div>
+          <h3>A gentle nudge when it matters. Settings when you need them.</h3>
           <p>
-            Control every aspect of Nudge from the settings window — toggle ML, adjust check intervals, manage notifications, and monitor your AI model's training status.
+            When the AI detects you're drifting, a sleek dark check-in window appears with a simple YES/NO choice. Keyboard shortcuts let you answer without touching the mouse. The settings window gives you full control over ML, notifications, check intervals, and model stats.
           </p>
           <ul class="showcase-features">
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Toggle on-device ML on/off at any time
+              30-second auto-dismiss with countdown ring + drag-to-reposition
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Customizable check interval (5–15 min range)
+              Toggle ML on/off, customize check interval, manage notification sounds
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Live model stats: samples collected, accuracy, last trained
+              Live model stats: samples collected, training accuracy, last trained timestamp
             </li>
           </ul>
         </div>
@@ -219,18 +219,18 @@
       <div class="steps-grid">
         <div class="step-card">
           <div class="step-number">1</div>
-          <h3>Track silently</h3>
-          <p>Nudge monitors your foreground app and idle time — no screenshots, no keystroke logging, no cloud. Just a lightweight daemon running in the background.</p>
+          <h3>Track with the Harvest Engine</h3>
+          <p>The Nudge Harvest Engine silently fuses signals from your foreground app, idle time, and browser domains — no screenshots, no keystroke logging, no cloud.</p>
         </div>
         <div class="step-card">
           <div class="step-number">2</div>
-          <h3>Train the model</h3>
-          <p>Each time you answer "productive?" the on-device model learns. After ~50 responses it starts predicting drift with over 80% accuracy.</p>
+          <h3>Train the AI Brain</h3>
+          <p>Each time you answer a check-in, the on-device model learns your unique focus patterns. After ~50 responses it starts predicting drift with over 80% accuracy.</p>
         </div>
         <div class="step-card">
           <div class="step-number">3</div>
           <h3>Get nudged</h3>
-          <p>When the AI detects you're drifting, a quick check-in appears. When you're focused it stays silent. No noise, no fixed timers, no distractions.</p>
+          <p>When the AI Brain detects you're drifting with high confidence, a quick check-in appears. When you're focused it stays silent. No noise, no fixed timers.</p>
         </div>
       </div>
     </div>
@@ -246,7 +246,7 @@
         </div>
         <div class="stat-item">
           <div class="stat-value">~80%</div>
-          <div class="stat-label">ML prediction accuracy</div>
+          <div class="stat-label">AI Brain accuracy</div>
         </div>
         <div class="stat-item">
           <div class="stat-value">50+</div>
@@ -313,7 +313,7 @@
             </div>
             <h3>Linux</h3>
             <a class="btn btn-download" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-x64.tar.gz">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 15 21 19 3 19 3 15"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 15 21 19 3 19 3 15"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               Download .tar.gz
             </a>
             <p class="download-sub">Run <code>./install-linux-app.sh</code></p>
