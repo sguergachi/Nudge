@@ -64,7 +64,19 @@ jobs:
       - name: Build Windows installer
         shell: pwsh
         run: |
-          $env:Path = "C:\ProgramData\chocolatey\bin;$env:Path"
+          Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1" -ErrorAction SilentlyContinue
+          refreshenv 2>$null
+          $iscc = Get-Command iscc -ErrorAction SilentlyContinue
+          if (-not $iscc) {
+            $candidates = @(
+              "$env:ChocolateyInstall\bin\iscc.exe",
+              "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+              "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+            )
+            $isccPath = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+            if (-not $isccPath) { Write-Error "iscc not found"; exit 1 }
+            $env:Path = "$(Split-Path $isccPath);$env:Path"
+          }
           iscc --version
           $version = Select-String -Path "NudgeCrossPlatform\nudge-tray.cs" -Pattern 'const string VERSION = "([.\d]+)"' | ForEach-Object { $_.Matches.Groups[1].Value }
           if (-not $version) { Write-Error "Failed to extract version"; exit 1 }
