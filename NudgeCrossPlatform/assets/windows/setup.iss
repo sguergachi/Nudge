@@ -22,7 +22,7 @@ AppUpdatesURL={#MyAppURL}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
-OutputDir=..\..\dist
+OutputDir=..\..\..\dist
 OutputBaseFilename=Nudge-Setup-{#MyAppVersion}
 Compression=lzma2
 SolidCompression=yes
@@ -39,17 +39,17 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional icons:"; Flags: unchecked
 
 [Files]
-Source: "..\..\dist\win-x64\nudge-tray.exe";     DestDir: "{app}"; Flags: ignoreversion
-Source: "..\..\dist\win-x64\nudge.exe";          DestDir: "{app}"; Flags: ignoreversion
-Source: "..\..\dist\win-x64\nudge-notify.exe";   DestDir: "{app}"; Flags: ignoreversion
-Source: "..\..\dist\win-x64\*.dll";              DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "..\..\dist\win-x64\*.json";             DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "..\..\dist\win-x64\runtimes\*";         DestDir: "{app}\runtimes"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
-Source: "..\..\model_inference.py";              DestDir: "{app}"; Flags: ignoreversion
-Source: "..\..\train_model.py";                  DestDir: "{app}"; Flags: ignoreversion
-Source: "..\..\background_trainer.py";           DestDir: "{app}"; Flags: ignoreversion
-Source: "..\..\requirements-cpu.txt";             DestDir: "{app}"; Flags: ignoreversion
-Source: "..\..\requirements.txt";                 DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\..\dist\win-x64\nudge-tray.exe";     DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\..\dist\win-x64\nudge.exe";          DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\..\dist\win-x64\nudge-notify.exe";   DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\..\dist\win-x64\*.dll";              DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "..\..\..\dist\win-x64\*.json";             DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "..\..\..\dist\win-x64\runtimes\*";         DestDir: "{app}\runtimes"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
+Source: "..\..\..\model_inference.py";              DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\..\train_model.py";                  DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\..\background_trainer.py";           DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\..\requirements-cpu.txt";             DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\..\requirements.txt";                 DestDir: "{app}"; Flags: ignoreversion
 Source: "nudge.ico";                              DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
