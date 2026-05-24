@@ -275,39 +275,29 @@ nav {
 .steps {
   display: flex;
   flex-direction: column;
-  gap: 64px;
+  gap: 72px;
 }
 
 .step {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 60px;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-}
-
-.step:nth-child(even) {
-  direction: rtl;
-}
-
-.step:nth-child(even) > * {
-  direction: ltr;
+  text-align: center;
+  max-width: 680px;
+  margin: 0 auto;
 }
 
 .step-img {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  margin-bottom: 28px;
 }
 
 .step-img img {
-  width: 100%;
-  max-width: 560px;
-  height: auto;
+  max-height: 320px;
+  width: auto;
   display: block;
 }
 
 .step-number {
-  display: inline-block;
   font-size: 0.68rem;
   font-weight: 600;
   color: var(--text-muted);
@@ -319,7 +309,7 @@ nav {
 .step h3 {
   font-size: 1.15rem;
   font-weight: 600;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   color: var(--text);
 }
 
@@ -327,6 +317,7 @@ nav {
   font-size: 0.88rem;
   color: var(--text-dim);
   line-height: 1.75;
+  max-width: 480px;
 }
 
 /* ── Features ───────────────────────────────────── */
@@ -622,14 +613,8 @@ footer {
 
   .hero-shot { max-width: 320px; }
 
-  .step {
-    grid-template-columns: 1fr;
-    gap: 32px;
-    direction: ltr;
-  }
-
-  .step-img { justify-content: flex-start; }
-  .step-img img { max-width: 100%; }
+  .step { max-width: 100%; }
+  .step-img img { max-height: 260px; }
 
   .tech-grid {
     grid-template-columns: 1fr;
