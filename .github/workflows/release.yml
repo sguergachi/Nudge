@@ -64,21 +64,20 @@ jobs:
       - name: Build Windows installer
         shell: pwsh
         run: |
-          $env:Path = "$env:ChocolateyInstall\bin;$env:Path"
-          Write-Host "Checking iscc..."
-          $isccExe = (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source
-          if (-not $isccExe) { $isccExe = "$env:ChocolateyInstall\bin\iscc.exe" }
-          if (-not (Test-Path $isccExe)) { Write-Error "iscc.exe not found at $isccExe"; exit 1 }
-          Write-Host "  iscc: $isccExe"
-          & $isccExe --version
-          Write-Host "Extracting version..."
+          $isccPaths = @(
+            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+            "C:\Program Files\Inno Setup 6\ISCC.exe",
+            "$env:ChocolateyInstall\lib\innosetup\tools\ISCC.exe"
+          )
+          $isccExe = $null
+          foreach ($p in $isccPaths) { if (Test-Path $p) { $isccExe = $p; break } }
+          if (-not $isccExe) { Write-Error "ISCC.exe not found"; exit 1 }
+          Write-Host "Found: $isccExe"
           $version = Select-String -Path "NudgeCrossPlatform\nudge-tray.cs" -Pattern 'const string VERSION = "([.\d]+)"' | ForEach-Object { $_.Matches.Groups[1].Value }
           if (-not $version) { Write-Error "Failed to extract version"; exit 1 }
-          Write-Host "  version: $version"
-          Write-Host "Running Inno Setup compiler..."
+          Write-Host "Building v$version installer..."
           & $isccExe /DMyAppVersion=$version "NudgeCrossPlatform\assets\windows\setup.iss"
           if ($LASTEXITCODE -ne 0) { Write-Error "iscc failed (exit $LASTEXITCODE)"; exit 1 }
-          Write-Host "Checking output..."
           Get-ChildItem "dist" -Filter "Nudge-Setup-*.exe"
 
       - uses: actions/upload-artifact@v4
