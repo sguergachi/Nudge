@@ -8,7 +8,6 @@
   --border-hover: rgba(255,255,255,0.12);
   --accent: #58A6FF;
   --accent-dim: rgba(88,166,255,0.10);
-  --green: #22C55E;
   --text: #EDEDF5;
   --text-dim: #94949E;
   --text-muted: #5C5C66;
@@ -36,38 +35,40 @@ code {
   padding: 1px 5px; background: var(--bg-alt); border-radius: 3px; color: var(--accent);
 }
 
-.container { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+.container {
+  max-width: 1040px; margin: 0 auto; padding: 0 24px;
+}
 
-/* ── Navigation ─────────────────────────────────── */
+/* ── Nav ────────────────────────────────────────── */
 
 nav {
   position: fixed; top: 0; left: 0; right: 0; z-index: 100;
   height: var(--nav-h);
-  background: rgba(11,11,14,0.85); backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--border);
+  background: var(--bg); border-bottom: 1px solid var(--border);
 }
 
-.nav-inner {
+nav .container {
   display: flex; align-items: center; justify-content: space-between; height: var(--nav-h);
 }
 
 .logo { font-size: 1rem; font-weight: 700; color: var(--text); }
 
 .nav-links { display: flex; align-items: center; gap: 24px; list-style: none; }
-.nav-links a { font-size: 0.85rem; font-weight: 500; color: var(--text-dim); }
+
+.nav-links a { font-size: 0.84rem; font-weight: 500; color: var(--text-dim); }
 .nav-links a:hover { color: var(--text); }
 
-.nav-github {
-  padding: 4px 12px; border: 1px solid var(--border); border-radius: 5px;
-  font-size: 0.82rem !important;
+.nav-links a[target] {
+  padding: 4px 12px; border: 1px solid var(--border); border-radius: 5px; font-size: 0.8rem;
 }
-.nav-github:hover { border-color: var(--border-hover); background: rgba(255,255,255,0.03); }
+.nav-links a[target]:hover { border-color: var(--border-hover); background: rgba(255,255,255,0.03); }
 
 /* ── Hero ───────────────────────────────────────── */
 
 .hero {
-  min-height: 95vh; display: flex; align-items: center;
-  padding-top: var(--nav-h); position: relative; overflow: hidden;
+  min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: calc(var(--nav-h) + 40px) 0 60px;
+  position: relative; overflow: hidden; text-align: center;
 }
 
 .hero-bg {
@@ -80,25 +81,24 @@ nav {
   -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 50%, black 30%, transparent 75%);
 }
 
-.hero-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; position: relative; z-index: 1; }
-
-.hero-content { max-width: 460px; }
+.hero .container { position: relative; z-index: 1; max-width: 640px; }
 
 .hero h1 {
-  font-size: clamp(2.4rem, 4.5vw, 3.6rem); font-weight: 800;
+  font-size: clamp(2.8rem, 5vw, 4rem); font-weight: 800;
   line-height: 1.05; letter-spacing: -0.03em; color: var(--text); margin-bottom: 20px;
 }
 
-.hero-desc { font-size: 0.92rem; color: var(--text-dim); line-height: 1.8; margin-bottom: 28px; }
+.hero-desc {
+  font-size: 0.95rem; color: var(--text-dim); line-height: 1.75; margin-bottom: 28px;
+}
 
-.hero-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.hero-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 12px; }
+.hero-footnote { font-size: 0.76rem; color: var(--text-muted); margin-bottom: 48px; }
 
-.hero-footnote { font-size: 0.78rem; color: var(--text-muted); }
-
-.hero-visual { display: flex; align-items: center; justify-content: center; }
+.hero-media { display: flex; justify-content: center; }
 
 .hero-shot {
-  max-width: 400px; border-radius: var(--radius);
+  max-width: 420px; width: 100%; border-radius: var(--radius);
   box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06);
 }
 
@@ -111,7 +111,7 @@ nav {
   cursor: pointer; transition: all 0.15s;
 }
 
-.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); box-shadow: 0 2px 8px rgba(88,166,255,0.15); }
 .btn-primary:hover { background: #6CBAFF; color: #fff; transform: translateY(-1px); }
 
 .btn-secondary { background: transparent; color: var(--text); }
@@ -119,33 +119,40 @@ nav {
 
 /* ── Sections ───────────────────────────────────── */
 
-.section { padding: 80px 0; border-top: 1px solid var(--border); }
+.section { padding: 100px 0; }
 .section-dark { background: var(--bg-alt); }
 
-.section-label {
-  font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.08em; color: var(--accent); margin-bottom: 40px;
+.section-header { text-align: center; margin-bottom: 48px; }
+
+.section-header h2 {
+  font-size: 1.3rem; font-weight: 700; color: var(--text); letter-spacing: -0.01em;
 }
 
-/* ── Pillars (How it works) ──────────────────────── */
+/* ── Pillars ────────────────────────────────────── */
 
-.pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
+.pillars {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 48px 32px;
+}
 
-.pillar { display: flex; flex-direction: column; gap: 12px; }
+.pillar { display: flex; flex-direction: column; align-items: center; text-align: center; }
 
 .pillar-icon {
   display: flex; align-items: center; justify-content: center;
-  width: 36px; height: 36px; border: 1px solid var(--border); border-radius: 7px;
-  color: var(--accent); flex-shrink: 0;
+  width: 40px; height: 40px; border: 1px solid var(--border); border-radius: 8px;
+  color: var(--accent); margin-bottom: 16px; flex-shrink: 0;
 }
 
-.pillar h3 { font-size: 0.95rem; font-weight: 600; color: var(--text); }
+.pillar h3 {
+  font-size: 0.95rem; font-weight: 600; color: var(--text); margin-bottom: 8px;
+}
 
-.pillar p { font-size: 0.84rem; color: var(--text-dim); line-height: 1.7; }
+.pillar p {
+  font-size: 0.84rem; color: var(--text-dim); line-height: 1.7;
+}
 
 /* ── Features ───────────────────────────────────── */
 
-.features { display: grid; grid-template-columns: 1fr 1fr; gap: 36px 40px; }
+.features { display: grid; grid-template-columns: 1fr 1fr; gap: 40px 48px; }
 
 .feature { display: flex; flex-direction: column; gap: 6px; }
 
@@ -155,18 +162,22 @@ nav {
 }
 
 .feature h3 { font-size: 0.93rem; font-weight: 600; color: var(--text); }
-
 .feature p { font-size: 0.84rem; color: var(--text-dim); line-height: 1.7; }
-
 .feature p code { font-size: 0.9em; }
 
-/* ── CTA / Download ──────────────────────────────── */
+/* ── Download ────────────────────────────────────── */
 
-.cta { text-align: center; max-width: 560px; margin: 0 auto; }
+.container.tight { max-width: 600px; }
 
-.cta-heading { font-size: clamp(1.5rem, 2.5vw, 1.9rem); font-weight: 700; margin-bottom: 8px; color: var(--text); }
+.cta-heading {
+  font-size: clamp(1.6rem, 2.5vw, 2rem); font-weight: 700;
+  color: var(--text); letter-spacing: -0.01em;
+  text-align: center; margin-bottom: 8px;
+}
 
-.cta-desc { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 28px; }
+.cta-desc {
+  font-size: 0.88rem; color: var(--text-dim); text-align: center; margin-bottom: 32px;
+}
 
 .download-group { display: flex; gap: 10px; margin-bottom: 20px; }
 
@@ -177,8 +188,6 @@ nav {
 .dl-fmt { font-size: 0.72rem; opacity: 0.6; font-family: var(--font-mono); }
 .dl-arrow { font-size: 1.1rem; opacity: 0.4; transition: opacity 0.15s; }
 .btn-dl:hover .dl-arrow { opacity: 1; }
-
-/* ── Terminal ────────────────────────────────────── */
 
 .terminal {
   background: var(--bg-terminal); border: 1px solid var(--border);
@@ -195,48 +204,55 @@ nav {
 
 .tb-title { font-size: 0.7rem; color: var(--text-muted); font-family: var(--font-mono); margin-left: 6px; }
 
-.terminal-body { padding: 16px 18px; font-family: var(--font-mono); font-size: 0.78rem; line-height: 1.9; }
+.terminal-body { padding: 16px; font-family: var(--font-mono); font-size: 0.78rem; line-height: 1.9; }
 
 .terminal-line { color: var(--text-dim); }
 .terminal-line-dim { color: var(--text-muted); }
 
 .prompt { color: var(--accent); margin-right: 6px; }
 
-.cta-footnote { font-size: 0.78rem; color: var(--text-muted); }
+.cta-footnote {
+  font-size: 0.78rem; color: var(--text-muted); text-align: center;
+}
 .cta-footnote a { color: var(--text-dim); }
 .cta-footnote a:hover { color: var(--accent); }
 
 /* ── Footer ──────────────────────────────────────── */
 
-footer { padding: 32px 0; border-top: 1px solid var(--border); }
+footer {
+  padding: 40px 0; border-top: 1px solid var(--border); text-align: center;
+}
 
-.footer-inner { display: flex; justify-content: space-between; align-items: center; }
+footer .container {
+  display: flex; align-items: center; justify-content: center; gap: 24px; flex-wrap: wrap;
+}
+
 .footer-text { font-size: 0.8rem; color: var(--text-muted); }
-.footer-links { display: flex; gap: 20px; }
+
+.footer-links { display: flex; gap: 16px; }
 .footer-links a { font-size: 0.8rem; color: var(--text-muted); }
 .footer-links a:hover { color: var(--text-dim); }
 
 /* ── Responsive ─────────────────────────────────── */
 
 @media (max-width: 800px) {
-  .hero-inner { grid-template-columns: 1fr; gap: 40px; text-align: center; }
-  .hero-content { max-width: 100%; }
-  .hero-actions { justify-content: center; }
-  .hero-shot { max-width: 320px; margin: 0 auto; }
+  .hero { min-height: auto; padding-top: calc(var(--nav-h) + 24px); padding-bottom: 48px; }
 
-  .pillars { grid-template-columns: 1fr; gap: 28px; max-width: 500px; margin: 0 auto; }
-  .features { grid-template-columns: 1fr; }
+  .pillars { grid-template-columns: 1fr; gap: 36px; max-width: 500px; margin: 0 auto; }
+  .features { grid-template-columns: 1fr; gap: 28px; }
+  .download-group { flex-direction: column; }
+
+  .section { padding: 64px 0; }
 }
 
 @media (max-width: 600px) {
   .nav-links { gap: 14px; }
-  .nav-links a { font-size: 0.8rem; }
-  .nav-github { padding: 3px 8px; }
+  .nav-links a { font-size: 0.78rem; }
 
-  .hero { min-height: auto; padding-bottom: 40px; }
   .hero h1 { font-size: clamp(2rem, 10vw, 2.6rem); }
+  .hero-shot { max-width: 320px; }
+  .hero-media { margin: 0 -24px; }
 
-  .section { padding: 56px 0; }
-  .download-group { flex-direction: column; }
-  .footer-inner { flex-direction: column; gap: 10px; text-align: center; }
+  .section-header h2 { font-size: 1.15rem; }
+  .pillars { gap: 28px; }
 }

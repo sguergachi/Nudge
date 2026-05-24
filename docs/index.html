@@ -15,43 +15,43 @@
 
 <nav>
   <div class="container">
-    <div class="nav-inner">
-      <span class="logo">Nudge</span>
-      <ul class="nav-links">
-        <li><a href="#how-it-works">How it works</a></li>
-        <li><a href="#features">Features</a></li>
-        <li><a href="#download">Download</a></li>
-        <li><a href="https://github.com/sguergachi/Nudge" class="nav-github" target="_blank">GitHub</a></li>
-      </ul>
-    </div>
+    <span class="logo">Nudge</span>
+    <ul class="nav-links">
+      <li><a href="#how-it-works">How it works</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#download">Download</a></li>
+      <li><a href="https://github.com/sguergachi/Nudge" target="_blank">GitHub</a></li>
+    </ul>
   </div>
 </nav>
 
+<!-- ═══ Hero ═══ -->
 <section class="hero">
   <div class="hero-bg"></div>
-  <div class="container">
-    <div class="hero-inner">
-      <div class="hero-content">
-        <h1>Still&nbsp;focused?</h1>
-        <p class="hero-desc">
-          Nudge watches your desktop activity, learns your attention patterns, and asks "still focused?" at exactly the right moment — using a local AI model that runs entirely on your machine.
-        </p>
-        <div class="hero-actions">
-          <a class="btn btn-primary" href="https://github.com/sguergachi/Nudge/releases/latest/download/Nudge-Setup-1.5.0.exe">Download for Windows</a>
-          <a class="btn btn-secondary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-x64.tar.gz">Download for Linux</a>
-        </div>
-        <p class="hero-footnote">Free &middot; Open source &middot; No cloud &middot; No account</p>
-      </div>
-      <div class="hero-visual">
-        <img src="screenshots/notification_active.png" alt="Nudge notification: Still focused? YES / NO" class="hero-shot">
-      </div>
+  <div class="container tight">
+    <h1>Still&nbsp;focused?</h1>
+    <p class="hero-desc">
+      Nudge watches your desktop activity, learns your attention patterns, and asks "still focused?"
+      at exactly the right moment — using a local AI model that runs entirely on your machine.
+    </p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="https://github.com/sguergachi/Nudge/releases/latest/download/Nudge-Setup-1.5.0.exe">Download for Windows</a>
+      <a class="btn btn-secondary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-x64.tar.gz">Download for Linux</a>
+    </div>
+    <p class="hero-footnote">Free &middot; Open source &middot; No cloud &middot; No account</p>
+
+    <div class="hero-media">
+      <img src="screenshots/notification_active.png" alt="Nudge notification: Still focused? YES / NO" class="hero-shot">
     </div>
   </div>
 </section>
 
+<!-- ═══ Powered by sophisticated tech ═══ -->
 <section class="section" id="how-it-works">
   <div class="container">
-    <h2 class="section-label">Powered by sophisticated technology</h2>
+    <div class="section-header">
+      <h2>Powered by sophisticated technology</h2>
+    </div>
     <div class="pillars">
       <div class="pillar">
         <div class="pillar-icon">
@@ -65,7 +65,7 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
         </div>
         <h3>On-device AI model</h3>
-        <p>A scikit-learn binary classifier evaluates each snapshot against your personal YES/NO response history — not a generic population model. Inference runs locally over TCP 127.0.0.1:45002 with sub-100ms latency. Requires just 100 training samples to activate. A background process retrains automatically whenever 50 new responses accumulate.</p>
+        <p>A scikit-learn binary classifier evaluates each snapshot against your personal YES/NO response history — not a generic population model. Inference runs locally over TCP 127.0.0.1:45002 with sub-100ms latency. Requires just 100 training samples to activate; retrains automatically every 50 new responses.</p>
       </div>
       <div class="pillar">
         <div class="pillar-icon">
@@ -78,14 +78,17 @@
   </div>
 </section>
 
+<!-- ═══ Features ═══ -->
 <section class="section section-dark" id="features">
   <div class="container">
-    <h2 class="section-label">What sets Nudge apart</h2>
+    <div class="section-header">
+      <h2>What sets Nudge apart</h2>
+    </div>
     <div class="features">
       <div class="feature">
         <div class="feature-dot"></div>
         <h3>Your model, not someone else's</h3>
-        <p>Trained exclusively on your responses. No pre-trained population model. It knows what distraction looks like for <em>you</em>.</p>
+        <p>Trained exclusively on your responses. No pre-trained population model. It knows what distraction looks like for <em>you</em> — and gets sharper with every answer.</p>
       </div>
       <div class="feature">
         <div class="feature-dot"></div>
@@ -95,17 +98,17 @@
       <div class="feature">
         <div class="feature-dot"></div>
         <h3>Every response retrains the model</h3>
-        <p>Every YES or NO you give becomes a training sample. The model retrains automatically — getting sharper with every interaction.</p>
+        <p>Each YES or NO you give becomes a training sample. The model retrains automatically — getting sharper with every interaction. No manual retraining needed.</p>
       </div>
       <div class="feature">
         <div class="feature-dot"></div>
-        <h3>Keyboards stay in flow</h3>
-        <p>Ctrl+Shift+Y for YES, Ctrl+Shift+N for NO. The notification auto-dismisses after 30 seconds. Your hands never leave the keyboard.</p>
+        <h3>Keyboard-first design</h3>
+        <p><code>Ctrl+Shift+Y</code> for YES, <code>Ctrl+Shift+N</code> for NO. The notification auto-dismisses after 30 seconds. Your hands never leave the keyboard.</p>
       </div>
       <div class="feature">
         <div class="feature-dot"></div>
         <h3>Cross-platform</h3>
-        <p>Windows 10/11 and Linux — KDE, GNOME, Sway, Cinnamon. Wayland and X11. Self-contained binary, no runtime install required.</p>
+        <p>Windows 10/11 and Linux — KDE, GNOME, Sway, Cinnamon. Works on both Wayland and X11. Self-contained binary, no runtime install required.</p>
       </div>
       <div class="feature">
         <div class="feature-dot"></div>
@@ -116,54 +119,51 @@
   </div>
 </section>
 
+<!-- ═══ Download ═══ -->
 <section class="section" id="download">
-  <div class="container">
-    <div class="cta">
-      <h2 class="cta-heading">Try Nudge on your machine</h2>
-      <p class="cta-desc">Free and open source. No account, no telemetry, no strings.</p>
-      <div class="download-group">
-        <a class="btn btn-primary btn-dl" href="https://github.com/sguergachi/Nudge/releases/latest/download/Nudge-Setup-1.5.0.exe">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="4" y1="8" x2="20" y2="8"/><line x1="8" y1="4" x2="8" y2="20"/></svg>
-          <span class="dl-text"><span class="dl-label">Windows</span><span class="dl-fmt">Nudge-Setup-1.5.0.exe</span></span>
-          <span class="dl-arrow">&rarr;</span>
-        </a>
-        <a class="btn btn-secondary btn-dl" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-x64.tar.gz">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M3 21v-2a7 7 0 0 1 7-7h4a7 7 0 0 1 7 7v2"/></svg>
-          <span class="dl-text"><span class="dl-label">Linux</span><span class="dl-fmt">nudge-linux-x64.tar.gz</span></span>
-          <span class="dl-arrow">&rarr;</span>
-        </a>
-      </div>
-      <div class="terminal">
-        <div class="terminal-bar">
-          <span class="tb-dot tb-dot-r"></span>
-          <span class="tb-dot tb-dot-y"></span>
-          <span class="tb-dot tb-dot-g"></span>
-          <span class="tb-title">terminal</span>
-        </div>
-        <div class="terminal-body">
-          <div class="terminal-line"><span class="prompt">$</span> tar -xzf nudge-linux-x64.tar.gz &amp;&amp; cd linux</div>
-          <div class="terminal-line"><span class="prompt">$</span> ./install-linux-app.sh</div>
-          <div class="terminal-line"><span class="prompt">$</span> nudge-tray</div>
-          <div class="terminal-line terminal-line-dim">harvest daemon started · ML inference on 127.0.0.1:45002</div>
-        </div>
-      </div>
-      <p class="cta-footnote">
-        <a href="https://github.com/sguergachi/Nudge/releases/latest">All releases</a>
-        &middot;
-        <a href="https://github.com/sguergachi/Nudge">Source code</a>
-      </p>
+  <div class="container tight">
+    <h2 class="cta-heading">Try Nudge on your machine</h2>
+    <p class="cta-desc">Free and open source. No account, no telemetry, no strings.</p>
+    <div class="download-group">
+      <a class="btn btn-primary btn-dl" href="https://github.com/sguergachi/Nudge/releases/latest/download/Nudge-Setup-1.5.0.exe">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="4" y1="8" x2="20" y2="8"/><line x1="8" y1="4" x2="8" y2="20"/></svg>
+        <span class="dl-text"><span class="dl-label">Windows</span><span class="dl-fmt">Nudge-Setup-1.5.0.exe</span></span>
+        <span class="dl-arrow">&rarr;</span>
+      </a>
+      <a class="btn btn-secondary btn-dl" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-x64.tar.gz">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M3 21v-2a7 7 0 0 1 7-7h4a7 7 0 0 1 7 7v2"/></svg>
+        <span class="dl-text"><span class="dl-label">Linux</span><span class="dl-fmt">nudge-linux-x64.tar.gz</span></span>
+        <span class="dl-arrow">&rarr;</span>
+      </a>
     </div>
+    <div class="terminal">
+      <div class="terminal-bar">
+        <span class="tb-dot tb-dot-r"></span>
+        <span class="tb-dot tb-dot-y"></span>
+        <span class="tb-dot tb-dot-g"></span>
+        <span class="tb-title">terminal</span>
+      </div>
+      <div class="terminal-body">
+        <div class="terminal-line"><span class="prompt">$</span> tar -xzf nudge-linux-x64.tar.gz &amp;&amp; cd linux</div>
+        <div class="terminal-line"><span class="prompt">$</span> ./install-linux-app.sh</div>
+        <div class="terminal-line"><span class="prompt">$</span> nudge-tray</div>
+        <div class="terminal-line terminal-line-dim">harvest daemon started · ML inference on 127.0.0.1:45002</div>
+      </div>
+    </div>
+    <p class="cta-footnote">
+      <a href="https://github.com/sguergachi/Nudge/releases/latest">All releases</a>
+      &middot;
+      <a href="https://github.com/sguergachi/Nudge">Source code</a>
+    </p>
   </div>
 </section>
 
 <footer>
   <div class="container">
-    <div class="footer-inner">
-      <span class="footer-text">Nudge &mdash; Free &amp; open source (MIT)</span>
-      <div class="footer-links">
-        <a href="https://github.com/sguergachi/Nudge">GitHub</a>
-        <a href="https://github.com/sguergachi/Nudge/issues/new">Feedback</a>
-      </div>
+    <span class="footer-text">Nudge &mdash; Free &amp; open source (MIT)</span>
+    <div class="footer-links">
+      <a href="https://github.com/sguergachi/Nudge">GitHub</a>
+      <a href="https://github.com/sguergachi/Nudge/issues/new">Feedback</a>
     </div>
   </div>
 </footer>
