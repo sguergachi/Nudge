@@ -59,24 +59,24 @@ jobs:
           Compress-Archive -Path "$dist/*" -DestinationPath "nudge-win-x64.zip" -Force
 
       - name: Install Inno Setup
-        run: choco install innosetup -y --no-progress
+        shell: pwsh
+        run: |
+          $url = "https://jrsoftware.org/download.php/is.exe"
+          $out = "$env:RUNNER_TEMP\is-install.exe"
+          $isccDir = "$env:RUNNER_TEMP\iscc"
+          curl.exe -sL -o $out $url
+          & $out /PORTABLE=1 /VERYSILENT /DIR="$isccDir" /NOICONS
+          Add-Content -Path $env:GITHUB_PATH -Value $isccDir
+          $env:Path = "$isccDir;$env:Path"
+          ISCC.exe --version
 
       - name: Build Windows installer
         shell: pwsh
         run: |
-          $isccPaths = @(
-            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
-            "C:\Program Files\Inno Setup 6\ISCC.exe",
-            "$env:ChocolateyInstall\lib\innosetup\tools\ISCC.exe"
-          )
-          $isccExe = $null
-          foreach ($p in $isccPaths) { if (Test-Path $p) { $isccExe = $p; break } }
-          if (-not $isccExe) { Write-Error "ISCC.exe not found"; exit 1 }
-          Write-Host "Found: $isccExe"
           $version = Select-String -Path "NudgeCrossPlatform\nudge-tray.cs" -Pattern 'const string VERSION = "([.\d]+)"' | ForEach-Object { $_.Matches.Groups[1].Value }
           if (-not $version) { Write-Error "Failed to extract version"; exit 1 }
           Write-Host "Building v$version installer..."
-          & $isccExe /DMyAppVersion=$version "NudgeCrossPlatform\assets\windows\setup.iss"
+          ISCC.exe /DMyAppVersion=$version "NudgeCrossPlatform\assets\windows\setup.iss"
           if ($LASTEXITCODE -ne 0) { Write-Error "iscc failed (exit $LASTEXITCODE)"; exit 1 }
           Get-ChildItem "dist" -Filter "Nudge-Setup-*.exe"
 
