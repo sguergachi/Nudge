@@ -27,7 +27,7 @@
   --radius-md: 10px;
   --radius-lg: 12px;
 
-  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "SF Mono", "Fira Code", Menlo, monospace;
 
   --nav-h: 56px;
@@ -304,6 +304,7 @@ nav .container {
   filter: drop-shadow(0 8px 32px rgba(0,0,0,0.4));
 }
 
+.mockup-notification img,
 .mockup-notification svg {
   width: 340px;
   height: auto;
@@ -320,6 +321,7 @@ nav .container {
   filter: drop-shadow(0 12px 40px rgba(0,0,0,0.5));
 }
 
+.mockup-analytics img,
 .mockup-analytics svg {
   width: 320px;
   height: auto;
@@ -457,6 +459,7 @@ nav .container {
   align-items: center;
 }
 
+.showcase-visual img,
 .showcase-visual svg {
   width: 100%;
   max-width: 400px;
@@ -466,6 +469,7 @@ nav .container {
   transition: transform 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
+.showcase-visual img:hover,
 .showcase-visual svg:hover {
   transform: scale(1.02);
 }
