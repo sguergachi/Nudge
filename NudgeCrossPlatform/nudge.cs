@@ -48,9 +48,11 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+#if !WINDOWS
 using Tmds.DBus.Protocol;
 using WaylandDotnet;
 using WaylandDotnet.Staging;
+#endif
 using NudgeCore;
 using NudgeTray;
 
@@ -113,6 +115,7 @@ sealed class Nudge
     static bool _forceTrainedModel;
     static bool _mlAvailable;
 
+#if !WINDOWS
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // KWIN WINDOW TRACKER — KWin script + D-Bus listener for KDE Wayland focus
     //
@@ -1052,6 +1055,7 @@ publish();
         private static string ExtractQuotedString(string input) =>
             NudgeCoreLogic.ExtractQuotedString(input);
     }
+#endif
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // WINDOWS PLATFORM SERVICE — Win32 idle + foreground detection
@@ -1072,20 +1076,45 @@ publish();
 
         public (string app, string title) GetForegroundAppWithTitle()
         {
-            return ("unknown", "");
+            var hwnd = GetForegroundWindow();
+            if (hwnd == IntPtr.Zero)
+                return ("unknown", "");
+
+            var buf = new char[512];
+            var len = GetWindowText(hwnd, buf, buf.Length);
+            var title = len > 0 ? new string(buf, 0, len) : "";
+
+            GetWindowThreadProcessId(hwnd, out uint pid);
+            try
+            {
+                using var proc = Process.GetProcessById((int)pid);
+                return (proc.ProcessName.ToLowerInvariant(), title);
+            }
+            catch
+            {
+                return ("unknown", title);
+            }
         }
 
         public int GetIdleTime()
         {
-            if (!PlatformConfig.IsWindows) return 0;
             LASTINPUTINFO info = new();
             info.cbSize = Marshal.SizeOf<LASTINPUTINFO>();
             if (GetLastInputInfo(ref info))
-                return (int)(Environment.TickCount - info.dwTime);
+                return (int)(Environment.TickCount64 - info.dwTime);
             return 0;
         }
 
         public void Dispose() { }
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int GetWindowText(IntPtr hWnd, char[] text, int count);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 
         [DllImport("user32.dll")]
         private static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);

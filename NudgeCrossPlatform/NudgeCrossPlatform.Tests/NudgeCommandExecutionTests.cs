@@ -1,3 +1,4 @@
+using System;
 using Xunit;
 using NudgeCore;
 
@@ -8,6 +9,7 @@ public class NudgeCommandExecutionTests
     [Fact]
     public void RunCommand_ReturnsStdout_ForSuccessfulCommand()
     {
+        if (!OperatingSystem.IsLinux()) return;
         var output = NudgeCoreLogic.RunCommand("/bin/sh", "-c \"printf 'ok'\"", timeoutMs: 2000);
         Assert.Equal("ok", output);
     }
@@ -15,6 +17,7 @@ public class NudgeCommandExecutionTests
     [Fact]
     public void RunCommand_ReturnsEmpty_WhenCommandTimesOut()
     {
+        if (!OperatingSystem.IsLinux()) return;
         var output = NudgeCoreLogic.RunCommand("/bin/sh", "-c \"sleep 2; printf 'late'\"", timeoutMs: 100);
         Assert.Equal(string.Empty, output);
     }
@@ -29,7 +32,7 @@ public class NudgeCommandExecutionTests
     [Fact]
     public void RunCommand_ReturnsStdout_NotStderr()
     {
-        // Command writes only to stderr; stdout should be empty
+        if (!OperatingSystem.IsLinux()) return;
         var output = NudgeCoreLogic.RunCommand("/bin/sh", "-c \"printf 'err' >&2\"", timeoutMs: 2000);
         Assert.Equal(string.Empty, output);
     }
@@ -37,7 +40,7 @@ public class NudgeCommandExecutionTests
     [Fact]
     public void RunCommand_ReturnsStdout_EvenOnNonZeroExitCode()
     {
-        // Command emits stdout then exits with code 1
+        if (!OperatingSystem.IsLinux()) return;
         var output = NudgeCoreLogic.RunCommand("/bin/sh", "-c \"printf 'out'; exit 1\"", timeoutMs: 2000);
         Assert.Equal("out", output);
     }
@@ -45,6 +48,7 @@ public class NudgeCommandExecutionTests
     [Fact]
     public void RunCommand_ReturnsBothLines_WhenCommandOutputsMultipleLines()
     {
+        if (!OperatingSystem.IsLinux()) return;
         var output = NudgeCoreLogic.RunCommand("/bin/sh", "-c \"printf 'a\\nb'\"", timeoutMs: 2000);
         Assert.Equal("a\nb", output);
     }
