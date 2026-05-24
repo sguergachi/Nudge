@@ -53,13 +53,9 @@ namespace NudgeTray
         private Border? _monthTab;
         private Border? _allTimeTab;
 
-        // AI Status indicator components
-        private Border? _aiStatusDot;
-        private Border? _aiStatusBadge;
-        private TextBlock? _aiStatusText;
-        private TextBlock? _aiInfoIcon;
-        private Button? _aiEnableButton;
-        private DispatcherTimer? _aiStatusTimer;
+        // Pause/Active toggle
+        private Border? _pauseToggleBadge;
+        private TextBlock? _pauseToggleText;
 
         // AI Brain live tab
         private bool _aiTabActive;
@@ -73,14 +69,6 @@ namespace NudgeTray
         // AI Brain tab collapse state — survives refreshes
         private static bool _sensorSignalsOpen;
         private static bool _trainingDetailsOpen;
-
-        // AI Status enum
-        public enum AIStatus
-        {
-            Active,
-            Learning,
-            Inactive
-        }
 
         // Fluent Design System Colors - matching CustomNotification
         private static readonly Color BackgroundColor = Color.FromRgb(18, 18, 20);
@@ -135,14 +123,6 @@ namespace NudgeTray
             Background = Brushes.Transparent;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Focusable = true;
-
-            // Set up AI status refresh timer
-            _aiStatusTimer = new DispatcherTimer
-            {
-                Interval = TimeSpan.FromSeconds(5)
-            };
-            _aiStatusTimer.Tick += (s, e) => UpdateAIStatus();
-            _aiStatusTimer.Start();
 
             // Live AI Brain tab refresh — only runs when AI tab is active
             _aiLiveRefreshTimer = new DispatcherTimer
@@ -268,9 +248,6 @@ namespace NudgeTray
             mainContainer.Child = outerGrid;
             Content = mainContainer;
 
-            // Initial AI status update (don't wait for timer)
-            UpdateAIStatus();
-
             // Populate content
             RefreshContent();
         }
@@ -304,9 +281,9 @@ namespace NudgeTray
             };
             Grid.SetColumn(titleText, 0);
 
-            // AI Status indicator — right-justified group
-            var aiStatusContainer = CreateAIStatusIndicator();
-            Grid.SetColumn(aiStatusContainer, 1);
+            // Pause/Active toggle — right-justified group
+            var pauseToggle = CreatePauseToggle();
+            Grid.SetColumn(pauseToggle, 1);
 
             // Pin Button (col 3)
             var pinButton = CreatePinButton();
@@ -317,7 +294,7 @@ namespace NudgeTray
             Grid.SetColumn(closeButton, 5);
 
             topGrid.Children.Add(titleText);
-            topGrid.Children.Add(aiStatusContainer);
+            topGrid.Children.Add(pauseToggle);
             topGrid.Children.Add(pinButton);
             topGrid.Children.Add(closeButton);
             topBar.Child = topGrid;
@@ -1333,26 +1310,25 @@ namespace NudgeTray
                 toggleText.Text = nowVisible ? "▾ Sensor Signals" : "▸ Sensor Signals";
             };
 
-            // ── Footer row: engine badge ─────────────────────────────────────
-            var footerRow = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 4
-            };
-            footerRow.Children.Add(new TextBlock
+            var outerStack = new StackPanel { Spacing = 0 };
+            outerStack.Children.Add(mainGrid);
+            outerStack.Children.Add(sep);
+
+            // ── Toggle row: Sensor Signals + engine badge flush right ────────
+            var toggleRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,auto") };
+            toggleRow.Children.Add(toggleBtn);
+            var badge = new TextBlock
             {
                 Text       = "POWERED BY NUDGE HARVEST ENGINE",
                 FontSize   = 7.5,
                 LetterSpacing = 1.0,
                 Foreground = new SolidColorBrush(Color.FromArgb(80, 100, 180, 255)),
                 VerticalAlignment = VerticalAlignment.Center
-            });
+            };
+            Grid.SetColumn(badge, 1);
+            toggleRow.Children.Add(badge);
+            outerStack.Children.Add(toggleRow);
 
-            var outerStack = new StackPanel { Spacing = 0 };
-            outerStack.Children.Add(mainGrid);
-            outerStack.Children.Add(sep);
-            outerStack.Children.Add(footerRow);
-            outerStack.Children.Add(toggleBtn);
             outerStack.Children.Add(signalPanel);
 
             return new Border
@@ -2120,10 +2096,116 @@ namespace NudgeTray
             return canvas;
         }
 
-        /// <summary>Compact log of most-recent ML checks, newest first.</summary>
-        private static StackPanel CreateEventsLog(IReadOnlyList<MLLiveEvent> events)
+        /// <summary>Build tooltip content Grid for a given event.</summary>
+        private static Grid CreateTooltipContent(MLLiveEvent evt)
         {
+            Color dotColor = evt.Confidence < 0.5
+                ? Color.FromRgb(255, 193, 7)
+                : (evt.Productive ? ProductiveGreen : UnproductiveRed);
+
+            string actionLabel;
+            Color actionColor;
+            if (evt.Triggered)
+            {
+                actionLabel = "nudged";
+                actionColor = UnproductiveRed;
+            }
+            else
+            {
+                actionLabel = "skipped";
+                actionColor = ProductiveGreen;
+            }
+
+            string statusLabel = "";
+            if (evt.AiCorrect == true)
+                statusLabel = " · ✓ confirmed";
+            else if (evt.AiCorrect == false)
+                statusLabel = " · ✗ rejected";
+
+            var tipGrid = new Grid
+            {
+                RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto"),
+                ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+                Width = 180
+            };
+
+            var timeTb = new TextBlock
+            {
+                Text = DateTimeOffset.FromUnixTimeSeconds(evt.T).LocalDateTime.ToString("t", CultureInfo.CurrentCulture),
+                FontSize = 10,
+                Foreground = new SolidColorBrush(Color.FromArgb(160, 255, 255, 255))
+            };
+            Grid.SetColumn(timeTb, 1);
+            tipGrid.Children.Add(timeTb);
+
+            var appTb = new TextBlock
+            {
+                Text = evt.App,
+                FontSize = 13,
+                FontWeight = FontWeight.SemiBold,
+                Foreground = new SolidColorBrush(Color.FromArgb(230, 255, 255, 255))
+            };
+            Grid.SetRow(appTb, 1);
+            Grid.SetColumnSpan(appTb, 2);
+            tipGrid.Children.Add(appTb);
+
+            var scoreTb = new TextBlock
+            {
+                Text = $"{evt.Score * 100:F0}% · {(evt.Productive ? "productive" : "not productive")}",
+                FontSize = 11,
+                Foreground = new SolidColorBrush(dotColor)
+            };
+            Grid.SetRow(scoreTb, 2);
+            Grid.SetColumnSpan(scoreTb, 2);
+            tipGrid.Children.Add(scoreTb);
+
+            var responseTb = new TextBlock
+            {
+                Text = $"{actionLabel}{statusLabel}",
+                FontSize = 11,
+                Foreground = new SolidColorBrush(actionColor)
+            };
+            Grid.SetRow(responseTb, 3);
+            Grid.SetColumnSpan(responseTb, 2);
+            tipGrid.Children.Add(responseTb);
+
+            return tipGrid;
+        }
+
+        /// <summary>Build a hover tooltip Border (same style as the gradient chart tooltip).</summary>
+        private static Border CreateEventTooltip(MLLiveEvent evt)
+        {
+            return new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(200, 30, 30, 30)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(10, 8),
+                Child = CreateTooltipContent(evt)
+            };
+        }
+
+        /// <summary>Compact log of most-recent ML checks, newest first.</summary>
+        private static Grid CreateEventsLog(IReadOnlyList<MLLiveEvent> events)
+        {
+            var grid = new Grid();
             var panel = new StackPanel { Spacing = 5 };
+            grid.Children.Add(panel);
+
+            var tipBorder = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(200, 30, 30, 30)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(10, 8),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top,
+                IsHitTestVisible = false,
+                IsVisible = false,
+            };
+            grid.Children.Add(tipBorder);
 
             // Newest first, cap at 8 rows
             int start = Math.Max(0, events.Count - 8);
@@ -2132,7 +2214,7 @@ namespace NudgeTray
                 var evt = events[i];
                 var row = new Grid
                 {
-                    ColumnDefinitions = new ColumnDefinitions("34,*,46,52")
+                    ColumnDefinitions = new ColumnDefinitions("34,*,46,40,28")
                 };
 
                 // Time
@@ -2208,14 +2290,50 @@ namespace NudgeTray
                 };
                 Grid.SetColumn(actionText, 3);
 
+                // Response icon (✓ = AI correct, ✗ = AI wrong)
+                var respText = new TextBlock
+                {
+                    Text = evt.AiCorrect == true ? "✓"
+                         : evt.AiCorrect == false ? "✗"
+                         : "",
+                    FontSize = 11,
+                    FontWeight = FontWeight.Medium,
+                    Foreground = new SolidColorBrush(
+                        evt.AiCorrect == true ? ProductiveGreen
+                        : evt.AiCorrect == false ? UnproductiveRed
+                        : Colors.Transparent),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                Grid.SetColumn(respText, 4);
+
                 row.Children.Add(timeText);
                 row.Children.Add(appText);
                 row.Children.Add(scoreRow);
                 row.Children.Add(actionText);
+                row.Children.Add(respText);
+
+                row.PointerEntered += (_, _) =>
+                {
+                    tipBorder.Child = CreateTooltipContent(evt);
+                    var pos = row.TranslatePoint(new Point(0, 0), grid);
+                    if (pos.HasValue)
+                    {
+                        double rowCenter = pos.Value.X + row.Bounds.Width / 2;
+                        tipBorder.Margin = new Thickness(rowCenter - 90, pos.Value.Y - 70, 0, 0);
+                        tipBorder.IsVisible = true;
+                    }
+                };
+
                 panel.Children.Add(row);
             }
 
-            return panel;
+            panel.PointerExited += (_, _) =>
+            {
+                tipBorder.IsVisible = false;
+            };
+
+            return grid;
         }
 
         /// <summary>"Enable AI" placeholder shown when ML is not running.</summary>
@@ -2304,192 +2422,103 @@ namespace NudgeTray
             return (appName, string.Empty);
         }
 
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // ─── Pause / Active toggle ───────────────────────────────────────────────
 
-        private StackPanel CreateAIStatusIndicator()
+        private Border CreatePauseToggle()
         {
-            var container = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 8,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-
-            // Pill badge — background/border color updated dynamically by UpdateAIStatus
-            _aiStatusBadge = new Border
+            _pauseToggleBadge = new Border
             {
                 CornerRadius = new CornerRadius(10),
                 Padding = new Thickness(7, 3, 7, 3),
                 VerticalAlignment = VerticalAlignment.Center,
-                Background = new SolidColorBrush(Color.FromArgb(20, 150, 150, 160)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(40, 150, 150, 160)),
-                BorderThickness = new Thickness(1)
-            };
-
-            var badgeContent = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 5,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-
-            _aiStatusDot = new Border
-            {
-                Width = 6,
-                Height = 6,
-                CornerRadius = new CornerRadius(3),
-                Background = new SolidColorBrush(AIStatusInactive),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-
-            _aiStatusText = new TextBlock
-            {
-                Text = "AI: Inactive",
-                FontSize = 10,
-                FontWeight = FontWeight.Medium,
-                Foreground = new SolidColorBrush(TextSecondary),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-
-            _aiInfoIcon = new TextBlock
-            {
-                Text = "ⓘ",
-                FontSize = 10,
-                Foreground = new SolidColorBrush(TextTertiary),
-                VerticalAlignment = VerticalAlignment.Center,
-                Cursor = new Cursor(StandardCursorType.Hand),
-                IsVisible = false
-            };
-
-            badgeContent.Children.Add(_aiStatusDot);
-            badgeContent.Children.Add(_aiStatusText);
-            badgeContent.Children.Add(_aiInfoIcon);
-            _aiStatusBadge.Child = badgeContent;
-
-            // Enable AI button — ghost/outline style so it doesn't compete with content
-            _aiEnableButton = new Button
-            {
-                Content = "Enable",
-                Background = Brushes.Transparent,
-                Foreground = new SolidColorBrush(PrimaryBlue),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(120, 88, 166, 255)),
+                Background = new SolidColorBrush(Color.FromArgb(25, 76, 175, 80)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(55, 76, 175, 80)),
                 BorderThickness = new Thickness(1),
-                Padding = new Thickness(9, 3),
-                FontSize = 10,
-                FontWeight = FontWeight.Medium,
-                Cursor = new Cursor(StandardCursorType.Hand),
-                IsVisible = false
+                Cursor = new Cursor(StandardCursorType.Hand)
             };
 
-            _aiEnableButton.Click += (s, e) => Program.RestartWithML();
-
-            ToolTip.SetTip(_aiStatusBadge, new ToolTip
+            _pauseToggleText = new TextBlock
             {
-                Content = "AI Model Status"
+                Text = "Active",
+                FontSize = 10,
+                FontWeight = FontWeight.Medium,
+                Foreground = new SolidColorBrush(AIStatusActive),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            _pauseToggleBadge.Child = _pauseToggleText;
+
+            ToolTip.SetTip(_pauseToggleBadge, new ToolTip
+            {
+                Content = "Notifications are active. Click to pause."
             });
 
-            container.Children.Add(_aiStatusBadge);
-            container.Children.Add(_aiEnableButton);
+            _pauseToggleBadge.PointerEntered += (s, e) => ApplyHover(true);
+            _pauseToggleBadge.PointerExited  += (s, e) => ApplyHover(false);
 
-            return container;
+            _pauseToggleBadge.PointerPressed += (s, e) =>
+            {
+                Program.TogglePauseNotifications();
+                UpdatePauseToggle();
+            };
+
+            return _pauseToggleBadge;
         }
 
-        private static AIStatus GetAIStatus()
+        private void ApplyHover(bool hovering)
         {
-            // Check if ML is enabled
-            if (!Program._mlEnabled)
-            {
-                return AIStatus.Inactive;
-            }
+            if (_pauseToggleBadge == null || _pauseToggleText == null) return;
 
-            // Check sample count in HARVEST.CSV
-            try
+            bool paused = Program._notificationsPaused;
+            if (hovering)
             {
-                string homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                string harvestPath = Path.Combine(homeDir, ".nudge", "HARVEST.CSV");
-
-                if (File.Exists(harvestPath))
+                if (paused)
                 {
-                    int lineCount = File.ReadAllLines(harvestPath).Length;
-                    // Subtract 1 for header line
-                    int sampleCount = Math.Max(0, lineCount - 1);
-
-                    // Learning if fewer than 100 samples, Active if 100+
-                    return sampleCount >= 100 ? AIStatus.Active : AIStatus.Learning;
+                    _pauseToggleText.Text = "Resume";
+                    _pauseToggleText.Foreground = new SolidColorBrush(AIStatusActive);
+                    _pauseToggleBadge.Background = new SolidColorBrush(Color.FromArgb(45, 76, 175, 80));
+                    _pauseToggleBadge.BorderBrush = new SolidColorBrush(Color.FromArgb(80, 76, 175, 80));
+                }
+                else
+                {
+                    _pauseToggleText.Text = "Pause";
+                    _pauseToggleText.Foreground = new SolidColorBrush(AIStatusLearning);
+                    _pauseToggleBadge.Background = new SolidColorBrush(Color.FromArgb(45, 255, 193, 7));
+                    _pauseToggleBadge.BorderBrush = new SolidColorBrush(Color.FromArgb(80, 255, 193, 7));
                 }
             }
-            catch (Exception ex)
+            else
             {
-                Console.WriteLine($"[Analytics] Error checking AI status: {ex.Message}");
+                UpdatePauseToggle();
             }
-
-            return AIStatus.Learning;
         }
 
-        private void UpdateAIStatus()
+        private void UpdatePauseToggle()
         {
-            if (_aiStatusDot == null || _aiStatusText == null || _aiEnableButton == null || _aiInfoIcon == null)
-                return;
+            if (_pauseToggleBadge == null || _pauseToggleText == null) return;
 
-            TrainerState.RefreshFromCsv();
-
-            var status = GetAIStatus();
-
-            switch (status)
+            bool paused = Program._notificationsPaused;
+            if (paused)
             {
-                case AIStatus.Active:
-                    _aiStatusDot.Background = new SolidColorBrush(AIStatusActive);
-                    _aiStatusText.Text = "AI: Active";
-                    _aiStatusText.Foreground = new SolidColorBrush(AIStatusActive);
-                    _aiEnableButton.IsVisible = false;
-                    _aiInfoIcon.IsVisible = false;
-
-                    if (_aiStatusBadge != null)
-                    {
-                        _aiStatusBadge.Background = new SolidColorBrush(Color.FromArgb(25, 76, 175, 80));
-                        _aiStatusBadge.BorderBrush = new SolidColorBrush(Color.FromArgb(55, 76, 175, 80));
-                        ToolTip.SetTip(_aiStatusBadge, new ToolTip { Content = "AI Model Status: Active\n\nThe ML model is running and making predictions." });
-                    }
-                    break;
-
-                case AIStatus.Learning:
-                    _aiStatusDot.Background = new SolidColorBrush(AIStatusLearning);
-                    _aiStatusText.Text = "AI: Learning";
-                    _aiStatusText.Foreground = new SolidColorBrush(AIStatusLearning);
-                    _aiEnableButton.IsVisible = false;
-                    _aiInfoIcon.IsVisible = true;
-
-                    // Calculate training progress estimate
-                    int lineCount = 0;
-                    try {
-                        string homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                        string harvestPath = Path.Combine(homeDir, ".nudge", "HARVEST.CSV");
-                        lineCount = File.Exists(harvestPath) ? Math.Max(0, File.ReadAllLines(harvestPath).Length - 1) : 0;
-                    } catch { }
-
-                    int remaining = Math.Max(0, 100 - lineCount);
-                    if (_aiStatusBadge != null)
-                    {
-                        _aiStatusBadge.Background = new SolidColorBrush(Color.FromArgb(25, 255, 193, 7));
-                        _aiStatusBadge.BorderBrush = new SolidColorBrush(Color.FromArgb(55, 255, 193, 7));
-                        ToolTip.SetTip(_aiStatusBadge, new ToolTip { Content = $"AI is learning...\n{remaining} more responses needed to unlock AI predictions." });
-                    }
-                    break;
-
-                case AIStatus.Inactive:
-                    _aiStatusDot.Background = new SolidColorBrush(AIStatusInactive);
-                    _aiStatusText.Text = "AI: Inactive";
-                    _aiStatusText.Foreground = new SolidColorBrush(AIStatusInactive);
-                    _aiEnableButton.IsVisible = true;
-                    _aiInfoIcon.IsVisible = false;
-
-                    if (_aiStatusBadge != null)
-                    {
-                        _aiStatusBadge.Background = new SolidColorBrush(Color.FromArgb(20, 150, 150, 160));
-                        _aiStatusBadge.BorderBrush = new SolidColorBrush(Color.FromArgb(40, 150, 150, 160));
-                        ToolTip.SetTip(_aiStatusBadge, new ToolTip { Content = "AI Model Status: Inactive\n\nThe ML model is not running.\nClick 'Enable' to start AI-powered productivity tracking." });
-                    }
-                    break;
+                _pauseToggleText.Text = "Paused";
+                _pauseToggleText.Foreground = new SolidColorBrush(AIStatusInactive);
+                _pauseToggleBadge.Background = new SolidColorBrush(Color.FromArgb(20, 150, 150, 160));
+                _pauseToggleBadge.BorderBrush = new SolidColorBrush(Color.FromArgb(40, 150, 150, 160));
+                ToolTip.SetTip(_pauseToggleBadge, new ToolTip
+                {
+                    Content = "Notifications are paused. Click to resume."
+                });
+            }
+            else
+            {
+                _pauseToggleText.Text = "Active";
+                _pauseToggleText.Foreground = new SolidColorBrush(AIStatusActive);
+                _pauseToggleBadge.Background = new SolidColorBrush(Color.FromArgb(25, 76, 175, 80));
+                _pauseToggleBadge.BorderBrush = new SolidColorBrush(Color.FromArgb(55, 76, 175, 80));
+                ToolTip.SetTip(_pauseToggleBadge, new ToolTip
+                {
+                    Content = "Notifications are active. Click to pause."
+                });
             }
         }
 

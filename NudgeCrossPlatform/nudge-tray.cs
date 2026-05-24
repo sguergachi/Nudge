@@ -48,6 +48,7 @@ namespace NudgeTray
         static Process? _mlInferenceProcess;
         static Process? _mlTrainerProcess;
         internal static bool _mlEnabled;
+        internal static bool _notificationsPaused;
         static bool _forceTrainedModel;
         static DateTime? _nextSnapshotTime;
         static int _intervalMinutes;
@@ -480,6 +481,10 @@ namespace NudgeTray
 
         static string GetMenuStatusText()
         {
+            if (_notificationsPaused)
+            {
+                return "⏸ Notifications Paused";
+            }
             if (_waitingForResponse)
             {
                 return "⏳ Waiting for response...";
@@ -1296,6 +1301,19 @@ namespace NudgeTray
                             }
                             catch { /* non-critical, silently ignore parse errors */ }
                         }
+                        // ML user response → update the corresponding event
+                        else if (e.Data.StartsWith("MLRESPONSE:", StringComparison.Ordinal))
+                        {
+                            try
+                            {
+                                var resp = JsonSerializer.Deserialize(
+                                    e.Data.AsSpan(11),
+                                    NudgeJsonContext.Default.MLResponseEvent);
+                                if (resp != null)
+                                    LiveAIState.UpdateResponse(resp.T, resp.Response);
+                            }
+                            catch { /* non-critical, silently ignore parse errors */ }
+                        }
                         // Next scheduled ML check update
                         else if (e.Data.StartsWith("MLNEXT:", StringComparison.Ordinal))
                         {
@@ -1360,6 +1378,13 @@ namespace NudgeTray
 
         public static void ShowSnapshotNotification()
         {
+            // Don't show notification if paused
+            if (_notificationsPaused)
+            {
+                Console.WriteLine("[DEBUG] Skipping notification - notifications are paused");
+                return;
+            }
+
             // Don't show notification if already waiting for a response
             if (_waitingForResponse)
             {
@@ -1824,6 +1849,15 @@ namespace NudgeTray
             return null;
         }
 
+        internal static void TogglePauseNotifications()
+        {
+            _notificationsPaused = !_notificationsPaused;
+            Console.WriteLine($"[INFO] Notifications {(_notificationsPaused ? "PAUSED" : "RESUMED")}");
+
+            if (_statusItem != null)
+                _statusItem.Header = GetMenuStatusText();
+        }
+
         public static void RestartWithML()
         {
             Console.WriteLine("[INFO] Restarting with ML enabled...");
@@ -2105,6 +2139,24 @@ namespace NudgeTray
                 _events.Add(evt);
                 if (_events.Count > 200)
                     _events.RemoveAt(0);
+            }
+            SaveToDisk();
+        }
+
+        /// <summary>Updates the matching event with the user's response and correctness.</summary>
+        public static void UpdateResponse(long t, bool response)
+        {
+            lock (_lock)
+            {
+                for (int i = _events.Count - 1; i >= 0; i--)
+                {
+                    if (_events[i].T == t)
+                    {
+                        _events[i].UserResponse = response;
+                        _events[i].AiCorrect = !response;
+                        break;
+                    }
+                }
             }
             SaveToDisk();
         }

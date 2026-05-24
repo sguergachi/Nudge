@@ -40,6 +40,22 @@ internal sealed class MLLiveEvent
     public bool Productive { get; set; }
     /// <summary>True if this prediction caused a nudge notification</summary>
     public bool Triggered { get; set; }
+    /// <summary>User's response: true=YES productive, false=NO not productive, null=pending/skipped</summary>
+    public bool? UserResponse { get; set; }
+    /// <summary>Whether the AI prediction matched the user's response</summary>
+    public bool? AiCorrect { get; set; }
+}
+
+/// <summary>
+/// Broadcast over stdout as "MLRESPONSE:{json}" by nudge.cs after the user responds.
+/// Consumed by nudge-tray.cs to update the corresponding MLLiveEvent.
+/// </summary>
+internal sealed class MLResponseEvent
+{
+    /// <summary>Unix timestamp (seconds UTC) of the original ML prediction</summary>
+    public long T { get; set; }
+    /// <summary>User response: true=YES productive, false=NO not productive</summary>
+    public bool Response { get; set; }
 }
 
 /// <summary>
@@ -92,6 +108,7 @@ internal sealed class TraySettings
 [JsonSerializable(typeof(MLLiveEvent))]
 [JsonSerializable(typeof(List<MLLiveEvent>))]
 [JsonSerializable(typeof(HarvestSignal))]
+[JsonSerializable(typeof(MLResponseEvent))]
 [JsonSerializable(typeof(NotificationPositionConfig))]
 [JsonSerializable(typeof(TraySettings))]
 internal sealed partial class NudgeJsonContext : JsonSerializerContext

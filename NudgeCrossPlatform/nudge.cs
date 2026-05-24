@@ -1004,6 +1004,7 @@ publish();
     static int _intervalTriggeredSnapshots;
     static bool _productivityConfirmed;
     static List<double> _mlConfidenceScores = new List<double>();
+    static long _lastMLTriggerT;  // Unix timestamp of last ML-triggered snapshot (0=none/interval)
 
     // Log message formats
     private const string LogPredictionFormat = "📊 Request #{0}: {1} (confidence: {2:F1}%, {3:F1}ms)";
@@ -1562,6 +1563,7 @@ publish();
             {
                 Warning("⏱  Timeout - no response received");
                 _waitingForResponse = false;
+                _lastMLTriggerT = 0;
             }
         }, null, RESPONSE_TIMEOUT_MS, Timeout.Infinite);
     }
@@ -1741,7 +1743,20 @@ publish();
         writer.WriteLine();
     }
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━���━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    static void BroadcastMLResponse(bool productive)
+    {
+        if (_lastMLTriggerT <= 0) return;
+
+        var resp = new MLResponseEvent
+        {
+            T = _lastMLTriggerT,
+            Response = productive
+        };
+        Console.WriteLine($"MLRESPONSE:{JsonSerializer.Serialize(resp, NudgeJsonContext.Default.MLResponseEvent)}");
+        _lastMLTriggerT = 0;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // UDP LISTENER - Network communication with detailed logging
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -1784,11 +1799,13 @@ publish();
                     case "YES":
                         Info($"  Received: {Color.BGREEN}YES{Color.RESET} (productive)");
                         SaveSnapshot(app, idle, attention, productive: true, _snapshotTick);
+                        BroadcastMLResponse(true);
                         break;
 
                     case "NO":
                         Info($"  Received: {Color.YELLOW}NO{Color.RESET} (not productive)");
                         SaveSnapshot(app, idle, attention, productive: false, _snapshotTick);
+                        BroadcastMLResponse(false);
                         break;
 
                     default:
@@ -1973,6 +1990,10 @@ publish();
                 Triggered  = willTrigger
             };
             Console.WriteLine($"MLDATA:{JsonSerializer.Serialize(liveEvt, NudgeJsonContext.Default.MLLiveEvent)}");
+
+            // Store timestamp for response correlation
+            if (willTrigger)
+                _lastMLTriggerT = liveEvt.T;
         }
 
         // Trigger based on prediction regardless of confidence

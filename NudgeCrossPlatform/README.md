@@ -131,4 +131,4 @@ Every 60 seconds:
 5. If productive + high confidence → check skipped
 6. If low confidence → wait for 5–10 min fallback interval
 
-See [ML_README.md](ML_README.md) for full ML documentation.
+See [ML_README.md](ML_README.md) for full ML documentation, and [ALERT_LOGIC.md](ALERT_LOGIC.md) for the complete alert trigger logic.
