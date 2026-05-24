@@ -2474,14 +2474,14 @@ namespace NudgeTray
             {
                 if (paused)
                 {
-                    _pauseToggleText.Text = "Resume";
+                    _pauseToggleText.Text = "\u25B6 Resume";
                     _pauseToggleText.Foreground = new SolidColorBrush(AIStatusActive);
                     _pauseToggleBadge.Background = new SolidColorBrush(Color.FromArgb(45, 76, 175, 80));
                     _pauseToggleBadge.BorderBrush = new SolidColorBrush(Color.FromArgb(80, 76, 175, 80));
                 }
                 else
                 {
-                    _pauseToggleText.Text = "Pause";
+                    _pauseToggleText.Text = "\u23F8 Pause";
                     _pauseToggleText.Foreground = new SolidColorBrush(AIStatusLearning);
                     _pauseToggleBadge.Background = new SolidColorBrush(Color.FromArgb(45, 255, 193, 7));
                     _pauseToggleBadge.BorderBrush = new SolidColorBrush(Color.FromArgb(80, 255, 193, 7));
@@ -2500,13 +2500,13 @@ namespace NudgeTray
             bool paused = Program._notificationsPaused;
             if (paused)
             {
-                _pauseToggleText.Text = "Paused";
+                _pauseToggleText.Text = "\u23F8 Paused";
                 _pauseToggleText.Foreground = new SolidColorBrush(AIStatusInactive);
                 _pauseToggleBadge.Background = new SolidColorBrush(Color.FromArgb(20, 150, 150, 160));
                 _pauseToggleBadge.BorderBrush = new SolidColorBrush(Color.FromArgb(40, 150, 150, 160));
                 ToolTip.SetTip(_pauseToggleBadge, new ToolTip
                 {
-                    Content = "Notifications are paused. Click to resume."
+                    Content = "Notifications are paused. Snapshots are marked as skipped."
                 });
             }
             else

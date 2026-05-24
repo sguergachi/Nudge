@@ -1378,10 +1378,11 @@ namespace NudgeTray
 
         public static void ShowSnapshotNotification()
         {
-            // Don't show notification if paused
+            // Don't show notification if paused — auto-respond SKIP instead
             if (_notificationsPaused)
             {
-                Console.WriteLine("[DEBUG] Skipping notification - notifications are paused");
+                Console.WriteLine("[DEBUG] Notifications paused — auto-responding SKIP");
+                SendSkip();
                 return;
             }
 
@@ -1700,6 +1701,23 @@ namespace NudgeTray
         // COMMON FUNCTIONS
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+        public static void SendSkip()
+        {
+            try
+            {
+                using var udp = new UdpClient();
+                var endpoint = new IPEndPoint(IPAddress.Loopback, UDP_PORT);
+                var message = "SKIP";
+                var bytes = Encoding.UTF8.GetBytes(message);
+                udp.Send(bytes, bytes.Length, endpoint);
+                Console.WriteLine($"✓ Sent SKIP (notifications paused)");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"✗ Failed to send SKIP: {ex.Message}");
+            }
+        }
+
         public static void SendResponse(bool productive)
         {
             try
@@ -1913,6 +1931,13 @@ namespace NudgeTray
         private static readonly object _lock = new();
         private static readonly List<string> _log = new(capacity: 10);
 
+        // Cache for trainer_meta.json to avoid re-reading on every refresh
+        private static DateTime _lastMetaWrite;
+        private static DateTime _cachedTrained = DateTime.MinValue;
+        private static int _cachedTrainedCount;
+        private static float _cachedAccuracy = -1f;
+        private static int _cachedModelVersion;
+
         public static int  SampleCount;
         public static int  MinSamples   = 100;
         public static int  LastTrainedCount;
@@ -2044,23 +2069,43 @@ namespace NudgeTray
                 float accuracy = -1f;
                 if (System.IO.File.Exists(metaPath))
                 {
-                    try
+                    var lastWrite = System.IO.File.GetLastWriteTimeUtc(metaPath);
+                    lock (_lock)
                     {
-                        var doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllBytes(metaPath));
-                        var root = doc.RootElement;
-                        if (root.TryGetProperty("trained_at", out var t))
+                        if (lastWrite == _lastMetaWrite)
                         {
-                            double unix = t.GetDouble();
-                            trained = DateTimeOffset.FromUnixTimeMilliseconds((long)(unix * 1000)).LocalDateTime;
+                            trained = _cachedTrained;
+                            trainedCount = _cachedTrainedCount;
+                            accuracy = _cachedAccuracy;
                         }
-                        if (root.TryGetProperty("sample_count", out var s))
-                            trainedCount = s.GetInt32();
-                        if (root.TryGetProperty("accuracy", out var a))
-                            accuracy = (float)a.GetDouble();
-                        if (root.TryGetProperty("model_version", out var mv))
-                            ModelVersion = mv.GetInt32();
                     }
-                    catch { }
+                    if (trained == DateTime.MinValue)
+                    {
+                        try
+                        {
+                            var json = System.IO.File.ReadAllText(metaPath);
+                            var meta = System.Text.Json.JsonSerializer.Deserialize(
+                                json, NudgeJsonContext.Default.TrainerMeta);
+                            if (meta != null)
+                            {
+                                if (meta.TrainedAt > 0)
+                                    trained = DateTimeOffset.FromUnixTimeMilliseconds(
+                                        (long)(meta.TrainedAt * 1000)).LocalDateTime;
+                                trainedCount = meta.SampleCount;
+                                accuracy = (float)meta.Accuracy;
+                                ModelVersion = meta.ModelVersion;
+                            }
+                            lock (_lock)
+                            {
+                                _lastMetaWrite = lastWrite;
+                                _cachedTrained = trained;
+                                _cachedTrainedCount = trainedCount;
+                                _cachedAccuracy = accuracy;
+                                _cachedModelVersion = ModelVersion;
+                            }
+                        }
+                        catch { }
+                    }
                 }
 
                 lock (_lock)

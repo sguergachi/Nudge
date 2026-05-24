@@ -1611,10 +1611,9 @@ publish();
         }
     }
 
-    static void SaveSnapshot(string app, int idle, int attention, bool productive, ActivityTickResult? tick)
+    static void SaveSnapshot(string app, int idle, int attention, bool? productive, ActivityTickResult? tick)
     {
         int appHash = GetHash(app);
-        int productiveInt = productive ? 1 : 0;
         bool wroteRow = false;
 
         var now = DateTime.Now;
@@ -1622,8 +1621,10 @@ publish();
         int dayOfWeek = (int)now.DayOfWeek;  // 0-6 (Sunday=0)
         string timestamp = now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 
-        // Productive responses get a stronger training signal (3x) to bias the model
-        int boost = productive ? 3 : 1;
+        // Productive responses get a stronger training signal (3x) to bias the model;
+        // null (SKIP) means no training signal at all.
+        int? productiveInt = productive.HasValue ? (productive.Value ? 1 : 0) : null;
+        int boost = productive.HasValue ? (productive.Value ? 3 : 1) : 0;
 
         try
         {
@@ -1647,7 +1648,7 @@ publish();
                         fusedTick.LegacyForegroundAppHash,
                         fusedTick.Context.IdleMs,
                         fusedTick.TimeLastRequestMs,
-                        productiveInt,
+                        (object?)productiveInt,
                         FeatureSchema.SchemaVersion,
                         fusedTick.Context.FocusedAppId,
                         fusedTick.Context.FocusedTitle,
@@ -1687,12 +1688,16 @@ publish();
                 }
             }
 
-            if (wroteRow)
+            if (!productive.HasValue)
             {
-                var label = productive ?
+                Dim("  Snapshot skipped — notifications paused");
+            }
+            else if (wroteRow)
+            {
+                var label = productive.Value ?
                     $"{Color.BGREEN}PRODUCTIVE{Color.RESET}" :
                     $"{Color.YELLOW}NOT PRODUCTIVE{Color.RESET}";
-                string boostInfo = productive ? $" (x{boost} boost)" : "";
+                string boostInfo = productive.Value ? $" (x{boost} boost)" : "";
                 Success($"✓ Saved as {label}{boostInfo}");
             }
             else
@@ -1711,7 +1716,7 @@ publish();
         }
     }
 
-    static void WriteCsvRow(StreamWriter? writer, params object[] fields)
+    static void WriteCsvRow(StreamWriter? writer, params object?[] fields)
     {
         if (writer == null)
             return;
@@ -1721,7 +1726,7 @@ publish();
             if (i > 0)
                 writer.Write(',');
 
-            object field = fields[i];
+            object? field = fields[i];
             if (field is null)
                 continue;
 
@@ -1805,6 +1810,11 @@ publish();
                         Info($"  Received: {Color.YELLOW}NO{Color.RESET} (not productive)");
                         SaveSnapshot(app, idle, attention, productive: false, _snapshotTick);
                         BroadcastMLResponse(false);
+                        break;
+
+                    case "SKIP":
+                        Dim($"  Received: SKIP (notifications paused)");
+                        SaveSnapshot(app, idle, attention, productive: null, _snapshotTick);
                         break;
 
                     default:

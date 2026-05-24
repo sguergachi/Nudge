@@ -100,6 +100,22 @@ internal sealed class TraySettings
     public int IntervalMinutes { get; set; } = 5;
 }
 
+/// <summary>
+/// Written by background_trainer.py after each training run.
+/// Read by TrainerState.RefreshFromCsv() to show training status.
+/// </summary>
+internal sealed class TrainerMeta
+{
+    /// <summary>Unix timestamp (seconds) of the last training completion.</summary>
+    public double TrainedAt { get; init; }
+    /// <summary>Number of samples used in the last training run.</summary>
+    public int SampleCount { get; init; }
+    /// <summary>Accuracy score of the trained model (0-1).</summary>
+    public double Accuracy { get; init; }
+    /// <summary>Monotonically increasing version number.</summary>
+    public int ModelVersion { get; init; }
+}
+
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
@@ -111,6 +127,7 @@ internal sealed class TraySettings
 [JsonSerializable(typeof(MLResponseEvent))]
 [JsonSerializable(typeof(NotificationPositionConfig))]
 [JsonSerializable(typeof(TraySettings))]
+[JsonSerializable(typeof(TrainerMeta))]
 internal sealed partial class NudgeJsonContext : JsonSerializerContext
 {
 }
