@@ -1284,6 +1284,7 @@ publish();
             _platformService = new WindowsPlatformService();
             Success($"✓ Platform: Windows");
         }
+#if !WINDOWS
         else if (PlatformConfig.IsLinux)
         {
             var linuxService = new LinuxPlatformService();
@@ -1312,6 +1313,7 @@ publish();
 
             Success($"✓ Desktop Environment: {_platformService.PlatformName}");
         }
+#endif
         else if (PlatformConfig.IsMacOS)
         {
             _platformService = new WindowsPlatformService(); // Placeholder for now

@@ -15,6 +15,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
+using System.Net.Http;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -91,6 +92,7 @@ namespace NudgeTray
         static AnalyticsWindow? _analyticsWindow;
         static SettingsWindow? _settingsWindow;
         static NativeMenuItem? _statusItem;
+        static NativeMenuItem? _updateItem;
 
 #if WINDOWS
         [DllImport("kernel32.dll")]
@@ -286,6 +288,7 @@ namespace NudgeTray
 #endif
                     }
                     CreateTrayIcon();
+                    Task.Run(CheckForUpdateAsync);
 
                     if (_uiAuditMode)
                     {
@@ -679,6 +682,38 @@ namespace NudgeTray
 
                 menu.Add(new NativeMenuItemSeparator());
 
+                var feedbackItem = new NativeMenuItem { Header = "Send Feedback" };
+                feedbackItem.Click += (s, e) =>
+                {
+                    try
+                    {
+                        Process.Start(new ProcessStartInfo(
+                            "https://github.com/sguergachi/Nudge/issues/new") { UseShellExecute = true });
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[ERROR] Could not open feedback URL: {ex.Message}");
+                    }
+                };
+                menu.Add(feedbackItem);
+
+                _updateItem = new NativeMenuItem { Header = "Check for Updates" };
+                _updateItem.Click += (s, e) =>
+                {
+                    try
+                    {
+                        Process.Start(new ProcessStartInfo(
+                            "https://github.com/sguergachi/Nudge/releases/latest") { UseShellExecute = true });
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[ERROR] Could not open releases URL: {ex.Message}");
+                    }
+                };
+                menu.Add(_updateItem);
+
+                menu.Add(new NativeMenuItemSeparator());
+
                 // Quit option
                 var quitItem = new NativeMenuItem { Header = "Quit" };
                 quitItem.Click += (s, e) =>
@@ -788,6 +823,36 @@ namespace NudgeTray
             renderBitmap.Save(stream);
             stream.Position = 0;
             return new WindowIcon(stream);
+        }
+
+        static async Task CheckForUpdateAsync()
+        {
+            try
+            {
+                using var http = new HttpClient();
+                http.DefaultRequestHeaders.UserAgent.ParseAdd($"Nudge/{VERSION}");
+                var json = await http.GetStringAsync(
+                    "https://api.github.com/repos/sguergachi/Nudge/releases/latest");
+                using var doc = JsonDocument.Parse(json);
+                var tag = doc.RootElement.GetProperty("tag_name").GetString();
+                if (tag == null) return;
+                var latestStr = tag.TrimStart('v');
+                if (Version.TryParse(latestStr, out var latest) &&
+                    Version.TryParse(VERSION, out var current) &&
+                    latest > current)
+                {
+                    Console.WriteLine($"[UPDATE] New version available: {tag}");
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (_updateItem != null)
+                            _updateItem.Header = $"Update available: {tag} ↗";
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[WARN] Update check failed: {ex.Message}");
+            }
         }
 
         static void CleanupOldProcesses()
@@ -1232,10 +1297,13 @@ namespace NudgeTray
 
             try
             {
+                // Prefer self-contained binary (release); fall back to dotnet dll (dev build)
+                string nudgeExe = Path.Combine(_baseDir, PlatformConfig.IsWindows ? "nudge.exe" : "nudge");
                 string nudgeDllPath = Path.Combine(_baseDir, "nudge.dll");
-                if (!File.Exists(nudgeDllPath))
+                bool useExe = File.Exists(nudgeExe);
+                if (!useExe && !File.Exists(nudgeDllPath))
                 {
-                    Console.WriteLine($"✗ nudge assembly not found: {nudgeDllPath}");
+                    Console.WriteLine($"✗ nudge not found (checked: {nudgeExe}, {nudgeDllPath})");
                     Environment.Exit(1);
                 }
 
@@ -1254,8 +1322,8 @@ namespace NudgeTray
                 {
                     StartInfo = new ProcessStartInfo
                     {
-                        FileName = PlatformConfig.DotnetCommand,
-                        Arguments = $"\"{nudgeDllPath}\" {args}",
+                        FileName = useExe ? nudgeExe : PlatformConfig.DotnetCommand,
+                        Arguments = useExe ? args : $"\"{nudgeDllPath}\" {args}",
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
                         UseShellExecute = false,

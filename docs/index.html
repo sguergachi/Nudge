@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nudge — AI-powered focus tracker</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <nav>
+      <span class="logo">Nudge</span>
+      <a href="https://github.com/sguergachi/Nudge" target="_blank">GitHub</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1>Catch the exact moment you start drifting.<br><span>Only then.</span></h1>
+      <p class="tagline">Nudge uses a local AI model trained on <em>your</em> habits to interrupt you when you're genuinely losing focus — not on a fixed schedule. All data stays on your machine.</p>
+      <div class="downloads">
+        <a class="btn-primary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip">
+          Download for Windows
+        </a>
+        <a class="btn-secondary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-x64.tar.gz">
+          Download for Linux
+        </a>
+      </div>
+      <p class="version-note">Latest release &rarr; <a href="https://github.com/sguergachi/Nudge/releases/latest" target="_blank">GitHub Releases</a></p>
+    </section>
+
+    <section class="how">
+      <h2>How it works</h2>
+      <div class="steps">
+        <div class="step">
+          <span class="step-num">1</span>
+          <h3>Track</h3>
+          <p>Nudge silently watches your foreground app and idle time — no screenshots, no cloud, no accounts.</p>
+        </div>
+        <div class="step">
+          <span class="step-num">2</span>
+          <h3>Learn</h3>
+          <p>Each time you answer "productive?" the on-device model gets smarter. After ~50 answers it starts predicting drift in real time.</p>
+        </div>
+        <div class="step">
+          <span class="step-num">3</span>
+          <h3>Nudge</h3>
+          <p>When the AI detects you're drifting it pops a quick check-in. When you're focused it stays silent. No noise, no fixed timers.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="install">
+      <h2>Quick start</h2>
+      <div class="platforms">
+        <div class="platform">
+          <h3>Windows</h3>
+          <ol>
+            <li>Download <code>nudge-win-x64.zip</code></li>
+            <li>Extract and run <code>nudge-tray.exe</code></li>
+            <li>A tray icon appears — you're tracking</li>
+          </ol>
+          <p class="ml-note">For ML: <code>pip install scikit-learn joblib pandas numpy</code>, then enable ML in Settings.</p>
+        </div>
+        <div class="platform">
+          <h3>Linux</h3>
+          <ol>
+            <li>Download <code>nudge-linux-x64.tar.gz</code></li>
+            <li><code>tar -xzf nudge-linux-x64.tar.gz</code></li>
+            <li>Run <code>./install-linux-app.sh</code>, then launch <code>nudge-tray</code></li>
+          </ol>
+          <p class="ml-note">Supports Wayland (KDE, GNOME, Sway) and X11.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="privacy">
+      <h2>Privacy first</h2>
+      <p>Everything stays local. Nudge writes to <code>~/.nudge/</code> on your machine. There is no server, no telemetry, no account. Your productivity data is yours.</p>
+    </section>
+
+    <section class="feedback">
+      <h2>Using Nudge?</h2>
+      <p>This is an early release. Your feedback directly shapes what gets built next.</p>
+      <a class="btn-feedback" href="https://github.com/sguergachi/Nudge/issues/new" target="_blank">Open an issue on GitHub</a>
+    </section>
+  </main>
+
+  <footer>
+    <p>Nudge is open source &mdash; <a href="https://github.com/sguergachi/Nudge" target="_blank">view on GitHub</a></p>
+  </footer>
+</body>
+</html>
