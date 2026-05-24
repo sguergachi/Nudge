@@ -122,25 +122,25 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag "v$VERSION"
           git push origin "v$VERSION"
+          cat > release-notes.md << 'NOTES'
+          ## Install
+
+          ### Windows
+          1. Download **nudge-win-x64.zip** and extract it
+          2. Run **nudge-tray.exe**
+
+          ### Linux
+          1. Download **nudge-linux-x64.tar.gz** and extract it: `tar -xzf nudge-linux-x64.tar.gz`
+          2. Run `./install-linux-app.sh` to register the desktop entry, then launch **nudge-tray**
+
+          ### ML features (optional)
+          Install Python dependencies: `pip install scikit-learn joblib pandas numpy`
+
+          ---
+          **Feedback?** [Open an issue](https://github.com/sguergachi/Nudge/issues/new) — every report shapes what gets built next.
+          NOTES
           gh release create "v$VERSION" \
             --title "Nudge v$VERSION" \
-            --notes "$(cat <<'EOF'
-## Install
-
-### Windows
-1. Download **nudge-win-x64.zip** and extract it
-2. Run **nudge-tray.exe**
-
-### Linux
-1. Download **nudge-linux-x64.tar.gz** and extract it: `tar -xzf nudge-linux-x64.tar.gz`
-2. Run `./install-linux-app.sh` to register the desktop entry, then launch **nudge-tray**
-
-### ML features (optional)
-Install Python dependencies: `pip install scikit-learn joblib pandas numpy`
-
----
-**Feedback?** [Open an issue](https://github.com/sguergachi/Nudge/issues/new) — every report shapes what gets built next.
-EOF
-)" \
+            --notes-file release-notes.md \
             nudge-win-x64.zip \
             nudge-linux-x64.tar.gz
