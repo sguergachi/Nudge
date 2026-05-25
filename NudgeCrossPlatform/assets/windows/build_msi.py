@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
 """Build Nudge MSI installer using Python's built-in msilib module."""
 
-import msilib, os, sys, uuid
-from pathlib import Path
+import traceback
+try:
+    import msilib, os, sys, uuid
+    from pathlib import Path
+except ImportError as e:
+    print(f"FATAL: {e}", flush=True)
+    sys.exit(1)
 
 VERSION = os.environ.get("NUDGE_VERSION", "1.5.3")
+try:
 SCRIPT_DIR = Path(__file__).resolve().parent  # assets/windows/
 PROJECT_DIR = SCRIPT_DIR.parent.parent        # NudgeCrossPlatform/
 REPO_DIR = PROJECT_DIR.parent                 # repo root
@@ -86,3 +92,7 @@ db.Execute("INSERT INTO `InstallExecuteSequence` (`Action`, `Sequence`) VALUES (
 db.Commit()
 print(f"MSI built: {msi_path}", flush=True)
 print(f"Size: {os.path.getsize(msi_path) // 1024} KB", flush=True)
+except Exception as e:
+    print(f"FATAL: {e}", flush=True)
+    traceback.print_exc()
+    sys.exit(1)
