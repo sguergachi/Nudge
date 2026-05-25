@@ -85,10 +85,12 @@ jobs:
           $wxsDir = (Get-Item $wxs).Directory.FullName
           $msi = Join-Path $outDir "Nudge-Setup-$version.msi"
           Write-Host "Compiling..."
-          & $candle -out "$outDir\installer.wixobj" $wxs 2>&1
-          if ($LASTEXITCODE -ne 0) { throw "candle failed (exit $LASTEXITCODE)" }
-          Write-Host "Linking... (bind path: $wxsDir)"
-          & $light -b "$wxsDir" -out $msi "$outDir\installer.wixobj" -sw 2>&1
+          Push-Location $wxsDir
+          & $candle -out "$outDir\installer.wixobj" "installer.wxs" 2>&1
+          if ($LASTEXITCODE -ne 0) { Pop-Location; throw "candle failed (exit $LASTEXITCODE)" }
+          Write-Host "Linking..."
+          & $light -out $msi "$outDir\installer.wixobj" -sw 2>&1
+          Pop-Location
           if ($LASTEXITCODE -ne 0) { throw "light failed (exit $LASTEXITCODE)" }
           if (Test-Path $msi) { Write-Host "MSI: $((Get-Item $msi).Length/1KB) KB" }
           else { throw "MSI not produced" }
