@@ -70,15 +70,20 @@ jobs:
       - name: Build Windows MSI installer
         shell: pwsh
         run: |
+          $wix = Get-Command wix -ErrorAction SilentlyContinue
+          if (-not $wix) { Write-Host "wix not found — skipping MSI"; exit 0 }
+          Write-Host "WiX: $($wix.Source)"
+          & $wix.Source --version
           $version = Select-String -Path "NudgeCrossPlatform\nudge-tray.cs" -Pattern 'const string VERSION = "([.\d]+)"' | ForEach-Object { $_.Matches.Groups[1].Value }
           if (-not $version) { Write-Host "Failed to extract version — skipping MSI"; exit 0 }
           $outDir = Join-Path $PWD "dist"
           New-Item -ItemType Directory -Path $outDir -Force | Out-Null
           $msiPath = Join-Path $outDir "Nudge-Setup-$version.msi"
           Write-Host "Building $msiPath..."
-          wix build "NudgeCrossPlatform\assets\windows\installer.wxs" -d Version=$version -o $msiPath
-          if ($LASTEXITCODE -ne 0) { Write-Host "wix build failed (exit $LASTEXITCODE) — skipping MSI"; exit 0 }
-          if (-not (Test-Path $msiPath)) { Write-Host "MSI not found at $msiPath — build may have failed silently"; exit 0 }
+          & $wix.Source build "NudgeCrossPlatform\assets\windows\installer.wxs" -d Version=$version -o $msiPath
+          Write-Host "wix exit: $LASTEXITCODE"
+          if ($LASTEXITCODE -ne 0) { Write-Host "wix build failed — skipping MSI"; exit 0 }
+          if (-not (Test-Path $msiPath)) { Write-Host "MSI not found at $msiPath — skipping"; exit 0 }
           Write-Host "MSI built: $((Get-Item $msiPath).Length / 1KB) KB"
 
       - name: Upload Windows MSI installer
