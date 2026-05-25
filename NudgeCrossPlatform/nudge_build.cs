@@ -1,6 +1,6 @@
-﻿// â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Nudge - ML-Powered Productivity Tracker
-// â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //
 // Tracks your activity, learns from your responses, nudges you to stay productive.
 // Built with obsessive attention to detail.
@@ -31,7 +31,7 @@
 // - KDE Wayland /proc scanning streams process directories and parses cmdline/stat data in place.
 // - ML JSON payloads use source-generated metadata instead of runtime reflection.
 //
-// â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 using System;
 using System.Collections.Frozen;
@@ -67,17 +67,17 @@ interface IPlatformService
 
 sealed class Nudge
 {
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // VERSION & CONSTANTS
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     const string ProgramVersion = "2.0.4";
     const string VersionSuffix = "dev";
     static readonly string VERSION = $"{ProgramVersion}-{VersionSuffix}";
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // ANSI COLORS - Professional terminal output
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     static class Color
     {
@@ -95,9 +95,9 @@ sealed class Nudge
         public const string BCYAN   = "\u001b[1;36m";
     }
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // CONSTANTS
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     const int CYCLE_MS = 1000;
     const int UDP_PORT = 45001;
@@ -115,8 +115,8 @@ sealed class Nudge
     static bool _mlAvailable;
 
 #if !WINDOWS
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
-    // KWIN WINDOW TRACKER â€” KWin script + D-Bus listener for KDE Wayland focus
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // KWIN WINDOW TRACKER — KWin script + D-Bus listener for KDE Wayland focus
     //
     // Writes a KWin script to ~/.local/share/kwin/scripts/nudge-window-tracker/
     // that listens for windowActivated and captionChanged events, then publishes
@@ -126,7 +126,7 @@ sealed class Nudge
     //
     // Used as the primary KDE Wayland detection path in LinuxPlatformService,
     // falling back to xprop on XWayland only when the tracker isn't ready.
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     sealed class KWinWindowTracker : IPathMethodHandler, IDisposable
     {
@@ -312,9 +312,9 @@ publish();
 ";
     }
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
-    // WAYLAND IDLE MONITOR â€” ext-idle-notify-v1 native idle detection
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // WAYLAND IDLE MONITOR — ext-idle-notify-v1 native idle detection
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     sealed class WaylandIdleMonitor : IDisposable
     {
@@ -408,9 +408,9 @@ publish();
         private static extern void DisplayDisconnect(IntPtr display);
     }
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
-    // LINUX PLATFORM SERVICE â€” Focus + idle detection per compositor
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // LINUX PLATFORM SERVICE — Focus + idle detection per compositor
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     sealed class LinuxPlatformService : IPlatformService, IDisposable
     {
@@ -563,7 +563,7 @@ publish();
             int idle;
 
             // Primary: ext-idle-notify-v1 (native Wayland, cross-compositor).
-            // When available, this is the authoritative source â€” it tracks
+            // When available, this is the authoritative source — it tracks
             // actual seat input (mouse + keyboard), not window switches.
             if (_waylandIdle != null && _waylandIdle.IsAvailable)
             {
@@ -690,7 +690,7 @@ publish();
                     return (app, title);
             }
             // Fallback: xprop on XWayland (only sees X11 apps; misses Wayland-native).
-            // Strictly invisible â€” _NET_ACTIVE_WINDOW is just a property read.
+            // Strictly invisible — _NET_ACTIVE_WINDOW is just a property read.
             var x = ReadActiveX11Window();
             if (!string.IsNullOrEmpty(x.app))
                 return x;
@@ -1056,9 +1056,9 @@ publish();
     }
 #endif
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
-    // WINDOWS PLATFORM SERVICE â€” Win32 idle + foreground detection
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // WINDOWS PLATFORM SERVICE — Win32 idle + foreground detection
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     sealed class WindowsPlatformService : IPlatformService, IDisposable
     {
@@ -1125,9 +1125,9 @@ publish();
         }
     }
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // STATE - Application state
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     static IPlatformService? _platformService;
     static string _csvPath = PlatformConfig.CsvPath;
@@ -1166,15 +1166,15 @@ publish();
     static long _lastMLTriggerT;  // Unix timestamp of last ML-triggered snapshot (0=none/interval)
 
     // Log message formats
-    private const string LogPredictionFormat = "ðŸ“Š Request #{0}: {1} (confidence: {2:F1}%, {3:F1}ms)";
+    private const string LogPredictionFormat = "📊 Request #{0}: {1} (confidence: {2:F1}%, {3:F1}ms)";
     private const string LogIdleFormat = "  {0} min until next snapshot{1}  ({2}{3}{4}, idle: {5}ms)";
-    private const string LogAppSwitchFormat = "  Switched: {0} â†’ {1}";
+    private const string LogAppSwitchFormat = "  Switched: {0} → {1}";
 
     private static readonly CompositeFormat LogAppSwitchComposite = CompositeFormat.Parse(LogAppSwitchFormat);
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // RANDOM INTERVAL - Generate random snapshot interval between 5-10 minutes
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     static void SetRandomInterval()
     {
@@ -1187,9 +1187,9 @@ publish();
         }
     }
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // MAIN - Entry point with professional argument parsing
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     static void Main(string[] args)
     {
@@ -1231,7 +1231,7 @@ publish();
         StartUDPListener();
 
         // Main event loop
-        Success("âœ“ Nudge is running");
+        Success("✓ Nudge is running");
         if (_customInterval)
         {
             Info($"  Taking snapshots every {SNAPSHOT_INTERVAL_MS/1000/60} minutes");
@@ -1267,9 +1267,9 @@ publish();
         RunMainLoop();
     }
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // ENVIRONMENT VALIDATION - Check all requirements before running
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     static bool ValidateEnvironment()
     {
@@ -1281,7 +1281,7 @@ publish();
         if (PlatformConfig.IsWindows)
         {
             _platformService = new WindowsPlatformService();
-            Success($"âœ“ Platform: Windows");
+            Success($"✓ Platform: Windows");
         }
 #if !WINDOWS
         else if (PlatformConfig.IsLinux)
@@ -1299,24 +1299,24 @@ publish();
             var sessionType = Environment.GetEnvironmentVariable("XDG_SESSION_TYPE");
             if (sessionType == "wayland")
             {
-                Success($"âœ“ Session: Wayland");
+                Success($"✓ Session: Wayland");
             }
             else if (sessionType == "x11")
             {
-                Success($"âœ“ Session: X11");
+                Success($"✓ Session: X11");
             }
             else
             {
                 Warning($"Unknown session type: {sessionType ?? "none"}");
             }
 
-            Success($"âœ“ Desktop Environment: {_platformService.PlatformName}");
+            Success($"✓ Desktop Environment: {_platformService.PlatformName}");
         }
 #endif
         else if (PlatformConfig.IsMacOS)
         {
             _platformService = new WindowsPlatformService(); // Placeholder for now
-            Success($"âœ“ Platform: macOS");
+            Success($"✓ Platform: macOS");
             Warning("macOS support is experimental");
         }
 
@@ -1339,7 +1339,7 @@ publish();
         }
         else
         {
-            Success($"âœ“ Detected window: {Color.CYAN}{testApp}{Color.RESET}");
+            Success($"✓ Detected window: {Color.CYAN}{testApp}{Color.RESET}");
         }
 
         // Test idle time detection
@@ -1347,7 +1347,7 @@ publish();
         var testIdle = _platformService.GetIdleTime();
         if (testIdle >= 0)
         {
-            Success($"âœ“ Idle time: {testIdle}ms");
+            Success($"✓ Idle time: {testIdle}ms");
         }
         else
         {
@@ -1399,9 +1399,9 @@ publish();
                 MappedToplevelCount: 0),
             new IdleObservation(idle, _platformService?.LastIdleSource ?? IdleSource.Unknown));
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // MAIN LOOP - Core event loop with professional status updates
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     static void RunMainLoop()
     {
@@ -1506,7 +1506,7 @@ publish();
                 _activityLogElapsed = 0;
             }
 
-            // Always reset ML timer when interval fires â€” even if waiting for a response â€”
+            // Always reset ML timer when interval fires — even if waiting for a response —
             // so the AI Brain countdown never gets stuck at "Checking now..."
             bool mlCheckDue = _mlEnabled && mlElapsed >= ML_CHECK_INTERVAL_MS;
             if (mlCheckDue)
@@ -1537,7 +1537,7 @@ publish();
                 {
                     if (mlTriggered)
                     {
-                        Info($"  {Color.BGREEN}âœ“ ML-TRIGGERED SNAPSHOT{Color.RESET} (detected unproductive)");
+                        Info($"  {Color.BGREEN}✓ ML-TRIGGERED SNAPSHOT{Color.RESET} (detected unproductive)");
                     }
                     else if (intervalReached)
                     {
@@ -1545,7 +1545,7 @@ publish();
                         string intervalReason = !_mlEnabled ? "ML disabled"
                             : _mlLowConfidence ? $"ML below {ML_CONFIDENCE_THRESHOLD*100:F0}% confidence threshold"
                             : "ML unavailable";
-                        Info($"  {Color.BYELLOW}â° INTERVAL SNAPSHOT{Color.RESET} ({intervalReason})");
+                        Info($"  {Color.BYELLOW}⏰ INTERVAL SNAPSHOT{Color.RESET} ({intervalReason})");
 
                         // Broadcast interval-triggered event for Recent Checks display
                         var intEvt = new MLLiveEvent
@@ -1600,7 +1600,7 @@ publish();
     static void ShowMLStats()
     {
         Console.WriteLine();
-        Console.WriteLine($"{Color.BCYAN}â”â”â” ML PERFORMANCE SUMMARY â”â”â”{Color.RESET}");
+        Console.WriteLine($"{Color.BCYAN}━━━ ML PERFORMANCE SUMMARY ━━━{Color.RESET}");
 
         double avgConfidence = _mlConfidenceScores.Count > 0 ? _mlConfidenceScores.Average() : 0;
         int totalMLDecisions = _mlTriggeredSnapshots + _mlSkippedAlerts;
@@ -1622,13 +1622,13 @@ publish();
             Console.WriteLine($"  {Color.BOLD}Alerts Prevented:{Color.RESET}       {Color.BGREEN}{mlEfficiency:F1}%{Color.RESET} {Color.DIM}(interruptions avoided){Color.RESET}");
         }
 
-        Console.WriteLine($"{Color.BCYAN}â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”{Color.RESET}");
+        Console.WriteLine($"{Color.BCYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{Color.RESET}");
         Console.WriteLine();
     }
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // DATA COLLECTION - CSV management with professional error handling
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     static void InitializeCSV()
     {
@@ -1699,7 +1699,7 @@ publish();
         _snapshotTick = tick ?? default;
 
         Console.WriteLine();
-        Console.WriteLine($"{Color.BYELLOW}â”â”â” SNAPSHOT #{_totalSnapshots} â”â”â”{Color.RESET}");
+        Console.WriteLine($"{Color.BYELLOW}━━━ SNAPSHOT #{_totalSnapshots} ━━━{Color.RESET}");
         Console.WriteLine($"  {Color.BOLD}App:{Color.RESET}       {Color.CYAN}{app}{Color.RESET}");
         Console.WriteLine($"  {Color.BOLD}Hash:{Color.RESET}      {appHash}");
         Console.WriteLine($"  {Color.BOLD}Idle:{Color.RESET}      {FormatTime(idle)}");
@@ -1711,7 +1711,7 @@ publish();
             Console.WriteLine($"  {Color.BOLD}Signal:{Color.RESET}    {NudgeCoreLogic.GetSignalQualityName(fusedTick.Context.SignalQuality)}");
         }
         Console.WriteLine();
-        Console.WriteLine($"  {Color.MAGENTA}â¯{Color.RESET} Waiting for response...");
+        Console.WriteLine($"  {Color.MAGENTA}❯{Color.RESET} Waiting for response...");
         Console.WriteLine($"  {Color.DIM}Run: {Color.BCYAN}nudge-notify YES{Color.DIM} or {Color.BCYAN}nudge-notify NO{Color.RESET}");
         Console.WriteLine();
 
@@ -1728,7 +1728,7 @@ publish();
         {
             if (_waitingForResponse)
             {
-                Warning("â±  Timeout - no response received");
+                Warning("⏱  Timeout - no response received");
                 _waitingForResponse = false;
                 _lastMLTriggerT = 0;
             }
@@ -1855,14 +1855,14 @@ publish();
 
             if (!productive.HasValue)
             {
-                Dim("  Snapshot skipped â€” notifications paused");
+                Dim("  Snapshot skipped — notifications paused");
             }
             else if (wroteRow)
             {
                 var label = productive.Value ?
                     $"{Color.BGREEN}PRODUCTIVE{Color.RESET}" :
                     $"{Color.YELLOW}NOT PRODUCTIVE{Color.RESET}";
-                Success($"âœ“ Saved as {label}");
+                Success($"✓ Saved as {label}");
             }
             else
             {
@@ -1924,9 +1924,9 @@ publish();
         _lastMLTriggerT = 0;
     }
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // UDP LISTENER - Network communication with detailed logging
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     static void StartUDPListener()
     {
@@ -1943,7 +1943,7 @@ publish();
         try
         {
             listener = new UdpClient(UDP_PORT);
-            Success($"âœ“ UDP listener started on port {UDP_PORT}");
+            Success($"✓ UDP listener started on port {UDP_PORT}");
 
             while (true)
             {
@@ -2005,9 +2005,9 @@ publish();
         }
     }
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // ML INFERENCE - Communicate with ML prediction service
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     static MLPrediction? QueryMLModel(string app, int idle, int attention, ActivityTickResult? tick)
     {
@@ -2075,7 +2075,7 @@ publish();
 
             if (!_mlAvailable)
             {
-                Success($"âœ“ ML inference server connected (TCP {ML_HOST}:{ML_PORT})");
+                Success($"✓ ML inference server connected (TCP {ML_HOST}:{ML_PORT})");
                 _mlAvailable = true;
             }
 
@@ -2128,7 +2128,7 @@ publish();
         // Check ML availability every time (this function is called once per minute)
         CheckMLAvailability();
 
-        // ML not available â€” let the regular interval fallback handle notification timing
+        // ML not available — let the regular interval fallback handle notification timing
         if (!_mlAvailable)
         {
             return false;
@@ -2137,7 +2137,7 @@ publish();
         // Require minimum training samples before trusting ML predictions
         if (!_forceTrainedModel && _mlSampleCount < MIN_SAMPLES_THRESHOLD)
         {
-            Dim($"  ML: {_mlSampleCount} samples < {MIN_SAMPLES_THRESHOLD} minimum â€” using interval fallback");
+            Dim($"  ML: {_mlSampleCount} samples < {MIN_SAMPLES_THRESHOLD} minimum — using interval fallback");
             return false;
         }
 
@@ -2178,7 +2178,7 @@ publish();
         // Calculate average confidence
         double avgConfidence = _mlConfidenceScores.Average();
 
-        // â”€â”€ Broadcast live state to nudge-tray AI Brain tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Broadcast live state to nudge-tray AI Brain tab ──────────────────
         {
             bool willTrigger = prediction.Prediction == 0 && prediction.Confidence >= ML_CONFIDENCE_THRESHOLD;
             bool isProductive = prediction.Prediction == 1;
@@ -2208,7 +2208,7 @@ publish();
         {
             if (prediction.Confidence >= ML_CONFIDENCE_THRESHOLD)
             {
-                // HIGH confidence NOT productive â€” trigger snapshot!
+                // HIGH confidence NOT productive — trigger snapshot!
                 _mlTriggeredSnapshots++;
                 _mlLowConfidence = false;
                 Info($"  {Color.BRED}ML TRIGGER{Color.RESET}: NOT productive (confidence: {Color.BYELLOW}{prediction.Confidence*100:F1}%{Color.RESET}, avg: {avgConfidence*100:F1}%)");
@@ -2216,15 +2216,15 @@ publish();
                 return true;
             }
 
-            // Low confidence NOT productive â€” defer to interval-based fallback
+            // Low confidence NOT productive — defer to interval-based fallback
             _mlLowConfidence = true;
             _mlLowConfidenceSkips++;
-            Dim($"  {Color.DIM}ML DEFER{Color.RESET}: NOT productive (confidence: {prediction.Confidence*100:F1}% < {ML_CONFIDENCE_THRESHOLD*100:F0}% threshold) â€” deferring to interval");
+            Dim($"  {Color.DIM}ML DEFER{Color.RESET}: NOT productive (confidence: {prediction.Confidence*100:F1}% < {ML_CONFIDENCE_THRESHOLD*100:F0}% threshold) — deferring to interval");
             return false;
         }
         else
         {
-            // User IS productive â€” skip snapshot, reset interval
+            // User IS productive — skip snapshot, reset interval
             _mlSkippedAlerts++;
             _productivityConfirmed = true;
             _mlLowConfidence = false;
@@ -2234,9 +2234,9 @@ publish();
         }
     }
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // UTILITIES - Helper functions
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     static string RunCommand(string cmd, string args)
     {
@@ -2286,9 +2286,9 @@ publish();
         return seconds > 0 ? $"{minutes}m {seconds}s" : $"{minutes}m";
     }
 
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // CONSOLE OUTPUT - Professional logging with colors
-    // â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     static void Success(string msg) =>
         Console.WriteLine($"{Color.BGREEN}{msg}{Color.RESET}");
@@ -2308,10 +2308,10 @@ publish();
     static void PrintBanner()
     {
         Console.WriteLine();
-        Console.WriteLine($"{Color.BCYAN}â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—{Color.RESET}");
-        Console.WriteLine($"{Color.BCYAN}â•‘{Color.RESET}  {Color.BOLD}Nudge Harvest{Color.RESET} - Activity Collector     {Color.BCYAN}â•‘{Color.RESET}");
-        Console.WriteLine($"{Color.BCYAN}â•‘{Color.RESET}  {Color.DIM}Version {VERSION,-36}{Color.RESET}{Color.BCYAN}â•‘{Color.RESET}");
-        Console.WriteLine($"{Color.BCYAN}â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•{Color.RESET}");
+        Console.WriteLine($"{Color.BCYAN}╔═══════════════════════════════════════════════╗{Color.RESET}");
+        Console.WriteLine($"{Color.BCYAN}║{Color.RESET}  {Color.BOLD}Nudge Harvest{Color.RESET} - Activity Collector     {Color.BCYAN}║{Color.RESET}");
+        Console.WriteLine($"{Color.BCYAN}║{Color.RESET}  {Color.DIM}Version {VERSION,-36}{Color.RESET}{Color.BCYAN}║{Color.RESET}");
+        Console.WriteLine($"{Color.BCYAN}╚═══════════════════════════════════════════════╝{Color.RESET}");
         Console.WriteLine();
     }
 
