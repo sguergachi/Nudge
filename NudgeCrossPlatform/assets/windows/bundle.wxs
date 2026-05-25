@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?define Version = "1.5.8" ?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:bal="http://wixtoolset.org/schemas/v4/bal">
+  <Bundle Name="Nudge" Version="$(var.Version)" Manufacturer="Nudge"
+          UpgradeCode="C9E4B8D1-5A3F-4E7B-9C6D-2F8A1B4E3C7D">
+    <BootstrapperApplication>
+      <bal:WixStandardBootstrapperApplication
+        ThemeFile="theme.xml"
+        LogoFile="..\..\..\dist\nudge.png" />
+    </BootstrapperApplication>
+    <Chain>
+      <MsiPackage SourceFile="..\..\..\dist\Nudge-Setup-$(var.Version).msi" />
+    </Chain>
+  </Bundle>
+</Wix>

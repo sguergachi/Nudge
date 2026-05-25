@@ -134,17 +134,56 @@ jobs:
           else { throw "MSI not produced" }
           Copy-Item $msi (Join-Path $outDir "Nudge-Setup.msi")
 
-      - name: Stage MSI for upload
+          Write-Host "Generating logo PNG for bootstrapper..."
+          $logo = New-Object System.Drawing.Bitmap 256, 256
+          $g = [System.Drawing.Graphics]::FromImage($logo)
+          $g.SmoothingMode = 'HighQuality'
+          $g.TextRenderingHint = 'AntiAliasGridFit'
+          $g.Clear([System.Drawing.Color]::FromArgb(0,0,0,0))
+          $circleBrush = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(40,40,60))
+          $g.FillEllipse($circleBrush, 28, 28, 200, 200)
+          $fontLogo = [System.Drawing.Font]::new("Segoe UI", [System.Single]80, [System.Drawing.FontStyle]::Bold)
+          $g.DrawString("N", $fontLogo, [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(180,140,255)), 78, 62)
+          $logo.Save("$outDir\nudge.png", [System.Drawing.Imaging.ImageFormat]::Png)
+          $g.Dispose(); $logo.Dispose()
+          Write-Host "Logo generated."
+
+      - name: Build WiX v5 bootstrapper
+        shell: pwsh
+        run: |
+          $outDir = Join-Path $PWD "dist"
+          $m = Select-String -Path "NudgeCrossPlatform\nudge-tray.cs" -Pattern 'const string VERSION = "([.\d]+)"'
+          $version = if ($m) { $m.Matches[0].Groups[1].Value } else { "1.5.7" }
+          Write-Host "Installing WiX v5..."
+          dotnet tool install --global wix --version 5.* 2>&1 | Out-Host
+          $wix = where.exe wix 2>$null
+          if (-not $wix) { $wix = where.exe wix.exe 2>$null }
+          Write-Host "wix: $wix"
+          $bundleDir = Resolve-Path "NudgeCrossPlatform\assets\windows"
+          Write-Host "Building bundle..."
+          Push-Location $bundleDir
+          & $wix build bundle.wxs -d Version=$version -o "$outDir\NudgeInstaller.exe" 2>&1
+          Pop-Location
+          if ($LASTEXITCODE -ne 0) { throw "wix build failed (exit $LASTEXITCODE)" }
+          $bundle = Join-Path $outDir "NudgeInstaller.exe"
+          if (Test-Path $bundle) { Write-Host "Bundle: $((Get-Item $bundle).Length/1KB) KB" }
+          else { Write-Host "WARNING: Bundle not produced" }
+
+      - name: Stage installers for upload
         if: success() || failure()
         shell: pwsh
-        run: Copy-Item dist/Nudge-Setup*.msi .
+        run: |
+          Copy-Item dist/Nudge-Setup*.msi .
+          Copy-Item dist/NudgeInstaller.exe . -ErrorAction SilentlyContinue
 
       - name: Upload Windows MSI installer
         if: success() || failure()
         uses: actions/upload-artifact@v7
         with:
           name: nudge-win-installer
-          path: Nudge-Setup*.msi
+          path: |
+            Nudge-Setup*.msi
+            NudgeInstaller.exe
           if-no-files-found: warn
 
   build-linux:
@@ -259,7 +298,7 @@ jobs:
       - name: Tag and publish release
         run: |
           ASSETS=()
-           for f in Nudge-Setup*.msi nudge-win-x64.zip nudge-linux-installer.run nudge-linux-x64.tar.gz; do
+           for f in NudgeInstaller.exe Nudge-Setup*.msi nudge-win-x64.zip nudge-linux-installer.run nudge-linux-x64.tar.gz; do
              [ -f "$f" ] && ASSETS+=("$f")
            done
            echo "Release assets: ${ASSETS[*]}"
@@ -271,8 +310,9 @@ jobs:
            ## Install
 
            ### Windows
-           1. Download **Nudge Setup** (`.msi`) — recommended: installs with Start Menu/Desktop shortcuts and auto-launches
-           2. Or download **nudge-win-x64.zip** and run **nudge-tray.exe**
+           1. Download **NudgeInstaller.exe** (recommended) — modern dark-themed installer with shortcuts and auto-launch
+           2. Or download **Nudge Setup** (`.msi`) for silent/automated installs
+           3. Or download **nudge-win-x64.zip** and run **nudge-tray.exe**
 
           ### Linux
           1. Download **nudge-linux-installer.run** and run: `chmod +x nudge-linux-installer.run && ./nudge-linux-installer.run`
