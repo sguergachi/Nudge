@@ -151,6 +151,18 @@ jobs:
       - name: Build MSIX package
         shell: pwsh
         run: |
+          # Locate MakeAppx.exe in Windows SDK
+          $makeAppx = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\MakeAppx.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $makeAppx) { $makeAppx = where.exe MakeAppx 2>$null }
+          if (-not $makeAppx) { $makeAppx = where.exe MakeAppx.exe 2>$null }
+          if (-not $makeAppx) { Write-Host "Windows SDK not found, searching..."; Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Recurse -Filter "MakeAppx.exe" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" }; throw "MakeAppx.exe not found" }
+          Write-Host "MakeAppx: $makeAppx"
+          $signTool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\SignTool.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $signTool) { $signTool = where.exe SignTool 2>$null }
+          if (-not $signTool) { $signTool = where.exe SignTool.exe 2>$null }
+          if (-not $signTool) { throw "SignTool.exe not found" }
+          Write-Host "SignTool: $signTool"
+
           # Generate app certificate
           $cert = New-SelfSignedCertificate -Type Custom -Subject "CN=Nudge" -KeyUsage DigitalSignature -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3") -CertStoreLocation "Cert:\CurrentUser\My" -NotAfter (Get-Date).AddYears(3)
           $thumbprint = $cert.Thumbprint
@@ -179,12 +191,11 @@ jobs:
           }
 
           Write-Host "Creating MSIX package..."
-          MakeAppx.exe pack /d $pkg /p "dist/Nudge.msix" /l 2>&1
+          & $makeAppx pack /d $pkg /p "dist/Nudge.msix" /l 2>&1
           if ($LASTEXITCODE -ne 0) { throw "MakeAppx failed (exit $LASTEXITCODE)" }
 
           Write-Host "Signing MSIX..."
-          $certPath = "Cert:\CurrentUser\My\$thumbprint"
-          SignTool.exe sign /fd SHA256 /sha1 $thumbprint /v "dist/Nudge.msix" 2>&1
+          & $signTool sign /fd SHA256 /sha1 $thumbprint /v "dist/Nudge.msix" 2>&1
           if ($LASTEXITCODE -ne 0) { throw "SignTool failed (exit $LASTEXITCODE)" }
 
           $msix = Join-Path $PWD "dist/Nudge.msix"
