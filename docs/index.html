@@ -4,8 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nudge — Still focused?</title>
-  <meta name="description" content="A local AI that learns your attention patterns and asks at the right moment.">
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='2' width='28' height='28' rx='5' fill='%230B0B0E'/%3E%3Ctext x='16' y='23' font-family='system-ui' font-size='17' fill='%2358A6FF' text-anchor='middle' font-weight='700'%3EN%3C/text%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -13,52 +11,72 @@
 </head>
 <body>
 
-<header class="nav">
-  <span class="logo">Nudge</span>
-  <nav>
-    <a href="https://github.com/sguergachi/Nudge" target="_blank">GitHub</a>
-    <a href="https://github.com/sguergachi/Nudge/releases/latest" class="cta-link">Download</a>
-  </nav>
+<nav>
+  <a href="/" class="brand">Nudge</a>
+  <div class="links">
+    <a href="https://github.com/sguergachi/Nudge">GitHub</a>
+    <a href="https://github.com/sguergachi/Nudge/releases/latest" class="btn-sm">Download</a>
+  </div>
+</nav>
+
+<header>
+  <h1>Still focused?</h1>
+  <p class="tagline">A local AI that learns your attention patterns and asks at the right moment.</p>
+  <div class="actions">
+    <a href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip" class="btn">Download for Windows</a>
+    <a href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-installer.run" class="btn btn-ghost">Download for Linux</a>
+  </div>
+  <p class="meta">Free &middot; Open source &middot; No account needed</p>
 </header>
 
 <main>
 
-<section class="hero">
-  <h1>Still focused?</h1>
-  <p class="lead">A local AI that learns when to ask.</p>
-  <div class="actions">
-    <a class="btn btn-primary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip">Download for Windows</a>
-    <a class="btn btn-secondary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-installer.run">Download for Linux</a>
+<section class="feature">
+  <div class="text">
+    <span class="label">Check-in</span>
+    <h2>Asked at the right time</h2>
+    <p>ML checks every 60 seconds. Falls back to random 5&ndash;10 minute intervals while learning. Keyboard shortcuts: Ctrl+Shift+Y for YES, Ctrl+Shift+N for NO.</p>
   </div>
-  <p class="meta">Free &middot; Open source &middot; No account</p>
-  <img class="hero-shot" src="screenshots/notification_active.png" alt="Nudge check-in notification">
+  <img src="screenshots/notification_active.png" alt="Nudge check-in notification" loading="eager">
 </section>
 
-<section class="showcase">
-  <div class="shot">
-    <img src="screenshots/analytics_today.png" alt="Analytics dashboard">
-    <p>Track where your time goes.</p>
+<section class="feature feature-rev">
+  <img src="screenshots/analytics_today.png" alt="Analytics dashboard" loading="lazy">
+  <div class="text">
+    <span class="label">Analytics</span>
+    <h2>See where time goes</h2>
+    <p>Track focus across Today, Week, Month and All Time. Hourly breakdowns, most-used apps with category colors, and AI prediction history.</p>
   </div>
-  <div class="shot">
-    <img src="screenshots/analytics_ai_brain.png" alt="AI Brain">
-    <p>See the model learn.</p>
+</section>
+
+<section class="feature">
+  <div class="text">
+    <span class="label">AI Brain</span>
+    <h2>Trained on your answers</h2>
+    <p>Model trained exclusively on your YES/NO responses. Sub-100ms inference. Activates after 100 samples, retrains every 50 new answers. No cloud, no telemetry.</p>
   </div>
+  <img src="screenshots/analytics_ai_brain.png" alt="AI Brain tab" loading="lazy">
 </section>
 
 <section class="download">
-  <h2>Try it on your machine</h2>
+  <h2>Try Nudge on your machine</h2>
+  <p>Free and open source. No account, no telemetry, no strings.</p>
   <div class="actions">
-    <a class="btn btn-primary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip">Download for Windows</a>
-    <a class="btn btn-secondary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-installer.run">Download for Linux</a>
+    <a href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip" class="btn">Download for Windows</a>
+    <a href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-installer.run" class="btn btn-ghost">Download for Linux</a>
   </div>
-  <p class="meta"><a href="https://github.com/sguergachi/Nudge/releases/latest">All releases</a> &middot; <a href="https://github.com/sguergachi/Nudge">Source code</a></p>
+  <p class="meta">
+    <a href="https://github.com/sguergachi/Nudge/releases/latest">All releases</a>
+    &middot;
+    <a href="https://github.com/sguergachi/Nudge">Source code</a>
+  </p>
 </section>
 
 </main>
 
 <footer>
   <span>Nudge &mdash; Free &amp; open source (MIT)</span>
-  <div class="links">
+  <div>
     <a href="https://github.com/sguergachi/Nudge">GitHub</a>
     <a href="https://github.com/sguergachi/Nudge/issues/new">Feedback</a>
   </div>
