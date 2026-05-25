@@ -13,7 +13,7 @@ jobs:
       version: ${{ steps.ver.outputs.version }}
       should_release: ${{ steps.ver.outputs.should_release }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           fetch-tags: true
 
@@ -35,9 +35,9 @@ jobs:
     if: needs.check-version.outputs.should_release == 'true'
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
 
@@ -66,7 +66,7 @@ jobs:
           Compress-Archive -Path "$dist/*" -DestinationPath "nudge-win-x64.zip" -Force
 
       - name: Upload Windows zip
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: nudge-win-x64
           path: nudge-win-x64.zip
@@ -104,7 +104,7 @@ jobs:
 
       - name: Upload Windows MSI installer
         if: success() || failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: nudge-win-installer
           path: dist\Nudge-Setup-*.msi
@@ -115,13 +115,13 @@ jobs:
     if: needs.check-version.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Clone WaylandDotnet sibling repo
         continue-on-error: true
         run: git clone https://github.com/sguergachi/WaylandDotnet.git "${{ github.workspace }}/Nudge/WaylandDotnet" 2>/dev/null || echo "WaylandDotnet not available — continuing"
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
 
@@ -197,24 +197,24 @@ jobs:
       VERSION: ${{ needs.check-version.outputs.version }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v4
         continue-on-error: true
         with:
           name: nudge-win-x64
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v4
         continue-on-error: true
         with:
           name: nudge-linux-x64
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v4
         continue-on-error: true
         with:
           name: nudge-win-installer
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v4
         continue-on-error: true
         with:
           name: nudge-linux-installer
