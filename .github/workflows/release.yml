@@ -44,15 +44,15 @@ jobs:
       - name: Publish self-contained Windows binaries
         shell: pwsh
         run: |
-          $dist = "dist/win-x64"
+          $dist = Join-Path $PWD "dist\win-x64"
           New-Item -ItemType Directory -Path $dist -Force | Out-Null
           Push-Location NudgeCrossPlatform
-          dotnet publish nudge.csproj        -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o "../$dist" --nologo
-          dotnet publish nudge-notify.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o "../$dist" --nologo
-          dotnet publish nudge-tray.csproj   -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -f net10.0-windows10.0.17763.0 -p:SkipBuildNudgeDaemon=true -o "../$dist" --nologo
+          dotnet publish nudge.csproj        -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o $dist --nologo
+          dotnet publish nudge-notify.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o $dist --nologo
+          dotnet publish nudge-tray.csproj   -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -f net10.0-windows10.0.17763.0 -p:SkipBuildNudgeDaemon=true -o $dist --nologo
           Pop-Location
           Write-Host "Files in $dist:"
-          Get-ChildItem "$dist" -Name | Sort-Object
+          Get-ChildItem $dist -Name -Include "*.exe" | Sort-Object
 
       - name: Package Windows artifacts
         shell: pwsh
