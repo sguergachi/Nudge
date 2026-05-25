@@ -453,13 +453,7 @@ namespace NudgeTray
         static void ShutdownApplication(int exitCode)
         {
             Environment.ExitCode = exitCode;
-
-            if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-            {
-                desktop.Shutdown(exitCode);
-                return;
-            }
-
+            Console.WriteLine($"[SHUTDOWN] Exiting with code {exitCode}");
             Environment.Exit(exitCode);
         }
 

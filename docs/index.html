@@ -17,10 +17,10 @@
   <div class="nav-inner">
     <span class="logo">Nudge</span>
     <ul class="nav-links">
-      <li><a href="#engine">Engine</a></li>
+      <li><a href="#engine">Harvest</a></li>
       <li><a href="#ai">AI Brain</a></li>
       <li><a href="#interrupt">Interrupt</a></li>
-      <li><a href="#download">Download</a></li>
+      <li><a href="#download" class="nav-cta">Try it free &rarr;</a></li>
       <li><a href="https://github.com/sguergachi/Nudge" target="_blank">GitHub</a></li>
     </ul>
   </div>
@@ -34,14 +34,17 @@
     Local AI that learns your attention patterns and asks at the right moment. No cloud.
   </p>
   <div class="hero-actions" data-reveal data-delay="2">
-          <a class="btn btn-primary" href="https://github.com/sguergachi/Nudge/releases/latest/download/Nudge-Setup-1.5.1.msi">Download for Windows</a>
-    <a class="btn btn-secondary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-x64.tar.gz">Download for Linux</a>
+          <a class="btn btn-primary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip">Download for Windows</a>
+          <a class="btn btn-secondary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-installer.run">Download for Linux</a>
   </div>
   <p class="hero-note" data-reveal data-delay="3">Free &middot; Open source &middot; No account needed</p>
   <div class="hero-media" data-reveal data-delay="4">
     <img src="screenshots/notification_active.png" alt="Nudge notification" class="hero-shot">
   </div>
-  <div class="scroll-hint" data-reveal data-delay="5">
+  <div class="hero-stats" data-reveal data-delay="5">
+    <span>26 dimensions</span><span>≥98% confidence</span><span>6 categories</span><span>5 desktop environments</span>
+  </div>
+  <div class="scroll-hint">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
   </div>
 </section>
@@ -62,12 +65,88 @@
       <details class="dims-inline">
         <summary class="dims-inline-toggle">All 26 dimensions</summary>
         <div class="dims-inline-grid">
-          <span class="di"><b>HourOfDay</b> <s>0–23 hour</s></span><span class="di"><b>DayOfWeek</b> <s>0–6</s></span><span class="di"><b>FocusedAppHash</b> <s>hash of process</s></span><span class="di"><b>FocusedDomainHash</b> <s>hash of domain</s></span><span class="di"><b>IdleMs</b> <s>ms since input</s></span><span class="di"><b>FocusedSinceMs</b> <s>ms app focused</s></span><span class="di"><b>TitleStabilityMs</b> <s>ms title unchanged</s></span><span class="di"><b>SwitchCount60s</b> <s>switches 60s</s></span><span class="di"><b>SwitchCount300s</b> <s>switches 300s</s></span><span class="di"><b>DistinctApps300s</b> <s>distinct apps</s></span><span class="di"><b>DistinctDomains300s</b> <s>distinct domains</s></span><span class="di"><b>ReturnedToAnchorApp300s</b> <s>anchor return</s></span><span class="di"><b>CurrentAppShare300s</b> <s>app time share</s></span><span class="di"><b>CurrentDomainShare300s</b> <s>domain share</s></span><span class="di"><b>WorkspaceSwitchCount300s</b> <s>desktop switches</s></span><span class="di"><b>BrowserWindowFlag</b> <s>browser focused</s></span><span class="di"><b>FullscreenFlag</b> <s>fullscreen</s></span><span class="di"><b>AfkFlag</b> <s>afk 30+s</s></span><span class="di"><b>DevAppFlag</b> <s>Development app</s></span><span class="di"><b>CreativeAppFlag</b> <s>Creative app</s></span><span class="di"><b>OfficeAppFlag</b> <s>Office app</s></span><span class="di"><b>CommAppFlag</b> <s>Comm app</s></span><span class="di"><b>EntAppFlag</b> <s>Entertainment</s></span><span class="di"><b>CommunicationAppFlag</b> <s>domain Comm</s></span><span class="di"><b>EntertainmentDomainFlag</b> <s>domain Ent</s></span><span class="di"><b>WorkDomainFlag</b> <s>domain Work</s></span>
+          <span class="di di-hdr">Temporal</span>
+          <span class="di"><b>HourOfDay</b> <s>0–23 hour</s></span><span class="di"><b>DayOfWeek</b> <s>0–6</s></span>
+          <span class="di di-hdr">Identity</span>
+          <span class="di"><b>FocusedAppHash</b> <s>hash of process</s></span><span class="di"><b>FocusedDomainHash</b> <s>hash of domain</s></span>
+          <span class="di di-hdr">Activity</span>
+          <span class="di"><b>IdleMs</b> <s>ms since input</s></span><span class="di"><b>AfkFlag</b> <s>afk 30+s</s></span>
+          <span class="di di-hdr">Duration</span>
+          <span class="di"><b>FocusedSinceMs</b> <s>ms app focused</s></span><span class="di"><b>TitleStabilityMs</b> <s>ms title unchanged</s></span>
+          <span class="di di-hdr">Switching</span>
+          <span class="di"><b>SwitchCount60s</b> <s>switches 60s</s></span><span class="di"><b>SwitchCount300s</b> <s>switches 300s</s></span>
+          <span class="di"><b>DistinctApps300s</b> <s>distinct apps</s></span><span class="di"><b>DistinctDomains300s</b> <s>distinct domains</s></span>
+          <span class="di"><b>ReturnedToAnchorApp300s</b> <s>anchor return</s></span>
+          <span class="di di-hdr">Time share</span>
+          <span class="di"><b>CurrentAppShare300s</b> <s>app time share</s></span><span class="di"><b>CurrentDomainShare300s</b> <s>domain share</s></span>
+          <span class="di di-hdr">Flags</span>
+          <span class="di"><b>BrowserWindowFlag</b> <s>browser focused</s></span><span class="di"><b>FullscreenFlag</b> <s>fullscreen</s></span>
+          <span class="di"><b>WorkspaceSwitchCount300s</b> <s>desktop switches</s></span>
+          <span class="di di-hdr">Categories</span>
+          <span class="di"><b>DevAppFlag</b> <s>Development app</s></span><span class="di"><b>CreativeAppFlag</b> <s>Creative app</s></span>
+          <span class="di"><b>OfficeAppFlag</b> <s>Office app</s></span><span class="di"><b>CommAppFlag</b> <s>Comm app</s></span>
+          <span class="di"><b>EntAppFlag</b> <s>Entertainment</s></span>
+          <span class="di di-hdr">Domain flags</span>
+          <span class="di"><b>CommunicationAppFlag</b> <s>domain Comm</s></span><span class="di"><b>EntertainmentDomainFlag</b> <s>domain Ent</s></span>
+          <span class="di"><b>WorkDomainFlag</b> <s>domain Work</s></span>
         </div>
       </details>
     </div>
     <div class="g-viz">
-      <canvas id="engine-canvas"></canvas>
+      <svg class="sig-grid" viewBox="0 0 400 400">
+        <!-- Concentric rings (symmetric, even spacing) -->
+        <circle cx="200" cy="200" r="40"  fill="none" stroke="rgba(88,166,255,0.10)" stroke-width="0.5"/>
+        <circle cx="200" cy="200" r="70"  fill="none" stroke="rgba(88,166,255,0.07)" stroke-width="0.5"/>
+        <circle cx="200" cy="200" r="105" fill="none" stroke="rgba(88,166,255,0.05)" stroke-width="0.5"/>
+        <circle cx="200" cy="200" r="145" fill="none" stroke="rgba(88,166,255,0.03)" stroke-width="0.5"/>
+        <circle cx="200" cy="200" r="188" fill="none" stroke="rgba(88,166,255,0.02)" stroke-width="0.5"/>
+        <!-- Expanding rings (staggered timing, anticipation) -->
+        <circle cx="200" cy="200" r="8" fill="none" stroke="rgba(88,166,255,0.22)" stroke-width="1.5" class="exp-ring er1"/>
+        <circle cx="200" cy="200" r="8" fill="none" stroke="rgba(88,166,255,0.14)" stroke-width="1"   class="exp-ring er2"/>
+        <circle cx="200" cy="200" r="8" fill="none" stroke="rgba(88,166,255,0.08)" stroke-width="0.7" class="exp-ring er3"/>
+        <!-- 8 dots per ring (symmetric: 0°,45°,90°,135°,180°,225°,270°,315°) -->
+        <g class="dot-ring dr1">
+          <circle cx="200" cy="60"  r="3" fill="#58A6FF"/><circle cx="261" cy="139" r="3" fill="#58A6FF"/>
+          <circle cx="340" cy="200" r="3" fill="#58A6FF"/><circle cx="261" cy="261" r="3" fill="#58A6FF"/>
+          <circle cx="200" cy="340" r="3" fill="#58A6FF"/><circle cx="139" cy="261" r="3" fill="#58A6FF"/>
+          <circle cx="60"  cy="200" r="3" fill="#58A6FF"/><circle cx="139" cy="139" r="3" fill="#58A6FF"/>
+        </g>
+        <g class="dot-ring dr2">
+          <circle cx="200" cy="130" r="2.5" fill="#58A6FF"/><circle cx="250" cy="150" r="2.5" fill="#58A6FF"/>
+          <circle cx="270" cy="200" r="2.5" fill="#58A6FF"/><circle cx="250" cy="250" r="2.5" fill="#58A6FF"/>
+          <circle cx="200" cy="270" r="2.5" fill="#58A6FF"/><circle cx="150" cy="250" r="2.5" fill="#58A6FF"/>
+          <circle cx="130" cy="200" r="2.5" fill="#58A6FF"/><circle cx="150" cy="150" r="2.5" fill="#58A6FF"/>
+        </g>
+        <!-- 26 feature dots radiating (symmetric placement) -->
+        <g class="feat-dots">
+          <circle cx="200" cy="88" r="1.5" fill="#58A6FF"/><circle cx="232" cy="96" r="1.5" fill="#58A6FF"/>
+          <circle cx="260" cy="116" r="1.5" fill="#58A6FF"/><circle cx="280" cy="144" r="1.5" fill="#58A6FF"/>
+          <circle cx="292" cy="175" r="1.5" fill="#58A6FF"/><circle cx="292" cy="210" r="1.5" fill="#58A6FF"/>
+          <circle cx="282" cy="242" r="1.5" fill="#58A6FF"/><circle cx="264" cy="268" r="1.5" fill="#58A6FF"/>
+          <circle cx="240" cy="286" r="1.5" fill="#58A6FF"/><circle cx="212" cy="294" r="1.5" fill="#58A6FF"/>
+          <circle cx="184" cy="294" r="1.5" fill="#58A6FF"/><circle cx="156" cy="286" r="1.5" fill="#58A6FF"/>
+          <circle cx="132" cy="268" r="1.5" fill="#58A6FF"/><circle cx="114" cy="242" r="1.5" fill="#58A6FF"/>
+          <circle cx="104" cy="210" r="1.5" fill="#58A6FF"/><circle cx="104" cy="175" r="1.5" fill="#58A6FF"/>
+          <circle cx="116" cy="144" r="1.5" fill="#58A6FF"/><circle cx="136" cy="116" r="1.5" fill="#58A6FF"/>
+          <circle cx="162" cy="96" r="1.5"  fill="#58A6FF"/><circle cx="200" cy="70" r="1.5" fill="#58A6FF"/>
+          <circle cx="242" cy="78" r="1.5" fill="#58A6FF"/><circle cx="272" cy="104" r="1.5" fill="#58A6FF"/>
+          <circle cx="286" cy="150" r="1.5" fill="#58A6FF"/><circle cx="286" cy="200" r="1.5" fill="#58A6FF"/>
+          <circle cx="268" cy="260" r="1.5" fill="#58A6FF"/><circle cx="200" cy="306" r="1.5" fill="#58A6FF"/>
+        </g>
+        <!-- Rotating sweep (smooth, slow) -->
+        <g class="sweep-arc">
+          <path d="M 200 200 L 200 12 A 188 188 0 0 1 388 200 Z" fill="rgba(88,166,255,0.03)"/>
+        </g>
+        <!-- Center fusion node -->
+        <circle cx="200" cy="200" r="22" fill="rgba(88,166,255,0.04)" class="center-glow"/>
+        <circle cx="200" cy="200" r="10" fill="none" stroke="rgba(88,166,255,0.22)" stroke-width="1" class="center-ring"/>
+        <circle cx="200" cy="200" r="3" fill="#fff" opacity="0.8" class="center-dot"/>
+        <!-- Firefly particles (free-floating, organic motion) -->
+        <circle cx="200" cy="120" r="2.5" fill="#93C5FD" class="firefly ff1"/>
+        <circle cx="260" cy="180" r="2"   fill="#60A5FA" class="firefly ff2"/>
+        <circle cx="150" cy="260" r="3"   fill="#93C5FD" class="firefly ff3"/>
+        <circle cx="230" cy="300" r="1.8" fill="#BAE6FD" class="firefly ff4"/>
+      </svg>
     </div>
   </div>
 </section>
@@ -76,7 +155,54 @@
 <section class="section" id="ai">
   <div class="grid g-right" data-reveal>
     <div class="g-viz">
-      <canvas id="ai-canvas"></canvas>
+      <svg class="neural-mesh" viewBox="0 0 400 400">
+        <!-- Outer hex ring (faint) -->
+        <g fill="none" stroke="rgba(34,197,94,0.05)" stroke-width="0.5">
+          <polygon points="200,40 339,120 339,280 200,360 61,280 61,120" class="hex-outer"/>
+          <line x1="200" y1="40"  x2="200" y2="200"/><line x1="339" y1="120" x2="200" y2="200"/>
+          <line x1="339" y1="280" x2="200" y2="200"/><line x1="200" y1="360" x2="200" y2="200"/>
+          <line x1="61"  y1="280" x2="200" y2="200"/><line x1="61"  y1="120" x2="200" y2="200"/>
+        </g>
+        <!-- Inner hex ring -->
+        <g fill="none" stroke="rgba(34,197,94,0.06)" stroke-width="0.4">
+          <polygon points="200,90 295,145 295,255 200,310 105,255 105,145"/>
+          <line x1="200" y1="90"  x2="200" y2="200"/><line x1="295" y1="145" x2="200" y2="200"/>
+          <line x1="295" y1="255" x2="200" y2="200"/><line x1="200" y1="310" x2="200" y2="200"/>
+          <line x1="105" y1="255" x2="200" y2="200"/><line x1="105" y1="145" x2="200" y2="200"/>
+        </g>
+        <!-- Outer nodes (hexagon vertices, 6 nodes) — wave stagger -->
+        <g class="node-hex">
+          <circle cx="200" cy="40"  r="4" fill="#22C55E" style="--nd:0s"/><circle cx="339" cy="120" r="4" fill="#22C55E" style="--nd:0.3s"/>
+          <circle cx="339" cy="280" r="4" fill="#22C55E" style="--nd:0.6s"/><circle cx="200" cy="360" r="4" fill="#22C55E" style="--nd:0.9s"/>
+          <circle cx="61"  cy="280" r="4" fill="#22C55E" style="--nd:1.2s"/><circle cx="61"  cy="120" r="4" fill="#22C55E" style="--nd:1.5s"/>
+        </g>
+        <!-- Inner nodes (6 nodes, rotated 30°, smaller) -->
+        <g class="node-inner">
+          <circle cx="200" cy="90"  r="3" fill="#22C55E" style="--nd:0.15s"/><circle cx="295" cy="145" r="3" fill="#22C55E" style="--nd:0.45s"/>
+          <circle cx="295" cy="255" r="3" fill="#22C55E" style="--nd:0.75s"/><circle cx="200" cy="310" r="3" fill="#22C55E" style="--nd:1.05s"/>
+          <circle cx="105" cy="255" r="3" fill="#22C55E" style="--nd:1.35s"/><circle cx="105" cy="145" r="3" fill="#22C55E" style="--nd:1.65s"/>
+        </g>
+        <!-- Orbiting signal — travels the outer hexagon -->
+        <circle r="5" fill="#4ADE80" opacity="0" class="hex-pulse"/>
+        <circle r="12" fill="none" stroke="rgba(52,211,153,0.12)" stroke-width="1" opacity="0" class="hex-pulse-ring"/>
+        <!-- Central node — breathing with anticipation (dip before rise, overshoot) -->
+        <circle cx="200" cy="200" r="36" fill="rgba(34,197,94,0.03)" class="core-aura"/>
+        <circle cx="200" cy="200" r="16" fill="rgba(34,197,94,0.08)" stroke="rgba(34,197,94,0.28)" stroke-width="1" class="core-node"/>
+        <circle cx="200" cy="200" r="4" fill="#fff" opacity="0.5" class="core-inner"/>
+        <!-- Sparks — 6 symmetric positions (between hex vertices, 30° offset) -->
+        <circle cx="270" cy="80"  r="2" fill="#86EFAC" class="spark s1"/><circle cx="370" cy="200" r="2" fill="#86EFAC" class="spark s2"/>
+        <circle cx="270" cy="320" r="2" fill="#86EFAC" class="spark s3"/><circle cx="130" cy="320" r="2" fill="#86EFAC" class="spark s4"/>
+        <circle cx="30"  cy="200" r="2" fill="#86EFAC" class="spark s5"/><circle cx="130" cy="80"  r="2" fill="#86EFAC" class="spark s6"/>
+        <!-- Feedback ring (dashed circle around core, flow animation) -->
+        <circle cx="200" cy="200" r="140" fill="none" stroke="rgba(34,197,94,0.06)" stroke-width="0.6" stroke-dasharray="4,8" class="fb-ring"/>
+        <!-- Floating thought particles — free-form organic drift -->
+        <circle cx="260" cy="16"  r="2.5" fill="#6EE7B7" class="drift d1"/>
+        <circle cx="360" cy="200" r="2"   fill="#A7F3D0" class="drift d2"/>
+        <circle cx="270" cy="350" r="3"   fill="#6EE7B7" class="drift d3"/>
+        <circle cx="80"  cy="330" r="2"   fill="#A7F3D0" class="drift d4"/>
+        <circle cx="30"  cy="180" r="2.5" fill="#6EE7B7" class="drift d5"/>
+        <circle cx="240" cy="200" r="1.5" fill="#D1FAE5" class="drift d6"/>
+      </svg>
     </div>
     <div class="g-text">
       <div class="g-num t-green">02</div>
@@ -120,9 +246,9 @@
     <h2 class="cta-heading">Try Nudge on your machine</h2>
     <p class="cta-desc">Free and open source. No account, no telemetry, no strings.</p>
     <div class="download-group">
-      <a class="btn btn-primary btn-dl" href="https://github.com/sguergachi/Nudge/releases/latest/download/Nudge-Setup-1.5.1.msi">
+      <a class="btn btn-primary btn-dl" href="https://github.com/sguergachi/Nudge/releases/latest/download/Nudge-Setup-1.5.3.msi">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="4" y1="8" x2="20" y2="8"/><line x1="8" y1="4" x2="8" y2="20"/></svg>
-        <span class="dl-text"><span class="dl-label">Windows</span><span class="dl-fmt">Nudge-Setup-1.5.1.msi</span></span>
+        <span class="dl-text"><span class="dl-label">Windows</span><span class="dl-fmt">Nudge-Setup-1.5.3.msi</span></span>
         <span class="dl-arrow">&rarr;</span>
       </a>
       <a class="btn btn-secondary btn-dl" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-installer.run">
@@ -156,6 +282,7 @@
   <div class="footer-inner">
     <span class="footer-brand">Nudge</span>
     <span class="footer-copy">&mdash; Free &amp; open source (MIT)</span>
+    <span class="footer-status"><span class="status-dot"></span> running</span>
     <span class="footer-links">
       <a href="https://github.com/sguergachi/Nudge">GitHub</a>
       <a href="https://github.com/sguergachi/Nudge/issues/new">Feedback</a>
@@ -163,7 +290,6 @@
   </div>
 </footer>
 
-<script src="animations.js"></script>
 <script>
 const observer = new IntersectionObserver((entries) => {
   entries.forEach(entry => {

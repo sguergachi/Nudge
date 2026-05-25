@@ -31,6 +31,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;height:var(--nav-h);backgrou
 .nav-links a:hover{color:var(--text)}
 .nav-links a[target]{padding:5px 14px;border:1px solid var(--border);border-radius:6px;font-size:.8rem;transition:border-color .2s var(--ease),background .2s var(--ease)}
 .nav-links a[target]:hover{border-color:var(--border-hover);background:rgba(255,255,255,.04);color:var(--text)}
+.nav-cta{color:var(--accent)!important;font-weight:600!important}
 
 /* ── Hero ────────────────────────────────────────────── */
 .hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;position:relative;overflow:hidden;padding:calc(var(--nav-h) + 64px) 24px 80px}
@@ -39,11 +40,13 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;height:var(--nav-h);backgrou
 @keyframes shimmer{0%,100%{background-position:0 center}50%{background-position:200% center}}
 .hero-desc{font-size:1.1rem;color:var(--text-dim);max-width:500px;margin:0 auto 36px;line-height:1.6}
 .hero-actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:14px}
-.hero-note{font-size:.76rem;color:var(--text-muted);margin-bottom:64px}
-.hero-media{position:relative;display:flex;justify-content:center;width:100%;max-width:680px;margin:0 auto}
-.hero-media::before{content:'';position:absolute;inset:-48px;z-index:0;pointer-events:none;background:radial-gradient(ellipse at center,rgba(88,166,255,.12) 0%,transparent 60%);animation:heroGlow 8s ease-in-out infinite}
+.hero-note{font-size:.76rem;color:var(--text-muted);margin-bottom:48px}
+.hero-stats{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;margin-bottom:52px}
+.hero-stats span{font-size:.72rem;font-family:var(--font-mono);color:rgba(88,166,255,.5);font-weight:500}
+.hero-media{position:relative;display:flex;justify-content:center;width:100%;max-width:400px;margin:0 auto}
+.hero-media::before{content:'';position:absolute;inset:-36px;z-index:0;pointer-events:none;background:radial-gradient(ellipse at center,rgba(88,166,255,.12) 0%,transparent 60%);animation:heroGlow 8s ease-in-out infinite}
 @keyframes heroGlow{0%,100%{opacity:.25;transform:scale(.95)}50%{opacity:.65;transform:scale(1.02)}}
-.hero-shot{position:relative;z-index:1;max-width:100%;border-radius:12px;box-shadow:0 24px 80px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.06)}
+.hero-shot{position:relative;z-index:1;max-width:340px;width:100%;border-radius:12px;box-shadow:0 24px 80px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.06)}
 .scroll-hint{position:absolute;bottom:36px;left:50%;transform:translateX(-50%);color:var(--text-muted);opacity:0;animation:fadeInDown 1s 1.5s forwards}
 .scroll-hint svg{animation:bounce 2.5s ease-in-out infinite;display:block}
 @keyframes fadeInDown{from{opacity:0;transform:translateX(-50%) translateY(-8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
@@ -81,14 +84,116 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;height:var(--nav-h);backgrou
 .g-spec{margin-top:22px;padding-top:18px;border-top:1px solid var(--border);font-size:.76rem;color:var(--text-muted);font-family:var(--font-mono);position:relative;z-index:1;letter-spacing:.01em}
 .g-extra{margin-top:18px;font-size:.88rem;color:var(--text-dim);line-height:1.65;position:relative;z-index:1}
 
-/* ── Canvas ──────────────────────────────────────────── */
+/* ── Engine SVG: Signal Grid ─────────────────────────── */
+.sig-grid{width:100%;max-width:420px;aspect-ratio:1;display:block}
+
+/* Expanding rings — staggered, easing for anticipation */
+.er1{animation:exR1 5s cubic-bezier(.25,.1,.25,1) infinite;transform-origin:200px 200px}
+.er2{animation:exR2 5s cubic-bezier(.25,.1,.25,1) infinite;animation-delay:1.2s;transform-origin:200px 200px}
+.er3{animation:exR3 5s cubic-bezier(.25,.1,.25,1) infinite;animation-delay:2.4s;transform-origin:200px 200px}
+@keyframes exR1{0%{r:8px;opacity:.22}5%{r:6px;opacity:.12}15%{r:30px;opacity:.28}100%{r:188px;opacity:0}}
+@keyframes exR2{0%{r:8px;opacity:.14}5%{r:6px;opacity:.07}15%{r:30px;opacity:.18}100%{r:188px;opacity:0}}
+@keyframes exR3{0%{r:8px;opacity:.08}5%{r:6px;opacity:.04}15%{r:30px;opacity:.10}100%{r:188px;opacity:0}}
+
+/* Firefly particles — compound sinusoidal drift + twinkle */
+.firefly{animation-timing-function:ease-in-out;animation-iteration-count:infinite}
+.ff1{animation:fly1 11s ease-in-out infinite,twinkle 3.2s ease-in-out infinite}
+.ff2{animation:fly2 13s ease-in-out infinite,twinkle 2.8s ease-in-out infinite .4s}
+.ff3{animation:fly3 10s ease-in-out infinite,twinkle 3.6s ease-in-out infinite .8s}
+.ff4{animation:fly4 14s ease-in-out infinite,twinkle 3.0s ease-in-out infinite 1.2s}
+@keyframes fly1{0%,100%{transform:translate(0,0)}20%{transform:translate(15px,-12px)}45%{transform:translate(-8px,20px)}70%{transform:translate(-18px,-6px)}90%{transform:translate(6px,14px)}}
+@keyframes fly2{0%,100%{transform:translate(0,0)}25%{transform:translate(-20px,8px)}55%{transform:translate(12px,-18px)}80%{transform:translate(16px,10px)}}
+@keyframes fly3{0%,100%{transform:translate(0,0)}30%{transform:translate(10px,16px)}60%{transform:translate(-14px,-10px)}85%{transform:translate(6px,-20px)}}
+@keyframes fly4{0%,100%{transform:translate(0,0)}35%{transform:translate(-10px,-14px)}65%{transform:translate(18px,-8px)}}
+@keyframes twinkle{0%,100%{opacity:.3}50%{opacity:.85}}
+
+/* Dot rings — staggered pulse with dip before rise */
+.dr1{animation:drPulse 4.5s cubic-bezier(.4,0,.2,1) infinite}
+.dr2{animation:drPulse 4.5s cubic-bezier(.4,0,.2,1) infinite;animation-delay:2.25s}
+@keyframes drPulse{0%,100%{opacity:.3}10%{opacity:.15}30%{opacity:.85}60%{opacity:.4}}
+
+/* 26 feature dots — slow atmospheric pulse */
+.feat-dots{animation:featPulse 6s cubic-bezier(.4,0,.2,1) infinite}
+@keyframes featPulse{0%,100%{opacity:.25}15%{opacity:.15}40%{opacity:.7}70%{opacity:.35}}
+
+/* Sweep — smooth constant rotation */
+.sweep-arc{animation:sweep 18s linear infinite;transform-origin:200px 200px}
+@keyframes sweep{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+
+/* Center fusion node — anticipate (dip), rise, overshoot, settle */
+.center-dot{animation:cdAnticipate 3.5s cubic-bezier(.4,0,.2,1) infinite}
+@keyframes cdAnticipate{0%,100%{r:3px;opacity:.8}8%{r:2.5px;opacity:.5}25%{r:5.5px;opacity:1}35%{r:4px;opacity:.85}55%{r:3.5px;opacity:.75}}
+
+.center-ring{animation:crAnticipate 3.5s cubic-bezier(.4,0,.2,1) infinite}
+@keyframes crAnticipate{0%,100%{r:10px;opacity:.22}8%{r:9px;opacity:.12}25%{r:18px;opacity:.4}35%{r:14px;opacity:.28}55%{r:11px;opacity:.2}}
+
+.center-glow{animation:cgAnticipate 3.5s cubic-bezier(.4,0,.2,1) infinite;transform-origin:200px 200px}
+@keyframes cgAnticipate{0%,100%{r:22px;opacity:.04}8%{r:20px;opacity:.02}25%{r:32px;opacity:.08}35%{r:26px;opacity:.05}55%{r:23px;opacity:.04}}
+
+/* ── AI SVG: Neural Mesh ────────────────────────────── */
+.neural-mesh{width:100%;max-width:420px;aspect-ratio:1;display:block}
+
+/* Outer hex rotates slowly */
+.hex-outer{animation:hexRotate 24s linear infinite;transform-origin:200px 200px}
+@keyframes hexRotate{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+
+/* Hex nodes — wave propagation with anticipation */
+.node-hex circle,.node-inner circle{animation:hexNodePulse 1.8s cubic-bezier(.4,0,.2,1) infinite;animation-delay:var(--nd,0s)}
+@keyframes hexNodePulse{0%,100%{opacity:.25;r:4px}8%{opacity:.1;r:3.5px}22%{opacity:1;r:7px}45%{opacity:.4;r:4.5px}}
+
+.node-inner circle{animation-name:innerNodePulse}
+@keyframes innerNodePulse{0%,100%{opacity:.2;r:3px}8%{opacity:.08;r:2.5px}22%{opacity:.8;r:5.5px}45%{opacity:.3;r:3.5px}}
+
+/* Orbiting hex pulse — travels outer polygon vertices */
+.hex-pulse{animation:hexOrbit 6s steps(6) infinite;transform-origin:200px 200px}
+@keyframes hexOrbit{0%{transform:translate(0,-160px);opacity:1}16%{transform:translate(139px,-80px);opacity:1}33%{transform:translate(139px,80px);opacity:1}50%{transform:translate(0,160px);opacity:1}66%{transform:translate(-139px,80px);opacity:1}83%{transform:translate(-139px,-80px);opacity:1}100%{transform:translate(0,-160px);opacity:1}}
+
+.hex-pulse-ring{animation:hexOrbitRing 6s steps(6) infinite;animation-delay:.15s;transform-origin:200px 200px}
+@keyframes hexOrbitRing{0%{transform:translate(0,-160px);opacity:.6}16%{transform:translate(139px,-80px);opacity:.6}33%{transform:translate(139px,80px);opacity:.6}50%{transform:translate(0,160px);opacity:.6}66%{transform:translate(-139px,80px);opacity:.6}83%{transform:translate(-139px,-80px);opacity:.6}100%{transform:translate(0,-160px);opacity:.6}}
+
+/* Core — breathe with overshoot */
+.core-node{animation:coreBreathe 4.5s cubic-bezier(.4,0,.2,1) infinite;transform-origin:200px 200px}
+@keyframes coreBreathe{0%,100%{transform:scale(1)}10%{transform:scale(.95)}28%{transform:scale(1.3)}38%{transform:scale(1.12)}55%{transform:scale(1.05)}}
+
+.core-inner{animation:ciAnticipate 4.5s cubic-bezier(.4,0,.2,1) infinite}
+@keyframes ciAnticipate{0%,100%{r:4px;opacity:.5}10%{r:3.5px;opacity:.35}28%{r:7px;opacity:.85}38%{r:5.5px;opacity:.6}55%{r:4.5px;opacity:.5}}
+
+.core-aura{animation:auraBreathe 4.5s cubic-bezier(.4,0,.2,1) infinite;transform-origin:200px 200px}
+@keyframes auraBreathe{0%,100%{r:36px;opacity:.03}10%{r:34px;opacity:.015}28%{r:52px;opacity:.07}38%{r:42px;opacity:.04}55%{r:38px;opacity:.03}}
+
+/* Sparks — 6 symmetric, perfectly staggered */
+.spark{animation:sparkPop 2.4s cubic-bezier(.4,0,.2,1) infinite}
+.s1{animation-delay:0s}.s2{animation-delay:.4s}.s3{animation-delay:.8s}.s4{animation-delay:1.2s}.s5{animation-delay:1.6s}.s6{animation-delay:2.0s}
+@keyframes sparkPop{0%,100%{opacity:0;r:1px}5%{opacity:0;r:1px}15%{opacity:1;r:3.5px}35%{opacity:.4;r:2px}60%{opacity:0;r:1px}}
+
+/* Drifting thought particles — compound sinusoidal wander + pulse */
+.drift{animation-timing-function:ease-in-out;animation-iteration-count:infinite}
+.d1{animation:drift1 12s ease-in-out infinite,pulseIn 4s ease-in-out infinite}
+.d2{animation:drift2 14s ease-in-out infinite,pulseIn 3.5s ease-in-out infinite .6s}
+.d3{animation:drift3 11s ease-in-out infinite,pulseIn 4.5s ease-in-out infinite 1.1s}
+.d4{animation:drift4 15s ease-in-out infinite,pulseIn 3.8s ease-in-out infinite 1.7s}
+.d5{animation:drift5 13s ease-in-out infinite,pulseIn 4.2s ease-in-out infinite .3s}
+.d6{animation:drift6 10s ease-in-out infinite,pulseIn 3.2s ease-in-out infinite .9s}
+@keyframes drift1{0%,100%{transform:translate(0,0)}25%{transform:translate(18px,10px)}55%{transform:translate(-12px,-16px)}80%{transform:translate(8px,22px)}}
+@keyframes drift2{0%,100%{transform:translate(0,0)}30%{transform:translate(-14px,8px)}60%{transform:translate(10px,-18px)}}
+@keyframes drift3{0%,100%{transform:translate(0,0)}20%{transform:translate(-20px,-6px)}50%{transform:translate(14px,12px)}75%{transform:translate(6px,-14px)}}
+@keyframes drift4{0%,100%{transform:translate(0,0)}35%{transform:translate(16px,-10px)}70%{transform:translate(-8px,20px)}}
+@keyframes drift5{0%,100%{transform:translate(0,0)}28%{transform:translate(-16px,-12px)}58%{transform:translate(12px,16px)}82%{transform:translate(-10px,8px)}}
+@keyframes drift6{0%,100%{transform:translate(0,0)}22%{transform:translate(8px,-14px)}48%{transform:translate(-18px,6px)}72%{transform:translate(14px,18px)}}
+@keyframes pulseIn{0%,100%{opacity:.25;r:2px}50%{opacity:.65;r:3.2px}}
+
+/* Feedback ring — dash flow */
+.fb-ring{animation:fbFlow 4s linear infinite}
+@keyframes fbFlow{0%{stroke-dashoffset:24}100%{stroke-dashoffset:0}}
+
+/* ── Viz container ──────────────────────────────────── */
 .g-viz{display:flex;align-items:center;justify-content:center;min-height:200px}
-canvas{width:100%;max-width:520px;height:auto;aspect-ratio:2/1.2;display:block;border-radius:6px}
+canvas{display:none}
 
 /* ── Screenshots ─────────────────────────────────────── */
-.g-viz-shots{flex-direction:column;gap:24px;align-items:center}
-.shot-main{border-radius:10px;box-shadow:0 16px 48px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.04);max-width:420px;width:100%}
-.shot-sub{border-radius:10px;box-shadow:0 12px 36px rgba(0,0,0,.4);max-width:280px;width:100%;opacity:.9}
+.g-viz-shots{position:relative;display:flex;align-items:center;justify-content:center;min-height:320px}
+.shot-main{position:relative;z-index:2;border-radius:10px;box-shadow:0 16px 48px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.04);max-width:300px;width:100%;margin-right:-30px;margin-top:-15px}
+.shot-sub{position:absolute;z-index:1;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.35);max-width:200px;width:100%;right:-5px;top:15px;opacity:.92;transform:rotate(2deg)}
 
 /* ── Dimensions ──────────────────────────────────────── */
 .dims-inline{margin-top:22px;position:relative;z-index:1}
@@ -96,9 +201,11 @@ canvas{width:100%;max-width:520px;height:auto;aspect-ratio:2/1.2;display:block;b
 .dims-inline-toggle:hover{color:#8AC0FF}
 .dims-inline-toggle::-webkit-details-marker{display:none}
 .dims-inline-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);margin-top:12px;border-radius:4px;overflow:hidden}
-.di{background:var(--bg-alt);padding:9px 12px;font-size:.7rem;line-height:1.45;font-family:var(--font-mono)}
+.di{background:var(--bg-alt);padding:9px 12px;font-size:.7rem;line-height:1.45;font-family:var(--font-mono);transition:background .15s var(--ease)}
+.di:hover{background:rgba(88,166,255,.04)}
 .di b{color:var(--accent);font-weight:500;margin-right:7px}
 .di s{color:var(--text-muted);text-decoration:none}
+.di-hdr{grid-column:1/-1;font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);padding:10px 12px 4px;background:transparent!important;border-bottom:1px solid var(--border)}
 
 /* ── CTA ─────────────────────────────────────────────── */
 .cta-section{text-align:center}
@@ -133,6 +240,9 @@ footer{padding:44px 32px;border-top:1px solid var(--border)}
 .footer-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap}
 .footer-brand{font-size:.85rem;font-weight:700;color:var(--text);letter-spacing:-.01em}
 .footer-copy{font-size:.8rem;color:var(--text-muted)}
+.footer-status{font-size:.74rem;color:var(--text-muted);font-family:var(--font-mono);display:flex;align-items:center;gap:6px}
+.status-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);animation:statusPulse 2.5s ease-in-out infinite}
+@keyframes statusPulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(34,197,94,.4)}50%{opacity:.6;box-shadow:0 0 0 6px rgba(34,197,94,0)}}
 .footer-links{display:flex;gap:20px}
 .footer-links a{font-size:.8rem;color:var(--text-muted);transition:color .2s var(--ease)}
 .footer-links a:hover{color:var(--text-dim)}
@@ -142,13 +252,13 @@ footer{padding:44px 32px;border-top:1px solid var(--border)}
   .hero h1{font-size:clamp(3rem,10vw,5rem)}
   .hero-desc{font-size:1rem;max-width:380px}
   .grid{grid-template-columns:1fr;gap:40px}
-  .g-right .g-viz{order:0;margin:0 auto}
+  .g-viz{order:-1;margin:0 auto}
   .g-text{max-width:100%!important}
   .g-left .g-text,.g-right .g-text{max-width:100%!important}
   .g-right .g-text{margin-left:0}
-  canvas{max-width:400px}
-  .g-viz-shots{flex-direction:row;align-items:center;flex-wrap:wrap;justify-content:center}
-  .shot-main{max-width:300px}.shot-sub{max-width:200px}
+  .sig-grid,.neural-mesh{max-width:340px}
+  .shot-main{max-width:260px;margin-right:0;margin-top:0}.shot-sub{position:static;max-width:180px;transform:none;opacity:.92;margin-top:-12px}
+  .g-viz-shots{flex-direction:column;gap:0}
   .dims-inline-grid{grid-template-columns:1fr 1fr}
   .download-group{flex-direction:column}
   .btn-dl{justify-content:flex-start}
@@ -158,7 +268,7 @@ footer{padding:44px 32px;border-top:1px solid var(--border)}
   .nav-links a[target]{padding:3px 10px;font-size:.72rem!important}
   .hero{padding-top:calc(var(--nav-h) + 32px);padding-bottom:48px;min-height:auto}
   .hero h1{font-size:clamp(2.4rem,12vw,3.6rem)}
-  .hero-note{margin-bottom:40px}.hero-media::before{inset:-24px}
+  .hero-note{margin-bottom:40px}.hero-stats{margin-bottom:40px;gap:16px}.hero-media::before{inset:-24px}
   .section{padding:64px 20px}
   .dims-inline-grid{grid-template-columns:1fr}
   .footer-inner{flex-direction:column}
