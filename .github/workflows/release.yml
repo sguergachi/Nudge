@@ -42,17 +42,17 @@ jobs:
           dotnet-version: "10.0.x"
 
       - name: Publish self-contained Windows binaries
-        shell: pwsh
+        working-directory: NudgeCrossPlatform
         run: |
-          $dist = Join-Path $PWD "dist\win-x64"
-          New-Item -ItemType Directory -Path $dist -Force | Out-Null
-          Push-Location NudgeCrossPlatform
-          dotnet publish nudge.csproj        -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o $dist --nologo
-          dotnet publish nudge-notify.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o $dist --nologo
-          dotnet publish nudge-tray.csproj   -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -f net10.0-windows10.0.17763.0 -p:SkipBuildNudgeDaemon=true -o $dist --nologo
-          Pop-Location
-          Write-Host "Files in $dist:"
-          Get-ChildItem $dist -Name -Include "*.exe" | Sort-Object
+          dotnet publish nudge.csproj        -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o ../dist/win-x64 --nologo --verbosity normal 2>&1
+          echo "After nudge:"
+          ls ../dist/win-x64/*.exe 2>/dev/null || echo "no exes yet"
+          dotnet publish nudge-notify.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o ../dist/win-x64 --nologo --verbosity normal 2>&1
+          echo "After nudge-notify:"
+          ls ../dist/win-x64/*.exe 2>/dev/null
+          dotnet publish nudge-tray.csproj   -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -f net10.0-windows10.0.17763.0 -p:SkipBuildNudgeDaemon=true -o ../dist/win-x64 --nologo --verbosity normal 2>&1
+          echo "After nudge-tray:"
+          ls ../dist/win-x64/*.exe 2>/dev/null
 
       - name: Package Windows artifacts
         shell: pwsh
