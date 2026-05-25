@@ -18,7 +18,7 @@
     <span class="logo">Nudge</span>
     <ul class="nav-links">
       <li><a href="#engine">Engine</a></li>
-      <li><a href="#ai">AI Model</a></li>
+      <li><a href="#ai">AI Brain</a></li>
       <li><a href="#interrupt">Interrupt</a></li>
       <li><a href="#download">Download</a></li>
       <li><a href="https://github.com/sguergachi/Nudge" target="_blank">GitHub</a></li>
@@ -51,14 +51,14 @@
   <div class="grid g-left" data-reveal>
     <div class="g-text">
       <div class="g-num t-blue">01</div>
-      <h2 class="g-head">Sensor Fusion Engine</h2>
+      <h2 class="g-head">Harvest Engine</h2>
       <div class="g-claims">
         <p>Harvest engine samples foreground app, idle time &amp; browser domain at <strong>1&thinsp;Hz</strong>.</p>
         <p>Rolling <strong>300&thinsp;s</strong> window captures switch velocity, distinct-app count &amp; anchor-return events.</p>
         <p>Every app classified into <strong>6 categories</strong> at <strong>5 confidence tiers</strong>.</p>
         <p>Three raw signals fused into a <strong>26-dimension</strong> feature vector.</p>
       </div>
-      <div class="g-spec">Sources: KWin Script · X11 EWMH · Sway IPC · Win32 · browser domain extraction</div>
+      <div class="g-spec">Cross-platform sensor fusion &mdash; Windows &amp; Linux compositors &middot; Wayland &amp; X11</div>
       <details class="dims-inline">
         <summary class="dims-inline-toggle">All 26 dimensions</summary>
         <div class="dims-inline-grid">
@@ -80,14 +80,14 @@
     </div>
     <div class="g-text">
       <div class="g-num t-green">02</div>
-      <h2 class="g-head">On-device AI Model</h2>
+      <h2 class="g-head">AI Brain</h2>
       <div class="g-claims">
-        <p>Personal scikit-learn binary classifier — <strong>your model</strong>, trained on <strong>your responses</strong>.</p>
-        <p>Inference at <strong>sub-100ms</strong> over TCP 127.0.0.1:45002.</p>
-        <p>Activates after 100 samples; background trainer retriggers at every <strong>50 new responses</strong>.</p>
-        <p>Adaptive architecture: lightweight (&lt;200 samples), standard (200+).</p>
+        <p>Your personal AI Brain — trained exclusively on <strong>your YES/NO responses</strong>.</p>
+        <p>Runs inference at <strong>sub-100ms</strong> — asks only when confident you're drifting.</p>
+        <p>Activates after 100 samples; <strong>retrains automatically</strong> at every 50 new responses.</p>
+        <p>Adaptive architecture: lightweight (&lt;200 samples), full feature set (200+).</p>
       </div>
-      <div class="g-spec">RandomForest / LogisticRegression · sub-100ms · no cloud · retrains automatically</div>
+      <div class="g-spec">Sub-100ms inference &middot; TCP 127.0.0.1:45002 &middot; retrains automatically &middot; no cloud</div>
     </div>
   </div>
 </section>
