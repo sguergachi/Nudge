@@ -17,7 +17,9 @@
   <div class="nav-inner">
     <span class="logo">Nudge</span>
     <ul class="nav-links">
-      <li><a href="#how">How it works</a></li>
+      <li><a href="#engine">Engine</a></li>
+      <li><a href="#ai">AI Model</a></li>
+      <li><a href="#interrupt">Interrupt</a></li>
       <li><a href="#download">Download</a></li>
       <li><a href="https://github.com/sguergachi/Nudge" target="_blank">GitHub</a></li>
     </ul>
@@ -29,7 +31,7 @@
   <div class="hero-bg"></div>
   <h1 data-reveal>Still&nbsp;focused?</h1>
   <p class="hero-desc" data-reveal data-delay="1">
-    Local AI that learns your attention patterns and asks at the right moment.
+    Local AI that learns your attention patterns and asks at the right moment. No cloud.
   </p>
   <div class="hero-actions" data-reveal data-delay="2">
     <a class="btn btn-primary" href="https://github.com/sguergachi/Nudge/releases/latest/download/Nudge-Setup-1.5.0.exe">Download for Windows</a>
@@ -40,149 +42,80 @@
     <img src="screenshots/notification_active.png" alt="Nudge notification" class="hero-shot">
   </div>
   <div class="scroll-hint" data-reveal data-delay="5">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
   </div>
 </section>
 
-<!-- ════════════════ How it works ════════════════ -->
-<section class="section" id="how">
-  <h3 class="section-label">How it works</h3>
-
-  <!-- ── Step 1: Engine ── -->
-  <div class="step-card" data-reveal>
-    <div class="step-viz">
-      <svg viewBox="0 0 200 140" class="engine-svg">
-        <line x1="0" y1="32" x2="72" y2="32" stroke="rgba(88,166,255,0.2)" stroke-width="1"/>
-        <line x1="0" y1="70" x2="72" y2="70" stroke="rgba(88,166,255,0.2)" stroke-width="1"/>
-        <line x1="0" y1="108" x2="72" y2="108" stroke="rgba(88,166,255,0.2)" stroke-width="1"/>
-        <circle r="3" fill="#58A6FF"><animateMotion dur="3s" repeatCount="indefinite" path="M8,32 L68,32" begin="0s"/></circle>
-        <circle r="3" fill="#58A6FF"><animateMotion dur="3s" repeatCount="indefinite" path="M8,70 L68,70" begin="0.6s"/></circle>
-        <circle r="3" fill="#58A6FF"><animateMotion dur="3s" repeatCount="indefinite" path="M8,108 L68,108" begin="1.2s"/></circle>
-        <rect x="68" y="20" width="8" height="104" rx="4" fill="var(--accent)" opacity="0.15" stroke="var(--accent)" stroke-width="1.5" stroke-opacity="0.5">
-          <animate attributeName="opacity" values="0.15;0.35;0.15" dur="2s" repeatCount="indefinite"/>
-        </rect>
-        <g>
-          <line x1="80" y1="30" x2="160" y2="18" stroke="rgba(88,166,255,0.12)" stroke-width="0.8"/><line x1="80" y1="38" x2="158" y2="28" stroke="rgba(88,166,255,0.12)" stroke-width="0.8"/><line x1="80" y1="46" x2="162" y2="38" stroke="rgba(88,166,255,0.12)" stroke-width="0.8"/><line x1="80" y1="54" x2="164" y2="48" stroke="rgba(88,166,255,0.12)" stroke-width="0.8"/><line x1="80" y1="62" x2="166" y2="58" stroke="rgba(88,166,255,0.12)" stroke-width="0.8"/><line x1="80" y1="70" x2="168" y2="70" stroke="rgba(88,166,255,0.12)" stroke-width="0.8"/><line x1="80" y1="78" x2="166" y2="82" stroke="rgba(88,166,255,0.12)" stroke-width="0.8"/><line x1="80" y1="86" x2="164" y2="92" stroke="rgba(88,166,255,0.12)" stroke-width="0.8"/><line x1="80" y1="94" x2="162" y2="102" stroke="rgba(88,166,255,0.12)" stroke-width="0.8"/><line x1="80" y1="102" x2="158" y2="112" stroke="rgba(88,166,255,0.12)" stroke-width="0.8"/><line x1="80" y1="110" x2="160" y2="122" stroke="rgba(88,166,255,0.12)" stroke-width="0.8"/>
-        </g>
-        <text x="4" y="25" font-family="system-ui" font-size="7" fill="rgba(88,166,255,0.5)">app</text>
-        <text x="4" y="63" font-family="system-ui" font-size="7" fill="rgba(88,166,255,0.5)">idle</text>
-        <text x="4" y="101" font-family="system-ui" font-size="7" fill="rgba(88,166,255,0.5)">domain</text>
-        <text x="85" y="11" font-family="system-ui" font-size="8" fill="var(--accent)" font-weight="600" text-anchor="middle">FUSION</text>
-        <text x="130" y="136" font-family="system-ui" font-size="7" fill="rgba(88,166,255,0.3)">26-dim vector</text>
-      </svg>
-    </div>
-    <div class="step-body">
-      <span class="step-num">01</span>
-      <h4>Sensor Fusion Engine</h4>
-      <ul class="step-bullets">
-        <li>Harvest engine samples foreground app, idle time &amp; browser domain at <strong>1&thinsp;Hz</strong></li>
-        <li>Rolling <strong>300&thinsp;s</strong> window captures switch velocity, distinct-app count &amp; anchor-return events</li>
-        <li>Every app classified into one of <strong>6 categories</strong> at <strong>5 confidence tiers</strong></li>
-        <li>Three raw signals fused into a <strong>26-dimension</strong> feature vector</li>
-      </ul>
-      <div class="step-spec">Sources: KWin Script · X11 EWMH · Sway IPC · Win32 · browser domain extraction</div>
-
-      <!-- 26-dim collapsible inside step 1 -->
+<!-- ════════════════ Engine ════════════════ -->
+<section class="section section-alt" id="engine">
+  <div class="grid g-left" data-reveal>
+    <div class="g-text">
+      <div class="g-num t-blue">01</div>
+      <h2 class="g-head">Sensor Fusion Engine</h2>
+      <div class="g-claims">
+        <p>Harvest engine samples foreground app, idle time &amp; browser domain at <strong>1&thinsp;Hz</strong>.</p>
+        <p>Rolling <strong>300&thinsp;s</strong> window captures switch velocity, distinct-app count &amp; anchor-return events.</p>
+        <p>Every app classified into <strong>6 categories</strong> at <strong>5 confidence tiers</strong>.</p>
+        <p>Three raw signals fused into a <strong>26-dimension</strong> feature vector.</p>
+      </div>
+      <div class="g-spec">Sources: KWin Script · X11 EWMH · Sway IPC · Win32 · browser domain extraction</div>
       <details class="dims-inline">
-        <summary class="dims-inline-toggle">Explore all 26 dimensions</summary>
+        <summary class="dims-inline-toggle">All 26 dimensions</summary>
         <div class="dims-inline-grid">
-          <span class="di"><b>HourOfDay</b> <i>temporal</i> <s>0–23 hour</s></span>
-          <span class="di"><b>DayOfWeek</b> <i>temporal</i> <s>0–6</s></span>
-          <span class="di"><b>FocusedAppHash</b> <i>identity</i> <s>hash of app process</s></span>
-          <span class="di"><b>FocusedDomainHash</b> <i>identity</i> <s>hash of domain</s></span>
-          <span class="di"><b>IdleMs</b> <i>activity</i> <s>ms since last input</s></span>
-          <span class="di"><b>FocusedSinceMs</b> <i>duration</i> <s>ms app focused</s></span>
-          <span class="di"><b>TitleStabilityMs</b> <i>duration</i> <s>ms title unchanged</s></span>
-          <span class="di"><b>SwitchCount60s</b> <i>switching</i> <s>switches in 60s</s></span>
-          <span class="di"><b>SwitchCount300s</b> <i>switching</i> <s>switches in 300s</s></span>
-          <span class="di"><b>DistinctApps300s</b> <i>switching</i> <s>distinct apps</s></span>
-          <span class="di"><b>DistinctDomains300s</b> <i>switching</i> <s>distinct domains</s></span>
-          <span class="di"><b>ReturnedToAnchorApp300s</b> <i>switching</i> <s>back to anchor</s></span>
-          <span class="di"><b>CurrentAppShare300s</b> <i>share</i> <s>% time in app</s></span>
-          <span class="di"><b>CurrentDomainShare300s</b> <i>share</i> <s>% time on domain</s></span>
-          <span class="di"><b>WorkspaceSwitchCount300s</b> <i>workspace</i> <s>desktop switches</s></span>
-          <span class="di"><b>BrowserWindowFlag</b> <i>flag</i> <s>browser focused</s></span>
-          <span class="di"><b>FullscreenFlag</b> <i>flag</i> <s>fullscreen active</s></span>
-          <span class="di"><b>AfkFlag</b> <i>flag</i> <s>no input 30+s</s></span>
-          <span class="di"><b>DevAppFlag</b> <i>category</i> <s>Development app</s></span>
-          <span class="di"><b>CreativeAppFlag</b> <i>category</i> <s>Creative app</s></span>
-          <span class="di"><b>OfficeAppFlag</b> <i>category</i> <s>Office app</s></span>
-          <span class="di"><b>CommAppFlag</b> <i>category</i> <s>Comm app</s></span>
-          <span class="di"><b>EntAppFlag</b> <i>category</i> <s>Entertainment app</s></span>
-          <span class="di"><b>CommunicationAppFlag</b> <i>domain</i> <s>domain is Comm</s></span>
-          <span class="di"><b>EntertainmentDomainFlag</b> <i>domain</i> <s>domain Entertain</s></span>
-          <span class="di"><b>WorkDomainFlag</b> <i>domain</i> <s>domain is Work</s></span>
+          <span class="di"><b>HourOfDay</b> <s>0–23 hour</s></span><span class="di"><b>DayOfWeek</b> <s>0–6</s></span><span class="di"><b>FocusedAppHash</b> <s>hash of process</s></span><span class="di"><b>FocusedDomainHash</b> <s>hash of domain</s></span><span class="di"><b>IdleMs</b> <s>ms since input</s></span><span class="di"><b>FocusedSinceMs</b> <s>ms app focused</s></span><span class="di"><b>TitleStabilityMs</b> <s>ms title unchanged</s></span><span class="di"><b>SwitchCount60s</b> <s>switches 60s</s></span><span class="di"><b>SwitchCount300s</b> <s>switches 300s</s></span><span class="di"><b>DistinctApps300s</b> <s>distinct apps</s></span><span class="di"><b>DistinctDomains300s</b> <s>distinct domains</s></span><span class="di"><b>ReturnedToAnchorApp300s</b> <s>anchor return</s></span><span class="di"><b>CurrentAppShare300s</b> <s>app time share</s></span><span class="di"><b>CurrentDomainShare300s</b> <s>domain share</s></span><span class="di"><b>WorkspaceSwitchCount300s</b> <s>desktop switches</s></span><span class="di"><b>BrowserWindowFlag</b> <s>browser focused</s></span><span class="di"><b>FullscreenFlag</b> <s>fullscreen</s></span><span class="di"><b>AfkFlag</b> <s>afk 30+s</s></span><span class="di"><b>DevAppFlag</b> <s>Development app</s></span><span class="di"><b>CreativeAppFlag</b> <s>Creative app</s></span><span class="di"><b>OfficeAppFlag</b> <s>Office app</s></span><span class="di"><b>CommAppFlag</b> <s>Comm app</s></span><span class="di"><b>EntAppFlag</b> <s>Entertainment</s></span><span class="di"><b>CommunicationAppFlag</b> <s>domain Comm</s></span><span class="di"><b>EntertainmentDomainFlag</b> <s>domain Ent</s></span><span class="di"><b>WorkDomainFlag</b> <s>domain Work</s></span>
         </div>
       </details>
     </div>
-  </div>
-
-  <!-- ── Step 2: AI Model ── -->
-  <div class="step-card" data-reveal data-delay="1">
-    <div class="step-viz">
-      <svg viewBox="0 0 200 140" class="ai-svg">
-        <rect x="4" y="52" width="40" height="20" rx="4" fill="rgba(34,197,94,0.06)" stroke="rgba(34,197,94,0.15)" stroke-width="1"/>
-        <text x="24" y="65" font-family="system-ui" font-size="7" fill="var(--green)" font-weight="600" text-anchor="middle">26-feat</text>
-        <line x1="44" y1="62" x2="70" y2="62" stroke="rgba(34,197,94,0.25)" stroke-width="1"/>
-        <circle r="2.5" fill="#22C55E"><animateMotion dur="2s" repeatCount="indefinite" path="M44,62 L66,62"/></circle>
-        <rect x="70" y="32" width="50" height="60" rx="8" fill="rgba(34,197,94,0.04)" stroke="rgba(34,197,94,0.2)" stroke-width="1">
-          <animate attributeName="stroke-opacity" values="0.2;0.5;0.2" dur="3s" repeatCount="indefinite"/>
-        </rect>
-        <text x="95" y="58" font-family="system-ui" font-size="7" fill="var(--green)" font-weight="600" text-anchor="middle">scikit-</text>
-        <text x="95" y="70" font-family="system-ui" font-size="7" fill="var(--green)" font-weight="600" text-anchor="middle">learn</text>
-        <text x="95" y="82" font-family="system-ui" font-size="6" fill="rgba(34,197,94,0.5)" text-anchor="middle">classifier</text>
-        <line x1="120" y1="62" x2="148" y2="62" stroke="rgba(34,197,94,0.25)" stroke-width="1"/>
-        <circle r="2.5" fill="#22C55E"><animateMotion dur="2s" repeatCount="indefinite" path="M120,62 L144,62" begin="0.3s"/></circle>
-        <rect x="152" y="52" width="44" height="20" rx="4" fill="rgba(34,197,94,0.06)" stroke="rgba(34,197,94,0.15)" stroke-width="1"/>
-        <text x="174" y="65" font-family="system-ui" font-size="7" fill="var(--green)" font-weight="700" text-anchor="middle">YES/NO</text>
-        <path d="M 120 95 Q 95 120 70 95" fill="none" stroke="rgba(34,197,94,0.2)" stroke-width="1" stroke-dasharray="3,3">
-          <animate attributeName="stroke-dashoffset" from="12" to="0" dur="2s" repeatCount="indefinite"/>
-        </path>
-        <circle r="2" fill="#22C55E"><animateMotion dur="2.5s" repeatCount="indefinite" path="M120,95 Q95,120 70,95" begin="1s"/></circle>
-        <text x="95" y="115" font-family="system-ui" font-size="6" fill="rgba(34,197,94,0.4)" text-anchor="middle">retrains at 50+ samples</text>
-        <text x="24" y="42" font-family="system-ui" font-size="7" fill="rgba(34,197,94,0.4)" text-anchor="middle">vector</text>
-        <text x="90" y="20" font-family="system-ui" font-size="8" fill="var(--green)" font-weight="600" text-anchor="middle">AI MODEL</text>
-      </svg>
-    </div>
-    <div class="step-body">
-      <span class="step-num">02</span>
-      <h4>On-device AI Model</h4>
-      <ul class="step-bullets">
-        <li>Personal scikit-learn binary classifier — <strong>your model</strong>, trained on <strong>your responses</strong></li>
-        <li>Inference over TCP 127.0.0.1:45002 at <strong>sub-100ms</strong> latency</li>
-        <li>Activates after 100 training samples; background trainer retriggers at every <strong>50 new responses</strong></li>
-        <li>Adaptive architecture: lightweight (&lt;200 samples), standard (200+)</li>
-      </ul>
-      <div class="step-spec">RandomForest / LogisticRegression · sub-100ms · retrains automatically · no cloud</div>
+    <div class="g-viz">
+      <canvas id="engine-canvas"></canvas>
     </div>
   </div>
+</section>
 
-  <!-- ── Step 3: Alert + Analytics ── -->
-  <div class="step-card" data-reveal data-delay="2">
-    <div class="step-viz step-viz-shots">
-      <img src="screenshots/notification_active.png" alt="Nudge notification" class="alert-shot">
-      <img src="screenshots/analytics_today.png" alt="Nudge analytics dashboard" class="alert-analytics">
+<!-- ════════════════ AI Model ════════════════ -->
+<section class="section" id="ai">
+  <div class="grid g-right" data-reveal>
+    <div class="g-viz">
+      <canvas id="ai-canvas"></canvas>
     </div>
-    <div class="step-body">
-      <span class="step-num">03</span>
-      <h4>Adaptive Interrupt &amp; Live Analytics</h4>
-      <ul class="step-bullets">
-        <li>No fixed schedule — the model fires only when drift confidence reaches <strong>&ge;98%</strong></li>
-        <li>Stays silent when you're productive; falls back to variable-interval (5&ndash;10 min) below threshold</li>
-        <li>Ctrl+Shift+Y / Ctrl+Shift+N respond without leaving the keyboard</li>
-        <li>30s auto-dismiss · every answer feeds back and <strong>sharpens the next prediction</strong></li>
-      </ul>
-      <div class="step-spec">≥98% confidence · 30s auto-dismiss · keyboard shortcuts · UDP 127.0.0.1:45001</div>
-      <div class="step-extra">
-        <h5>Live analytics dashboard</h5>
-        <p>Track your focus trends from the system tray. Daily, weekly, and monthly breakdowns of productive vs. distracted time. Every YES/NO you give builds your personal focus history — visible anytime from the tray menu.</p>
+    <div class="g-text">
+      <div class="g-num t-green">02</div>
+      <h2 class="g-head">On-device AI Model</h2>
+      <div class="g-claims">
+        <p>Personal scikit-learn binary classifier — <strong>your model</strong>, trained on <strong>your responses</strong>.</p>
+        <p>Inference at <strong>sub-100ms</strong> over TCP 127.0.0.1:45002.</p>
+        <p>Activates after 100 samples; background trainer retriggers at every <strong>50 new responses</strong>.</p>
+        <p>Adaptive architecture: lightweight (&lt;200 samples), standard (200+).</p>
       </div>
+      <div class="g-spec">RandomForest / LogisticRegression · sub-100ms · no cloud · retrains automatically</div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ Interrupt ════════════════ -->
+<section class="section section-alt" id="interrupt">
+  <div class="grid g-left" data-reveal>
+    <div class="g-text">
+      <div class="g-num t-amber">03</div>
+      <h2 class="g-head">Adaptive Interrupt</h2>
+      <div class="g-claims">
+        <p>No fixed schedule — fires only when drift confidence hits <strong>&ge;98%</strong>.</p>
+        <p>Stays silent when productive; falls back to variable-interval below threshold.</p>
+        <p><strong>Ctrl+Shift+Y</strong> / <strong>Ctrl+Shift+N</strong> respond without leaving the keyboard.</p>
+        <p><strong>30s auto-dismiss</strong> — every answer feeds back to sharpen the model.</p>
+      </div>
+      <div class="g-spec">≥98% confidence · 30s auto-dismiss · UDP 127.0.0.1:45001</div>
+      <p class="g-extra">Includes a live analytics dashboard accessible from the system tray — track daily, weekly, and monthly focus trends.</p>
+    </div>
+    <div class="g-viz g-viz-shots">
+      <img src="screenshots/notification_active.png" alt="Nudge notification" class="shot-main">
+      <img src="screenshots/analytics_today.png" alt="Nudge analytics" class="shot-sub">
     </div>
   </div>
 </section>
 
 <!-- ════════════════ Download ════════════════ -->
-<section class="section" id="download">
+<section class="section cta-section" id="download">
   <div class="cta" data-reveal>
     <h2 class="cta-heading">Try Nudge on your machine</h2>
     <p class="cta-desc">Free and open source. No account, no telemetry, no strings.</p>
@@ -207,7 +140,7 @@
         <div class="t-line"><span class="prompt">$</span> tar -xzf nudge-linux-x64.tar.gz &amp;&amp; cd linux</div>
         <div class="t-line"><span class="prompt">$</span> ./install-linux-app.sh</div>
         <div class="t-line"><span class="prompt">$</span> nudge-tray</div>
-        <div class="t-line t-dim">harvest daemon started · ML on 127.0.0.1:45002</div>
+        <div class="t-line t-dim">harvest daemon started</div>
         <div class="t-line t-live">waiting for 100 training samples<span class="cursor">&#9608;</span></div>
       </div>
     </div>
@@ -230,6 +163,7 @@
   </div>
 </footer>
 
+<script src="animations.js"></script>
 <script>
 const observer = new IntersectionObserver((entries) => {
   entries.forEach(entry => {
