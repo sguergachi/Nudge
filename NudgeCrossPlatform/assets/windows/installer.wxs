@@ -33,5 +33,10 @@
       <ComponentRef Id="ProductComponent" />
       <ComponentRef Id="ShortcutComponent" />
     </Feature>
+
+    <CustomAction Id="LaunchApp" FileKey="NudgeTrayExe" ExeCommand="" Execute="immediate" Impersonate="yes" Return="asyncNoWait" />
+    <InstallExecuteSequence>
+      <Custom Action="LaunchApp" After="InstallFinalize">NOT Installed</Custom>
+    </InstallExecuteSequence>
   </Product>
 </Wix>
