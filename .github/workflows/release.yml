@@ -13,7 +13,7 @@ jobs:
       version: ${{ steps.ver.outputs.version }}
       should_release: ${{ steps.ver.outputs.should_release }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-tags: true
 
@@ -35,9 +35,9 @@ jobs:
     if: needs.check-version.outputs.should_release == 'true'
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "10.0.x"
 
@@ -66,7 +66,7 @@ jobs:
           Compress-Archive -Path "$dist/*" -DestinationPath "nudge-win-x64.zip" -Force
 
       - name: Upload Windows zip
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nudge-win-x64
           path: nudge-win-x64.zip
@@ -86,17 +86,47 @@ jobs:
           $version = if ($m) { $m.Matches[0].Groups[1].Value } else { "1.5.3" }
           Write-Host "version: $version"
           $outDir = Join-Path $PWD "dist"
+
+          Write-Host "Generating installer bitmaps..."
+          Add-Type -AssemblyName System.Drawing
+          $banner = New-Object System.Drawing.Bitmap 493, 58
+          $g = [System.Drawing.Graphics]::FromImage($banner)
+          $g.SmoothingMode = 'HighQuality'
+          $g.TextRenderingHint = 'AntiAliasGridFit'
+          $rect = New-Object System.Drawing.Rectangle 0, 0, 493, 58
+          $brushBg = New-Object System.Drawing.Drawing2D.LinearGradientBrush $rect, ([System.Drawing.Color]::FromArgb(30,30,46)), ([System.Drawing.Color]::FromArgb(15,15,25)), 0
+          $g.FillRectangle($brushBg, $rect)
+          $font = New-Object System.Drawing.Font "Segoe UI", 18, [System.Drawing.FontStyle]::Bold
+          $g.DrawString("Nudge", $font, [System.Drawing.Brushes]::White, 18, 10)
+          $font2 = New-Object System.Drawing.Font "Segoe UI", 8
+          $g.DrawString("Stay focused. Stay productive.", $font2, [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(160,160,180)), 18, 36)
+          $pen = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(180,140,255)), 2
+          $g.DrawLine($pen, 18, 32, 140, 32)
+          $banner.Save("$outDir\banner.bmp")
+          $g.Dispose(); $banner.Dispose()
+
+          $dialog = New-Object System.Drawing.Bitmap 493, 312
+          $g = [System.Drawing.Graphics]::FromImage($dialog)
+          $g.SmoothingMode = 'HighQuality'
+          $rect = New-Object System.Drawing.Rectangle 0, 0, 493, 312
+          $brushBg = New-Object System.Drawing.Drawing2D.LinearGradientBrush $rect, ([System.Drawing.Color]::FromArgb(25,25,40)), ([System.Drawing.Color]::FromArgb(10,10,18)), 90
+          $g.FillRectangle($brushBg, $rect)
+          $g.DrawString("Nudge", $font, [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(200,200,220,80)), 30, 120)
+          $font3 = New-Object System.Drawing.Font "Segoe UI", 11
+          $g.DrawString("Stay focused. Stay productive.", $font3, [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(200,200,220,40)), 32, 155)
+          $dialog.Save("$outDir\dialog.bmp")
+          $g.Dispose(); $dialog.Dispose()
+          Write-Host "Bitmaps generated."
+
           $wxs = Resolve-Path "NudgeCrossPlatform\assets\windows\installer.wxs"
           $wxsDir = (Get-Item $wxs).Directory.FullName
           $msi = Join-Path $outDir "Nudge-Setup-$version.msi"
           Write-Host "Compiling..."
           Push-Location $wxsDir
-          Get-ChildItem "..\..\..\dist\win-x64" -Name | ForEach-Object { Write-Host "  dist: $_" }
-          Get-ChildItem "..\..\.." -Name "*.py" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  root: $_" }
           & $candle -out "$outDir\installer.wixobj" "installer.wxs" 2>&1
           if ($LASTEXITCODE -ne 0) { Pop-Location; throw "candle failed (exit $LASTEXITCODE)" }
           Write-Host "Linking..."
-          & $light -out $msi "$outDir\installer.wixobj" -sw 2>&1
+          & $light -out $msi "$outDir\installer.wixobj" -ext WixUIExtension -sw 2>&1
           Pop-Location
           if ($LASTEXITCODE -ne 0) { throw "light failed (exit $LASTEXITCODE)" }
           if (Test-Path $msi) { Write-Host "MSI: $((Get-Item $msi).Length/1KB) KB" }
@@ -104,7 +134,7 @@ jobs:
 
       - name: Upload Windows MSI installer
         if: success() || failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nudge-win-installer
           path: dist\Nudge-Setup-*.msi
@@ -115,13 +145,13 @@ jobs:
     if: needs.check-version.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Clone WaylandDotnet sibling repo
         continue-on-error: true
         run: git clone https://github.com/sguergachi/WaylandDotnet.git "${{ github.workspace }}/Nudge/WaylandDotnet" 2>/dev/null || echo "WaylandDotnet not available — continuing"
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "10.0.x"
 
@@ -197,24 +227,24 @@ jobs:
       VERSION: ${{ needs.check-version.outputs.version }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         continue-on-error: true
         with:
           name: nudge-win-x64
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         continue-on-error: true
         with:
           name: nudge-linux-x64
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         continue-on-error: true
         with:
           name: nudge-win-installer
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         continue-on-error: true
         with:
           name: nudge-linux-installer

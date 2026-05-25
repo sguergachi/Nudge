@@ -34,9 +34,13 @@
       <ComponentRef Id="ShortcutComponent" />
     </Feature>
 
-    <CustomAction Id="LaunchApp" FileKey="NudgeTrayExe" ExeCommand="" Execute="immediate" Impersonate="yes" Return="asyncNoWait" />
-    <InstallExecuteSequence>
-      <Custom Action="LaunchApp" After="InstallFinalize">NOT Installed</Custom>
-    </InstallExecuteSequence>
+    <UI>
+      <UIRef Id="WixUI_Minimal" />
+      <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch Nudge" />
+      <Property Id="WixShellExecTarget" Value="[#NudgeTrayExe]" />
+    </UI>
+
+    <WixVariable Id="WixUIBannerBmp" Value="..\..\..\dist\banner.bmp" />
+    <WixVariable Id="WixUIDialogBmp" Value="..\..\..\dist\dialog.bmp" />
   </Product>
 </Wix>
