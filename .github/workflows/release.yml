@@ -119,7 +119,7 @@ jobs:
 
       - name: Clone WaylandDotnet sibling repo
         continue-on-error: true
-        run: git clone https://github.com/sguergachi/WaylandDotnet.git "${{ github.workspace }}/WaylandDotnet" 2>/dev/null || echo "WaylandDotnet not available — continuing"
+        run: git clone https://github.com/sguergachi/WaylandDotnet.git "${{ github.workspace }}/Nudge/WaylandDotnet" 2>/dev/null || echo "WaylandDotnet not available — continuing"
 
       - uses: actions/setup-dotnet@v5
         with:

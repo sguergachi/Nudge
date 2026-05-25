@@ -38,7 +38,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           repository: IrishBruse/WaylandDotnet
-          path: WaylandDotnet
+          path: Nudge/WaylandDotnet
 
       - uses: actions/setup-dotnet@v5
         with:
