@@ -1,31 +1,34 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
-  <Package Name="Nudge" Version="$(var.Version)" Manufacturer="Nudge" UpgradeCode="C9E4B8D1-5A3F-4E7B-9C6D-2F8A1B4E3C7D" Scope="perMachine" Compressed="yes" Platform="x64">
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="Nudge" Language="1033" Version="$(var.Version)" Manufacturer="Nudge" UpgradeCode="C9E4B8D1-5A3F-4E7B-9C6D-2F8A1B4E3C7D">
+    <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" Platform="x64" />
     <MajorUpgrade DowngradeErrorMessage="A newer version of Nudge is already installed." />
     <Media Id="1" Cabinet="product.cab" EmbedCab="yes" />
-    <StandardDirectory Id="ProgramFiles64Folder">
-      <Directory Id="INSTALLFOLDER" Name="Nudge">
-        <Component Id="ProductComponent" Guid="A1B2C3D4-E5F6-7890-ABCD-EF1234567890">
-          <File Id="NudgeTrayExe" Name="nudge-tray.exe" Source="..\..\..\dist\win-x64\nudge-tray.exe" KeyPath="yes" />
-          <File Id="NudgeExe" Name="nudge.exe" Source="..\..\..\dist\win-x64\nudge.exe" />
-          <File Id="NudgeNotifyExe" Name="nudge-notify.exe" Source="..\..\..\dist\win-x64\nudge-notify.exe" />
-          <File Id="ModelInferencePy" Name="model_inference.py" Source="..\..\..\model_inference.py" />
-          <File Id="TrainModelPy" Name="train_model.py" Source="..\..\..\train_model.py" />
-          <File Id="BackgroundTrainerPy" Name="background_trainer.py" Source="..\..\..\background_trainer.py" />
-          <File Id="RequirementsCpuTxt" Name="requirements-cpu.txt" Source="..\..\..\requirements-cpu.txt" />
-          <File Id="RequirementsTxt" Name="requirements.txt" Source="..\..\..\requirements.txt" />
-        </Component>
-        <Component Id="ShortcutComponent" Guid="B2C3D4E5-F6A7-8901-BCDE-F12345678901">
-          <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="Nudge" Target="[INSTALLFOLDER]nudge-tray.exe" WorkingDirectory="INSTALLFOLDER" />
-          <Shortcut Id="DesktopShortcut" Directory="DesktopFolder" Name="Nudge" Target="[INSTALLFOLDER]nudge-tray.exe" WorkingDirectory="INSTALLFOLDER" />
-          <RemoveFolder Id="RemoveStartMenu" Directory="ProgramMenuFolder" />
-          <RegistryValue Root="HKCU" Key="Software\Nudge" Name="installed" Type="integer" Value="1" KeyPath="yes" />
-        </Component>
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="Nudge">
+          <Component Id="ProductComponent" Guid="A1B2C3D4-E5F6-7890-ABCD-EF1234567890">
+            <File Id="NudgeTrayExe" Name="nudge-tray.exe" Source="..\..\..\dist\win-x64\nudge-tray.exe" KeyPath="yes" />
+            <File Id="NudgeExe" Name="nudge.exe" Source="..\..\..\dist\win-x64\nudge.exe" />
+            <File Id="NudgeNotifyExe" Name="nudge-notify.exe" Source="..\..\..\dist\win-x64\nudge-notify.exe" />
+            <File Id="ModelInferencePy" Name="model_inference.py" Source="..\..\..\model_inference.py" />
+            <File Id="TrainModelPy" Name="train_model.py" Source="..\..\..\train_model.py" />
+            <File Id="BackgroundTrainerPy" Name="background_trainer.py" Source="..\..\..\background_trainer.py" />
+            <File Id="RequirementsCpuTxt" Name="requirements-cpu.txt" Source="..\..\..\requirements-cpu.txt" />
+            <File Id="RequirementsTxt" Name="requirements.txt" Source="..\..\..\requirements.txt" />
+          </Component>
+          <Component Id="ShortcutComponent" Guid="B2C3D4E5-F6A7-8901-BCDE-F12345678901">
+            <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="Nudge" Target="[INSTALLFOLDER]nudge-tray.exe" WorkingDirectory="INSTALLFOLDER" />
+            <Shortcut Id="DesktopShortcut" Directory="DesktopFolder" Name="Nudge" Target="[INSTALLFOLDER]nudge-tray.exe" WorkingDirectory="INSTALLFOLDER" />
+            <RemoveFolder Id="RemoveStartMenu" Directory="ProgramMenuFolder" />
+            <RegistryValue Root="HKCU" Key="Software\Nudge" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+          </Component>
+        </Directory>
       </Directory>
-    </StandardDirectory>
+    </Directory>
     <Feature Id="ProductFeature" Title="Nudge" Level="1">
       <ComponentRef Id="ProductComponent" />
       <ComponentRef Id="ShortcutComponent" />
     </Feature>
-  </Package>
+  </Product>
 </Wix>
