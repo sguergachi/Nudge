@@ -28,13 +28,16 @@ code{font-family:var(--font-mono);font-size:.85em;color:var(--accent)}
 .nav-dl{color:var(--accent)!important;font-weight:600!important}
 
 /* ── Hero ────────────────────────────────────────────── */
-.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:120px 24px 80px;text-align:center;position:relative}
+.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:120px 24px 80px;text-align:center;position:relative;overflow:hidden}
+.hero-bg{position:absolute;top:0;left:0;right:0;bottom:0;z-index:0;pointer-events:none}
+.hero-bg-svg{width:100%;height:100%}
+.hero-text{position:relative;z-index:1}
 .hero h1{font-size:clamp(3.5rem,7vw,6rem);font-weight:800;line-height:1.05;letter-spacing:-.045em;margin-bottom:20px;background:linear-gradient(135deg,var(--text) 0%,var(--accent) 50%,var(--text) 100%);background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:shimmer 5s linear infinite}
 @keyframes shimmer{0%,100%{background-position:0 center}50%{background-position:200% center}}
 .hero-text p{font-size:1.1rem;color:var(--text-dim);max-width:440px;margin:0 auto 28px;line-height:1.6}
 .hero-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:12px}
 .hero-foot{font-size:.78rem;color:var(--text-muted)}
-.hero-image{margin-top:48px;width:100%;max-width:600px;display:flex;justify-content:center}
+.hero-image{margin-top:48px;width:100%;max-width:600px;display:flex;justify-content:center;position:relative;z-index:1}
 .hero-image img{width:100%;max-width:380px;box-shadow:0 32px 100px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.06);border-radius:var(--radius)}
 
 /* ── Buttons ─────────────────────────────────────────── */
@@ -58,6 +61,9 @@ code{font-family:var(--font-mono);font-size:.85em;color:var(--accent)}
 .feature-image{display:flex;justify-content:center;align-items:center}
 .feature-image img{width:100%;max-width:480px;box-shadow:0 16px 56px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.04);border-radius:var(--radius);transition:transform .3s}
 .feature-image img:hover{transform:scale(1.015)}
+
+/* Animated SVGs */
+.anim-svg{width:100%;max-width:500px;height:auto;overflow:visible}
 
 /* ── Specs Bar ───────────────────────────────────────── */
 .specs{border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:36px 24px;background:var(--bg-alt)}
