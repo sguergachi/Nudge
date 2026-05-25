@@ -79,7 +79,6 @@ namespace NudgeTray
         static bool _verifyAnalyticsScrollOnStartup;
         static int _analyticsScrollVerificationAttempts;
         static bool _uiAuditMode;
-        static bool _uiAudit2x;
         static string _uiAuditOutputDir = "";
 
         // Common tray icon for all platforms
@@ -214,15 +213,11 @@ namespace NudgeTray
                 else if (args[i] == "--ui-audit")
                 {
                     _uiAuditMode = true;
-                    if (i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal))
+                    if (i + 1 < args.Length && args[i + 1].StartsWith("--output=", StringComparison.Ordinal))
                     {
-                        _uiAuditOutputDir = args[i + 1];
+                        _uiAuditOutputDir = args[i + 1].Substring("--output=".Length);
                         i++;
                     }
-                }
-                else if (args[i] == "--ui-audit-2x")
-                {
-                    _uiAudit2x = true;
                 }
             }
 
@@ -434,14 +429,13 @@ namespace NudgeTray
                     return;
                 }
 
-                int scale = _uiAudit2x ? 2 : 1;
-                var pxSize = new PixelSize(w * scale, h * scale);
-                var dpi = new Vector(96 * scale, 96 * scale);
+                var pxSize = new PixelSize(w, h);
+                var dpi = new Vector(96, 96);
 
                 using var bmp = new RenderTargetBitmap(pxSize, dpi);
                 bmp.Render(window);
                 bmp.Save(path);
-                Console.WriteLine($"[UI-AUDIT] Captured {filename} ({w}×{h} @{scale}x)");
+                Console.WriteLine($"[UI-AUDIT] Captured {filename} ({w}×{h})");
             }
             catch (Exception ex)
             {
@@ -1327,6 +1321,29 @@ namespace NudgeTray
 
             try
             {
+                // Kill any nudge daemon from a previous session so we start fresh with correct args
+                if (!PlatformConfig.IsWindows)
+                {
+                    try
+                    {
+                        var killOld = new Process
+                        {
+                            StartInfo = new ProcessStartInfo
+                            {
+                                FileName = "pkill",
+                                Arguments = "-9 -f '^.*nudge .*--interval'",
+                                RedirectStandardOutput = true,
+                                RedirectStandardError = true,
+                                UseShellExecute = false,
+                                CreateNoWindow = true
+                            }
+                        };
+                        killOld.Start();
+                        killOld.WaitForExit(1000);
+                    }
+                    catch { /* no previous process to kill */ }
+                }
+
                 // Prefer self-contained binary (release); fall back to dotnet dll (dev build)
                 string nudgeExe = Path.Combine(_baseDir, PlatformConfig.IsWindows ? $"{NudgeExeName}.exe" : NudgeExeName);
                 string nudgeDllPath = Path.Combine(_baseDir, NudgeDllName);
@@ -1809,6 +1826,9 @@ namespace NudgeTray
                 var bytes = Encoding.UTF8.GetBytes(message);
                 udp.Send(bytes, bytes.Length, endpoint);
                 Console.WriteLine($"✓ Sent response: {message}");
+
+                // Retrain the model immediately so the next prediction reflects this feedback
+                TriggerTrainingNow();
             }
             catch (Exception ex)
             {

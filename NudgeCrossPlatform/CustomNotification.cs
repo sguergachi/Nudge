@@ -44,8 +44,8 @@ namespace NudgeTray
         private static readonly Color UrgentRed = Color.FromArgb(210, 255, 80, 80);
         private static readonly Color WarmAmber = Color.FromArgb(170, 255, 150, 80);
         private static readonly Color CalmNeutral = Color.FromArgb(160, 150, 150, 165);
-        private static readonly Color ActiveGlow = Color.FromArgb(70, 88, 166, 255);
-        private static readonly Color InactiveBorder = Color.FromArgb(40, 255, 255, 255);
+        private static readonly Color ActiveGlow = Color.FromArgb(160, 88, 166, 255);
+        private static readonly Color InactiveBorder = Color.FromArgb(50, 255, 255, 255);
         private static readonly Color BtnYesBase = Color.FromRgb(88, 166, 255);
         private static readonly Color BtnYesHover = Color.FromRgb(108, 186, 255);
         private static readonly Color BtnYesPressed = Color.FromRgb(60, 130, 220);
@@ -55,7 +55,7 @@ namespace NudgeTray
         private static readonly Color NoBtnText = Color.FromRgb(210, 210, 220);
         private static readonly Color NoBtnBorder = Color.FromArgb(40, 255, 255, 255);
         private static readonly Color ShadowColor = Color.FromArgb(50, 0, 0, 0);
-        private static readonly Color GlowColor = Color.FromArgb(45, 88, 166, 255);
+        private static readonly Color GlowColor = Color.FromArgb(80, 88, 166, 255);
         private Point? _dragStartPosition;
         private bool _isDragging;
         private Action<bool?>? _onResponse; // Nullable bool: true=YES, false=NO, null=auto-dismissed
@@ -82,7 +82,7 @@ namespace NudgeTray
         private void InitializeWindow()
         {
             Width = 340;
-            Height = 144; // header(20)+question(18)+gap(12)+buttons(32)+padding(32)+margins(20)=134 +10 buffer
+            Height = 148;
             CanResize = false;
             ShowInTaskbar = false;
             WindowStartupLocation = WindowStartupLocation.Manual;
@@ -167,8 +167,8 @@ namespace NudgeTray
             // Title - recedes so the question becomes the visual anchor
             var titleText = new TextBlock
             {
-                Text = string.IsNullOrEmpty(_appName) ? "Nudge" : $"Nudge  >  {_appName}",
-                FontSize = 10,
+                Text = string.IsNullOrEmpty(_appName) ? "Nudge" : $"Nudge  ›  {_appName}",
+                FontSize = 11,
                 FontWeight = FontWeight.Normal,
                 Foreground = new SolidColorBrush(TitleText),
                 TextTrimming = TextTrimming.CharacterEllipsis,
@@ -317,8 +317,8 @@ namespace NudgeTray
             var border = new Border
             {
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                Height = 32,
-                CornerRadius = new CornerRadius(4),
+                Height = 34,
+                CornerRadius = new CornerRadius(6),
                 Background = new SolidColorBrush(baseColor),
                 BorderBrush = isPrimary
                     ? Brushes.Transparent

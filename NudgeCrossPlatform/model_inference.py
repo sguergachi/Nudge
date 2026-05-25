@@ -154,10 +154,10 @@ class InferenceServer:
         signal.signal(signal.SIGINT,  self.shutdown)
         signal.signal(signal.SIGTERM, self.shutdown)
 
-        # Reload loop — picks up newly trained models every 60 s
+        # Reload loop — picks up newly trained models every 10 s
         def _reload_loop():
             while self.running:
-                time.sleep(60)
+                time.sleep(10)
                 self.predictor.check_and_reload()
         threading.Thread(target=_reload_loop, daemon=True).start()
 

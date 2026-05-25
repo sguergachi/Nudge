@@ -202,6 +202,31 @@ public sealed class NudgePlatformConfigTests
         Assert.Contains("-m pip", args);
         Assert.Contains("install", args);
     }
+
+    [Fact]
+    public void TrainerLaunchArgs_IncludeSeed()
+    {
+        // Verify nudge-tray.cs passes --seed to the background trainer
+        // Test runs from NudgeCrossPlatform.Tests/bin/Debug/net10.0/
+        // Source is at NudgeCrossPlatform/nudge-tray.cs — 4 levels up
+        string content = File.ReadAllText(
+            Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(),
+            "..", "..", "..", "..", "nudge-tray.cs")));
+        Assert.Contains("--seed", content);
+    }
+
+    [Fact]
+    public void ConfidenceThreshold_Is85()
+    {
+        // Verify ML_CONFIDENCE_THRESHOLD is 0.85 in both nudge.cs and nudge_build.cs
+        string srcDir = Path.GetFullPath(
+            Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", ".."));
+        foreach (var file in new[] { "nudge.cs", "nudge_build.cs" })
+        {
+            string content = File.ReadAllText(Path.Combine(srcDir, file));
+            Assert.Contains("ML_CONFIDENCE_THRESHOLD = 0.85", content);
+        }
+    }
 }
 
 public sealed class NudgeMlSerializationTests

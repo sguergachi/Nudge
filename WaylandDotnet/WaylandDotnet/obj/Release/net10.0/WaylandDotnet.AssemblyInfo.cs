@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("WaylandDotnet")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+4dfac6e501fad509660d5a99eb2da57c09de9c17")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+14fc54ac1f0d67a8e6da6bfbf3507e45be791f14")]
 [assembly: System.Reflection.AssemblyProductAttribute("WaylandDotnet")]
 [assembly: System.Reflection.AssemblyTitleAttribute("WaylandDotnet")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

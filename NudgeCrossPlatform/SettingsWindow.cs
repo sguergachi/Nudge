@@ -56,12 +56,18 @@ namespace NudgeTray
         {
             var shell = new Border
             {
-                Background    = new SolidColorBrush(CardColor),
-                BorderBrush   = new SolidColorBrush(BorderNormal),
+                Background      = new SolidColorBrush(CardColor),
+                BorderBrush     = new SolidColorBrush(BorderNormal),
                 BorderThickness = new Thickness(1),
-                CornerRadius  = new CornerRadius(14),
-                ClipToBounds  = true,
-                Margin        = new Thickness(8)   // leaves room for glow/shadow
+                CornerRadius    = new CornerRadius(14),
+                ClipToBounds    = true,
+                Margin          = new Thickness(10),
+                BoxShadow       = new BoxShadows(
+                    new BoxShadow { Blur = 24, Spread = -4, OffsetX = 0, OffsetY = 8,
+                                    Color = Color.FromArgb(120, 0, 0, 0) },
+                    new[] { new BoxShadow { Blur = 6, Spread = 0, OffsetX = 0, OffsetY = 2,
+                                            Color = Color.FromArgb(60, 0, 0, 0) } }
+                )
             };
 
             var outer = new StackPanel { Spacing = 0 };
@@ -196,7 +202,7 @@ namespace NudgeTray
         // ── Scrollable body ───────────────────────────────────────────────────
         private ScrollViewer BuildScrollBody()
         {
-            var stack = new StackPanel { Spacing = 12, Margin = new Thickness(16) };
+            var stack = new StackPanel { Spacing = 16, Margin = new Thickness(16) };
 
             stack.Children.Add(BuildVersionChip());
             stack.Children.Add(BuildHarvestCard());
@@ -249,11 +255,11 @@ namespace NudgeTray
         }
 
         // ── Stat row (label | value) ──────────────────────────────────────────
-        private static Grid MakeStatRow(string label, string value)
+        private static Grid MakeStatRow(string label, string value, bool dimValue = false)
         {
             var g = new Grid
             {
-                ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+                ColumnDefinitions = new ColumnDefinitions("Auto,*"),
                 Margin = new Thickness(0, 2, 0, 2)
             };
 
@@ -261,7 +267,8 @@ namespace NudgeTray
             {
                 Text = label,
                 FontSize = 12,
-                Foreground = new SolidColorBrush(TextMuted)
+                Foreground = new SolidColorBrush(TextMuted),
+                MinWidth = 110
             };
             Grid.SetColumn(lbl, 0);
 
@@ -270,11 +277,11 @@ namespace NudgeTray
                 Text = value,
                 FontSize = 12,
                 FontWeight = FontWeight.Medium,
-                Foreground = new SolidColorBrush(TextSecondary),
+                Foreground = new SolidColorBrush(dimValue ? TextMuted : TextSecondary),
                 TextAlignment = TextAlignment.Right,
-                MaxWidth = 220,
                 TextWrapping = TextWrapping.NoWrap,
-                TextTrimming = TextTrimming.CharacterEllipsis
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                HorizontalAlignment = HorizontalAlignment.Right
             };
             Grid.SetColumn(val, 1);
 
@@ -300,7 +307,7 @@ namespace NudgeTray
             var body = new StackPanel { Spacing = 2, Margin = new Thickness(14, 10, 14, 14) };
             body.Children.Add(MakeStatRow("Samples collected", sampleCount.ToString("N0", CultureInfo.InvariantCulture)));
             body.Children.Add(MakeStatRow("File size", FormatFileSize(fileSize)));
-            body.Children.Add(MakeStatRow("Location", csvPath));
+            body.Children.Add(MakeStatRow("Location", csvPath, dimValue: true));
 
             body.Children.Add(new Border { Height = 10 });
 
@@ -425,13 +432,14 @@ namespace NudgeTray
                 Content = label,
                 FontSize = 12,
                 FontWeight = FontWeight.Medium,
-                Padding = new Thickness(14, 7),
+                Padding = new Thickness(14, 8),
                 Background = new SolidColorBrush(Color.FromArgb(40, 220, 50, 50)),
                 Foreground = new SolidColorBrush(Color.FromRgb(240, 100, 100)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(70, 220, 50, 50)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(80, 220, 50, 50)),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(6),
-                HorizontalAlignment = HorizontalAlignment.Left,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Center,
                 Cursor = new Cursor(StandardCursorType.Hand),
                 IsEnabled = enabled
             };
