@@ -529,13 +529,20 @@ namespace NudgeTray
                 ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*")
             };
 
-            var cdIcon = new TextBlock
+            var cdIconCanvas = new Canvas { Width = 24, Height = 24 };
+            cdIconCanvas.Children.Add(new Avalonia.Controls.Shapes.Path
             {
-                Text = "⏱",
-                FontSize = 10,
-                Foreground = new SolidColorBrush(TextSecondary),
+                Fill = new SolidColorBrush(TextSecondary),
+                Data = Geometry.Parse(GetIconPath("clock"))
+            });
+            var cdIcon = new Viewbox
+            {
+                Width = 14,
+                Height = 14,
+                Stretch = Stretch.Uniform,
+                Child = cdIconCanvas,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 4, 0)
+                Margin = new Thickness(0, 0, 5, 0)
             };
             Grid.SetColumn(cdIcon, 0);
 

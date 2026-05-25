@@ -14,283 +14,451 @@ namespace NudgeTray
 {
     public sealed class SettingsWindow : Window
     {
-        private static readonly Color BackgroundColor = Color.FromRgb(18, 18, 20);
-        private static readonly Color SurfaceColor = Color.FromRgb(28, 28, 32);
-        private static readonly Color CardColor = Color.FromRgb(25, 25, 28);
-        private static readonly Color PrimaryBlue = Color.FromRgb(88, 166, 255);
-        private static readonly Color DangerRed = Color.FromRgb(220, 50, 50);
-        private static readonly Color TextPrimary = Color.FromRgb(240, 240, 245);
-        private static readonly Color TextSecondary = Color.FromRgb(150, 150, 160);
-        private static readonly Color TextMuted = Color.FromRgb(110, 110, 120);
-        private static readonly Color BorderColor = Color.FromArgb(40, 255, 255, 255);
-        private static readonly Color SuccessGreen = Color.FromRgb(60, 180, 75);
+        // Design tokens — identical to AnalyticsWindow
+        private static readonly Color SurfaceColor  = Color.FromRgb(28, 28, 32);
+        private static readonly Color CardColor      = Color.FromRgb(22, 22, 26);
+        private static readonly Color ElevatedColor  = Color.FromRgb(34, 34, 40);
+        private static readonly Color PrimaryBlue    = Color.FromRgb(88, 166, 255);
+        private static readonly Color DangerRed      = Color.FromRgb(220, 50, 50);
+        private static readonly Color TextPrimary    = Color.FromRgb(240, 240, 245);
+        private static readonly Color TextSecondary  = Color.FromRgb(150, 150, 160);
+        private static readonly Color TextMuted      = Color.FromRgb(100, 100, 110);
+        private static readonly Color BorderSubtle   = Color.FromArgb(35, 255, 255, 255);
+        private static readonly Color BorderNormal   = Color.FromArgb(55, 255, 255, 255);
+        private static readonly Color SuccessGreen   = Color.FromRgb(60, 180, 75);
+        private static readonly Color AccentHarvest  = Color.FromRgb(255, 165, 50);
+        private static readonly Color AccentModel    = Color.FromRgb(88, 166, 255);
 
-        private Border? _harvestConfirmPanel;
-        private Border? _modelConfirmPanel;
+        private Border?    _harvestConfirmPanel;
+        private Border?    _modelConfirmPanel;
         private TextBlock? _harvestStatus;
         private TextBlock? _modelStatus;
-        private Button? _harvestDeleteBtn;
-        private Button? _modelDeleteBtn;
+        private Button?    _harvestDeleteBtn;
+        private Button?    _modelDeleteBtn;
 
         public SettingsWindow()
         {
-            Title = "Nudge Settings";
-            Width = 420;
-            Height = 530;
-            CanResize = false;
-            ShowInTaskbar = false;
-            Background = new SolidColorBrush(BackgroundColor);
+            Title                  = "Nudge Settings";
+            Width                  = 440;
+            Height                 = 590;
+            CanResize              = false;
+            ShowInTaskbar          = false;
+            WindowDecorations      = WindowDecorations.None;
+            Background             = Brushes.Transparent;
+            TransparencyLevelHint  = new[] { WindowTransparencyLevel.Transparent };
+            Focusable              = true;
 
-            Content = BuildContent();
+            Content = BuildRoot();
         }
 
-        private static string FormatFileSize(long bytes)
+        // ── Root shell — provides the visible window frame ────────────────────
+        private Border BuildRoot()
         {
-            if (bytes < 1024) return $"{bytes} B";
-            if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
-            return $"{bytes / (1024.0 * 1024.0):F1} MB";
-        }
-
-        private Border BuildContent()
-        {
-            var root = new Border
+            var shell = new Border
             {
-                Background = new SolidColorBrush(CardColor),
-                BorderBrush = new SolidColorBrush(BorderColor),
+                Background    = new SolidColorBrush(CardColor),
+                BorderBrush   = new SolidColorBrush(BorderNormal),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(12),
-                Margin = new Thickness(16),
-                Padding = new Thickness(20)
+                CornerRadius  = new CornerRadius(14),
+                ClipToBounds  = true,
+                Margin        = new Thickness(8)   // leaves room for glow/shadow
             };
 
-            var scroll = new ScrollViewer
+            var outer = new StackPanel { Spacing = 0 };
+            outer.Children.Add(BuildTitleBar());
+            outer.Children.Add(new Border
             {
-                Content = BuildStack(),
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
-            };
+                Height     = 1,
+                Background = new SolidColorBrush(BorderSubtle)
+            });
+            outer.Children.Add(BuildScrollBody());
 
-            root.Child = scroll;
-            return root;
+            shell.Child = outer;
+            return shell;
         }
 
-        private StackPanel BuildStack()
+        // ── Custom title bar ──────────────────────────────────────────────────
+        private Border BuildTitleBar()
         {
-            var stack = new StackPanel { Spacing = 16 };
-
-            stack.Children.Add(new TextBlock
-            {
-                Text = "Nudge Settings",
-                FontSize = 20,
-                FontWeight = FontWeight.SemiBold,
-                Foreground = new SolidColorBrush(TextPrimary)
-            });
-
-            stack.Children.Add(new Border
+            var bar = new Border
             {
                 Background = new SolidColorBrush(SurfaceColor),
-                CornerRadius = new CornerRadius(10),
-                Padding = new Thickness(14),
-                Child = new TextBlock
-                {
-                    Text = $"Version {Program.CurrentVersion}",
-                    FontSize = 13,
-                    Foreground = new SolidColorBrush(TextSecondary)
-                }
-            });
+                Padding    = new Thickness(16, 10, 8, 10),
+                Cursor     = new Cursor(StandardCursorType.SizeAll)
+            };
 
+            // Drag to move
+            bar.PointerPressed += (s, e) =>
+            {
+                if (e.GetCurrentPoint(bar).Properties.IsLeftButtonPressed)
+                    BeginMoveDrag(e);
+            };
+
+            var grid = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,4,Auto")
+            };
+
+            // Gear icon
+            var gear = new TextBlock
+            {
+                Text = "⚙",
+                FontSize = 15,
+                Foreground = new SolidColorBrush(TextSecondary),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+            Grid.SetColumn(gear, 0);
+
+            // Title
+            var title = new TextBlock
+            {
+                Text = "Settings",
+                FontSize = 13,
+                FontWeight = FontWeight.SemiBold,
+                Foreground = new SolidColorBrush(TextPrimary),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(title, 1);
+
+            // Minimize button
+            var minimizeBtn = MakeChromeButton("–", 15, () => WindowState = WindowState.Minimized, "Minimize");
+            Grid.SetColumn(minimizeBtn, 2);
+
+            // Close button
+            var closeBtn = MakeChromeButton("✕", 13, Close, "Close", danger: true);
+            Grid.SetColumn(closeBtn, 4);
+
+            grid.Children.Add(gear);
+            grid.Children.Add(title);
+            grid.Children.Add(minimizeBtn);
+            grid.Children.Add(closeBtn);
+            bar.Child = grid;
+            return bar;
+        }
+
+        private static Border MakeChromeButton(string symbol, double fontSize, Action action, string tooltip, bool danger = false)
+        {
+            var icon = new TextBlock
+            {
+                Text = symbol,
+                FontSize = fontSize,
+                Foreground = new SolidColorBrush(TextSecondary),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            var btn = new Button
+            {
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(0),
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Width = 30,
+                Height = 30,
+                Cursor = new Cursor(StandardCursorType.Hand),
+                Content = icon
+            };
+            btn.Click += (_, _) => action();
+            ToolTip.SetTip(btn, tooltip);
+
+            var border = new Border
+            {
+                CornerRadius = new CornerRadius(6),
+                Width = 30,
+                Height = 30,
+                Background = Brushes.Transparent,
+                Child = btn
+            };
+
+            var hoverBg = danger
+                ? new SolidColorBrush(Color.FromArgb(50, 220, 50, 50))
+                : new SolidColorBrush(Color.FromArgb(30, 255, 255, 255));
+            var hoverFg = danger
+                ? new SolidColorBrush(Color.FromRgb(255, 80, 80))
+                : new SolidColorBrush(TextPrimary);
+
+            border.PointerEntered += (_, _) =>
+            {
+                border.Background = hoverBg;
+                icon.Foreground = hoverFg;
+            };
+            border.PointerExited += (_, _) =>
+            {
+                border.Background = Brushes.Transparent;
+                icon.Foreground = new SolidColorBrush(TextSecondary);
+            };
+
+            return border;
+        }
+
+        // ── Scrollable body ───────────────────────────────────────────────────
+        private ScrollViewer BuildScrollBody()
+        {
+            var stack = new StackPanel { Spacing = 12, Margin = new Thickness(16) };
+
+            stack.Children.Add(BuildVersionChip());
             stack.Children.Add(BuildHarvestCard());
             stack.Children.Add(BuildModelCard());
 
-            var closeButton = new Button
+            return new ScrollViewer
             {
-                Content = "Close",
-                Padding = new Thickness(16, 8),
-                Background = new SolidColorBrush(PrimaryBlue),
-                Foreground = Brushes.White,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                Cursor = new Cursor(StandardCursorType.Hand),
-                Margin = new Thickness(0, 4, 0, 0)
+                Content = stack,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
             };
-            closeButton.Click += (_, _) => Close();
-            stack.Children.Add(closeButton);
-
-            return stack;
         }
 
-        private static TextBlock MakeStat(string label, string value)
+        // ── Version chip ──────────────────────────────────────────────────────
+        private static Border BuildVersionChip()
         {
-            return new TextBlock
+            var pill = new Border
             {
-                Text = $"{label}  {value}",
-                FontSize = 13,
-                Foreground = new SolidColorBrush(TextSecondary)
+                Background = new SolidColorBrush(Color.FromArgb(30, 88, 166, 255)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(60, 88, 166, 255)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(20),
+                Padding = new Thickness(12, 5),
+                HorizontalAlignment = HorizontalAlignment.Left
+            };
+
+            pill.Child = new TextBlock
+            {
+                Text = $"Nudge  v{Program.CurrentVersion}",
+                FontSize = 11,
+                FontWeight = FontWeight.Medium,
+                Foreground = new SolidColorBrush(PrimaryBlue),
+                LetterSpacing = 0.3
+            };
+
+            return pill;
+        }
+
+        // ── Section card helper ───────────────────────────────────────────────
+        private static Border MakeCard(Color accentColor)
+        {
+            return new Border
+            {
+                Background = new SolidColorBrush(ElevatedColor),
+                BorderBrush = new SolidColorBrush(BorderSubtle),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                ClipToBounds = true
             };
         }
 
+        // ── Stat row (label | value) ──────────────────────────────────────────
+        private static Grid MakeStatRow(string label, string value)
+        {
+            var g = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+                Margin = new Thickness(0, 2, 0, 2)
+            };
+
+            var lbl = new TextBlock
+            {
+                Text = label,
+                FontSize = 12,
+                Foreground = new SolidColorBrush(TextMuted)
+            };
+            Grid.SetColumn(lbl, 0);
+
+            var val = new TextBlock
+            {
+                Text = value,
+                FontSize = 12,
+                FontWeight = FontWeight.Medium,
+                Foreground = new SolidColorBrush(TextSecondary),
+                TextAlignment = TextAlignment.Right,
+                MaxWidth = 220,
+                TextWrapping = TextWrapping.NoWrap,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+            Grid.SetColumn(val, 1);
+
+            g.Children.Add(lbl);
+            g.Children.Add(val);
+            return g;
+        }
+
+        // ── Harvest Data card ─────────────────────────────────────────────────
         private Border BuildHarvestCard()
         {
-            string csvPath = PlatformConfig.CsvPath;
-            long fileSize = File.Exists(csvPath) ? new FileInfo(csvPath).Length : 0;
-            int sampleCount = TrainerState.SampleCount;
+            string csvPath   = PlatformConfig.CsvPath;
+            long fileSize    = File.Exists(csvPath) ? new FileInfo(csvPath).Length : 0;
+            int sampleCount  = TrainerState.SampleCount;
 
-            var card = new Border
-            {
-                Background = new SolidColorBrush(SurfaceColor),
-                CornerRadius = new CornerRadius(10),
-                Padding = new Thickness(14)
-            };
+            var card  = MakeCard(AccentHarvest);
+            var inner = new StackPanel { Spacing = 0 };
 
-            var inner = new StackPanel { Spacing = 10 };
+            // Accent header strip
+            inner.Children.Add(BuildSectionHeader("Harvest Data", "◈", AccentHarvest));
 
-            inner.Children.Add(new TextBlock
-            {
-                Text = "Harvest Data",
-                FontSize = 15,
-                FontWeight = FontWeight.SemiBold,
-                Foreground = new SolidColorBrush(TextPrimary)
-            });
+            // Stats body
+            var body = new StackPanel { Spacing = 2, Margin = new Thickness(14, 10, 14, 14) };
+            body.Children.Add(MakeStatRow("Samples collected", sampleCount.ToString("N0", CultureInfo.InvariantCulture)));
+            body.Children.Add(MakeStatRow("File size", FormatFileSize(fileSize)));
+            body.Children.Add(MakeStatRow("Location", csvPath));
 
-            var stats = new StackPanel { Spacing = 3 };
-            stats.Children.Add(MakeStat("Samples collected", sampleCount.ToString("N0", CultureInfo.InvariantCulture)));
-            stats.Children.Add(MakeStat("File size", FormatFileSize(fileSize)));
-            stats.Children.Add(MakeStat("Location", csvPath));
-            inner.Children.Add(stats);
+            body.Children.Add(new Border { Height = 10 });
 
-            var deleteSection = new StackPanel { Spacing = 6 };
-
-            _harvestDeleteBtn = new Button
-            {
-                Content = "Delete Harvest Data",
-                Padding = new Thickness(12, 7),
-                Background = new SolidColorBrush(DangerRed),
-                Foreground = Brushes.White,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                Cursor = new Cursor(StandardCursorType.Hand),
-                IsEnabled = (sampleCount > 0 || fileSize > 0)
-            };
+            // Delete row
+            _harvestDeleteBtn = MakeDangerButton("Delete Harvest Data", sampleCount > 0 || fileSize > 0);
             _harvestDeleteBtn.Click += OnHarvestDeleteClicked;
-            deleteSection.Children.Add(_harvestDeleteBtn);
+            body.Children.Add(_harvestDeleteBtn);
 
             _harvestConfirmPanel = MakeConfirmPanel(
-                "This will permanently delete all harvest data and reset counters. Continue?",
+                "Permanently delete all harvest data and reset counters?",
                 DeleteHarvestData,
                 () => { if (_harvestConfirmPanel != null) _harvestConfirmPanel.IsVisible = false; });
             _harvestConfirmPanel.IsVisible = false;
-            deleteSection.Children.Add(_harvestConfirmPanel);
+            body.Children.Add(_harvestConfirmPanel);
 
-            _harvestStatus = new TextBlock
-            {
-                FontSize = 12,
-                Foreground = new SolidColorBrush(TextMuted),
-                IsVisible = false
-            };
-            deleteSection.Children.Add(_harvestStatus);
+            _harvestStatus = new TextBlock { FontSize = 12, Foreground = new SolidColorBrush(TextMuted), IsVisible = false };
+            body.Children.Add(_harvestStatus);
 
-            inner.Children.Add(deleteSection);
+            inner.Children.Add(body);
             card.Child = inner;
             return card;
         }
 
+        // ── ML Model card ─────────────────────────────────────────────────────
         private Border BuildModelCard()
         {
-            string modelDir = Path.Combine(PlatformConfig.DataDirectory, "model");
-            string modelPath = Path.Combine(modelDir, "productivity_model.joblib");
+            string modelDir  = System.IO.Path.Combine(PlatformConfig.DataDirectory, "model");
+            string modelPath = System.IO.Path.Combine(modelDir, "productivity_model.joblib");
             bool modelExists = File.Exists(modelPath);
 
             long dirSize = 0;
             if (Directory.Exists(modelDir))
-            {
                 foreach (var f in Directory.GetFiles(modelDir))
                     dirSize += new FileInfo(f).Length;
-            }
 
-            var card = new Border
-            {
-                Background = new SolidColorBrush(SurfaceColor),
-                CornerRadius = new CornerRadius(10),
-                Padding = new Thickness(14)
-            };
+            var card  = MakeCard(AccentModel);
+            var inner = new StackPanel { Spacing = 0 };
 
-            var inner = new StackPanel { Spacing = 10 };
+            inner.Children.Add(BuildSectionHeader("ML Model", "◉", AccentModel));
 
-            inner.Children.Add(new TextBlock
-            {
-                Text = "ML Model",
-                FontSize = 15,
-                FontWeight = FontWeight.SemiBold,
-                Foreground = new SolidColorBrush(TextPrimary)
-            });
+            var body = new StackPanel { Spacing = 2, Margin = new Thickness(14, 10, 14, 14) };
 
-            var stats = new StackPanel { Spacing = 3 };
             string statusText = TrainerState.LastTrained != DateTime.MinValue ? "Trained" : "Not trained";
-            stats.Children.Add(MakeStat("Status", statusText));
+            body.Children.Add(MakeStatRow("Status", statusText));
+
             if (TrainerState.LastTrained != DateTime.MinValue)
             {
-                stats.Children.Add(MakeStat("Trained",
-                    TrainerState.LastTrained.ToString("MMM dd, yyyy HH:mm", CultureInfo.InvariantCulture)));
-                stats.Children.Add(MakeStat("Training samples", TrainerState.LastTrainedCount.ToString("N0", CultureInfo.InvariantCulture)));
+                body.Children.Add(MakeStatRow("Trained on",
+                    TrainerState.LastTrained.ToString("MMM dd yyyy, HH:mm", CultureInfo.InvariantCulture)));
+                body.Children.Add(MakeStatRow("Training samples",
+                    TrainerState.LastTrainedCount.ToString("N0", CultureInfo.InvariantCulture)));
                 if (TrainerState.LastAccuracy >= 0)
-                    stats.Children.Add(MakeStat("Accuracy", $"{TrainerState.LastAccuracy:P1}"));
+                    body.Children.Add(MakeStatRow("Accuracy", $"{TrainerState.LastAccuracy:P1}"));
                 if (TrainerState.ModelVersion > 0)
-                    stats.Children.Add(MakeStat("Version", TrainerState.ModelVersion.ToString(CultureInfo.InvariantCulture)));
+                    body.Children.Add(MakeStatRow("Version",
+                        TrainerState.ModelVersion.ToString(CultureInfo.InvariantCulture)));
                 if (TrainerState.Architecture.Length > 0)
-                    stats.Children.Add(MakeStat("Architecture", TrainerState.Architecture));
+                    body.Children.Add(MakeStatRow("Architecture", TrainerState.Architecture));
             }
-            stats.Children.Add(MakeStat("Size", FormatFileSize(dirSize)));
-            inner.Children.Add(stats);
+            body.Children.Add(MakeStatRow("Size", FormatFileSize(dirSize)));
 
-            var deleteSection = new StackPanel { Spacing = 6 };
+            body.Children.Add(new Border { Height = 10 });
 
-            _modelDeleteBtn = new Button
-            {
-                Content = "Delete Model",
-                Padding = new Thickness(12, 7),
-                Background = new SolidColorBrush(DangerRed),
-                Foreground = Brushes.White,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                Cursor = new Cursor(StandardCursorType.Hand),
-                IsEnabled = modelExists || dirSize > 0
-            };
+            _modelDeleteBtn = MakeDangerButton("Delete Model", modelExists || dirSize > 0);
             _modelDeleteBtn.Click += OnModelDeleteClicked;
-            deleteSection.Children.Add(_modelDeleteBtn);
+            body.Children.Add(_modelDeleteBtn);
 
             _modelConfirmPanel = MakeConfirmPanel(
-                "This will permanently delete the trained model. You'll need to retrain. Continue?",
+                "Permanently delete the trained model? You'll need to retrain.",
                 DeleteModel,
                 () => { if (_modelConfirmPanel != null) _modelConfirmPanel.IsVisible = false; });
             _modelConfirmPanel.IsVisible = false;
-            deleteSection.Children.Add(_modelConfirmPanel);
+            body.Children.Add(_modelConfirmPanel);
 
-            _modelStatus = new TextBlock
-            {
-                FontSize = 12,
-                Foreground = new SolidColorBrush(TextMuted),
-                IsVisible = false
-            };
-            deleteSection.Children.Add(_modelStatus);
+            _modelStatus = new TextBlock { FontSize = 12, Foreground = new SolidColorBrush(TextMuted), IsVisible = false };
+            body.Children.Add(_modelStatus);
 
-            inner.Children.Add(deleteSection);
+            inner.Children.Add(body);
             card.Child = inner;
             return card;
         }
 
+        // ── Section header strip ──────────────────────────────────────────────
+        private static Border BuildSectionHeader(string title, string icon, Color accent)
+        {
+            var strip = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(18, accent.R, accent.G, accent.B)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(40, accent.R, accent.G, accent.B)),
+                BorderThickness = new Thickness(0, 0, 0, 1),
+                Padding = new Thickness(14, 10, 14, 10)
+            };
+
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+
+            row.Children.Add(new TextBlock
+            {
+                Text = icon,
+                FontSize = 13,
+                Foreground = new SolidColorBrush(Color.FromArgb(200, accent.R, accent.G, accent.B)),
+                VerticalAlignment = VerticalAlignment.Center
+            });
+
+            row.Children.Add(new TextBlock
+            {
+                Text = title,
+                FontSize = 13,
+                FontWeight = FontWeight.SemiBold,
+                Foreground = new SolidColorBrush(TextPrimary),
+                VerticalAlignment = VerticalAlignment.Center
+            });
+
+            strip.Child = row;
+            return strip;
+        }
+
+        // ── Danger button ─────────────────────────────────────────────────────
+        private static Button MakeDangerButton(string label, bool enabled)
+        {
+            var btn = new Button
+            {
+                Content = label,
+                FontSize = 12,
+                FontWeight = FontWeight.Medium,
+                Padding = new Thickness(14, 7),
+                Background = new SolidColorBrush(Color.FromArgb(40, 220, 50, 50)),
+                Foreground = new SolidColorBrush(Color.FromRgb(240, 100, 100)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(70, 220, 50, 50)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(6),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Cursor = new Cursor(StandardCursorType.Hand),
+                IsEnabled = enabled
+            };
+            return btn;
+        }
+
+        // ── Confirm panel ─────────────────────────────────────────────────────
         private static Border MakeConfirmPanel(string message, Action confirm, Action cancel)
         {
             var panel = new Border
             {
-                Background = new SolidColorBrush(Color.FromArgb(18, 220, 50, 50)),
+                Background = new SolidColorBrush(Color.FromArgb(25, 220, 50, 50)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(60, 220, 50, 50)),
+                BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(8),
-                Padding = new Thickness(10)
+                Padding = new Thickness(12),
+                Margin = new Thickness(0, 8, 0, 0)
             };
 
-            var inner = new StackPanel { Spacing = 8 };
+            var inner = new StackPanel { Spacing = 10 };
 
             inner.Children.Add(new TextBlock
             {
                 Text = message,
                 FontSize = 12,
                 TextWrapping = TextWrapping.Wrap,
-                Foreground = new SolidColorBrush(TextSecondary)
+                Foreground = new SolidColorBrush(Color.FromRgb(220, 140, 140))
             });
 
             var btnRow = new StackPanel
@@ -303,9 +471,12 @@ namespace NudgeTray
             var cancelBtn = new Button
             {
                 Content = "Cancel",
-                Padding = new Thickness(12, 5),
-                Background = new SolidColorBrush(Color.FromRgb(45, 45, 50)),
-                Foreground = new SolidColorBrush(TextPrimary),
+                FontSize = 12,
+                Padding = new Thickness(14, 6),
+                Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
+                Foreground = new SolidColorBrush(TextSecondary),
+                BorderThickness = new Thickness(0),
+                CornerRadius = new CornerRadius(6),
                 Cursor = new Cursor(StandardCursorType.Hand)
             };
             cancelBtn.Click += (_, _) => cancel();
@@ -313,11 +484,14 @@ namespace NudgeTray
             var confirmBtn = new Button
             {
                 Content = "Yes, Delete",
-                Padding = new Thickness(12, 5),
-                Background = new SolidColorBrush(DangerRed),
+                FontSize = 12,
+                FontWeight = FontWeight.Medium,
+                Padding = new Thickness(14, 6),
+                Background = new SolidColorBrush(Color.FromArgb(180, 220, 50, 50)),
                 Foreground = Brushes.White,
-                Cursor = new Cursor(StandardCursorType.Hand),
-                IsEnabled = true
+                BorderThickness = new Thickness(0),
+                CornerRadius = new CornerRadius(6),
+                Cursor = new Cursor(StandardCursorType.Hand)
             };
             confirmBtn.Click += (_, _) => confirm();
 
@@ -328,12 +502,19 @@ namespace NudgeTray
             return panel;
         }
 
+        // ── File size helper ──────────────────────────────────────────────────
+        private static string FormatFileSize(long bytes)
+        {
+            if (bytes < 1024) return $"{bytes} B";
+            if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+            return $"{bytes / (1024.0 * 1024.0):F1} MB";
+        }
+
+        // ── Event handlers ────────────────────────────────────────────────────
         private void OnHarvestDeleteClicked(object? sender, EventArgs e)
         {
             if (_harvestConfirmPanel!.IsVisible)
-            {
                 DeleteHarvestData();
-            }
             else
             {
                 _harvestConfirmPanel.IsVisible = true;
@@ -344,9 +525,7 @@ namespace NudgeTray
         private void OnModelDeleteClicked(object? sender, EventArgs e)
         {
             if (_modelConfirmPanel!.IsVisible)
-            {
                 DeleteModel();
-            }
             else
             {
                 _modelConfirmPanel.IsVisible = true;
@@ -362,32 +541,20 @@ namespace NudgeTray
                 string actPath = PlatformConfig.ActivityLogPath;
 
                 long deletedSize = 0;
-                if (File.Exists(csvPath))
-                {
-                    deletedSize += new FileInfo(csvPath).Length;
-                    File.Delete(csvPath);
-                }
-                if (File.Exists(actPath))
-                {
-                    deletedSize += new FileInfo(actPath).Length;
-                    File.Delete(actPath);
-                }
+                if (File.Exists(csvPath))  { deletedSize += new FileInfo(csvPath).Length;  File.Delete(csvPath); }
+                if (File.Exists(actPath))  { deletedSize += new FileInfo(actPath).Length;  File.Delete(actPath); }
 
                 TrainerState.SampleCount = 0;
                 TrainerState.LastChecked = DateTime.Now;
 
                 _harvestConfirmPanel!.IsVisible = false;
                 _harvestDeleteBtn!.IsEnabled = false;
-                _harvestStatus!.Text = $"Deleted ({FormatFileSize(deletedSize)})";
-                _harvestStatus.Foreground = new SolidColorBrush(SuccessGreen);
-                _harvestStatus.IsVisible = true;
+                ShowStatus(_harvestStatus!, $"Deleted ({FormatFileSize(deletedSize)})", SuccessGreen);
             }
             catch (Exception ex)
             {
                 _harvestConfirmPanel!.IsVisible = false;
-                _harvestStatus!.Text = $"Failed: {ex.Message}";
-                _harvestStatus.Foreground = new SolidColorBrush(DangerRed);
-                _harvestStatus.IsVisible = true;
+                ShowStatus(_harvestStatus!, $"Failed: {ex.Message}", DangerRed);
             }
         }
 
@@ -395,37 +562,38 @@ namespace NudgeTray
         {
             try
             {
-                string modelDir = Path.Combine(PlatformConfig.DataDirectory, "model");
-
+                string modelDir = System.IO.Path.Combine(PlatformConfig.DataDirectory, "model");
                 long deletedSize = 0;
                 if (Directory.Exists(modelDir))
-                {
                     foreach (var f in Directory.GetFiles(modelDir))
                     {
                         deletedSize += new FileInfo(f).Length;
                         File.Delete(f);
                     }
-                }
 
-                TrainerState.LastTrained = DateTime.MinValue;
+                TrainerState.LastTrained      = DateTime.MinValue;
                 TrainerState.LastTrainedCount = 0;
-                TrainerState.LastAccuracy = -1f;
-                TrainerState.ModelVersion = 0;
-                TrainerState.Architecture = "";
+                TrainerState.LastAccuracy     = -1f;
+                TrainerState.ModelVersion     = 0;
+                TrainerState.Architecture     = "";
 
                 _modelConfirmPanel!.IsVisible = false;
                 _modelDeleteBtn!.IsEnabled = false;
-                _modelStatus!.Text = $"Deleted ({FormatFileSize(deletedSize)})";
-                _modelStatus.Foreground = new SolidColorBrush(SuccessGreen);
-                _modelStatus.IsVisible = true;
+                ShowStatus(_modelStatus!, $"Deleted ({FormatFileSize(deletedSize)})", SuccessGreen);
             }
             catch (Exception ex)
             {
                 _modelConfirmPanel!.IsVisible = false;
-                _modelStatus!.Text = $"Failed: {ex.Message}";
-                _modelStatus.Foreground = new SolidColorBrush(DangerRed);
-                _modelStatus.IsVisible = true;
+                ShowStatus(_modelStatus!, $"Failed: {ex.Message}", DangerRed);
             }
+        }
+
+        private static void ShowStatus(TextBlock tb, string text, Color color)
+        {
+            tb.Text       = text;
+            tb.Foreground = new SolidColorBrush(color);
+            tb.Margin     = new Thickness(0, 6, 0, 0);
+            tb.IsVisible  = true;
         }
     }
 }
