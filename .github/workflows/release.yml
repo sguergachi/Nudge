@@ -44,16 +44,14 @@ jobs:
       - name: Publish self-contained Windows binaries
         working-directory: NudgeCrossPlatform
         run: |
-          dotnet publish nudge.csproj        -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o ../dist/win-x64 --nologo --verbosity normal
-          Write-Host "--- after nudge ---"
-          Get-ChildItem ../dist/win-x64 -Name -Filter "*.exe" -ErrorAction SilentlyContinue | Sort-Object | ForEach-Object { Write-Host "  $_" }
-          if (-not (Test-Path ../dist/win-x64/nudge.exe)) { Write-Host "WARNING: nudge.exe NOT FOUND" }
-          dotnet publish nudge-notify.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o ../dist/win-x64 --nologo
-          Write-Host "--- after nudge-notify ---"
-          Get-ChildItem ../dist/win-x64 -Name -Filter "*.exe" -ErrorAction SilentlyContinue | Sort-Object | ForEach-Object { Write-Host "  $_" }
-          dotnet publish nudge-tray.csproj   -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -f net10.0-windows10.0.17763.0 -p:SkipBuildNudgeDaemon=true -o ../dist/win-x64 --nologo
-          Write-Host "--- after nudge-tray ---"
-          Get-ChildItem ../dist/win-x64 -Name -Filter "*.exe" | Sort-Object | ForEach-Object { Write-Host "  $_" }
+          dotnet publish nudge.csproj        -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o ../dist/nudge --nologo
+          dotnet publish nudge-notify.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o ../dist/notify --nologo
+          dotnet publish nudge-tray.csproj   -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -f net10.0-windows10.0.17763.0 -p:SkipBuildNudgeDaemon=true -o ../dist/tray --nologo
+          New-Item -ItemType Directory -Force -Path ../dist/win-x64
+          Copy-Item ../dist/nudge/nudge.exe, ../dist/notify/nudge-notify.exe, ../dist/tray/nudge-tray.exe ../dist/win-x64/
+          Copy-Item ../dist/tray/*.dll, ../dist/tray/*.exe, ../dist/tray/*.pdb ../dist/win-x64/ -ErrorAction SilentlyContinue
+          Copy-Item ../dist/nudge/*.pdb, ../dist/notify/*.pdb ../dist/win-x64/ -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force ../dist/nudge, ../dist/notify, ../dist/tray
 
       - name: Package Windows artifacts
         shell: pwsh
