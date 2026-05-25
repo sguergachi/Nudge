@@ -35,28 +35,25 @@ jobs:
         with:
           path: Nudge
 
-      - uses: actions/checkout@v6
-        with:
-          repository: IrishBruse/WaylandDotnet
-          path: WaylandDotnet
-
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "10.0.x"
 
-      - name: Restore
-        working-directory: Nudge/NudgeCrossPlatform
-        run: |
-          dotnet restore nudge.csproj --nologo
-          dotnet restore nudge-notify.csproj --nologo
-          dotnet restore nudge-tray.csproj --nologo
-
       - name: Build
         working-directory: Nudge/NudgeCrossPlatform
         run: |
-          dotnet build nudge.csproj        -c Release -f net10.0  --no-restore --nologo
-          dotnet build nudge-notify.csproj -c Release -f net10.0  --no-restore --nologo
-          dotnet build nudge-tray.csproj   -c Release -f net10.0  --no-restore --nologo
+          # Sequential restore+build (shared obj/ overwrites on each restore)
+          rm -rf obj
+          dotnet restore nudge.csproj --nologo
+          dotnet build nudge.csproj -c Release -f net10.0 --no-restore --nologo
+
+          rm -rf obj
+          dotnet restore nudge-notify.csproj --nologo
+          dotnet build nudge-notify.csproj -c Release -f net10.0 --no-restore --nologo
+
+          rm -rf obj
+          dotnet restore nudge-tray.csproj --nologo
+          dotnet build nudge-tray.csproj -c Release -f net10.0 --no-restore --nologo
 
   build-windows:
     runs-on: windows-latest
@@ -68,16 +65,17 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: Restore
-        working-directory: NudgeCrossPlatform
-        run: |
-          dotnet restore nudge.csproj --nologo
-          dotnet restore nudge-notify.csproj --nologo
-          dotnet restore nudge-tray.csproj --nologo
-
       - name: Build
         working-directory: NudgeCrossPlatform
         run: |
-          dotnet build nudge.csproj        -c Release -f net10.0                      --no-restore --nologo
-          dotnet build nudge-notify.csproj -c Release -f net10.0                      --no-restore --nologo
-          dotnet build nudge-tray.csproj   -c Release -f net10.0-windows10.0.17763.0  --no-restore --nologo
+          rm -rf obj
+          dotnet restore nudge.csproj --nologo
+          dotnet build nudge.csproj -c Release -f net10.0 --no-restore --nologo
+
+          rm -rf obj
+          dotnet restore nudge-notify.csproj --nologo
+          dotnet build nudge-notify.csproj -c Release -f net10.0 --no-restore --nologo
+
+          rm -rf obj
+          dotnet restore nudge-tray.csproj --nologo
+          dotnet build nudge-tray.csproj -c Release -f net10.0-windows10.0.17763.0 --no-restore --nologo

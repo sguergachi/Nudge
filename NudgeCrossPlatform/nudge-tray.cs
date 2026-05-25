@@ -1464,25 +1464,29 @@ namespace NudgeTray
 
             try
             {
-                // Kill any nudge daemon from a previous session so we start fresh with correct args
+                // Kill any nudge daemon from a previous session so we start fresh
                 if (!PlatformConfig.IsWindows)
                 {
                     try
                     {
-                        var killOld = new Process
+                        // Kill both native and dotnet-launched daemon variants
+                        foreach (var pattern in new[] { "/nudge --interval", "nudge.dll --interval" })
                         {
-                            StartInfo = new ProcessStartInfo
+                            var killOld = new Process
                             {
-                                FileName = "pkill",
-                                Arguments = "-9 -f '^.*nudge .*--interval'",
-                                RedirectStandardOutput = true,
-                                RedirectStandardError = true,
-                                UseShellExecute = false,
-                                CreateNoWindow = true
-                            }
-                        };
-                        killOld.Start();
-                        killOld.WaitForExit(1000);
+                                StartInfo = new ProcessStartInfo
+                                {
+                                    FileName = "pkill",
+                                    Arguments = $"-9 -f {pattern}",
+                                    RedirectStandardOutput = true,
+                                    RedirectStandardError = true,
+                                    UseShellExecute = false,
+                                    CreateNoWindow = true
+                                }
+                            };
+                            killOld.Start();
+                            killOld.WaitForExit(1000);
+                        }
                     }
                     catch { /* no previous process to kill */ }
                 }

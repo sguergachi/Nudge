@@ -117,10 +117,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Clone WaylandDotnet sibling repo
-        continue-on-error: true
-        run: git clone https://github.com/sguergachi/WaylandDotnet.git "${{ github.workspace }}/WaylandDotnet" 2>/dev/null || echo "WaylandDotnet not available — continuing"
-
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "10.0.x"
@@ -128,24 +124,27 @@ jobs:
       - name: Build and publish Linux binaries
         working-directory: NudgeCrossPlatform
         run: |
-          # Create output directory
           mkdir -p dist/linux
-          
-          # Build and publish nudge (daemon)
-          dotnet publish nudge.csproj -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -o bin/Release/net10.0/linux-x64/publish_nudge --nologo
-          
-          # Build and publish nudge-notify
-          dotnet publish nudge-notify.csproj -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -o bin/Release/net10.0/linux-x64/publish_notify --nologo
-          
-          # Build and publish nudge-tray
-          dotnet publish nudge-tray.csproj -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -f net10.0 -p:SkipBuildNudgeDaemon=true -o bin/Release/net10.0/linux-x64/publish_tray --nologo
-          
-          # Copy executables to dist/linux with expected names
-          cp bin/Release/net10.0/linux-x64/publish_nudge/Nudge dist/linux/nudge || cp bin/Release/net10.0/linux-x64/publish_nudge/nudge dist/linux/nudge
-          cp bin/Release/net10.0/linux-x64/publish_notify/NudgeNotify dist/linux/nudge-notify || cp bin/Release/net10.0/linux-x64/publish_notify/nudge-notify dist/linux/nudge-notify
-          cp bin/Release/net10.0/linux-x64/publish_tray/NudgeTray dist/linux/nudge-tray || cp bin/Release/net10.0/linux-x64/publish_tray/nudge-tray dist/linux/nudge-tray
-          
-          # Copy DLL files for runtime
+
+          # Restore + publish each project sequentially (shared obj/ overwrites on restore)
+          rm -rf obj
+          dotnet restore nudge.csproj --nologo
+          dotnet publish nudge.csproj -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true --no-restore -o bin/Release/net10.0/linux-x64/publish_nudge --nologo
+
+          rm -rf obj
+          dotnet restore nudge-notify.csproj --nologo
+          dotnet publish nudge-notify.csproj -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true --no-restore -o bin/Release/net10.0/linux-x64/publish_notify --nologo
+
+          rm -rf obj
+          dotnet restore nudge-tray.csproj --nologo
+          dotnet publish nudge-tray.csproj -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -f net10.0 -p:SkipBuildNudgeDaemon=true --no-restore -o bin/Release/net10.0/linux-x64/publish_tray --nologo
+
+          # Copy executables (name matches project — nudge, nudge-notify, nudge-tray)
+          cp bin/Release/net10.0/linux-x64/publish_nudge/nudge dist/linux/nudge
+          cp bin/Release/net10.0/linux-x64/publish_notify/nudge-notify dist/linux/nudge-notify
+          cp bin/Release/net10.0/linux-x64/publish_tray/nudge-tray dist/linux/nudge-tray
+
+          # Copy remaining DLLs for runtime
           find bin/Release/net10.0/linux-x64/publish_nudge -name "*.dll" -exec cp {} dist/linux/ \;
           find bin/Release/net10.0/linux-x64/publish_notify -name "*.dll" -exec cp {} dist/linux/ \;
           find bin/Release/net10.0/linux-x64/publish_tray -name "*.dll" -exec cp {} dist/linux/ \;
