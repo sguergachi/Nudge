@@ -47,7 +47,7 @@ jobs:
       - name: Build
         working-directory: NudgeCrossPlatform
         run: |
-          dotnet build nudge.csproj        -c Release -f net10.0  --no-restore --nologo
+          dotnet build nudge.csproj        -c Release -f net10.0  --no-restore --nologo -v normal
           dotnet build nudge-notify.csproj -c Release -f net10.0  --no-restore --nologo
           dotnet build nudge-tray.csproj   -c Release -f net10.0  --no-restore --nologo
 
