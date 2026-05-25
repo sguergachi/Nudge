@@ -148,46 +148,65 @@ jobs:
           $g.Dispose(); $logo.Dispose()
           Write-Host "Logo generated."
 
-      - name: Build WiX v5 bootstrapper
+      - name: Build MSIX package
         shell: pwsh
         run: |
-          $outDir = Join-Path $PWD "dist"
-          $m = Select-String -Path "NudgeCrossPlatform\nudge-tray.cs" -Pattern 'const string VERSION = "([.\d]+)"'
-          $version = if ($m) { $m.Matches[0].Groups[1].Value } else { "1.5.7" }
-          Write-Host "Installing WiX v5..."
-          dotnet tool install --global wix --version 5.* 2>&1 | Out-Host
-          wix extension list 2>&1 | Out-Host
-          wix extension add WixToolset.Bal.wixext --version 5.0.2 2>&1 | Out-Host
-          wix extension add WixToolset.StandardBootstrapperApplication --version 5.0.2 2>&1 | Out-Host
-          wix extension list 2>&1 | Out-Host
-          $wix = where.exe wix 2>$null
-          if (-not $wix) { $wix = where.exe wix.exe 2>$null }
-          Write-Host "wix: $wix"
-          $bundleDir = Resolve-Path "NudgeCrossPlatform\assets\windows"
-          Write-Host "Building bundle..."
-          Push-Location $bundleDir
-          & $wix build bundle.wxs -d Version=$version -o "$outDir\NudgeInstaller.exe" 2>&1
-          Pop-Location
-          if ($LASTEXITCODE -ne 0) { throw "wix build failed (exit $LASTEXITCODE)" }
-          $bundle = Join-Path $outDir "NudgeInstaller.exe"
-          if (Test-Path $bundle) { Write-Host "Bundle: $((Get-Item $bundle).Length/1KB) KB" }
-          else { Write-Host "WARNING: Bundle not produced" }
+          # Generate app certificate
+          $cert = New-SelfSignedCertificate -Type Custom -Subject "CN=Nudge" -KeyUsage DigitalSignature -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3") -CertStoreLocation "Cert:\CurrentUser\My" -NotAfter (Get-Date).AddYears(3)
+          $thumbprint = $cert.Thumbprint
+          Write-Host "Cert thumbprint: $thumbprint"
+
+          # Prepare package layout
+          $pkg = "msix-package"
+          New-Item -ItemType Directory -Force -Path $pkg/assets | Out-Null
+          Copy-Item "NudgeCrossPlatform/assets/windows/AppxManifest.xml" $pkg/
+          Copy-Item "dist/win-x64/*" $pkg/ -Recurse -ErrorAction SilentlyContinue
+
+          # Generate logo PNGs
+          Add-Type -AssemblyName System.Drawing
+          foreach ($size in @(44, 150)) {
+            $bmp = New-Object System.Drawing.Bitmap $size, $size
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.SmoothingMode = 'HighQuality'
+            $g.Clear([System.Drawing.Color]::Transparent)
+            $brush = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(40,40,60))
+            $g.FillEllipse($brush, [int]($size*0.15), [int]($size*0.15), [int]($size*0.7), [int]($size*0.7))
+            $fs = [System.Single]($size * 0.5)
+            $font = [System.Drawing.Font]::new("Segoe UI", $fs, [System.Drawing.FontStyle]::Bold)
+            $g.DrawString("N", $font, [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(180,140,255)), [int]($size*0.3), [int]($size*0.22))
+            $bmp.Save("$pkg/assets/logo.png")
+            $g.Dispose(); $bmp.Dispose()
+          }
+
+          Write-Host "Creating MSIX package..."
+          MakeAppx.exe pack /d $pkg /p "dist/Nudge.msix" /l 2>&1
+          if ($LASTEXITCODE -ne 0) { throw "MakeAppx failed (exit $LASTEXITCODE)" }
+
+          Write-Host "Signing MSIX..."
+          $certPath = "Cert:\CurrentUser\My\$thumbprint"
+          SignTool.exe sign /fd SHA256 /sha1 $thumbprint /v "dist/Nudge.msix" 2>&1
+          if ($LASTEXITCODE -ne 0) { throw "SignTool failed (exit $LASTEXITCODE)" }
+
+          $msix = Join-Path $PWD "dist/Nudge.msix"
+          if (Test-Path $msix) { Write-Host "MSIX: $((Get-Item $msix).Length/1KB) KB" }
+          else { throw "MSIX not produced" }
+          Remove-Item -Recurse -Force $pkg
 
       - name: Stage installers for upload
         if: success() || failure()
         shell: pwsh
         run: |
           Copy-Item dist/Nudge-Setup*.msi .
-          Copy-Item dist/NudgeInstaller.exe . -ErrorAction SilentlyContinue
+          Copy-Item dist/Nudge.msix . -ErrorAction SilentlyContinue
 
-      - name: Upload Windows MSI installer
+      - name: Upload Windows installers
         if: success() || failure()
         uses: actions/upload-artifact@v7
         with:
           name: nudge-win-installer
           path: |
             Nudge-Setup*.msi
-            NudgeInstaller.exe
+            Nudge.msix
           if-no-files-found: warn
 
   build-linux:
@@ -302,7 +321,7 @@ jobs:
       - name: Tag and publish release
         run: |
           ASSETS=()
-           for f in NudgeInstaller.exe Nudge-Setup*.msi nudge-win-x64.zip nudge-linux-installer.run nudge-linux-x64.tar.gz; do
+           for f in Nudge.msix Nudge-Setup*.msi nudge-win-x64.zip nudge-linux-installer.run nudge-linux-x64.tar.gz; do
              [ -f "$f" ] && ASSETS+=("$f")
            done
            echo "Release assets: ${ASSETS[*]}"
@@ -314,8 +333,8 @@ jobs:
            ## Install
 
            ### Windows
-           1. Download **NudgeInstaller.exe** (recommended) — modern dark-themed installer with shortcuts and auto-launch
-           2. Or download **Nudge Setup** (`.msi`) for silent/automated installs
+           1. Download **Nudge.msix** (recommended) — modern Windows package with clean install UI and auto-updates
+           2. Or download **Nudge Setup** (`.msi`) for traditional installer with shortcuts
            3. Or download **nudge-win-x64.zip** and run **nudge-tray.exe**
 
           ### Linux
