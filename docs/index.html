@@ -3,84 +3,136 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nudge — Still focused?</title>
+  <title>Nudge</title>
+  <meta name="description" content="A local AI that learns your attention patterns and asks at the right moment.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
+<div class="ambient-bg"></div>
+
 <nav>
-  <a href="/" class="brand">Nudge</a>
-  <div class="links">
+  <a href="/" class="logo">Nudge</a>
+  <div class="nav-links">
     <a href="https://github.com/sguergachi/Nudge">GitHub</a>
-    <a href="https://github.com/sguergachi/Nudge/releases/latest" class="btn-sm">Download</a>
+    <a href="https://github.com/sguergachi/Nudge/releases/latest" class="nav-cta">Download</a>
   </div>
 </nav>
 
 <header>
-  <h1>Still focused?</h1>
-  <p class="tagline">A local AI that learns your attention patterns and asks at the right moment.</p>
-  <div class="actions">
-    <a href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip" class="btn">Download for Windows</a>
-    <a href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-installer.run" class="btn btn-ghost">Download for Linux</a>
+  <div class="eyebrow">Local AI for your desktop</div>
+  <h1>Still<br>focused?</h1>
+  <p class="lead">An AI that learns when you lose focus and asks at the right moment. No cloud. No account. No telemetry.</p>
+  <div class="hero-actions">
+    <a href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip" class="btn btn-primary">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download for Windows
+    </a>
+    <a href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-installer.run" class="btn btn-secondary">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download for Linux
+    </a>
   </div>
-  <p class="meta">Free &middot; Open source &middot; No account needed</p>
+  <div class="hero-shot">
+    <img src="screenshots/notification_active.png" alt="Nudge check-in notification">
+  </div>
 </header>
 
 <main>
 
-<section class="feature">
-  <div class="text">
-    <span class="label">Check-in</span>
-    <h2>Asked at the right time</h2>
-    <p>ML checks every 60 seconds. Falls back to random 5&ndash;10 minute intervals while learning. Keyboard shortcuts: Ctrl+Shift+Y for YES, Ctrl+Shift+N for NO.</p>
+<section class="feature" id="checkin">
+  <div class="feature-visual">
+    <img src="screenshots/notification_active.png" alt="Check-in notification">
   </div>
-  <img src="screenshots/notification_active.png" alt="Nudge check-in notification" loading="eager">
+  <div class="feature-content">
+    <span class="feature-num">01</span>
+    <h2>Asked at the<br>right time</h2>
+    <p>ML checks every 60 seconds when active. Falls back to random 5&#x2013;10 minute intervals while the model is still learning.</p>
+    <div class="feature-meta">
+      <span>&#x2265;98% confidence threshold</span>
+      <span>Sub-100ms inference</span>
+    </div>
+  </div>
 </section>
 
-<section class="feature feature-rev">
-  <img src="screenshots/analytics_today.png" alt="Analytics dashboard" loading="lazy">
-  <div class="text">
-    <span class="label">Analytics</span>
-    <h2>See where time goes</h2>
+<section class="feature feature-rev" id="analytics">
+  <div class="feature-content">
+    <span class="feature-num">02</span>
+    <h2>See where<br>time goes</h2>
     <p>Track focus across Today, Week, Month and All Time. Hourly breakdowns, most-used apps with category colors, and AI prediction history.</p>
+    <div class="feature-meta">
+      <span>26 feature dimensions</span>
+      <span>6 app categories</span>
+    </div>
+  </div>
+  <div class="feature-visual">
+    <img src="screenshots/analytics_today.png" alt="Analytics dashboard">
   </div>
 </section>
 
-<section class="feature">
-  <div class="text">
-    <span class="label">AI Brain</span>
-    <h2>Trained on your answers</h2>
-    <p>Model trained exclusively on your YES/NO responses. Sub-100ms inference. Activates after 100 samples, retrains every 50 new answers. No cloud, no telemetry.</p>
+<section class="feature" id="brain">
+  <div class="feature-visual">
+    <img src="screenshots/analytics_ai_brain.png" alt="AI Brain">
   </div>
-  <img src="screenshots/analytics_ai_brain.png" alt="AI Brain tab" loading="lazy">
+  <div class="feature-content">
+    <span class="feature-num">03</span>
+    <h2>Trained on<br>your answers</h2>
+    <p>Model trained exclusively on your YES/NO responses. Activates after 100 samples, retrains every 50 new answers. No cloud, no telemetry.</p>
+    <div class="feature-meta">
+      <span>100 samples to activate</span>
+      <span>Retrains every 50 answers</span>
+    </div>
+  </div>
 </section>
 
-<section class="download">
-  <h2>Try Nudge on your machine</h2>
-  <p>Free and open source. No account, no telemetry, no strings.</p>
-  <div class="actions">
-    <a href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip" class="btn">Download for Windows</a>
-    <a href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-installer.run" class="btn btn-ghost">Download for Linux</a>
+<section class="download" id="download">
+  <div class="download-content">
+    <h2>Try it on your<br>machine</h2>
+    <p>Free and open source. No strings attached.</p>
+    <div class="download-actions">
+      <a href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip" class="btn btn-primary btn-lg">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download for Windows
+      </a>
+      <a href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-installer.run" class="btn btn-secondary btn-lg">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download for Linux
+      </a>
+    </div>
+    <p class="download-links">
+      <a href="https://github.com/sguergachi/Nudge/releases/latest">All releases</a>
+      &middot;
+      <a href="https://github.com/sguergachi/Nudge">Source code</a>
+    </p>
   </div>
-  <p class="meta">
-    <a href="https://github.com/sguergachi/Nudge/releases/latest">All releases</a>
-    &middot;
-    <a href="https://github.com/sguergachi/Nudge">Source code</a>
-  </p>
 </section>
 
 </main>
 
 <footer>
-  <span>Nudge &mdash; Free &amp; open source (MIT)</span>
-  <div>
+  <span class="footer-brand">Nudge</span>
+  <div class="footer-links">
     <a href="https://github.com/sguergachi/Nudge">GitHub</a>
     <a href="https://github.com/sguergachi/Nudge/issues/new">Feedback</a>
   </div>
 </footer>
+
+<script>
+// Scroll reveal
+const reveal = (entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('in-view');
+      observer.unobserve(entry.target);
+    }
+  });
+};
+const observer = new IntersectionObserver(reveal, { threshold: 0.15, rootMargin: '0px 0px -40px' });
+document.querySelectorAll('.feature, .download').forEach(el => observer.observe(el));
+</script>
 
 </body>
 </html>
