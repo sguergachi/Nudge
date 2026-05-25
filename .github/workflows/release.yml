@@ -150,6 +150,9 @@ jobs:
 
       - name: Build MSIX package
         shell: pwsh
+        env:
+          WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         run: |
           # Locate MakeAppx.exe in Windows SDK
           $makeAppx = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\MakeAppx.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
@@ -163,10 +166,33 @@ jobs:
           if (-not $signTool) { throw "SignTool.exe not found" }
           Write-Host "SignTool: $signTool"
 
-          # Generate app certificate
-          $cert = New-SelfSignedCertificate -Type Custom -Subject "CN=Nudge" -KeyUsage DigitalSignature -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3") -CertStoreLocation "Cert:\CurrentUser\My" -NotAfter (Get-Date).AddYears(3)
+          # Use a stored certificate from secrets when available, otherwise generate one.
+          # A stable cert lets users install it once and trust all future releases.
+          if ($env:WINDOWS_CERT_PFX) {
+            Write-Host "Importing signing certificate from WINDOWS_CERT_PFX secret..."
+            $pfxBytes = [Convert]::FromBase64String($env:WINDOWS_CERT_PFX)
+            $pfxPath = Join-Path $env:TEMP "nudge-sign.pfx"
+            [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
+            if ($env:WINDOWS_CERT_PASSWORD) {
+              $certPwd = ConvertTo-SecureString -String $env:WINDOWS_CERT_PASSWORD -Force -AsPlainText
+              $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation "Cert:\CurrentUser\My" -Password $certPwd
+            } else {
+              $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation "Cert:\CurrentUser\My"
+            }
+            Remove-Item $pfxPath -Force
+          } else {
+            Write-Host "No WINDOWS_CERT_PFX secret found — generating a new self-signed certificate."
+            Write-Host "::warning::Using an ephemeral certificate. For a stable cert that users install once, see WINDOWS_README.md."
+            $cert = New-SelfSignedCertificate -Type Custom -Subject "CN=Nudge" -KeyUsage DigitalSignature `
+              -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3") `
+              -CertStoreLocation "Cert:\CurrentUser\My" -NotAfter (Get-Date).AddYears(3)
+          }
           $thumbprint = $cert.Thumbprint
           Write-Host "Cert thumbprint: $thumbprint"
+
+          # Export the public certificate so users can trust it before installing the MSIX
+          Export-Certificate -Cert "Cert:\CurrentUser\My\$thumbprint" -FilePath "dist\Nudge.cer" -Type CERT | Out-Null
+          Write-Host "Exported public certificate to dist\Nudge.cer"
 
           # Prepare package layout
           $pkg = "msix-package"
@@ -209,6 +235,8 @@ jobs:
         run: |
           Copy-Item dist/Nudge-Setup*.msi .
           Copy-Item dist/Nudge.msix . -ErrorAction SilentlyContinue
+          Copy-Item dist/Nudge.cer  . -ErrorAction SilentlyContinue
+          Copy-Item NudgeCrossPlatform/assets/windows/Install-Nudge.ps1 . -ErrorAction SilentlyContinue
 
       - name: Upload Windows installers
         if: success() || failure()
@@ -218,6 +246,8 @@ jobs:
           path: |
             Nudge-Setup*.msi
             Nudge.msix
+            Nudge.cer
+            Install-Nudge.ps1
           if-no-files-found: warn
 
   build-linux:
@@ -332,21 +362,33 @@ jobs:
       - name: Tag and publish release
         run: |
           ASSETS=()
-           for f in Nudge.msix Nudge-Setup*.msi nudge-win-x64.zip nudge-linux-installer.run nudge-linux-x64.tar.gz; do
-             [ -f "$f" ] && ASSETS+=("$f")
-           done
-           echo "Release assets: ${ASSETS[*]}"
-           git config user.name  "github-actions[bot]"
-           git config user.email "github-actions[bot]@users.noreply.github.com"
-           git tag "v$VERSION"
-           git push origin "v$VERSION"
-           cat > release-notes.md << 'NOTES'
-           ## Install
+          for f in Nudge.msix Nudge.cer Install-Nudge.ps1 Nudge-Setup*.msi nudge-win-x64.zip nudge-linux-installer.run nudge-linux-x64.tar.gz; do
+            [ -f "$f" ] && ASSETS+=("$f")
+          done
+          echo "Release assets: ${ASSETS[*]}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
+          cat > release-notes.md << 'NOTES'
+          ## Install
 
-           ### Windows
-           1. Download **Nudge.msix** (recommended) — modern Windows package with clean install UI and auto-updates
-           2. Or download **Nudge Setup** (`.msi`) for traditional installer with shortcuts
-           3. Or download **nudge-win-x64.zip** and run **nudge-tray.exe**
+          ### Windows — MSIX (recommended)
+          The MSIX package requires trusting the signing certificate once:
+          1. Download **Nudge.cer**, **Nudge.msix**, and **Install-Nudge.ps1** into the same folder
+          2. Right-click **Install-Nudge.ps1** → *Run with PowerShell* (or run `powershell -ExecutionPolicy Bypass -File .\Install-Nudge.ps1`)
+
+          The script installs the certificate to your Trusted People store (current user only), then installs Nudge. You only need to do this once — future updates will install without re-trusting the certificate.
+
+          **Manual steps (if you prefer):**
+          1. Double-click **Nudge.cer** → Install → Current User → Trusted People
+          2. Double-click **Nudge.msix** to install
+
+          ### Windows — MSI (alternative)
+          Download **Nudge Setup** (`.msi`) for a traditional installer with shortcuts. No certificate required.
+
+          ### Windows — Portable
+          Download **nudge-win-x64.zip**, extract, and run **nudge-tray.exe**.
 
           ### Linux
           1. Download **nudge-linux-installer.run** and run: `chmod +x nudge-linux-installer.run && ./nudge-linux-installer.run`
