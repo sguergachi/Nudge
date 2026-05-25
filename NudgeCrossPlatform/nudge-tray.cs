@@ -1544,6 +1544,10 @@ namespace NudgeTray
                                     LiveAIState.Add(evt);
                             }
                             catch { /* non-critical, silently ignore parse errors */ }
+
+                            // ML check just completed — run training so the model
+                            // is ready for the next countdown cycle
+                            _ = Task.Run(() => TriggerTrainingNow());
                         }
                         // ML user response → update the corresponding event
                         else if (e.Data.StartsWith("MLRESPONSE:", StringComparison.Ordinal))
