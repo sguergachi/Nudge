@@ -51,8 +51,96 @@
       <h2>Harvest Engine</h2>
       <p>Tracks your foreground app, idle time and browser domain at 1Hz. Fuses three signals into 26 dimensions through a rolling 300-second window.</p>
     </div>
-    <div class="feature-shot">
-      <img src="screenshots/analytics_today.png" alt="Analytics dashboard" loading="lazy">
+    <div class="feature-viz">
+      <svg viewBox="0 0 440 320" class="harvest-svg" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="glow-blue" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#58A6FF" stop-opacity="0.5"/><stop offset="100%" stop-color="#58A6FF" stop-opacity="0"/></radialGradient>
+          <radialGradient id="glow-green" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#22C55E" stop-opacity="0.5"/><stop offset="100%" stop-color="#22C55E" stop-opacity="0"/></radialGradient>
+          <radialGradient id="glow-purple" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#A78BFA" stop-opacity="0.5"/><stop offset="100%" stop-color="#A78BFA" stop-opacity="0"/></radialGradient>
+          <radialGradient id="glow-center" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#58A6FF" stop-opacity="0.35"/><stop offset="100%" stop-color="#58A6FF" stop-opacity="0"/></radialGradient>
+          <linearGradient id="line-blue" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#58A6FF" stop-opacity="0.3"/><stop offset="100%" stop-color="#58A6FF" stop-opacity="0.8"/></linearGradient>
+          <linearGradient id="line-green" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#22C55E" stop-opacity="0.3"/><stop offset="100%" stop-color="#22C55E" stop-opacity="0.8"/></linearGradient>
+          <linearGradient id="line-purple" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#A78BFA" stop-opacity="0.3"/><stop offset="100%" stop-color="#A78BFA" stop-opacity="0.8"/></linearGradient>
+        </defs>
+        <!-- Background grid -->
+        <g stroke="rgba(88,166,255,0.04)" stroke-width="0.5">
+          <line x1="0" y1="40" x2="440" y2="40"/><line x1="0" y1="80" x2="440" y2="80"/><line x1="0" y1="120" x2="440" y2="120"/><line x1="0" y1="160" x2="440" y2="160"/><line x1="0" y1="200" x2="440" y2="200"/><line x1="0" y1="240" x2="440" y2="240"/><line x1="0" y1="280" x2="440" y2="280"/>
+          <line x1="40" y1="0" x2="40" y2="320"/><line x1="80" y1="0" x2="80" y2="320"/><line x1="120" y1="0" x2="120" y2="320"/><line x1="160" y1="0" x2="160" y2="320"/><line x1="200" y1="0" x2="200" y2="320"/><line x1="240" y1="0" x2="240" y2="320"/><line x1="280" y1="0" x2="280" y2="320"/><line x1="320" y1="0" x2="320" y2="320"/><line x1="360" y1="0" x2="360" y2="320"/><line x1="400" y1="0" x2="400" y2="320"/>
+        </g>
+        <!-- Sensor nodes -->
+        <g transform="translate(60,80)">
+          <circle r="28" fill="url(#glow-blue)" opacity="0.4"><animate attributeName="opacity" values="0.4;0.6;0.4" dur="3s" repeatCount="indefinite"/></circle>
+          <circle r="20" fill="none" stroke="#58A6FF" stroke-width="1.5"/>
+          <circle r="4" fill="#58A6FF"><animate attributeName="r" values="4;6;4" dur="2s" repeatCount="indefinite"/></circle>
+          <text x="0" y="42" fill="#58A6FF" font-size="9" text-anchor="middle" font-family="Inter, sans-serif" font-weight="600">App</text>
+        </g>
+        <g transform="translate(60,160)">
+          <circle r="28" fill="url(#glow-green)" opacity="0.4"><animate attributeName="opacity" values="0.4;0.6;0.4" dur="3.5s" repeatCount="indefinite"/></circle>
+          <circle r="20" fill="none" stroke="#22C55E" stroke-width="1.5"/>
+          <circle r="4" fill="#22C55E"><animate attributeName="r" values="4;6;4" dur="2.5s" repeatCount="indefinite"/></circle>
+          <text x="0" y="42" fill="#22C55E" font-size="9" text-anchor="middle" font-family="Inter, sans-serif" font-weight="600">Idle</text>
+        </g>
+        <g transform="translate(60,240)">
+          <circle r="28" fill="url(#glow-purple)" opacity="0.4"><animate attributeName="opacity" values="0.4;0.6;0.4" dur="4s" repeatCount="indefinite"/></circle>
+          <circle r="20" fill="none" stroke="#A78BFA" stroke-width="1.5"/>
+          <circle r="4" fill="#A78BFA"><animate attributeName="r" values="4;6;4" dur="3s" repeatCount="indefinite"/></circle>
+          <text x="0" y="42" fill="#A78BFA" font-size="9" text-anchor="middle" font-family="Inter, sans-serif" font-weight="600">Browser</text>
+        </g>
+        <!-- Data flow lines -->
+        <path d="M80 80 Q160 80 200 160" fill="none" stroke="url(#line-blue)" stroke-width="2" stroke-dasharray="5,5"><animate attributeName="stroke-dashoffset" values="0;-20" dur="1.5s" repeatCount="indefinite"/></path>
+        <path d="M80 160 Q140 160 200 160" fill="none" stroke="url(#line-green)" stroke-width="2" stroke-dasharray="5,5"><animate attributeName="stroke-dashoffset" values="0;-20" dur="1.2s" repeatCount="indefinite"/></path>
+        <path d="M80 240 Q160 240 200 160" fill="none" stroke="url(#line-purple)" stroke-width="2" stroke-dasharray="5,5"><animate attributeName="stroke-dashoffset" values="0;-20" dur="1.8s" repeatCount="indefinite"/></path>
+        <!-- Data particles -->
+        <circle r="3" fill="#58A6FF"><animateMotion dur="2s" repeatCount="indefinite" path="M80 80 Q160 80 200 160"/></circle>
+        <circle r="3" fill="#22C55E"><animateMotion dur="1.5s" repeatCount="indefinite" path="M80 160 Q140 160 200 160"/></circle>
+        <circle r="3" fill="#A78BFA"><animateMotion dur="2.5s" repeatCount="indefinite" path="M80 240 Q160 240 200 160"/></circle>
+        <!-- Center fusion -->
+        <g transform="translate(220,160)">
+          <circle r="45" fill="url(#glow-center)" opacity="0.5"/>
+          <circle r="36" fill="none" stroke="#58A6FF" stroke-width="1.5" stroke-dasharray="6,4"><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="20s" repeatCount="indefinite"/></circle>
+          <circle r="24" fill="none" stroke="#58A6FF" stroke-width="1" opacity="0.4"/>
+          <circle r="10" fill="#58A6FF" opacity="0.8"><animate attributeName="r" values="10;12;10" dur="3s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.8;0.5;0.8" dur="3s" repeatCount="indefinite"/></circle>
+          <text x="0" y="62" fill="#58A6FF" font-size="9" text-anchor="middle" font-family="Inter, sans-serif" font-weight="700" opacity="0.7">FUSION</text>
+        </g>
+        <!-- Output rays -->
+        <g>
+          <line x1="256" y1="160" x2="340" y2="60" stroke="rgba(88,166,255,0.15)" stroke-width="1"><animate attributeName="stroke-opacity" values="0.15;0.35;0.15" dur="3s" repeatCount="indefinite"/></line>
+          <line x1="256" y1="160" x2="340" y2="90" stroke="rgba(88,166,255,0.15)" stroke-width="1"><animate attributeName="stroke-opacity" values="0.15;0.35;0.15" dur="3.5s" repeatCount="indefinite"/></line>
+          <line x1="256" y1="160" x2="340" y2="120" stroke="rgba(88,166,255,0.15)" stroke-width="1"><animate attributeName="stroke-opacity" values="0.15;0.35;0.15" dur="2.8s" repeatCount="indefinite"/></line>
+          <line x1="256" y1="160" x2="340" y2="150" stroke="rgba(88,166,255,0.15)" stroke-width="1"><animate attributeName="stroke-opacity" values="0.15;0.35;0.15" dur="3.2s" repeatCount="indefinite"/></line>
+          <line x1="256" y1="160" x2="340" y2="180" stroke="rgba(88,166,255,0.15)" stroke-width="1"><animate attributeName="stroke-opacity" values="0.15;0.35;0.15" dur="2.5s" repeatCount="indefinite"/></line>
+          <line x1="256" y1="160" x2="340" y2="210" stroke="rgba(88,166,255,0.15)" stroke-width="1"><animate attributeName="stroke-opacity" values="0.15;0.35;0.15" dur="3.8s" repeatCount="indefinite"/></line>
+          <line x1="256" y1="160" x2="340" y2="240" stroke="rgba(88,166,255,0.15)" stroke-width="1"><animate attributeName="stroke-opacity" values="0.15;0.35;0.15" dur="2.2s" repeatCount="indefinite"/></line>
+        </g>
+        <!-- Output nodes -->
+        <g>
+          <circle cx="340" cy="60" r="3" fill="#58A6FF" opacity="0.6"><animate attributeName="opacity" values="0.6;1;0.6" dur="2s" repeatCount="indefinite"/></circle>
+          <circle cx="340" cy="90" r="3" fill="#58A6FF" opacity="0.6"><animate attributeName="opacity" values="0.6;1;0.6" dur="2.3s" repeatCount="indefinite"/></circle>
+          <circle cx="340" cy="120" r="3" fill="#58A6FF" opacity="0.6"><animate attributeName="opacity" values="0.6;1;0.6" dur="1.8s" repeatCount="indefinite"/></circle>
+          <circle cx="340" cy="150" r="3" fill="#58A6FF" opacity="0.6"><animate attributeName="opacity" values="0.6;1;0.6" dur="2.5s" repeatCount="indefinite"/></circle>
+          <circle cx="340" cy="180" r="3" fill="#58A6FF" opacity="0.6"><animate attributeName="opacity" values="0.6;1;0.6" dur="1.9s" repeatCount="indefinite"/></circle>
+          <circle cx="340" cy="210" r="3" fill="#58A6FF" opacity="0.6"><animate attributeName="opacity" values="0.6;1;0.6" dur="2.7s" repeatCount="indefinite"/></circle>
+          <circle cx="340" cy="240" r="3" fill="#58A6FF" opacity="0.6"><animate attributeName="opacity" values="0.6;1;0.6" dur="2.1s" repeatCount="indefinite"/></circle>
+          <!-- Second row -->
+          <circle cx="380" cy="75" r="2.5" fill="#58A6FF" opacity="0.4"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="2.4s" repeatCount="indefinite"/></circle>
+          <circle cx="380" cy="105" r="2.5" fill="#58A6FF" opacity="0.4"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="1.7s" repeatCount="indefinite"/></circle>
+          <circle cx="380" cy="135" r="2.5" fill="#58A6FF" opacity="0.4"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="2.9s" repeatCount="indefinite"/></circle>
+          <circle cx="380" cy="165" r="2.5" fill="#58A6FF" opacity="0.4"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="2s" repeatCount="indefinite"/></circle>
+          <circle cx="380" cy="195" r="2.5" fill="#58A6FF" opacity="0.4"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="2.6s" repeatCount="indefinite"/></circle>
+          <circle cx="380" cy="225" r="2.5" fill="#58A6FF" opacity="0.4"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="1.5s" repeatCount="indefinite"/></circle>
+        </g>
+        <text x="390" y="155" fill="#58A6FF" font-size="13" text-anchor="middle" font-family="Inter, sans-serif" font-weight="700" opacity="0.8">26</text>
+        <text x="390" y="170" fill="#58A6FF" font-size="8" text-anchor="middle" font-family="Inter, sans-serif" opacity="0.5">DIMS</text>
+        <!-- Signal quality -->
+        <g transform="translate(220, 300)">
+          <text x="-70" y="0" fill="#22C55E" font-size="9" font-family="Inter, sans-serif" font-weight="600" opacity="0.8">TRUSTED</text>
+          <text x="0" y="0" fill="#FBBF24" font-size="9" font-family="Inter, sans-serif" font-weight="600" opacity="0.8">USABLE</text>
+          <text x="70" y="0" fill="#EF4444" font-size="9" font-family="Inter, sans-serif" font-weight="600" opacity="0.8">POOR</text>
+          <circle cx="-50" cy="-12" r="3" fill="#22C55E" opacity="0.8"><animate attributeName="opacity" values="0.8;0.3;0.8" dur="3s" repeatCount="indefinite"/></circle>
+          <circle cx="5" cy="-12" r="3" fill="#FBBF24" opacity="0.8"><animate attributeName="opacity" values="0.8;0.3;0.8" dur="2.5s" repeatCount="indefinite"/></circle>
+          <circle cx="65" cy="-12" r="3" fill="#EF4444" opacity="0.8"><animate attributeName="opacity" values="0.8;0.3;0.8" dur="4s" repeatCount="indefinite"/></circle>
+        </g>
+      </svg>
     </div>
   </div>
 </section>

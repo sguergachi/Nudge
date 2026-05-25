@@ -145,6 +145,12 @@ a:hover{color:#8AC0FF}
 }
 
 /* ════════════════════════════════════════════════════════════
+   Feature visualization (SVG)
+   ════════════════════════════════════════════════════════════ */
+.feature-viz{display:flex;justify-content:center;align-items:center;width:100%}
+.harvest-svg{width:100%;max-width:480px;height:auto;border-radius:var(--radius-sm);box-shadow:0 20px 60px rgba(0,0,0,.4),0 0 0 1px rgba(255,255,255,.04);background:var(--bg)}
+
+/* ════════════════════════════════════════════════════════════
    Showcase — 3 big screenshots
    ════════════════════════════════════════════════════════════ */
 .showcase{
