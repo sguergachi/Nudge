@@ -83,8 +83,8 @@ jobs:
           $outDir = Join-Path $PWD "dist"
           $wxs = Resolve-Path "NudgeCrossPlatform\assets\windows\installer.wxs"
           $msi = Join-Path $outDir "Nudge-Setup-$version.msi"
-          Write-Host "Compiling with -dVersion=$version..."
-          & $candle -dVersion=$version -out "$outDir\installer.wixobj" $wxs 2>&1
+          Write-Host "Compiling..."
+          & $candle -out "$outDir\installer.wixobj" $wxs 2>&1
           if ($LASTEXITCODE -ne 0) { throw "candle failed (exit $LASTEXITCODE)" }
           Write-Host "Linking..."
           & $light -out $msi "$outDir\installer.wixobj" -sw 2>&1
