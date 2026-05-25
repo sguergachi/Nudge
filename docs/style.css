@@ -101,12 +101,6 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;height:var(--nav-h);backgrou
 .feat-dots{animation:featPulse 6s cubic-bezier(.4,0,.2,1) infinite}
 @keyframes featPulse{0%,100%{opacity:.25}15%{opacity:.15}40%{opacity:.7}70%{opacity:.35}}
 
-/* Input streams — staggered converging dots */
-.is1{animation:streamIn 3.5s ease-in-out infinite}
-.is2{animation:streamIn 3.5s ease-in-out infinite;animation-delay:.7s}
-.is3{animation:streamIn 3.5s ease-in-out infinite;animation-delay:1.4s}
-@keyframes streamIn{0%,100%{opacity:.15}50%{opacity:.45}}
-
 /* Sweep — smooth constant rotation */
 .sweep-arc{animation:sweep 18s linear infinite;transform-origin:200px 200px}
 @keyframes sweep{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
