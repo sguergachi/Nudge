@@ -61,13 +61,13 @@
       <p>Tracks your foreground app, idle time and browser domain at 1Hz. Fuses three signals into 26 dimensions through a rolling 300-second window.</p>
     </div>
     <div class="feature-image">
-      <img src="screenshots/analytics_today.png" alt="Nudge analytics dashboard showing productivity insights">
+      <canvas id="harvest-canvas" class="anim-canvas"></canvas>
     </div>
   </article>
 
   <article class="feature feature-reverse reveal">
     <div class="feature-image">
-      <img src="screenshots/analytics_ai_brain.png" alt="Nudge AI Brain tab showing model training status">
+      <canvas id="brain-canvas" class="anim-canvas"></canvas>
     </div>
     <div class="feature-text">
       <span class="feature-label">02</span>
@@ -83,13 +83,13 @@
       <p>Track focus across Today, Week, Month and All Time. Hourly breakdowns, most-used apps with category colors, and AI prediction history with confidence sparklines.</p>
     </div>
     <div class="feature-image">
-      <img src="screenshots/settings.png" alt="Nudge settings window">
+      <img src="screenshots/analytics_today.png" alt="Nudge analytics dashboard showing productivity insights">
     </div>
   </article>
 
   <article class="feature feature-reverse reveal">
     <div class="feature-image">
-      <img src="screenshots/notification.png" alt="Nudge idle notification">
+      <img src="screenshots/notification_active.png" alt="Nudge check-in notification">
     </div>
     <div class="feature-text">
       <span class="feature-label">04</span>
@@ -248,6 +248,468 @@
   }
 
   frame();
+})();
+
+// ============================================================
+// Harvest Engine Canvas — Sensor Fusion Pipeline
+// ============================================================
+(function() {
+  const canvas = document.getElementById('harvest-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let W, H, dpr;
+  function resize() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio, 2);
+    W = Math.min(520, rect.width);
+    H = 380;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // ── Layout ──
+  const sensors = [
+    { label: 'App',     y: 0.28, col: '#58A6FF', icon: '&#9632;' },
+    { label: 'Idle',    y: 0.50, col: '#22C55E', icon: '&#9716;' },
+    { label: 'Browser', y: 0.72, col: '#A78BFA', icon: '&#9689;' }
+  ];
+  const fusion = { x: 0.50, y: 0.50, r: 0.08 };
+  const outputs = [];
+  for (let i = 0; i < 13; i++) outputs.push({ y: 0.18 + i * 0.055, phase: i * 0.5 });
+
+  // ── Particle system ──
+  const particles = [];
+  function spawnParticle(srcIdx) {
+    particles.push({
+      src: srcIdx,
+      prog: 0,
+      speed: 0.003 + Math.random() * 0.002
+    });
+  }
+
+  // ── Animation state ──
+  let time = 0;
+  let running = true;
+
+  function draw() {
+    if (!running) return;
+    requestAnimationFrame(draw);
+    time += 1;
+
+    // Clear
+    ctx.fillStyle = '#0B0B0E';
+    ctx.fillRect(0, 0, W, H);
+
+    // Subtle grid
+    ctx.strokeStyle = 'rgba(88,166,255,0.03)';
+    ctx.lineWidth = 0.5;
+    for (let x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+    for (let y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+
+    const cx = fusion.x * W;
+    const cy = fusion.y * H;
+    const fr = fusion.r * Math.min(W, H);
+
+    // ── Draw connection paths ──
+    sensors.forEach((s, i) => {
+      const sx = 0.15 * W;
+      const sy = s.y * H;
+
+      // Glow path
+      ctx.beginPath();
+      ctx.moveTo(sx + 25, sy);
+      ctx.bezierCurveTo(sx + 80, sy, cx - 60, cy, cx - fr * 0.6, cy);
+      ctx.strokeStyle = s.col + '18';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Dashed animated line
+      ctx.beginPath();
+      ctx.moveTo(sx + 25, sy);
+      ctx.bezierCurveTo(sx + 80, sy, cx - 60, cy, cx - fr * 0.6, cy);
+      ctx.strokeStyle = s.col + '40';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([6, 8]);
+      ctx.lineDashOffset = -time * (0.3 + i * 0.1);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    });
+
+    // ── Draw data particles ──
+    if (!prefersReducedMotion && Math.random() < 0.08) spawnParticle(Math.floor(Math.random() * 3));
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.prog += p.speed;
+      if (p.prog >= 1) { particles.splice(i, 1); continue; }
+
+      const s = sensors[p.src];
+      const sx = 0.15 * W + 25;
+      const sy = s.y * H;
+      const t = p.prog;
+      // Cubic bezier interpolation
+      const mt = 1 - t;
+      const x = mt*mt*mt*sx + 3*mt*mt*t*(sx+80) + 3*mt*t*t*(cx-60) + t*t*t*(cx-fr*0.6);
+      const y = mt*mt*mt*sy + 3*mt*mt*t*sy + 3*mt*t*t*cy + t*t*t*cy;
+
+      ctx.shadowColor = s.col;
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = s.col;
+      ctx.beginPath();
+      ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    // ── Draw sensor nodes ──
+    sensors.forEach(s => {
+      const sx = 0.15 * W;
+      const sy = s.y * H;
+      const pulse = Math.sin(time * 0.04 + s.y * 10) * 0.3 + 0.7;
+
+      // Outer glow
+      ctx.shadowColor = s.col;
+      ctx.shadowBlur = 20 * pulse;
+      ctx.fillStyle = s.col + '20';
+      ctx.beginPath();
+      ctx.arc(sx, sy, 22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Ring
+      ctx.strokeStyle = s.col;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 18, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Core dot
+      ctx.fillStyle = s.col;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Label
+      ctx.fillStyle = s.col;
+      ctx.font = '600 10px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(s.label, sx, sy + 36);
+    });
+
+    // ── Draw fusion node ──
+    const fPulse = Math.sin(time * 0.03) * 0.2 + 0.8;
+
+    // Outer glow
+    ctx.shadowColor = '#58A6FF';
+    ctx.shadowBlur = 30 * fPulse;
+    ctx.fillStyle = 'rgba(88,166,255,0.08)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, fr * 1.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Rotating ring
+    ctx.strokeStyle = 'rgba(88,166,255,0.25)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([8, 6]);
+    ctx.lineDashOffset = -time * 0.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, fr, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Inner ring
+    ctx.strokeStyle = 'rgba(88,166,255,0.15)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, fr * 0.65, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Core
+    ctx.fillStyle = '#58A6FF';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 8 + Math.sin(time * 0.05) * 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Label
+    ctx.fillStyle = 'rgba(88,166,255,0.6)';
+    ctx.font = '700 9px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('FUSION', cx, cy + fr + 22);
+
+    // ── Draw output rays ──
+    outputs.forEach((o, i) => {
+      const oy = o.y * H;
+      const ox = 0.82 * W;
+      const flicker = Math.sin(time * 0.03 + o.phase) * 0.4 + 0.6;
+
+      // Ray line
+      ctx.strokeStyle = `rgba(88,166,255,${0.08 * flicker})`;
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(cx + fr * 0.6, cy);
+      ctx.lineTo(ox - 10, oy);
+      ctx.stroke();
+
+      // Dot
+      ctx.fillStyle = `rgba(88,166,255,${0.5 * flicker})`;
+      ctx.beginPath();
+      ctx.arc(ox, oy, 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // 26 label
+    ctx.fillStyle = 'rgba(88,166,255,0.5)';
+    ctx.font = '700 14px "SF Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('26', 0.82 * W, 0.92 * H);
+    ctx.fillStyle = 'rgba(88,166,255,0.3)';
+    ctx.font = '600 8px Inter, sans-serif';
+    ctx.fillText('DIMS', 0.82 * W, 0.96 * H);
+
+    // ── Signal quality indicators ──
+    const qy = H - 24;
+    const qualities = [
+      { label: 'TRUSTED', col: '#22C55E', x: W * 0.30 },
+      { label: 'USABLE',  col: '#FBBF24', x: W * 0.50 },
+      { label: 'POOR',    col: '#EF4444', x: W * 0.70 }
+    ];
+    qualities.forEach(q => {
+      const blink = Math.sin(time * 0.02 + q.x) * 0.3 + 0.7;
+      ctx.fillStyle = q.col;
+      ctx.globalAlpha = blink;
+      ctx.beginPath();
+      ctx.arc(q.x, qy - 8, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      ctx.fillStyle = q.col;
+      ctx.font = '600 9px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.globalAlpha = 0.7;
+      ctx.fillText(q.label, q.x, qy + 6);
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  // Pause when not visible
+  const obs = new IntersectionObserver(entries => {
+    running = entries[0].isIntersecting;
+    if (running) draw();
+  }, { threshold: 0.1 });
+  obs.observe(canvas);
+
+  draw();
+})();
+
+// ============================================================
+// AI Brain Canvas — Neural Network
+// ============================================================
+(function() {
+  const canvas = document.getElementById('brain-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let W, H, dpr;
+  function resize() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio, 2);
+    W = Math.min(520, rect.width);
+    H = 380;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // ── Network topology ──
+  const layers = [
+    { count: 5, x: 0.14, label: 'INPUT' },
+    { count: 7, x: 0.38, label: 'HIDDEN' },
+    { count: 6, x: 0.62, label: 'HIDDEN' },
+    { count: 2, x: 0.86, label: 'OUTPUT' }
+  ];
+
+  // Build node positions
+  const nodes = [];
+  layers.forEach((layer, li) => {
+    for (let i = 0; i < layer.count; i++) {
+      const spacing = H / (layer.count + 1);
+      nodes.push({
+        x: layer.x * W,
+        y: spacing * (i + 1),
+        layer: li,
+        idx: i,
+        phase: Math.random() * Math.PI * 2
+      });
+    }
+  });
+
+  // Build connections
+  const connections = [];
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      if (nodes[j].layer === nodes[i].layer + 1) {
+        connections.push({ from: nodes[i], to: nodes[j], phase: Math.random() * Math.PI * 2 });
+      }
+    }
+  }
+
+  // Data particles flowing through connections
+  const flowParticles = [];
+  function spawnFlow() {
+    const conn = connections[Math.floor(Math.random() * connections.length)];
+    flowParticles.push({
+      from: conn.from,
+      to: conn.to,
+      prog: 0,
+      speed: 0.008 + Math.random() * 0.006,
+      col: conn.to.layer === 3 ? (conn.to.idx === 0 ? '#58A6FF' : '#EF4444') : '#58A6FF'
+    });
+  }
+
+  // ── State ──
+  let time = 0;
+  let running = true;
+
+  function draw() {
+    if (!running) return;
+    requestAnimationFrame(draw);
+    time += 1;
+
+    // Clear
+    ctx.fillStyle = '#0B0B0E';
+    ctx.fillRect(0, 0, W, H);
+
+    // Subtle grid
+    ctx.strokeStyle = 'rgba(88,166,255,0.02)';
+    ctx.lineWidth = 0.5;
+    for (let x = 0; x < W; x += 50) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+    for (let y = 0; y < H; y += 50) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+
+    // ── Draw connections ──
+    connections.forEach(c => {
+      const flicker = Math.sin(time * 0.02 + c.phase) * 0.15 + 0.12;
+      ctx.strokeStyle = `rgba(88,166,255,${flicker})`;
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(c.from.x, c.from.y);
+      ctx.lineTo(c.to.x, c.to.y);
+      ctx.stroke();
+    });
+
+    // ── Draw flow particles ──
+    if (!prefersReducedMotion && Math.random() < 0.06) spawnFlow();
+
+    for (let i = flowParticles.length - 1; i >= 0; i--) {
+      const p = flowParticles[i];
+      p.prog += p.speed;
+      if (p.prog >= 1) { flowParticles.splice(i, 1); continue; }
+
+      const x = p.from.x + (p.to.x - p.from.x) * p.prog;
+      const y = p.from.y + (p.to.y - p.from.y) * p.prog;
+
+      ctx.shadowColor = p.col;
+      ctx.shadowBlur = 6;
+      ctx.fillStyle = p.col;
+      ctx.beginPath();
+      ctx.arc(x, y, 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    // ── Draw nodes ──
+    nodes.forEach(n => {
+      const isOutput = n.layer === 3;
+      const isProductive = isOutput && n.idx === 0;
+      const isDistracted = isOutput && n.idx === 1;
+      const col = isDistracted ? '#EF4444' : '#58A6FF';
+      const pulse = Math.sin(time * 0.035 + n.phase) * 0.25 + 0.75;
+      const r = isOutput ? 10 : 5.5;
+
+      // Glow
+      ctx.shadowColor = col;
+      ctx.shadowBlur = (isOutput ? 18 : 10) * pulse;
+      ctx.fillStyle = col + '20';
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, r + 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Core
+      ctx.fillStyle = col;
+      ctx.globalAlpha = 0.3 + pulse * 0.5;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // Stroke
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+      ctx.stroke();
+    });
+
+    // ── Output labels ──
+    const outNodes = nodes.filter(n => n.layer === 3);
+    ctx.font = '600 9px Inter, sans-serif';
+    ctx.textAlign = 'center';
+
+    ctx.fillStyle = '#58A6FF';
+    ctx.fillText('Productive', outNodes[0].x, outNodes[0].y + 24);
+
+    ctx.fillStyle = '#EF4444';
+    ctx.fillText('Distracted', outNodes[1].x, outNodes[1].y + 24);
+
+    // ── Confidence meter ──
+    const mx = W * 0.86;
+    const my = H - 40;
+    const mW = 60;
+    const conf = (Math.sin(time * 0.008) * 0.15 + 0.85); // 70-100%
+
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.beginPath();
+    ctx.roundRect(mx - mW/2, my, mW, 8, 3);
+    ctx.fill();
+
+    ctx.fillStyle = `rgba(88,166,255,${0.4 + conf * 0.3})`;
+    ctx.beginPath();
+    ctx.roundRect(mx - mW/2, my, mW * conf, 8, 3);
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(88,166,255,0.5)';
+    ctx.font = '600 8px Inter, sans-serif';
+    ctx.fillText('Confidence', mx, my + 22);
+
+    // ── Layer labels ──
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.font = '600 8px Inter, sans-serif';
+    layers.forEach(l => {
+      ctx.textAlign = 'center';
+      ctx.fillText(l.label, l.x * W, H - 10);
+    });
+  }
+
+  // Pause when not visible
+  const obs = new IntersectionObserver(entries => {
+    running = entries[0].isIntersecting;
+    if (running) draw();
+  }, { threshold: 0.1 });
+  obs.observe(canvas);
+
+  draw();
 })();
 
 // ============================================================
