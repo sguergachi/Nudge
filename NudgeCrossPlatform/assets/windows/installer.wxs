@@ -26,6 +26,8 @@
           </Component>
         </Directory>
       </Directory>
+      <Directory Id="DesktopFolder" Name="DesktopFolder" />
+      <Directory Id="ProgramMenuFolder" Name="ProgramMenuFolder" />
     </Directory>
     <Feature Id="ProductFeature" Title="Nudge" Level="1">
       <ComponentRef Id="ProductComponent" />
