@@ -58,8 +58,8 @@ jobs:
           Copy-Item "NudgeCrossPlatform/assets/windows/nudge.ico" $dist
           Compress-Archive -Path "$dist/*" -DestinationPath "nudge-win-x64.zip" -Force
 
-      - name: Install Inno Setup
-        run: choco install innosetup -y --no-progress
+      - name: Install WiX Toolset
+        run: dotnet tool install --global wix --version 5.0.2
 
       - name: Upload Windows zip
         uses: actions/upload-artifact@v4
@@ -67,27 +67,21 @@ jobs:
           name: nudge-win-x64
           path: nudge-win-x64.zip
 
-      - name: Build Windows installer
-        continue-on-error: true
+      - name: Build Windows MSI installer
         shell: pwsh
         run: |
-          $iscc = Get-ChildItem -Path "C:\Program Files" -Filter "ISCC.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $iscc) { $iscc = Get-ChildItem -Path "$env:ChocolateyInstall" -Filter "ISCC.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 }
-          if (-not $iscc) { Write-Host "ISCC.exe not found — skipping installer"; exit 0 }
-          $isccPath = $iscc.Directory.FullName
-          Write-Host "ISCC: $isccPath\ISCC.exe"
           $version = Select-String -Path "NudgeCrossPlatform\nudge-tray.cs" -Pattern 'const string VERSION = "([.\d]+)"' | ForEach-Object { $_.Matches.Groups[1].Value }
-          if (-not $version) { Write-Host "Failed to extract version — skipping installer"; exit 0 }
-          Write-Host "Building v$version installer..."
-          & "$isccPath\ISCC.exe" /DMyAppVersion=$version "NudgeCrossPlatform\assets\windows\setup.iss"
-          if ($LASTEXITCODE -ne 0) { Write-Host "iscc failed (exit $LASTEXITCODE) — skipping installer"; exit 0 }
+          if (-not $version) { Write-Host "Failed to extract version — skipping MSI"; exit 0 }
+          Write-Host "Building Nudge-Setup-$version.msi..."
+          wix build "NudgeCrossPlatform\assets\windows\installer.wxs" -d Version=$version -o "dist\Nudge-Setup-$version.msi"
+          if ($LASTEXITCODE -ne 0) { Write-Host "wix build failed (exit $LASTEXITCODE) — skipping MSI"; exit 0 }
 
-      - name: Upload Windows installer
+      - name: Upload Windows MSI installer
         if: success() || failure()
         uses: actions/upload-artifact@v4
         with:
           name: nudge-win-installer
-          path: dist\Nudge-Setup-*.exe
+          path: dist\Nudge-Setup-*.msi
           if-no-files-found: warn
 
   build-linux:
@@ -205,7 +199,7 @@ jobs:
           git tag "v$VERSION"
           git push origin "v$VERSION"
           ASSETS=()
-          for f in Nudge-Setup-*.exe nudge-win-x64.zip nudge-linux-installer.run nudge-linux-x64.tar.gz; do
+          for f in Nudge-Setup-*.msi nudge-win-x64.zip nudge-linux-installer.run nudge-linux-x64.tar.gz; do
             [ -f "$f" ] && ASSETS+=("$f")
           done
           echo "Release assets: ${ASSETS[*]}"
@@ -213,7 +207,7 @@ jobs:
           ## Install
 
           ### Windows
-          1. Download **Nudge-Setup-*.exe** (installer) or **nudge-win-x64.zip** (portable)
+          1. Download **Nudge-Setup-*.msi** (installer) or **nudge-win-x64.zip** (portable)
           2. Run the installer — one click, done
 
           ### Linux
