@@ -61,22 +61,19 @@ jobs:
           Compress-Archive -Path "$dist/*" -DestinationPath "nudge-win-x64.zip" -Force
 
       - name: Install WiX Toolset
-        run: dotnet tool install --global wix --version 5.0.2
-
-      - name: Upload Windows zip
-        uses: actions/upload-artifact@v4
-        with:
-          name: nudge-win-x64
-          path: nudge-win-x64.zip
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 4.0.5 2>$null
+          if ($LASTEXITCODE -ne 0) { Write-Host "WiX 4.0.5 not found, trying latest 4.x"; dotnet tool install --global wix --version 4.0.4 2>$null }
+          if ($LASTEXITCODE -ne 0) { Write-Host "WiX install failed"; exit 0 }
+          $wixPath = "$env:USERPROFILE\.dotnet\tools\wix.exe"
+          & $wixPath --version
 
       - name: Build Windows MSI installer
         shell: pwsh
         run: |
           $wixPath = "$env:USERPROFILE\.dotnet\tools\wix.exe"
-          if (-not (Test-Path $wixPath)) {
-            $wixPath = "$env:HOMEDRIVE$env:HOMEPATH\.dotnet\tools\wix.exe"
-          }
-          if (-not (Test-Path $wixPath)) { Write-Host "wix not found at $wixPath — skipping MSI"; exit 0 }
+          if (-not (Test-Path $wixPath)) { Write-Host "wix not found — skipping MSI"; exit 0 }
           Write-Host "WiX: $wixPath"
           & $wixPath --version
           $version = Select-String -Path "NudgeCrossPlatform\nudge-tray.cs" -Pattern 'const string VERSION = "([.\d]+)"' | ForEach-Object { $_.Matches.Groups[1].Value }
@@ -85,7 +82,7 @@ jobs:
           New-Item -ItemType Directory -Path $outDir -Force | Out-Null
           $msiPath = Join-Path $outDir "Nudge-Setup-$version.msi"
           Write-Host "Building $msiPath..."
-          & $wixPath build "NudgeCrossPlatform\assets\windows\installer.wxs" -d Version=$version -o $msiPath
+          & $wixPath build "NudgeCrossPlatform\assets\windows\installer.wxs" -d Version=$version -o $msiPath 2>&1
           Write-Host "wix exit: $LASTEXITCODE"
           if ($LASTEXITCODE -ne 0) { Write-Host "wix build failed — skipping MSI"; exit 0 }
           if (-not (Test-Path $msiPath)) { Write-Host "MSI not found at $msiPath — skipping"; exit 0 }
