@@ -9,12 +9,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-<canvas id="hero-canvas"></canvas>
 
 <header class="nav">
   <div class="nav-inner">
@@ -31,7 +28,7 @@
 
 <!-- ═══ Hero ═══ -->
 <section class="hero">
-  <div class="hero-text reveal">
+  <div class="hero-inner">
     <h1>Still&nbsp;focused?</h1>
     <p class="hero-sub">A local AI that learns your attention patterns and asks at the right moment.</p>
     <div class="hero-actions">
@@ -45,29 +42,203 @@
       </a>
     </div>
     <p class="hero-foot">Free &#xB7; Open source &#xB7; No account needed</p>
-  </div>
-  <div class="hero-image reveal-delay">
-    <img src="screenshots/notification_active.png" alt="Nudge check-in notification">
+    <div class="hero-image">
+      <img src="screenshots/notification_active.png" alt="Nudge check-in notification">
+    </div>
   </div>
 </section>
 
 <!-- ═══ Features ═══ -->
 <section class="features" id="features">
 
-  <article class="feature reveal">
+  <!-- 01 ─ Harvest Engine -->
+  <article class="feature">
     <div class="feature-text">
       <span class="feature-label">01</span>
       <h2>Harvest Engine</h2>
       <p>Tracks your foreground app, idle time and browser domain at 1Hz. Fuses three signals into 26 dimensions through a rolling 300-second window.</p>
     </div>
-    <div class="feature-image">
-      <canvas id="harvest-canvas" class="anim-canvas"></canvas>
+    <div class="feature-viz">
+      <svg viewBox="0 0 440 320" class="harvest-svg" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="glow-blue" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#58A6FF" stop-opacity="0.5"/><stop offset="100%" stop-color="#58A6FF" stop-opacity="0"/></radialGradient>
+          <radialGradient id="glow-green" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#22C55E" stop-opacity="0.5"/><stop offset="100%" stop-color="#22C55E" stop-opacity="0"/></radialGradient>
+          <radialGradient id="glow-purple" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#A78BFA" stop-opacity="0.5"/><stop offset="100%" stop-color="#A78BFA" stop-opacity="0"/></radialGradient>
+          <radialGradient id="glow-center" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#58A6FF" stop-opacity="0.35"/><stop offset="100%" stop-color="#58A6FF" stop-opacity="0"/></radialGradient>
+        </defs>
+        <!-- Background grid -->
+        <g stroke="rgba(88,166,255,0.04)" stroke-width="0.5">
+          <line x1="0" y1="40" x2="440" y2="40"/><line x1="0" y1="80" x2="440" y2="80"/><line x1="0" y1="120" x2="440" y2="120"/><line x1="0" y1="160" x2="440" y2="160"/><line x1="0" y1="200" x2="440" y2="200"/><line x1="0" y1="240" x2="440" y2="240"/><line x1="0" y1="280" x2="440" y2="280"/>
+          <line x1="40" y1="0" x2="40" y2="320"/><line x1="80" y1="0" x2="80" y2="320"/><line x1="120" y1="0" x2="120" y2="320"/><line x1="160" y1="0" x2="160" y2="320"/><line x1="200" y1="0" x2="200" y2="320"/><line x1="240" y1="0" x2="240" y2="320"/><line x1="280" y1="0" x2="280" y2="320"/><line x1="320" y1="0" x2="320" y2="320"/><line x1="360" y1="0" x2="360" y2="320"/><line x1="400" y1="0" x2="400" y2="320"/>
+        </g>
+        <!-- Sensor nodes -->
+        <g transform="translate(60,80)">
+          <circle r="28" fill="url(#glow-blue)" opacity="0.4"><animate attributeName="opacity" values="0.4;0.6;0.4" dur="3s" repeatCount="indefinite"/></circle>
+          <circle r="20" fill="none" stroke="#58A6FF" stroke-width="1.5"/>
+          <circle r="4" fill="#58A6FF"><animate attributeName="r" values="4;6;4" dur="2s" repeatCount="indefinite"/></circle>
+          <text x="0" y="42" fill="#58A6FF" font-size="9" text-anchor="middle" font-family="Inter, sans-serif" font-weight="600">App</text>
+        </g>
+        <g transform="translate(60,160)">
+          <circle r="28" fill="url(#glow-green)" opacity="0.4"><animate attributeName="opacity" values="0.4;0.6;0.4" dur="3.5s" repeatCount="indefinite"/></circle>
+          <circle r="20" fill="none" stroke="#22C55E" stroke-width="1.5"/>
+          <circle r="4" fill="#22C55E"><animate attributeName="r" values="4;6;4" dur="2.5s" repeatCount="indefinite"/></circle>
+          <text x="0" y="42" fill="#22C55E" font-size="9" text-anchor="middle" font-family="Inter, sans-serif" font-weight="600">Idle</text>
+        </g>
+        <g transform="translate(60,240)">
+          <circle r="28" fill="url(#glow-purple)" opacity="0.4"><animate attributeName="opacity" values="0.4;0.6;0.4" dur="4s" repeatCount="indefinite"/></circle>
+          <circle r="20" fill="none" stroke="#A78BFA" stroke-width="1.5"/>
+          <circle r="4" fill="#A78BFA"><animate attributeName="r" values="4;6;4" dur="3s" repeatCount="indefinite"/></circle>
+          <text x="0" y="42" fill="#A78BFA" font-size="9" text-anchor="middle" font-family="Inter, sans-serif" font-weight="600">Browser</text>
+        </g>
+        <!-- Data flow lines -->
+        <path d="M80 80 Q160 80 200 160" fill="none" stroke="url(#line-blue)" stroke-width="2" stroke-dasharray="5,5"><animate attributeName="stroke-dashoffset" values="0;-20" dur="1.5s" repeatCount="indefinite"/></path>
+        <path d="M80 160 Q140 160 200 160" fill="none" stroke="url(#line-green)" stroke-width="2" stroke-dasharray="5,5"><animate attributeName="stroke-dashoffset" values="0;-20" dur="1.2s" repeatCount="indefinite"/></path>
+        <path d="M80 240 Q160 240 200 160" fill="none" stroke="url(#line-purple)" stroke-width="2" stroke-dasharray="5,5"><animate attributeName="stroke-dashoffset" values="0;-20" dur="1.8s" repeatCount="indefinite"/></path>
+        <!-- Center fusion -->
+        <g transform="translate(220,160)">
+          <circle r="45" fill="url(#glow-center)" opacity="0.5"/>
+          <circle r="36" fill="none" stroke="#58A6FF" stroke-width="1.5" stroke-dasharray="6,4"><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="20s" repeatCount="indefinite"/></circle>
+          <circle r="24" fill="none" stroke="#58A6FF" stroke-width="1" opacity="0.4"/>
+          <circle r="10" fill="#58A6FF" opacity="0.8"><animate attributeName="r" values="10;12;10" dur="3s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.8;0.5;0.8" dur="3s" repeatCount="indefinite"/></circle>
+          <text x="0" y="62" fill="#58A6FF" font-size="9" text-anchor="middle" font-family="Inter, sans-serif" font-weight="700" opacity="0.7">FUSION</text>
+        </g>
+        <!-- Output rays -->
+        <g>
+          <line x1="256" y1="160" x2="340" y2="60" stroke="rgba(88,166,255,0.15)" stroke-width="1"><animate attributeName="stroke-opacity" values="0.15;0.35;0.15" dur="3s" repeatCount="indefinite"/></line>
+          <line x1="256" y1="160" x2="340" y2="90" stroke="rgba(88,166,255,0.15)" stroke-width="1"><animate attributeName="stroke-opacity" values="0.15;0.35;0.15" dur="3.5s" repeatCount="indefinite"/></line>
+          <line x1="256" y1="160" x2="340" y2="120" stroke="rgba(88,166,255,0.15)" stroke-width="1"><animate attributeName="stroke-opacity" values="0.15;0.35;0.15" dur="2.8s" repeatCount="indefinite"/></line>
+          <line x1="256" y1="160" x2="340" y2="150" stroke="rgba(88,166,255,0.15)" stroke-width="1"><animate attributeName="stroke-opacity" values="0.15;0.35;0.15" dur="3.2s" repeatCount="indefinite"/></line>
+          <line x1="256" y1="160" x2="340" y2="180" stroke="rgba(88,166,255,0.15)" stroke-width="1"><animate attributeName="stroke-opacity" values="0.15;0.35;0.15" dur="2.5s" repeatCount="indefinite"/></line>
+          <line x1="256" y1="160" x2="340" y2="210" stroke="rgba(88,166,255,0.15)" stroke-width="1"><animate attributeName="stroke-opacity" values="0.15;0.35;0.15" dur="3.8s" repeatCount="indefinite"/></line>
+          <line x1="256" y1="160" x2="340" y2="240" stroke="rgba(88,166,255,0.15)" stroke-width="1"><animate attributeName="stroke-opacity" values="0.15;0.35;0.15" dur="2.2s" repeatCount="indefinite"/></line>
+        </g>
+        <!-- Output nodes -->
+        <g>
+          <circle cx="340" cy="60" r="3" fill="#58A6FF" opacity="0.6"><animate attributeName="opacity" values="0.6;1;0.6" dur="2s" repeatCount="indefinite"/></circle>
+          <circle cx="340" cy="90" r="3" fill="#58A6FF" opacity="0.6"><animate attributeName="opacity" values="0.6;1;0.6" dur="2.3s" repeatCount="indefinite"/></circle>
+          <circle cx="340" cy="120" r="3" fill="#58A6FF" opacity="0.6"><animate attributeName="opacity" values="0.6;1;0.6" dur="1.8s" repeatCount="indefinite"/></circle>
+          <circle cx="340" cy="150" r="3" fill="#58A6FF" opacity="0.6"><animate attributeName="opacity" values="0.6;1;0.6" dur="2.5s" repeatCount="indefinite"/></circle>
+          <circle cx="340" cy="180" r="3" fill="#58A6FF" opacity="0.6"><animate attributeName="opacity" values="0.6;1;0.6" dur="1.9s" repeatCount="indefinite"/></circle>
+          <circle cx="340" cy="210" r="3" fill="#58A6FF" opacity="0.6"><animate attributeName="opacity" values="0.6;1;0.6" dur="2.7s" repeatCount="indefinite"/></circle>
+          <circle cx="340" cy="240" r="3" fill="#58A6FF" opacity="0.6"><animate attributeName="opacity" values="0.6;1;0.6" dur="2.1s" repeatCount="indefinite"/></circle>
+          <!-- Second row -->
+          <circle cx="380" cy="75" r="2.5" fill="#58A6FF" opacity="0.4"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="2.4s" repeatCount="indefinite"/></circle>
+          <circle cx="380" cy="105" r="2.5" fill="#58A6FF" opacity="0.4"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="1.7s" repeatCount="indefinite"/></circle>
+          <circle cx="380" cy="135" r="2.5" fill="#58A6FF" opacity="0.4"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="2.9s" repeatCount="indefinite"/></circle>
+          <circle cx="380" cy="165" r="2.5" fill="#58A6FF" opacity="0.4"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="2s" repeatCount="indefinite"/></circle>
+          <circle cx="380" cy="195" r="2.5" fill="#58A6FF" opacity="0.4"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="2.6s" repeatCount="indefinite"/></circle>
+          <circle cx="380" cy="225" r="2.5" fill="#58A6FF" opacity="0.4"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="1.5s" repeatCount="indefinite"/></circle>
+        </g>
+        <text x="390" y="155" fill="#58A6FF" font-size="13" text-anchor="middle" font-family="Inter, sans-serif" font-weight="700" opacity="0.8">26</text>
+        <text x="390" y="170" fill="#58A6FF" font-size="8" text-anchor="middle" font-family="Inter, sans-serif" opacity="0.5">DIMS</text>
+        <!-- Signal quality -->
+        <g transform="translate(220, 300)">
+          <text x="-70" y="0" fill="#22C55E" font-size="9" font-family="Inter, sans-serif" font-weight="600" opacity="0.8">TRUSTED</text>
+          <text x="0" y="0" fill="#FBBF24" font-size="9" font-family="Inter, sans-serif" font-weight="600" opacity="0.8">USABLE</text>
+          <text x="70" y="0" fill="#EF4444" font-size="9" font-family="Inter, sans-serif" font-weight="600" opacity="0.8">POOR</text>
+          <circle cx="-50" cy="-12" r="3" fill="#22C55E" opacity="0.8"><animate attributeName="opacity" values="0.8;0.3;0.8" dur="3s" repeatCount="indefinite"/></circle>
+          <circle cx="5" cy="-12" r="3" fill="#FBBF24" opacity="0.8"><animate attributeName="opacity" values="0.8;0.3;0.8" dur="2.5s" repeatCount="indefinite"/></circle>
+          <circle cx="65" cy="-12" r="3" fill="#EF4444" opacity="0.8"><animate attributeName="opacity" values="0.8;0.3;0.8" dur="4s" repeatCount="indefinite"/></circle>
+        </g>
+        <defs>
+          <linearGradient id="line-blue" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#58A6FF" stop-opacity="0.3"/><stop offset="100%" stop-color="#58A6FF" stop-opacity="0.8"/></linearGradient>
+          <linearGradient id="line-green" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#22C55E" stop-opacity="0.3"/><stop offset="100%" stop-color="#22C55E" stop-opacity="0.8"/></linearGradient>
+          <linearGradient id="line-purple" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#A78BFA" stop-opacity="0.3"/><stop offset="100%" stop-color="#A78BFA" stop-opacity="0.8"/></linearGradient>
+        </defs>
+      </svg>
     </div>
   </article>
 
-  <article class="feature feature-reverse reveal">
-    <div class="feature-image">
-      <canvas id="brain-canvas" class="anim-canvas"></canvas>
+  <!-- 02 ─ AI Brain -->
+  <article class="feature feature-reverse">
+    <div class="feature-viz">
+      <svg viewBox="0 0 440 320" class="brain-svg" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="nn-glow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#58A6FF" stop-opacity="0.45"/><stop offset="100%" stop-color="#58A6FF" stop-opacity="0"/></radialGradient>
+          <radialGradient id="nn-red" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#EF4444" stop-opacity="0.45"/><stop offset="100%" stop-color="#EF4444" stop-opacity="0"/></radialGradient>
+        </defs>
+        <!-- Grid -->
+        <g stroke="rgba(88,166,255,0.02)" stroke-width="0.5">
+          <line x1="0" y1="40" x2="440" y2="40"/><line x1="0" y1="80" x2="440" y2="80"/><line x1="0" y1="120" x2="440" y2="120"/><line x1="0" y1="160" x2="440" y2="160"/><line x1="0" y1="200" x2="440" y2="200"/><line x1="0" y1="240" x2="440" y2="240"/><line x1="0" y1="280" x2="440" y2="280"/>
+          <line x1="40" y1="0" x2="40" y2="320"/><line x1="80" y1="0" x2="80" y2="320"/><line x1="120" y1="0" x2="120" y2="320"/><line x1="160" y1="0" x2="160" y2="320"/><line x1="200" y1="0" x2="200" y2="320"/><line x1="240" y1="0" x2="240" y2="320"/><line x1="280" y1="0" x2="280" y2="320"/><line x1="320" y1="0" x2="320" y2="320"/><line x1="360" y1="0" x2="360" y2="320"/><line x1="400" y1="0" x2="400" y2="320"/>
+        </g>
+        <!-- Input layer -->
+        <g class="layer-input">
+          <circle cx="70" cy="55" r="6" fill="rgba(88,166,255,0.2)" stroke="#58A6FF" stroke-width="1.5"><animate attributeName="fill-opacity" values="0.2;0.55;0.2" dur="3s" repeatCount="indefinite"/></circle>
+          <circle cx="70" cy="105" r="6" fill="rgba(88,166,255,0.2)" stroke="#58A6FF" stroke-width="1.5"><animate attributeName="fill-opacity" values="0.2;0.55;0.2" dur="3.5s" repeatCount="indefinite"/></circle>
+          <circle cx="70" cy="155" r="6" fill="rgba(88,166,255,0.2)" stroke="#58A6FF" stroke-width="1.5"><animate attributeName="fill-opacity" values="0.2;0.55;0.2" dur="2.8s" repeatCount="indefinite"/></circle>
+          <circle cx="70" cy="205" r="6" fill="rgba(88,166,255,0.2)" stroke="#58A6FF" stroke-width="1.5"><animate attributeName="fill-opacity" values="0.2;0.55;0.2" dur="4s" repeatCount="indefinite"/></circle>
+          <circle cx="70" cy="255" r="6" fill="rgba(88,166,255,0.2)" stroke="#58A6FF" stroke-width="1.5"><animate attributeName="fill-opacity" values="0.2;0.55;0.2" dur="3.2s" repeatCount="indefinite"/></circle>
+        </g>
+        <!-- Hidden layer 1 -->
+        <g class="layer-hidden">
+          <circle cx="170" cy="40" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="2.5s" repeatCount="indefinite"/></circle>
+          <circle cx="170" cy="85" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="3s" repeatCount="indefinite"/></circle>
+          <circle cx="170" cy="130" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="2s" repeatCount="indefinite"/></circle>
+          <circle cx="170" cy="175" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="3.5s" repeatCount="indefinite"/></circle>
+          <circle cx="170" cy="220" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="2.8s" repeatCount="indefinite"/></circle>
+          <circle cx="170" cy="265" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="3.8s" repeatCount="indefinite"/></circle>
+          <circle cx="170" cy="310" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="2.2s" repeatCount="indefinite"/></circle>
+        </g>
+        <!-- Hidden layer 2 -->
+        <g class="layer-hidden-2">
+          <circle cx="270" cy="65" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="2.7s" repeatCount="indefinite"/></circle>
+          <circle cx="270" cy="115" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="3.3s" repeatCount="indefinite"/></circle>
+          <circle cx="270" cy="165" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="1.9s" repeatCount="indefinite"/></circle>
+          <circle cx="270" cy="215" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="2.4s" repeatCount="indefinite"/></circle>
+          <circle cx="270" cy="265" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="3.1s" repeatCount="indefinite"/></circle>
+          <circle cx="270" cy="310" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="2.6s" repeatCount="indefinite"/></circle>
+        </g>
+        <!-- Output layer -->
+        <g class="layer-output">
+          <circle cx="370" cy="130" r="10" fill="url(#nn-glow)" opacity="0.8"><animate attributeName="opacity" values="0.8;0.4;0.8" dur="2s" repeatCount="indefinite"/></circle>
+          <circle cx="370" cy="130" r="8" fill="rgba(88,166,255,0.25)" stroke="#58A6FF" stroke-width="2"><animate attributeName="r" values="8;10;8" dur="2s" repeatCount="indefinite"/></circle>
+          <text x="370" y="155" fill="#58A6FF" font-size="9" text-anchor="middle" font-family="Inter, sans-serif" font-weight="600">Productive</text>
+
+          <circle cx="370" cy="210" r="10" fill="url(#nn-red)" opacity="0.8"><animate attributeName="opacity" values="0.8;0.4;0.8" dur="2.5s" repeatCount="indefinite"/></circle>
+          <circle cx="370" cy="210" r="8" fill="rgba(239,68,68,0.25)" stroke="#EF4444" stroke-width="2"><animate attributeName="r" values="8;10;8" dur="2.5s" repeatCount="indefinite"/></circle>
+          <text x="370" y="235" fill="#EF4444" font-size="9" text-anchor="middle" font-family="Inter, sans-serif" font-weight="600">Distracted</text>
+        </g>
+        <!-- Connections -->
+        <g stroke="rgba(88,166,255,0.08)" stroke-width="1" fill="none">
+          <path d="M76 55 Q120 40 164 40" opacity="0.3"><animate attributeName="stroke-opacity" values="0.3;0.6;0.3" dur="3s" repeatCount="indefinite"/></path>
+          <path d="M76 105 Q120 85 164 85" opacity="0.3"><animate attributeName="stroke-opacity" values="0.3;0.6;0.3" dur="3.5s" repeatCount="indefinite"/></path>
+          <path d="M76 155 Q120 130 164 130" opacity="0.3"><animate attributeName="stroke-opacity" values="0.3;0.6;0.3" dur="2.8s" repeatCount="indefinite"/></path>
+          <path d="M76 205 Q120 175 164 175" opacity="0.3"><animate attributeName="stroke-opacity" values="0.3;0.6;0.3" dur="4s" repeatCount="indefinite"/></path>
+          <path d="M76 255 Q120 220 164 220" opacity="0.3"><animate attributeName="stroke-opacity" values="0.3;0.6;0.3" dur="3.2s" repeatCount="indefinite"/></path>
+
+          <path d="M175 40 Q220 65 264 65" opacity="0.3"><animate attributeName="stroke-opacity" values="0.3;0.6;0.3" dur="2.5s" repeatCount="indefinite"/></path>
+          <path d="M175 130 Q220 115 264 115" opacity="0.3"><animate attributeName="stroke-opacity" values="0.3;0.6;0.3" dur="3s" repeatCount="indefinite"/></path>
+          <path d="M175 175 Q220 165 264 165" opacity="0.3"><animate attributeName="stroke-opacity" values="0.3;0.6;0.3" dur="2s" repeatCount="indefinite"/></path>
+          <path d="M175 220 Q220 215 264 215" opacity="0.3"><animate attributeName="stroke-opacity" values="0.3;0.6;0.3" dur="3.5s" repeatCount="indefinite"/></path>
+          <path d="M175 265 Q220 265 264 265" opacity="0.3"><animate attributeName="stroke-opacity" values="0.3;0.6;0.3" dur="2.8s" repeatCount="indefinite"/></path>
+
+          <path d="M275 115 Q320 130 360 130" opacity="0.5" stroke-width="1.5"><animate attributeName="stroke-opacity" values="0.5;1;0.5" dur="2s" repeatCount="indefinite"/></path>
+          <path d="M275 165 Q320 180 360 180" opacity="0.5" stroke-width="1.5"><animate attributeName="stroke-opacity" values="0.5;1;0.5" dur="2.5s" repeatCount="indefinite"/></path>
+          <path d="M275 215 Q320 200 360 200" opacity="0.5" stroke-width="1.5"><animate attributeName="stroke-opacity" values="0.5;1;0.5" dur="3s" repeatCount="indefinite"/></path>
+        </g>
+        <!-- Data flow particles -->
+        <g class="data-flow">
+          <circle r="2.5" fill="#58A6FF"><animateMotion dur="2s" repeatCount="indefinite" path="M76 55 Q120 40 164 40"/></circle>
+          <circle r="2.5" fill="#58A6FF"><animateMotion dur="2.5s" repeatCount="indefinite" path="M76 155 Q120 130 164 130"/></circle>
+          <circle r="2.5" fill="#58A6FF"><animateMotion dur="3s" repeatCount="indefinite" path="M175 40 Q220 65 264 65"/></circle>
+          <circle r="2.5" fill="#58A6FF"><animateMotion dur="2.8s" repeatCount="indefinite" path="M175 175 Q220 165 264 165"/></circle>
+          <circle r="2.5" fill="#58A6FF"><animateMotion dur="2.2s" repeatCount="indefinite" path="M275 115 Q320 130 360 130"/></circle>
+          <circle r="2.5" fill="#EF4444"><animateMotion dur="2.7s" repeatCount="indefinite" path="M275 165 Q320 180 360 180"/></circle>
+          <circle r="2.5" fill="#EF4444"><animateMotion dur="3.2s" repeatCount="indefinite" path="M275 215 Q320 200 360 200"/></circle>
+        </g>
+        <!-- Confidence meter -->
+        <g transform="translate(370, 295)">
+          <rect x="-25" y="-5" width="50" height="8" rx="2" fill="none" stroke="rgba(88,166,255,0.2)" stroke-width="1"/>
+          <rect x="-25" y="-5" width="42" height="8" rx="2" fill="rgba(88,166,255,0.3)"><animate attributeName="width" values="28;46;28" dur="5s" repeatCount="indefinite"/></rect>
+          <text x="0" y="18" fill="#58A6FF" font-size="8" text-anchor="middle" font-family="Inter, sans-serif" opacity="0.5">Confidence</text>
+        </g>
+        <!-- Layer labels -->
+        <text x="70" y="315" fill="rgba(255,255,255,0.15)" font-size="8" text-anchor="middle" font-family="Inter, sans-serif" font-weight="600">INPUT</text>
+        <text x="170" y="315" fill="rgba(255,255,255,0.15)" font-size="8" text-anchor="middle" font-family="Inter, sans-serif" font-weight="600">HIDDEN</text>
+        <text x="270" y="315" fill="rgba(255,255,255,0.15)" font-size="8" text-anchor="middle" font-family="Inter, sans-serif" font-weight="600">HIDDEN</text>
+        <text x="370" y="315" fill="rgba(255,255,255,0.15)" font-size="8" text-anchor="middle" font-family="Inter, sans-serif" font-weight="600">OUTPUT</text>
+      </svg>
     </div>
     <div class="feature-text">
       <span class="feature-label">02</span>
@@ -76,7 +247,8 @@
     </div>
   </article>
 
-  <article class="feature reveal">
+  <!-- 03 ─ Analytics -->
+  <article class="feature">
     <div class="feature-text">
       <span class="feature-label">03</span>
       <h2>Analytics</h2>
@@ -87,7 +259,8 @@
     </div>
   </article>
 
-  <article class="feature feature-reverse reveal">
+  <!-- 04 ─ Smart Interruptions -->
+  <article class="feature feature-reverse">
     <div class="feature-image">
       <img src="screenshots/notification_active.png" alt="Nudge check-in notification">
     </div>
@@ -101,38 +274,20 @@
 </section>
 
 <!-- ═══ Specs ═══ -->
-<section class="specs reveal">
+<section class="specs">
   <div class="specs-inner">
-    <div class="spec">
-      <span class="spec-num">26</span>
-      <span class="spec-label">feature dimensions</span>
-    </div>
-    <div class="spec">
-      <span class="spec-num">&#x2265;98%</span>
-      <span class="spec-label">confidence threshold</span>
-    </div>
-    <div class="spec">
-      <span class="spec-num">100</span>
-      <span class="spec-label">samples to activate</span>
-    </div>
-    <div class="spec">
-      <span class="spec-num">6</span>
-      <span class="spec-label">app categories</span>
-    </div>
-    <div class="spec">
-      <span class="spec-num">5</span>
-      <span class="spec-label">desktop environments</span>
-    </div>
-    <div class="spec">
-      <span class="spec-num">2</span>
-      <span class="spec-label">operating systems</span>
-    </div>
+    <div class="spec"><span class="spec-num">26</span><span class="spec-label">feature dimensions</span></div>
+    <div class="spec"><span class="spec-num">&#x2265;98%</span><span class="spec-label">confidence threshold</span></div>
+    <div class="spec"><span class="spec-num">100</span><span class="spec-label">samples to activate</span></div>
+    <div class="spec"><span class="spec-num">6</span><span class="spec-label">app categories</span></div>
+    <div class="spec"><span class="spec-num">5</span><span class="spec-label">desktop environments</span></div>
+    <div class="spec"><span class="spec-num">2</span><span class="spec-label">operating systems</span></div>
   </div>
 </section>
 
 <!-- ═══ Download ═══ -->
 <section class="download" id="download">
-  <div class="download-inner reveal">
+  <div class="download-inner">
     <h2>Try Nudge on your machine</h2>
     <p class="download-desc">Free and open source. No account, no telemetry, no strings.</p>
     <div class="download-btns">
@@ -179,560 +334,6 @@
     </div>
   </div>
 </footer>
-
-<script>
-// ============================================================
-// Soft ambient orbs — calm, slow, no flicker, no grain
-// ============================================================
-
-(function() {
-  const canvas = document.getElementById('hero-canvas');
-  if (!canvas) return;
-
-  const ctx = canvas.getContext('2d');
-  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  let w, h;
-  function resize() {
-    const dpr = Math.min(window.devicePixelRatio, 2);
-    w = window.innerWidth;
-    h = window.innerHeight;
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
-    canvas.style.width = w + 'px';
-    canvas.style.height = h + 'px';
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  }
-  resize();
-  window.addEventListener('resize', resize);
-
-  // Three large, slow, heavily-blurred colour masses
-  // Only RGB, no white. Opacities extremely low.
-  const blobs = [
-    { cx: 0.35, cy: 0.40, r: 0.55, col: [30,  80, 160], a: 0.018, spd: 0.00025, off: 0.0  }, // deep blue
-    { cx: 0.70, cy: 0.55, r: 0.50, col: [20, 110,  70], a: 0.012, spd: 0.00020, off: 2.4  }, // muted teal
-    { cx: 0.50, cy: 0.65, r: 0.45, col: [50,  60, 130], a: 0.015, spd: 0.00030, off: 4.1  }, // slate purple
-  ];
-
-  let t = 0;
-
-  function frame() {
-    requestAnimationFrame(frame);
-    if (prefersReducedMotion) return;
-    t += 1;
-
-    // Base fill
-    ctx.fillStyle = '#0B0B0E';
-    ctx.fillRect(0, 0, w, h);
-
-    // Feather everything so edges are butter-soft
-    ctx.filter = 'blur(90px)';
-
-    for (const b of blobs) {
-      const phase = t * b.spd + b.off;
-      const x = (b.cx + Math.sin(phase)        * 0.10) * w;
-      const y = (b.cy + Math.cos(phase * 0.73) * 0.08) * h;
-      const r = b.r * Math.min(w, h) * (1 + Math.sin(phase * 0.4) * 0.08);
-
-      const g = ctx.createRadialGradient(x, y, r * 0.15, x, y, r);
-      const [R, G, B] = b.col;
-      g.addColorStop(0,   `rgba(${R},${G},${B},${b.a})`);
-      g.addColorStop(0.6, `rgba(${R},${G},${B},${b.a * 0.35})`);
-      g.addColorStop(1,   'rgba(0,0,0,0)');
-
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, w, h);
-    }
-
-    ctx.filter = 'none';
-  }
-
-  frame();
-})();
-
-// ============================================================
-// Harvest Engine Canvas — Sensor Fusion Pipeline
-// ============================================================
-(function() {
-  const canvas = document.getElementById('harvest-canvas');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  let W, H, dpr;
-  function resize() {
-    const rect = canvas.parentElement.getBoundingClientRect();
-    dpr = Math.min(window.devicePixelRatio, 2);
-    W = Math.min(520, rect.width);
-    H = 380;
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
-    canvas.style.width = W + 'px';
-    canvas.style.height = H + 'px';
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  }
-  resize();
-  window.addEventListener('resize', resize);
-
-  // ── Layout ──
-  const sensors = [
-    { label: 'App',     y: 0.28, col: '#58A6FF', icon: '&#9632;' },
-    { label: 'Idle',    y: 0.50, col: '#22C55E', icon: '&#9716;' },
-    { label: 'Browser', y: 0.72, col: '#A78BFA', icon: '&#9689;' }
-  ];
-  const fusion = { x: 0.50, y: 0.50, r: 0.08 };
-  const outputs = [];
-  for (let i = 0; i < 13; i++) outputs.push({ y: 0.18 + i * 0.055, phase: i * 0.5 });
-
-  // ── Particle system ──
-  const particles = [];
-  function spawnParticle(srcIdx) {
-    particles.push({
-      src: srcIdx,
-      prog: 0,
-      speed: 0.003 + Math.random() * 0.002
-    });
-  }
-
-  // ── Animation state ──
-  let time = 0;
-  let running = true;
-
-  function draw() {
-    if (!running) return;
-    requestAnimationFrame(draw);
-    time += 1;
-
-    // Clear
-    ctx.fillStyle = '#0B0B0E';
-    ctx.fillRect(0, 0, W, H);
-
-    // Subtle grid
-    ctx.strokeStyle = 'rgba(88,166,255,0.03)';
-    ctx.lineWidth = 0.5;
-    for (let x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-    for (let y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
-
-    const cx = fusion.x * W;
-    const cy = fusion.y * H;
-    const fr = fusion.r * Math.min(W, H);
-
-    // ── Draw connection paths ──
-    sensors.forEach((s, i) => {
-      const sx = 0.15 * W;
-      const sy = s.y * H;
-
-      // Glow path
-      ctx.beginPath();
-      ctx.moveTo(sx + 25, sy);
-      ctx.bezierCurveTo(sx + 80, sy, cx - 60, cy, cx - fr * 0.6, cy);
-      ctx.strokeStyle = s.col + '18';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      // Dashed animated line
-      ctx.beginPath();
-      ctx.moveTo(sx + 25, sy);
-      ctx.bezierCurveTo(sx + 80, sy, cx - 60, cy, cx - fr * 0.6, cy);
-      ctx.strokeStyle = s.col + '40';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([6, 8]);
-      ctx.lineDashOffset = -time * (0.3 + i * 0.1);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    });
-
-    // ── Draw data particles ──
-    if (!prefersReducedMotion && Math.random() < 0.08) spawnParticle(Math.floor(Math.random() * 3));
-
-    for (let i = particles.length - 1; i >= 0; i--) {
-      const p = particles[i];
-      p.prog += p.speed;
-      if (p.prog >= 1) { particles.splice(i, 1); continue; }
-
-      const s = sensors[p.src];
-      const sx = 0.15 * W + 25;
-      const sy = s.y * H;
-      const t = p.prog;
-      // Cubic bezier interpolation
-      const mt = 1 - t;
-      const x = mt*mt*mt*sx + 3*mt*mt*t*(sx+80) + 3*mt*t*t*(cx-60) + t*t*t*(cx-fr*0.6);
-      const y = mt*mt*mt*sy + 3*mt*mt*t*sy + 3*mt*t*t*cy + t*t*t*cy;
-
-      ctx.shadowColor = s.col;
-      ctx.shadowBlur = 8;
-      ctx.fillStyle = s.col;
-      ctx.beginPath();
-      ctx.arc(x, y, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-    }
-
-    // ── Draw sensor nodes ──
-    sensors.forEach(s => {
-      const sx = 0.15 * W;
-      const sy = s.y * H;
-      const pulse = Math.sin(time * 0.04 + s.y * 10) * 0.3 + 0.7;
-
-      // Outer glow
-      ctx.shadowColor = s.col;
-      ctx.shadowBlur = 20 * pulse;
-      ctx.fillStyle = s.col + '20';
-      ctx.beginPath();
-      ctx.arc(sx, sy, 22, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-
-      // Ring
-      ctx.strokeStyle = s.col;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(sx, sy, 18, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // Core dot
-      ctx.fillStyle = s.col;
-      ctx.beginPath();
-      ctx.arc(sx, sy, 4, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Label
-      ctx.fillStyle = s.col;
-      ctx.font = '600 10px Inter, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(s.label, sx, sy + 36);
-    });
-
-    // ── Draw fusion node ──
-    const fPulse = Math.sin(time * 0.03) * 0.2 + 0.8;
-
-    // Outer glow
-    ctx.shadowColor = '#58A6FF';
-    ctx.shadowBlur = 30 * fPulse;
-    ctx.fillStyle = 'rgba(88,166,255,0.08)';
-    ctx.beginPath();
-    ctx.arc(cx, cy, fr * 1.4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-
-    // Rotating ring
-    ctx.strokeStyle = 'rgba(88,166,255,0.25)';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([8, 6]);
-    ctx.lineDashOffset = -time * 0.5;
-    ctx.beginPath();
-    ctx.arc(cx, cy, fr, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Inner ring
-    ctx.strokeStyle = 'rgba(88,166,255,0.15)';
-    ctx.beginPath();
-    ctx.arc(cx, cy, fr * 0.65, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Core
-    ctx.fillStyle = '#58A6FF';
-    ctx.beginPath();
-    ctx.arc(cx, cy, 8 + Math.sin(time * 0.05) * 2, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Label
-    ctx.fillStyle = 'rgba(88,166,255,0.6)';
-    ctx.font = '700 9px Inter, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('FUSION', cx, cy + fr + 22);
-
-    // ── Draw output rays ──
-    outputs.forEach((o, i) => {
-      const oy = o.y * H;
-      const ox = 0.82 * W;
-      const flicker = Math.sin(time * 0.03 + o.phase) * 0.4 + 0.6;
-
-      // Ray line
-      ctx.strokeStyle = `rgba(88,166,255,${0.08 * flicker})`;
-      ctx.lineWidth = 0.5;
-      ctx.beginPath();
-      ctx.moveTo(cx + fr * 0.6, cy);
-      ctx.lineTo(ox - 10, oy);
-      ctx.stroke();
-
-      // Dot
-      ctx.fillStyle = `rgba(88,166,255,${0.5 * flicker})`;
-      ctx.beginPath();
-      ctx.arc(ox, oy, 3, 0, Math.PI * 2);
-      ctx.fill();
-    });
-
-    // 26 label
-    ctx.fillStyle = 'rgba(88,166,255,0.5)';
-    ctx.font = '700 14px "SF Mono", monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText('26', 0.82 * W, 0.92 * H);
-    ctx.fillStyle = 'rgba(88,166,255,0.3)';
-    ctx.font = '600 8px Inter, sans-serif';
-    ctx.fillText('DIMS', 0.82 * W, 0.96 * H);
-
-    // ── Signal quality indicators ──
-    const qy = H - 24;
-    const qualities = [
-      { label: 'TRUSTED', col: '#22C55E', x: W * 0.30 },
-      { label: 'USABLE',  col: '#FBBF24', x: W * 0.50 },
-      { label: 'POOR',    col: '#EF4444', x: W * 0.70 }
-    ];
-    qualities.forEach(q => {
-      const blink = Math.sin(time * 0.02 + q.x) * 0.3 + 0.7;
-      ctx.fillStyle = q.col;
-      ctx.globalAlpha = blink;
-      ctx.beginPath();
-      ctx.arc(q.x, qy - 8, 3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-
-      ctx.fillStyle = q.col;
-      ctx.font = '600 9px Inter, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.globalAlpha = 0.7;
-      ctx.fillText(q.label, q.x, qy + 6);
-      ctx.globalAlpha = 1;
-    });
-  }
-
-  // Pause when not visible
-  const obs = new IntersectionObserver(entries => {
-    running = entries[0].isIntersecting;
-    if (running) draw();
-  }, { threshold: 0.1 });
-  obs.observe(canvas);
-
-  draw();
-})();
-
-// ============================================================
-// AI Brain Canvas — Neural Network
-// ============================================================
-(function() {
-  const canvas = document.getElementById('brain-canvas');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  let W, H, dpr;
-  function resize() {
-    const rect = canvas.parentElement.getBoundingClientRect();
-    dpr = Math.min(window.devicePixelRatio, 2);
-    W = Math.min(520, rect.width);
-    H = 380;
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
-    canvas.style.width = W + 'px';
-    canvas.style.height = H + 'px';
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  }
-  resize();
-  window.addEventListener('resize', resize);
-
-  // ── Network topology ──
-  const layers = [
-    { count: 5, x: 0.14, label: 'INPUT' },
-    { count: 7, x: 0.38, label: 'HIDDEN' },
-    { count: 6, x: 0.62, label: 'HIDDEN' },
-    { count: 2, x: 0.86, label: 'OUTPUT' }
-  ];
-
-  // Build node positions
-  const nodes = [];
-  layers.forEach((layer, li) => {
-    for (let i = 0; i < layer.count; i++) {
-      const spacing = H / (layer.count + 1);
-      nodes.push({
-        x: layer.x * W,
-        y: spacing * (i + 1),
-        layer: li,
-        idx: i,
-        phase: Math.random() * Math.PI * 2
-      });
-    }
-  });
-
-  // Build connections
-  const connections = [];
-  for (let i = 0; i < nodes.length; i++) {
-    for (let j = i + 1; j < nodes.length; j++) {
-      if (nodes[j].layer === nodes[i].layer + 1) {
-        connections.push({ from: nodes[i], to: nodes[j], phase: Math.random() * Math.PI * 2 });
-      }
-    }
-  }
-
-  // Data particles flowing through connections
-  const flowParticles = [];
-  function spawnFlow() {
-    const conn = connections[Math.floor(Math.random() * connections.length)];
-    flowParticles.push({
-      from: conn.from,
-      to: conn.to,
-      prog: 0,
-      speed: 0.008 + Math.random() * 0.006,
-      col: conn.to.layer === 3 ? (conn.to.idx === 0 ? '#58A6FF' : '#EF4444') : '#58A6FF'
-    });
-  }
-
-  // ── State ──
-  let time = 0;
-  let running = true;
-
-  function draw() {
-    if (!running) return;
-    requestAnimationFrame(draw);
-    time += 1;
-
-    // Clear
-    ctx.fillStyle = '#0B0B0E';
-    ctx.fillRect(0, 0, W, H);
-
-    // Subtle grid
-    ctx.strokeStyle = 'rgba(88,166,255,0.02)';
-    ctx.lineWidth = 0.5;
-    for (let x = 0; x < W; x += 50) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-    for (let y = 0; y < H; y += 50) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
-
-    // ── Draw connections ──
-    connections.forEach(c => {
-      const flicker = Math.sin(time * 0.02 + c.phase) * 0.15 + 0.12;
-      ctx.strokeStyle = `rgba(88,166,255,${flicker})`;
-      ctx.lineWidth = 0.5;
-      ctx.beginPath();
-      ctx.moveTo(c.from.x, c.from.y);
-      ctx.lineTo(c.to.x, c.to.y);
-      ctx.stroke();
-    });
-
-    // ── Draw flow particles ──
-    if (!prefersReducedMotion && Math.random() < 0.06) spawnFlow();
-
-    for (let i = flowParticles.length - 1; i >= 0; i--) {
-      const p = flowParticles[i];
-      p.prog += p.speed;
-      if (p.prog >= 1) { flowParticles.splice(i, 1); continue; }
-
-      const x = p.from.x + (p.to.x - p.from.x) * p.prog;
-      const y = p.from.y + (p.to.y - p.from.y) * p.prog;
-
-      ctx.shadowColor = p.col;
-      ctx.shadowBlur = 6;
-      ctx.fillStyle = p.col;
-      ctx.beginPath();
-      ctx.arc(x, y, 2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-    }
-
-    // ── Draw nodes ──
-    nodes.forEach(n => {
-      const isOutput = n.layer === 3;
-      const isProductive = isOutput && n.idx === 0;
-      const isDistracted = isOutput && n.idx === 1;
-      const col = isDistracted ? '#EF4444' : '#58A6FF';
-      const pulse = Math.sin(time * 0.035 + n.phase) * 0.25 + 0.75;
-      const r = isOutput ? 10 : 5.5;
-
-      // Glow
-      ctx.shadowColor = col;
-      ctx.shadowBlur = (isOutput ? 18 : 10) * pulse;
-      ctx.fillStyle = col + '20';
-      ctx.beginPath();
-      ctx.arc(n.x, n.y, r + 6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-
-      // Core
-      ctx.fillStyle = col;
-      ctx.globalAlpha = 0.3 + pulse * 0.5;
-      ctx.beginPath();
-      ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-
-      // Stroke
-      ctx.strokeStyle = col;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-      ctx.stroke();
-    });
-
-    // ── Output labels ──
-    const outNodes = nodes.filter(n => n.layer === 3);
-    ctx.font = '600 9px Inter, sans-serif';
-    ctx.textAlign = 'center';
-
-    ctx.fillStyle = '#58A6FF';
-    ctx.fillText('Productive', outNodes[0].x, outNodes[0].y + 24);
-
-    ctx.fillStyle = '#EF4444';
-    ctx.fillText('Distracted', outNodes[1].x, outNodes[1].y + 24);
-
-    // ── Confidence meter ──
-    const mx = W * 0.86;
-    const my = H - 40;
-    const mW = 60;
-    const conf = (Math.sin(time * 0.008) * 0.15 + 0.85); // 70-100%
-
-    ctx.fillStyle = 'rgba(255,255,255,0.08)';
-    ctx.beginPath();
-    ctx.roundRect(mx - mW/2, my, mW, 8, 3);
-    ctx.fill();
-
-    ctx.fillStyle = `rgba(88,166,255,${0.4 + conf * 0.3})`;
-    ctx.beginPath();
-    ctx.roundRect(mx - mW/2, my, mW * conf, 8, 3);
-    ctx.fill();
-
-    ctx.fillStyle = 'rgba(88,166,255,0.5)';
-    ctx.font = '600 8px Inter, sans-serif';
-    ctx.fillText('Confidence', mx, my + 22);
-
-    // ── Layer labels ──
-    ctx.fillStyle = 'rgba(255,255,255,0.15)';
-    ctx.font = '600 8px Inter, sans-serif';
-    layers.forEach(l => {
-      ctx.textAlign = 'center';
-      ctx.fillText(l.label, l.x * W, H - 10);
-    });
-  }
-
-  // Pause when not visible
-  const obs = new IntersectionObserver(entries => {
-    running = entries[0].isIntersecting;
-    if (running) draw();
-  }, { threshold: 0.1 });
-  obs.observe(canvas);
-
-  draw();
-})();
-
-// ============================================================
-// Scroll-triggered reveal animations
-// ============================================================
-(function() {
-  const revealElements = document.querySelectorAll('.reveal, .reveal-delay');
-
-  const revealObserver = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        entry.target.classList.add('revealed');
-        revealObserver.unobserve(entry.target);
-      }
-    });
-  }, {
-    threshold: 0.1,
-    rootMargin: '0px 0px -40px 0px'
-  });
-
-  revealElements.forEach(el => revealObserver.observe(el));
-})();
-</script>
 
 </body>
 </html>
