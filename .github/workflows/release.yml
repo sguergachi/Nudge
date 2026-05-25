@@ -70,25 +70,25 @@ jobs:
         continue-on-error: true
         shell: pwsh
         run: |
-          dotnet tool install --global wix --version 4.0.5 2>&1 | Out-Null
-          $wix = "$env:USERPROFILE\.dotnet\tools\wix.exe"
-          if (-not (Test-Path $wix)) { Write-Host "wix not found"; exit 0 }
+          choco install innosetup -y --no-progress 2>&1 | Out-Null
+          $iscc = Get-ChildItem "C:\Program Files*\Inno Setup*\ISCC.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $iscc) {
+            $iscc = Get-ChildItem "$env:ChocolateyInstall" -Filter "ISCC.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+          }
+          if (-not $iscc) { Write-Host "ISCC not found"; exit 0 }
+          Write-Host "ISCC: $iscc"
           $version = Select-String -Path "NudgeCrossPlatform\nudge-tray.cs" -Pattern 'const string VERSION = "([.\d]+)"' | ForEach-Object { $_.Matches.Groups[1].Value }
           if (-not $version) { Write-Host "no version"; exit 0 }
-          $outDir = Join-Path $PWD "dist"
-          New-Item -ItemType Directory -Path $outDir -Force | Out-Null
-          $msiPath = Join-Path $outDir "Nudge-Setup-$version.msi"
-          Write-Host "Building $msiPath..."
-          & $wix build "NudgeCrossPlatform\assets\windows\installer.wxs" -d Version=$version -o $msiPath 2>&1
-          if ($LASTEXITCODE -ne 0) { Write-Host "wix failed"; exit 0 }
-          if (Test-Path $msiPath) { Write-Host "MSI: $((Get-Item $msiPath).Length/1KB) KB" }
+          & $iscc "/DMyAppVersion=$version" "NudgeCrossPlatform\assets\windows\setup.iss" 2>&1
+          $msi = Get-ChildItem "dist" -Filter "Nudge-Setup-*.exe" | Select-Object -First 1 -ExpandProperty FullName
+          if ($msi) { Write-Host "Installer: $msi" }
 
       - name: Upload Windows MSI installer
         if: success() || failure()
         uses: actions/upload-artifact@v4
         with:
           name: nudge-win-installer
-          path: dist\Nudge-Setup-*.msi
+          path: dist\Nudge-Setup-*.exe
           if-no-files-found: warn
 
   build-linux:
@@ -203,26 +203,20 @@ jobs:
       - name: Tag and publish release
         run: |
           ASSETS=()
-          for f in Nudge-Setup-*.msi nudge-win-x64.zip nudge-linux-installer.run nudge-linux-x64.tar.gz; do
-            [ -f "$f" ] && ASSETS+=("$f")
-          done
-          if [ ${#ASSETS[@]} -eq 0 ]; then echo "No assets found — skipping release"; exit 0; fi
-          echo "Release assets: ${ASSETS[*]}"
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "v$VERSION"
-          git push origin "v$VERSION"
-          ASSETS=()
-          for f in Nudge-Setup-*.msi nudge-win-x64.zip nudge-linux-installer.run nudge-linux-x64.tar.gz; do
-            [ -f "$f" ] && ASSETS+=("$f")
-          done
-          echo "Release assets: ${ASSETS[*]}"
-          cat > release-notes.md << 'NOTES'
-          ## Install
+           for f in Nudge-Setup-*.exe nudge-win-x64.zip nudge-linux-installer.run nudge-linux-x64.tar.gz; do
+             [ -f "$f" ] && ASSETS+=("$f")
+           done
+           echo "Release assets: ${ASSETS[*]}"
+           git config user.name  "github-actions[bot]"
+           git config user.email "github-actions[bot]@users.noreply.github.com"
+           git tag "v$VERSION"
+           git push origin "v$VERSION"
+           cat > release-notes.md << 'NOTES'
+           ## Install
 
-          ### Windows
-          1. Download **Nudge-Setup-*.msi** and run it
-          2. Or download **nudge-win-x64.zip** and run **nudge-tray.exe**
+           ### Windows
+           1. Download **Nudge-Setup-*.exe** and run it
+           2. Or download **nudge-win-x64.zip** and run **nudge-tray.exe**
 
           ### Linux
           1. Download **nudge-linux-installer.run** and run: `chmod +x nudge-linux-installer.run && ./nudge-linux-installer.run`
