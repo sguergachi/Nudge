@@ -259,7 +259,7 @@ jobs:
       - name: Tag and publish release
         run: |
           ASSETS=()
-           for f in Nudge-Setup-*.msi nudge-win-x64.zip nudge-linux-installer.run nudge-linux-x64.tar.gz; do
+           for f in Nudge-Setup*.msi nudge-win-x64.zip nudge-linux-installer.run nudge-linux-x64.tar.gz; do
              [ -f "$f" ] && ASSETS+=("$f")
            done
            echo "Release assets: ${ASSETS[*]}"
