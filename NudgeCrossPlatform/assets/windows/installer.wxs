@@ -21,7 +21,7 @@
           <Component Id="ShortcutComponent" Guid="B2C3D4E5-F6A7-8901-BCDE-F12345678901">
             <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="Nudge" Target="[INSTALLFOLDER]nudge-tray.exe" WorkingDirectory="INSTALLFOLDER" />
             <Shortcut Id="DesktopShortcut" Directory="DesktopFolder" Name="Nudge" Target="[INSTALLFOLDER]nudge-tray.exe" WorkingDirectory="INSTALLFOLDER" />
-            <RemoveFolder Id="RemoveStartMenu" Directory="ProgramMenuFolder" />
+            <RemoveFolder Id="RemoveStartMenu" Directory="ProgramMenuFolder" On="uninstall" />
             <RegistryValue Root="HKCU" Key="Software\Nudge" Name="installed" Type="integer" Value="1" KeyPath="yes" />
           </Component>
         </Directory>
