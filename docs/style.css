@@ -81,85 +81,45 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;height:var(--nav-h);backgrou
 .g-spec{margin-top:22px;padding-top:18px;border-top:1px solid var(--border);font-size:.76rem;color:var(--text-muted);font-family:var(--font-mono);position:relative;z-index:1;letter-spacing:.01em}
 .g-extra{margin-top:18px;font-size:.88rem;color:var(--text-dim);line-height:1.65;position:relative;z-index:1}
 
-/* ── Engine orbs ──────────────────────────────────────── */
-.orb-field{position:relative;width:100%;max-width:420px;aspect-ratio:1;overflow:hidden}
-.orb-field::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(11,11,14,0) 40%,var(--bg) 100%);z-index:5;pointer-events:none}
+/* ── Engine SVG: Signal Grid ─────────────────────────── */
+.sig-grid{width:100%;max-width:420px;aspect-ratio:1;display:block}
 
-.orb{position:absolute;border-radius:50%;filter:blur(40px);animation-timing-function:ease-in-out;animation-iteration-count:infinite}
+.exp-ring{animation:expandRing 4s ease-in infinite;transform-origin:200px 200px}
+@keyframes expandRing{0%{r:20px;opacity:.25}100%{r:190px;opacity:0}}
 
-.orb-1{
-  width:55%;height:55%;top:20%;left:5%;
-  background:radial-gradient(circle,rgba(88,166,255,.5),rgba(58,130,220,.15),transparent);
-  animation:float1 8s ease-in-out infinite
-}
-@keyframes float1{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(12%,-8%) scale(1.15)}66%{transform:translate(-5%,10%) scale(.9)}}
+.dot-ring{animation:dotPulse 4s ease-in-out infinite}
+@keyframes dotPulse{0%,100%{opacity:.4}50%{opacity:.9}}
 
-.orb-2{
-  width:45%;height:45%;top:35%;right:5%;
-  background:radial-gradient(circle,rgba(120,180,255,.4),rgba(88,140,220,.1),transparent);
-  animation:float2 10s ease-in-out infinite
-}
-@keyframes float2{0%,100%{transform:translate(0,0) scale(1)}25%{transform:translate(-10%,5%) scale(1.1)}75%{transform:translate(8%,-5%) scale(.85)}}
+.sweep-arc{animation:sweep 8s linear infinite;transform-origin:200px 200px}
+@keyframes sweep{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
 
-.orb-3{
-  width:35%;height:35%;bottom:15%;left:25%;
-  background:radial-gradient(circle,rgba(160,210,255,.35),rgba(100,160,230,.1),transparent);
-  animation:float3 9s ease-in-out infinite
-}
-@keyframes float3{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-8%,-12%) scale(1.2)}}
+.center-dot{animation:cdPulse 3s ease-in-out infinite}
+@keyframes cdPulse{0%,100%{r:4px;opacity:.7}50%{r:6px;opacity:1}}
 
-.orb-core{
-  width:15%;height:15%;top:50%;left:50%;transform:translate(-50%,-50%);
-  background:radial-gradient(circle,rgba(200,230,255,.7),rgba(88,166,255,.3),transparent);
-  filter:blur(12px);z-index:2;
-  animation:corePulse 3s ease-in-out infinite
-}
-@keyframes corePulse{0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.7}50%{transform:translate(-50%,-50%) scale(1.6);opacity:1}}
+.center-ring{animation:crPulse 3s ease-in-out infinite}
+@keyframes crPulse{0%,100%{r:8px;opacity:.2}50%{r:14px;opacity:.4}}
 
-/* ── AI Brain orbs ───────────────────────────────────── */
-.orb-field-ai{position:relative;width:100%;max-width:420px;aspect-ratio:1;overflow:hidden}
-.orb-field-ai::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(11,11,14,0) 35%,var(--bg) 100%);z-index:5;pointer-events:none}
+/* ── AI SVG: Neural Mesh ────────────────────────────── */
+.neural-mesh{width:100%;max-width:420px;aspect-ratio:1;display:block}
 
-.ai-core{
-  position:absolute;width:22%;height:22%;top:50%;left:50%;transform:translate(-50%,-50%);
-  border-radius:50%;z-index:3;
-  background:radial-gradient(circle,rgba(180,255,210,.6),rgba(34,197,94,.25),transparent);
-  filter:blur(8px);
-  animation:coreBreathe 5s ease-in-out infinite
-}
-@keyframes coreBreathe{0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.8}50%{transform:translate(-50%,-50%) scale(1.5);opacity:1}}
+.node-ring circle,.node-ring-mid circle{animation:nodePulse 2s ease-in-out infinite;animation-delay:var(--delay,0s)}
+@keyframes nodePulse{0%,100%{opacity:.3;r:3px}20%{opacity:1;r:5px}40%{opacity:.5;r:3px}}
 
-.ai-ring{
-  position:absolute;width:50%;height:50%;top:50%;left:50%;transform:translate(-50%,-50%);
-  border-radius:50%;z-index:2;
-  border:1px solid rgba(34,197,94,.08);
-  animation:ringRotate 12s linear infinite
-}
-@keyframes ringRotate{0%{transform:translate(-50%,-50%) rotate(0deg)}100%{transform:translate(-50%,-50%) rotate(360deg)}}
+.core-node{animation:coreBreathe 4s ease-in-out infinite;transform-origin:200px 200px}
+@keyframes coreBreathe{0%,100%{transform:scale(1);opacity:.8}50%{transform:scale(1.3);opacity:1}}
 
-.ai-orb{position:absolute;border-radius:50%;filter:blur(16px);z-index:1}
+.core-inner{animation:ciPulse 4s ease-in-out infinite}
+@keyframes ciPulse{0%,100%{r:4px;opacity:.6}50%{r:6px;opacity:.9}}
 
-.ai-o1{width:12%;height:12%;top:15%;left:40%;background:radial-gradient(circle,rgba(34,197,94,.5),transparent);animation:aiOrb1 6s ease-in-out infinite}
-@keyframes aiOrb1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(20%,15%) scale(1.3)}}
+.spark{animation:sparkFade 2.5s ease-in-out infinite}
+.s1{animation-delay:0s}.s2{animation-delay:.8s}.s3{animation-delay:1.6s}
+@keyframes sparkFade{0%,100%{opacity:0;r:1px}15%{opacity:1;r:3px}50%{opacity:.6;r:2px}85%{opacity:0;r:1px}}
 
-.ai-o2{width:10%;height:10%;top:55%;left:15%;background:radial-gradient(circle,rgba(34,197,94,.4),transparent);animation:aiOrb2 7s ease-in-out infinite}
-@keyframes aiOrb2{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-15%,-20%) scale(1.2)}}
+/* ── Canvas removed ────────────────────────────────── */
+canvas{display:none}
 
-.ai-o3{width:14%;height:14%;bottom:20%;right:25%;background:radial-gradient(circle,rgba(34,197,94,.45),transparent);animation:aiOrb3 8s ease-in-out infinite}
-@keyframes aiOrb3{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-10%,-15%) scale(1.25)}}
-
-.ai-o4{width:8%;height:8%;top:25%;right:20%;background:radial-gradient(circle,rgba(160,255,200,.5),transparent);animation:aiOrb4 5s ease-in-out infinite}
-@keyframes aiOrb4{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(15%,10%) scale(1.4)}}
-
-.ai-o5{width:9%;height:9%;bottom:35%;left:35%;background:radial-gradient(circle,rgba(100,220,150,.45),transparent);animation:aiOrb5 7.5s ease-in-out infinite}
-@keyframes aiOrb5{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-20%,10%) scale(1.15)}}
-
-.ai-o6{width:11%;height:11%;top:40%;right:35%;background:radial-gradient(circle,rgba(80,200,140,.4),transparent);animation:aiOrb6 6.5s ease-in-out infinite}
-@keyframes aiOrb6{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(12%,-12%) scale(1.3)}}
-
-/* Remove old canvas styles */
+/* ── Viz container ──────────────────────────────────── */
 .g-viz{display:flex;align-items:center;justify-content:center;min-height:200px}
-canvas{display:none} /* old canvas hidden */
 
 /* ── Screenshots ─────────────────────────────────────── */
 .g-viz-shots{position:relative;display:flex;align-items:center;justify-content:center;min-height:320px}
@@ -222,7 +182,7 @@ footer{padding:44px 32px;border-top:1px solid var(--border)}
   .g-text{max-width:100%!important}
   .g-left .g-text,.g-right .g-text{max-width:100%!important}
   .g-right .g-text{margin-left:0}
-  .orb-field,.orb-field-ai{max-width:320px}
+  .sig-grid,.neural-mesh{max-width:340px}
   .shot-main{max-width:260px;margin-right:-20px}.shot-sub{max-width:160px;right:0}
   .dims-inline-grid{grid-template-columns:1fr 1fr}
   .download-group{flex-direction:column}

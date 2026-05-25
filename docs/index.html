@@ -67,12 +67,29 @@
       </details>
     </div>
     <div class="g-viz">
-      <div class="orb-field">
-        <div class="orb orb-1"></div>
-        <div class="orb orb-2"></div>
-        <div class="orb orb-3"></div>
-        <div class="orb orb-core"></div>
-      </div>
+      <svg class="sig-grid" viewBox="0 0 400 400">
+        <!-- Concentric rings -->
+        <circle cx="200" cy="200" r="50" fill="none" stroke="rgba(88,166,255,0.08)" stroke-width="0.5"/>
+        <circle cx="200" cy="200" r="100" fill="none" stroke="rgba(88,166,255,0.06)" stroke-width="0.5"/>
+        <circle cx="200" cy="200" r="150" fill="none" stroke="rgba(88,166,255,0.04)" stroke-width="0.5"/>
+        <circle cx="200" cy="200" r="190" fill="none" stroke="rgba(88,166,255,0.02)" stroke-width="0.5"/>
+        <!-- Expanding ring -->
+        <circle cx="200" cy="200" r="20" fill="none" stroke="rgba(88,166,255,0.15)" stroke-width="1" class="exp-ring"/>
+        <!-- Dots on rings -->
+        <g class="dot-ring" style="animation-delay:0s">
+          <circle cx="200" cy="100" r="2.5" fill="#58A6FF" opacity="0.5"/><circle cx="271" cy="129" r="2.5" fill="#58A6FF" opacity="0.5"/><circle cx="306" cy="200" r="2.5" fill="#58A6FF" opacity="0.5"/><circle cx="271" cy="271" r="2.5" fill="#58A6FF" opacity="0.5"/><circle cx="200" cy="300" r="2.5" fill="#58A6FF" opacity="0.5"/><circle cx="129" cy="271" r="2.5" fill="#58A6FF" opacity="0.5"/><circle cx="94" cy="200" r="2.5" fill="#58A6FF" opacity="0.5"/><circle cx="129" cy="129" r="2.5" fill="#58A6FF" opacity="0.5"/>
+        </g>
+        <g class="dot-ring" style="animation-delay:2s">
+          <circle cx="200" cy="50" r="2" fill="#58A6FF" opacity="0.35"/><circle cx="250" cy="94" r="2" fill="#58A6FF" opacity="0.35"/><circle cx="350" cy="150" r="2" fill="#58A6FF" opacity="0.35"/><circle cx="350" cy="250" r="2" fill="#58A6FF" opacity="0.35"/><circle cx="250" cy="306" r="2" fill="#58A6FF" opacity="0.35"/><circle cx="150" cy="350" r="2" fill="#58A6FF" opacity="0.35"/><circle cx="94" cy="250" r="2" fill="#58A6FF" opacity="0.35"/><circle cx="94" cy="150" r="2" fill="#58A6FF" opacity="0.35"/>
+        </g>
+        <!-- Rotating sweep arc -->
+        <g class="sweep-arc">
+          <path d="M 200 200 L 200 10 A 190 190 0 0 1 390 200 Z" fill="rgba(88,166,255,0.04)"/>
+        </g>
+        <!-- Center dot -->
+        <circle cx="200" cy="200" r="4" fill="#58A6FF" opacity="0.7" class="center-dot"/>
+        <circle cx="200" cy="200" r="8" fill="none" stroke="rgba(88,166,255,0.2)" stroke-width="1" class="center-ring"/>
+      </svg>
     </div>
   </div>
 </section>
@@ -81,16 +98,40 @@
 <section class="section" id="ai">
   <div class="grid g-right" data-reveal>
     <div class="g-viz">
-      <div class="orb-field-ai">
-        <div class="ai-core"></div>
-        <div class="ai-ring"></div>
-        <div class="ai-orb ai-o1"></div>
-        <div class="ai-orb ai-o2"></div>
-        <div class="ai-orb ai-o3"></div>
-        <div class="ai-orb ai-o4"></div>
-        <div class="ai-orb ai-o5"></div>
-        <div class="ai-orb ai-o6"></div>
-      </div>
+      <svg class="neural-mesh" viewBox="0 0 400 400">
+        <!-- Connection lines -->
+        <g stroke="rgba(34,197,94,0.08)" stroke-width="0.5">
+          <line x1="80" y1="120" x2="200" y2="200"/><line x1="200" y1="60" x2="200" y2="200"/><line x1="320" y1="120" x2="200" y2="200"/>
+          <line x1="340" y1="240" x2="200" y2="200"/><line x1="280" y1="350" x2="200" y2="200"/><line x1="120" y1="350" x2="200" y2="200"/>
+          <line x1="60" y1="240" x2="200" y2="200"/>
+        </g>
+        <!-- Outer ring of nodes (14 nodes) -->
+        <g class="node-ring">
+          <circle cx="80" cy="120" r="3" fill="#22C55E" opacity="0.3" style="animation-delay:0s"/>
+          <circle cx="160" cy="72" r="3" fill="#22C55E" opacity="0.3" style="animation-delay:.15s"/>
+          <circle cx="240" cy="72" r="3" fill="#22C55E" opacity="0.3" style="animation-delay:.3s"/>
+          <circle cx="320" cy="120" r="3" fill="#22C55E" opacity="0.3" style="animation-delay:.45s"/>
+          <circle cx="340" cy="240" r="3" fill="#22C55E" opacity="0.3" style="animation-delay:.6s"/>
+          <circle cx="280" cy="350" r="3" fill="#22C55E" opacity="0.3" style="animation-delay:.75s"/>
+          <circle cx="120" cy="350" r="3" fill="#22C55E" opacity="0.3" style="animation-delay:.9s"/>
+          <circle cx="60" cy="240" r="3" fill="#22C55E" opacity="0.3" style="animation-delay:1.05s"/>
+        </g>
+        <!-- Middle ring (6 nodes) -->
+        <g class="node-ring-mid">
+          <circle cx="140" cy="140" r="2.5" fill="#22C55E" opacity="0.2" style="animation-delay:0.1s"/>
+          <circle cx="260" cy="140" r="2.5" fill="#22C55E" opacity="0.2" style="animation-delay:0.3s"/>
+          <circle cx="300" cy="240" r="2.5" fill="#22C55E" opacity="0.2" style="animation-delay:0.5s"/>
+          <circle cx="200" cy="290" r="2.5" fill="#22C55E" opacity="0.2" style="animation-delay:0.7s"/>
+          <circle cx="100" cy="240" r="2.5" fill="#22C55E" opacity="0.2" style="animation-delay:0.9s"/>
+        </g>
+        <!-- Central node -->
+        <circle cx="200" cy="200" r="12" fill="rgba(34,197,94,0.08)" stroke="rgba(34,197,94,0.25)" stroke-width="1" class="core-node"/>
+        <circle cx="200" cy="200" r="4" fill="#22C55E" opacity="0.6" class="core-inner"/>
+        <!-- Spark particles (travel from outer to center) -->
+        <circle cx="80" cy="120" r="2" fill="#4ADE80" class="spark s1"/>
+        <circle cx="280" cy="350" r="2" fill="#4ADE80" class="spark s2"/>
+        <circle cx="320" cy="120" r="2" fill="#4ADE80" class="spark s3"/>
+      </svg>
     </div>
     <div class="g-text">
       <div class="g-num t-green">02</div>
