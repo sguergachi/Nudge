@@ -193,7 +193,7 @@ jobs:
 
   release:
     needs: [check-version, build-windows, build-linux]
-    if: always() && needs.check-version.result == 'success' && needs.check-version.outputs.should_release == 'true'
+    if: needs.check-version.result == 'success' && needs.check-version.outputs.should_release == 'true' && (needs.build-linux.result == 'success' || needs.build-windows.result == 'success')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -225,6 +225,12 @@ jobs:
 
       - name: Tag and publish release
         run: |
+          ASSETS=()
+          for f in Nudge-Setup-*.msi nudge-win-x64.zip nudge-linux-installer.run nudge-linux-x64.tar.gz; do
+            [ -f "$f" ] && ASSETS+=("$f")
+          done
+          if [ ${#ASSETS[@]} -eq 0 ]; then echo "No assets found — skipping release"; exit 0; fi
+          echo "Release assets: ${ASSETS[*]}"
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag "v$VERSION"
