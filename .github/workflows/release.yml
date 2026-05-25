@@ -63,11 +63,20 @@ jobs:
       - name: Install WiX Toolset
         shell: pwsh
         run: |
-          dotnet tool install --global wix --version 4.0.5 2>$null
-          if ($LASTEXITCODE -ne 0) { Write-Host "WiX 4.0.5 not found, trying latest 4.x"; dotnet tool install --global wix --version 4.0.4 2>$null }
-          if ($LASTEXITCODE -ne 0) { Write-Host "WiX install failed"; exit 0 }
+          Write-Host "Listing global tools before install..."
+          dotnet tool list --global 2>&1
+          Write-Host "Installing WiX..."
+          dotnet tool install --global wix 2>&1
+          Write-Host "exit: $LASTEXITCODE"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Trying without version pin..."
+            dotnet tool install --global wix --version 4.0.5 2>&1
+            Write-Host "exit: $LASTEXITCODE"
+            if ($LASTEXITCODE -ne 0) { Write-Host "WiX install failed — skipping MSI"; exit 0 }
+          }
           $wixPath = "$env:USERPROFILE\.dotnet\tools\wix.exe"
-          & $wixPath --version
+          Write-Host "Checking $wixPath..."
+          if (Test-Path $wixPath) { & $wixPath --version } else { Write-Host "wix.exe not found at $wixPath"; exit 0 }
 
       - name: Build Windows MSI installer
         shell: pwsh
