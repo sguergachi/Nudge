@@ -244,7 +244,7 @@ footer{padding:44px 32px;border-top:1px solid var(--border)}
   .hero h1{font-size:clamp(3rem,10vw,5rem)}
   .hero-desc{font-size:1rem;max-width:380px}
   .grid{grid-template-columns:1fr;gap:40px}
-  .g-right .g-viz{order:0;margin:0 auto}
+  .g-viz{order:-1;margin:0 auto}
   .g-text{max-width:100%!important}
   .g-left .g-text,.g-right .g-text{max-width:100%!important}
   .g-right .g-text{margin-left:0}
