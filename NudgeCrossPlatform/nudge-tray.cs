@@ -80,6 +80,7 @@ namespace NudgeTray
         static int _analyticsScrollVerificationAttempts;
         static bool _uiAuditMode;
         static string _uiAuditOutputDir = "";
+        static bool _uiAuditStaging;
 
         // Common tray icon for all platforms
         static TrayIcon? _trayIcon;
@@ -219,6 +220,10 @@ namespace NudgeTray
                         i++;
                     }
                 }
+                else if (args[i] == "--staging")
+                {
+                    _uiAuditStaging = true;
+                }
             }
 
             // ── Load persisted settings (CLI args take precedence) ────────────────
@@ -354,6 +359,134 @@ namespace NudgeTray
 
         // ━━ UI Audit ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+        static AnalyticsData CreateStagingAnalyticsData()
+        {
+            var data = new AnalyticsData();
+
+            // App usage - realistic developer workflow
+            data.AppUsage["Visual Studio Code:"] = 92;
+            data.AppUsage["Chrome"] = 64;
+            data.AppUsage["Figma"] = 38;
+            data.AppUsage["Terminal"] = 31;
+            data.AppUsage["Obsidian"] = 24;
+            data.AppUsage["Slack"] = 18;
+            data.AppUsage["Spotify"] = 14;
+            data.AppUsage["Discord"] = 11;
+            data.AppUsage["Settings"] = 6;
+            data.AppUsage["File Explorer"] = 5;
+            data.AppUsage["Notion"] = 4;
+            data.AppUsage["Postman"] = 3;
+
+            foreach (var kv in data.AppUsage)
+                data.TotalActivityMinutes += kv.Value;
+
+            // Hourly productivity - 9am to 6pm with realistic patterns
+            int[] hours = { 9, 10, 11, 12, 13, 14, 15, 16, 17 };
+            int[] prodCounts = { 8, 10, 9, 6, 7, 11, 10, 9, 7 };
+            int[] unprodCounts = { 2, 1, 2, 4, 3, 1, 2, 2, 3 };
+
+            for (int i = 0; i < hours.Length; i++)
+            {
+                var stats = new ProductivityStats
+                {
+                    ProductiveCount = prodCounts[i],
+                    UnproductiveCount = unprodCounts[i]
+                };
+                data.HourlyProductivity[hours[i]] = stats;
+                data.ProductiveMinutes += prodCounts[i];
+                data.UnproductiveMinutes += unprodCounts[i];
+            }
+
+            return data;
+        }
+
+        static void InjectStagingData()
+        {
+            Console.WriteLine("[UI-AUDIT] Injecting staging data...");
+
+            // ── TrainerState ─────────────────────────────────────────────────────
+            TrainerState.SampleCount = 187;
+            TrainerState.MinSamples = 100;
+            TrainerState.LastTrainedCount = 187;
+            TrainerState.LastTrained = DateTime.Now.AddDays(-2).AddHours(-3);
+            TrainerState.LastAccuracy = 0.87f;
+            TrainerState.PreviousAccuracy = 0.84f;
+            TrainerState.ModelVersion = 3;
+            TrainerState.Architecture = "lightweight";
+            TrainerState.IsTraining = false;
+            TrainerState.LastError = "";
+            TrainerState.LastChecked = DateTime.Now.AddMinutes(-5);
+
+            // ── Dummy model file ─────────────────────────────────────────────────
+            string modelDir = Path.Combine(PlatformConfig.DataDirectory, "model");
+            Directory.CreateDirectory(modelDir);
+            string modelPath = Path.Combine(modelDir, "productivity_model.joblib");
+            if (!File.Exists(modelPath))
+            {
+                // Write a minimal valid joblib-like file (just enough bytes to show a size)
+                File.WriteAllBytes(modelPath, new byte[46_080]); // ~45 KB
+            }
+
+            // ── LiveAIState ──────────────────────────────────────────────────────
+            LiveAIState.NextCheckAt = DateTimeOffset.UtcNow.AddSeconds(45).ToUnixTimeSeconds();
+            LiveAIState.CurrentApp = "Visual Studio Code:";
+            LiveAIState.CurrentDetail = "nudge-tray.cs";
+            LiveAIState.LastHarvest = new HarvestSignal
+            {
+                Quality = "trusted",
+                FocusSrc = "kwin_script",
+                Category = "Development",
+                CategoryConf = 0.95f,
+                IdleMs = 1200,
+                FocusedMs = 45_000,
+                Domain = "",
+                Work = 1,
+                Ent = 0,
+                Comm = 0,
+                Browser = 0,
+                Afk = 0
+            };
+
+            // Add recent ML events
+            var now = DateTimeOffset.UtcNow;
+            var events = new[]
+            {
+                (App: "Visual Studio Code:", Score: 0.92, Conf: 0.95, Prod: true, Trig: false, Resp: (bool?)true, Correct: (bool?)true, Src: "ai"),
+                (App: "Chrome", Score: 0.15, Conf: 0.88, Prod: false, Trig: true, Resp: (bool?)false, Correct: (bool?)true, Src: "ai"),
+                (App: "Figma", Score: 0.78, Conf: 0.72, Prod: true, Trig: false, Resp: (bool?)true, Correct: (bool?)true, Src: "ai"),
+                (App: "Terminal", Score: 0.85, Conf: 0.91, Prod: true, Trig: false, Resp: (bool?)true, Correct: (bool?)true, Src: "ai"),
+                (App: "Slack", Score: 0.22, Conf: 0.82, Prod: false, Trig: true, Resp: (bool?)false, Correct: (bool?)true, Src: "ai"),
+                (App: "Obsidian", Score: 0.68, Conf: 0.76, Prod: true, Trig: false, Resp: (bool?)true, Correct: (bool?)true, Src: "ai"),
+                (App: "Chrome", Score: 0.10, Conf: 0.96, Prod: false, Trig: true, Resp: (bool?)false, Correct: (bool?)true, Src: "ai"),
+                (App: "Visual Studio Code:", Score: 0.89, Conf: 0.93, Prod: true, Trig: false, Resp: (bool?)true, Correct: (bool?)true, Src: "ai"),
+                (App: "Spotify", Score: 0.30, Conf: 0.65, Prod: false, Trig: false, Resp: (bool?)null, Correct: (bool?)null, Src: "int"),
+                (App: "Visual Studio Code:", Score: 0.95, Conf: 0.98, Prod: true, Trig: false, Resp: (bool?)null, Correct: (bool?)null, Src: "ai"),
+            };
+
+            for (int i = 0; i < events.Length; i++)
+            {
+                var e = events[i];
+                var evt = new MLLiveEvent
+                {
+                    T = now.AddMinutes(-(events.Length - i) * 6).ToUnixTimeSeconds(),
+                    App = e.App,
+                    Score = e.Score,
+                    Confidence = e.Conf,
+                    Productive = e.Prod,
+                    Triggered = e.Trig,
+                    UserResponse = e.Resp,
+                    AiCorrect = e.Correct,
+                    TriggerSource = e.Src
+                };
+                LiveAIState.Add(evt);
+            }
+
+            // Enable ML for the audit
+            Program._mlEnabled = true;
+
+            Console.WriteLine("[UI-AUDIT] Staging data injected: 187 samples, 87% accuracy, 10 recent events");
+        }
+
         static async Task RunUiAuditAsync()
         {
             if (string.IsNullOrEmpty(_uiAuditOutputDir))
@@ -364,22 +497,31 @@ namespace NudgeTray
             Directory.CreateDirectory(_uiAuditOutputDir);
             Console.WriteLine($"[UI-AUDIT] Output → {_uiAuditOutputDir}");
 
+            if (_uiAuditStaging)
+            {
+                InjectStagingData();
+            }
+
+            var stagingData = _uiAuditStaging ? CreateStagingAnalyticsData() : null;
+
             // ── Analytics window ─────────────────────────────────────────────────
-            _analyticsWindow = new AnalyticsWindow();
+            _analyticsWindow = stagingData != null
+                ? new AnalyticsWindow(stagingData)
+                : new AnalyticsWindow();
             _analyticsWindow.Show();
             await Task.Delay(900);
 
             CaptureWindow(_analyticsWindow, "analytics_today.png");
 
-            _analyticsWindow.AuditSelectTab(AnalyticsWindow.TimeFilter.ThisWeek);
+            _analyticsWindow.AuditSelectTab(AnalyticsWindow.TimeFilter.ThisWeek, _uiAuditStaging ? CreateStagingAnalyticsData() : null);
             await Task.Delay(300);
             CaptureWindow(_analyticsWindow, "analytics_week.png");
 
-            _analyticsWindow.AuditSelectTab(AnalyticsWindow.TimeFilter.ThisMonth);
+            _analyticsWindow.AuditSelectTab(AnalyticsWindow.TimeFilter.ThisMonth, _uiAuditStaging ? CreateStagingAnalyticsData() : null);
             await Task.Delay(300);
             CaptureWindow(_analyticsWindow, "analytics_month.png");
 
-            _analyticsWindow.AuditSelectTab(AnalyticsWindow.TimeFilter.AllTime);
+            _analyticsWindow.AuditSelectTab(AnalyticsWindow.TimeFilter.AllTime, _uiAuditStaging ? CreateStagingAnalyticsData() : null);
             await Task.Delay(300);
             CaptureWindow(_analyticsWindow, "analytics_alltime.png");
 

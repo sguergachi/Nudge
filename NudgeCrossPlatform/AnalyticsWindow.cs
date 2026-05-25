@@ -3955,14 +3955,14 @@ namespace NudgeTray
 
         // ━━ UI Audit helpers — called from nudge-tray --ui-audit mode ━━━━━━━━━━━
 
-        public void AuditSelectTab(TimeFilter filter)
+        public void AuditSelectTab(TimeFilter filter, AnalyticsData? injectedData = null)
         {
             _aiTabActive = false;
             _aiLiveRefreshTimer?.Stop();
             _currentFilter = filter;
             _contentScrollOffset = 0;
             UpdateTabStyles();
-            _data = AnalyticsData.LoadFromCSV(_currentFilter);
+            _data = injectedData ?? AnalyticsData.LoadFromCSV(_currentFilter);
             RefreshContent();
         }
 
