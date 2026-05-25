@@ -74,7 +74,18 @@ function Refresh-Path {
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 }
 
+function Assert-Winget {
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        Write-Err "[ERROR] winget (Windows Package Manager) is not available."
+        Write-Warn "  winget ships with Windows 10 1809+ via the App Installer."
+        Write-Warn "  Install it from the Microsoft Store: 'App Installer'"
+        Write-Warn "  Or install .NET 10 manually from: https://dotnet.microsoft.com/download/dotnet/10.0"
+        exit 1
+    }
+}
+
 function Install-Dotnet10 {
+    Assert-Winget
     Write-Info "Installing .NET SDK 10..."
     winget install Microsoft.DotNet.SDK.10 --silent --accept-package-agreements --accept-source-agreements
     Refresh-Path
@@ -171,6 +182,7 @@ function Ensure-Python {
     }
 
     Write-Warn "[WARN] Python not found"
+    Assert-Winget
     winget install Python.Python.3.12 --silent --accept-package-agreements --accept-source-agreements
     Refresh-Path
 
@@ -214,9 +226,9 @@ function Install-PythonDeps {
 
 function Prepare-BuildSources {
     Write-Host "  Preparing shebang-stripped sources..." -ForegroundColor DarkGray
-    $body = [System.IO.File]::ReadAllText((Resolve-Path "nudge.cs"), [System.Text.Encoding]::UTF8) -replace '^#!/usr/bin/env dotnet-script\r?\n', ''
+    $body = [System.IO.File]::ReadAllText((Resolve-Path "nudge.cs"), [System.Text.Encoding]::UTF8) -replace '^#!.*\r?\n', ''
     [System.IO.File]::WriteAllText((Join-Path $PSScriptRoot "nudge_build.cs"), $body, [System.Text.Encoding]::UTF8)
-    $body = [System.IO.File]::ReadAllText((Resolve-Path "nudge-notify.cs"), [System.Text.Encoding]::UTF8) -replace '^#!/usr/bin/env dotnet-script\r?\n', ''
+    $body = [System.IO.File]::ReadAllText((Resolve-Path "nudge-notify.cs"), [System.Text.Encoding]::UTF8) -replace '^#!.*\r?\n', ''
     [System.IO.File]::WriteAllText((Join-Path $PSScriptRoot "nudge-notify_build.cs"), $body, [System.Text.Encoding]::UTF8)
 }
 
