@@ -37,7 +37,7 @@ code{font-family:var(--font-mono);font-size:.85em;color:var(--accent)}
 /* ── Hero ────────────────────────────────────────────── */
 .hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:140px 24px 100px;text-align:center;position:relative;overflow:hidden}
 .hero-text{position:relative;z-index:1;max-width:560px}
-.hero h1{font-size:clamp(4rem,9vw,7.5rem);font-weight:800;line-height:.95;letter-spacing:-.055em;margin-bottom:24px;background:linear-gradient(135deg,#fff 0%,var(--accent) 55%,#fff 100%);background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:shimmer 6s ease-in-out infinite}
+.hero h1{font-size:clamp(4rem,9vw,7.5rem);font-weight:800;line-height:1.05;letter-spacing:-.055em;margin-bottom:24px;background:linear-gradient(135deg,#fff 0%,var(--accent) 55%,#fff 100%);background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:shimmer 6s ease-in-out infinite;padding-bottom:.08em}
 @keyframes shimmer{0%,100%{background-position:0% 50%}50%{background-position:200% 50%}}
 .hero-sub{font-size:1.15rem;color:var(--text-dim);max-width:440px;margin:0 auto 32px;line-height:1.65;font-weight:400}
 .hero-actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:14px}
