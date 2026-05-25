@@ -1925,13 +1925,35 @@ namespace NudgeTray
             {
                 if (OperatingSystem.IsLinux())
                 {
-                    // Strip browser site suffix like "Firefox (youtube.com)" -> "firefox"
+                    // Strip browser site suffix like "firefox (youtube.com)" -> "firefox"
                     string searchName = appName;
                     int parenIndex = appName.IndexOf(" (", StringComparison.Ordinal);
                     if (parenIndex > 0)
                         searchName = appName[..parenIndex].ToLowerInvariant();
 
-                    // Try xdotool (works on X11)
+                    // KDE Wayland: use KWin scripting to activate by resourceClass (app_id).
+                    // Writes a temp script that KWin loads and evaluates immediately.
+                    try
+                    {
+                        // Sanitize searchName for JS string literal (single-quoted)
+                        string safe = searchName.Replace("\\", "\\\\").Replace("'", "\\'");
+                        string js = $"var c=workspace.clientList();for(var i=0;i<c.length;i++){{if(c[i].resourceClass&&c[i].resourceClass.toString().toLowerCase()==='{safe}'){{workspace.activeClient=c[i];break;}}}}";
+                        string tmp = System.IO.Path.GetTempFileName() + ".js";
+                        System.IO.File.WriteAllText(tmp, js);
+                        var load = System.Diagnostics.Process.Start("qdbus",
+                            $"org.kde.KWin /Scripting org.kde.kwin.Scripting.loadScript \"{tmp}\"");
+                        load?.WaitForExit(2000);
+                        var unload = System.Diagnostics.Process.Start("qdbus",
+                            $"org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript \"{System.IO.Path.GetFileNameWithoutExtension(tmp)}\"");
+                        unload?.WaitForExit(1000);
+                        try { System.IO.File.Delete(tmp); } catch { }
+                    }
+                    catch
+                    {
+                        // KWin scripting unavailable — fall through to X11 tools
+                    }
+
+                    // Try xdotool (works on X11, not Wayland)
                     using var xd = Process.Start(new ProcessStartInfo
                     {
                         FileName = "xdotool",
