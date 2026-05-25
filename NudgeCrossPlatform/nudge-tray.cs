@@ -1194,7 +1194,7 @@ namespace NudgeTray
 
                 // Start background trainer
                 Console.WriteLine("  Starting background trainer...");
-                string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --csv \"{csvPath}\" --model-dir \"{_modelDirPath}\" --check-interval 300";
+                string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --seed --csv \"{csvPath}\" --model-dir \"{_modelDirPath}\" --check-interval 300";
                 if (_forceTrainedModel)
                 {
                     trainerArgs += " --min-total-samples 1";

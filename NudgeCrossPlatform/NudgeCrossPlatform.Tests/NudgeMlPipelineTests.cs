@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Text.Json;
 using Xunit;
 using NudgeCore;
@@ -7,6 +8,43 @@ namespace NudgeCrossPlatform.Tests;
 
 public sealed class NudgeMlPipelineTests
 {
+    private static readonly string[] ExpectedFeatureNames =
+    [
+        "hour_of_day",
+        "day_of_week",
+        "focused_app_hash",
+        "focused_domain_hash",
+        "idle_ms",
+        "focused_since_ms",
+        "title_stability_ms",
+        "switch_count_60s",
+        "switch_count_300s",
+        "distinct_apps_300s",
+        "distinct_domains_300s",
+        "returned_to_anchor_app_300s",
+        "current_app_share_300s",
+        "current_domain_share_300s",
+        "browser_window_flag",
+        "communication_app_flag",
+        "entertainment_domain_flag",
+        "work_domain_flag",
+        "afk_flag",
+        "fullscreen_flag",
+        "workspace_switch_count_300s",
+        "dev_app_flag",
+        "creative_app_flag",
+        "office_app_flag",
+        "comm_app_flag",
+        "ent_app_flag",
+    ];
+
+    [Fact]
+    public void FeatureSchema_OrderedFeatureNames_MatchesExpected()
+    {
+        Assert.Equal(26, FeatureSchema.OrderedFeatureNames.Length);
+        for (int i = 0; i < ExpectedFeatureNames.Length; i++)
+            Assert.Equal(ExpectedFeatureNames[i], FeatureSchema.OrderedFeatureNames[i]);
+    }
     [Fact]
     public void FeatureSchema_ToFeatureDictionary_ContainsAllKeys()
     {
@@ -121,6 +159,48 @@ public sealed class NudgePlatformConfigTests
     public void PlatformConfig_CsvPath_EndsWithHarvestCsv()
     {
         Assert.EndsWith("HARVEST.CSV", PlatformConfig.CsvPath);
+    }
+
+    [Fact]
+    public void FindPython_ReturnsNonEmptyString()
+    {
+        string python = PlatformConfig.FindPython("/tmp");
+        Assert.False(string.IsNullOrWhiteSpace(python));
+    }
+
+    [Fact]
+    public void FindPython_PrefersVenvOverSystem()
+    {
+        // When the user-level venv exists, FindPython returns the venv Python
+        string python = PlatformConfig.FindPython("/tmp");
+        Assert.False(string.IsNullOrWhiteSpace(python));
+        if (File.Exists(PlatformConfig.VenvPythonPath))
+            Assert.Equal(PlatformConfig.VenvPythonPath, python);
+    }
+
+    [Fact]
+    public void VenvPythonPath_IsUnderNudgeDir()
+    {
+        string path = PlatformConfig.VenvPythonPath;
+        Assert.Contains(".nudge", path);
+        Assert.Contains("venv", path);
+    }
+
+    [Fact]
+    public void EnsureVenv_DoesNotThrowWhenVenvExists()
+    {
+        // If the venv already exists, EnsureVenv should return true without error
+        string systemPython = PlatformConfig.FindPython("/tmp");
+        bool result = PlatformConfig.EnsureVenv(systemPython);
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void PipInstallArgs_ContainsPipInstall()
+    {
+        string args = PlatformConfig.PipInstallArgs("requirements.txt");
+        Assert.Contains("-m pip", args);
+        Assert.Contains("install", args);
     }
 }
 
