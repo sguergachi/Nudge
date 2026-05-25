@@ -68,54 +68,57 @@
     </div>
     <div class="g-viz">
       <svg class="sig-grid" viewBox="0 0 400 400">
-        <!-- Background grid -->
-        <g stroke="rgba(88,166,255,0.03)" stroke-width="0.3">
-          <line x1="200" y1="0" x2="200" y2="400"/><line x1="0" y1="200" x2="400" y2="200"/>
-          <line x1="100" y1="0" x2="100" y2="400"/><line x1="300" y1="0" x2="300" y2="400"/>
-          <line x1="0" y1="100" x2="400" y2="100"/><line x1="0" y1="300" x2="400" y2="300"/>
+        <!-- Concentric rings (symmetric, even spacing) -->
+        <circle cx="200" cy="200" r="40"  fill="none" stroke="rgba(88,166,255,0.10)" stroke-width="0.5"/>
+        <circle cx="200" cy="200" r="70"  fill="none" stroke="rgba(88,166,255,0.07)" stroke-width="0.5"/>
+        <circle cx="200" cy="200" r="105" fill="none" stroke="rgba(88,166,255,0.05)" stroke-width="0.5"/>
+        <circle cx="200" cy="200" r="145" fill="none" stroke="rgba(88,166,255,0.03)" stroke-width="0.5"/>
+        <circle cx="200" cy="200" r="188" fill="none" stroke="rgba(88,166,255,0.02)" stroke-width="0.5"/>
+        <!-- Expanding rings (staggered timing, anticipation) -->
+        <circle cx="200" cy="200" r="8" fill="none" stroke="rgba(88,166,255,0.22)" stroke-width="1.5" class="exp-ring er1"/>
+        <circle cx="200" cy="200" r="8" fill="none" stroke="rgba(88,166,255,0.14)" stroke-width="1"   class="exp-ring er2"/>
+        <circle cx="200" cy="200" r="8" fill="none" stroke="rgba(88,166,255,0.08)" stroke-width="0.7" class="exp-ring er3"/>
+        <!-- 8 dots per ring (symmetric: 0°,45°,90°,135°,180°,225°,270°,315°) -->
+        <g class="dot-ring dr1">
+          <circle cx="200" cy="60"  r="3" fill="#58A6FF"/><circle cx="261" cy="139" r="3" fill="#58A6FF"/>
+          <circle cx="340" cy="200" r="3" fill="#58A6FF"/><circle cx="261" cy="261" r="3" fill="#58A6FF"/>
+          <circle cx="200" cy="340" r="3" fill="#58A6FF"/><circle cx="139" cy="261" r="3" fill="#58A6FF"/>
+          <circle cx="60"  cy="200" r="3" fill="#58A6FF"/><circle cx="139" cy="139" r="3" fill="#58A6FF"/>
         </g>
-        <!-- 3 input streams (left side) -->
-        <g class="input-stream" opacity="0.3">
-          <line x1="0" y1="100" x2="180" y2="170" stroke="#58A6FF" stroke-width="0.5" stroke-dasharray="4,6"/>
-          <circle r="3" fill="#58A6FF"><animateMotion dur="3s" repeatCount="indefinite" path="M5,100 L175,170" begin="0s"/></circle>
+        <g class="dot-ring dr2">
+          <circle cx="200" cy="130" r="2.5" fill="#58A6FF"/><circle cx="250" cy="150" r="2.5" fill="#58A6FF"/>
+          <circle cx="270" cy="200" r="2.5" fill="#58A6FF"/><circle cx="250" cy="250" r="2.5" fill="#58A6FF"/>
+          <circle cx="200" cy="270" r="2.5" fill="#58A6FF"/><circle cx="150" cy="250" r="2.5" fill="#58A6FF"/>
+          <circle cx="130" cy="200" r="2.5" fill="#58A6FF"/><circle cx="150" cy="150" r="2.5" fill="#58A6FF"/>
         </g>
-        <g class="input-stream" opacity="0.3">
-          <line x1="0" y1="200" x2="180" y2="200" stroke="#58A6FF" stroke-width="0.5" stroke-dasharray="4,6"/>
-          <circle r="3" fill="#58A6FF"><animateMotion dur="3s" repeatCount="indefinite" path="M5,200 L175,200" begin="0.6s"/></circle>
-        </g>
-        <g class="input-stream" opacity="0.3">
-          <line x1="0" y1="300" x2="180" y2="230" stroke="#58A6FF" stroke-width="0.5" stroke-dasharray="4,6"/>
-          <circle r="3" fill="#58A6FF"><animateMotion dur="3s" repeatCount="indefinite" path="M5,300 L175,230" begin="1.2s"/></circle>
-        </g>
-        <!-- Concentric rings -->
-        <circle cx="200" cy="200" r="50" fill="none" stroke="rgba(88,166,255,0.08)" stroke-width="0.5"/>
-        <circle cx="200" cy="200" r="100" fill="none" stroke="rgba(88,166,255,0.06)" stroke-width="0.5"/>
-        <circle cx="200" cy="200" r="150" fill="none" stroke="rgba(88,166,255,0.04)" stroke-width="0.5"/>
-        <circle cx="200" cy="200" r="195" fill="none" stroke="rgba(88,166,255,0.02)" stroke-width="0.5"/>
-        <!-- Expanding ring -->
-        <circle cx="200" cy="200" r="20" fill="none" stroke="rgba(88,166,255,0.18)" stroke-width="1.2" class="exp-ring"/>
-        <circle cx="200" cy="200" r="20" fill="none" stroke="rgba(88,166,255,0.08)" stroke-width="0.8" class="exp-ring2"/>
-        <!-- 26 radiating dots (features) -->
+        <!-- 26 feature dots radiating (symmetric placement) -->
         <g class="feat-dots">
-          <circle cx="200" cy="100" r="1.5" fill="#58A6FF" opacity="0.4"/><circle cx="242" cy="115" r="1.5" fill="#58A6FF" opacity="0.4"/><circle cx="275" cy="146" r="1.5" fill="#58A6FF" opacity="0.4"/><circle cx="290" cy="185" r="1.5" fill="#58A6FF" opacity="0.4"/><circle cx="286" cy="226" r="1.5" fill="#58A6FF" opacity="0.4"/><circle cx="264" cy="262" r="1.5" fill="#58A6FF" opacity="0.4"/><circle cx="228" cy="285" r="1.5" fill="#58A6FF" opacity="0.4"/><circle cx="185" cy="291" r="1.5" fill="#58A6FF" opacity="0.4"/><circle cx="146" cy="278" r="1.5" fill="#58A6FF" opacity="0.4"/><circle cx="116" cy="249" r="1.5" fill="#58A6FF" opacity="0.4"/><circle cx="105" cy="210" r="1.5" fill="#58A6FF" opacity="0.4"/><circle cx="114" cy="167" r="1.5" fill="#58A6FF" opacity="0.4"/><circle cx="142" cy="135" r="1.5" fill="#58A6FF" opacity="0.4"/>
-          <circle cx="220" cy="80" r="1.2" fill="#58A6FF" opacity="0.3"/><circle cx="292" cy="115" r="1.2" fill="#58A6FF" opacity="0.3"/><circle cx="320" cy="185" r="1.2" fill="#58A6FF" opacity="0.3"/><circle cx="286" cy="300" r="1.2" fill="#58A6FF" opacity="0.3"/><circle cx="200" cy="315" r="1.2" fill="#58A6FF" opacity="0.3"/><circle cx="118" cy="300" r="1.2" fill="#58A6FF" opacity="0.3"/><circle cx="80" cy="185" r="1.2" fill="#58A6FF" opacity="0.3"/><circle cx="118" cy="105" r="1.2" fill="#58A6FF" opacity="0.3"/><circle cx="200" cy="65" r="1.2" fill="#58A6FF" opacity="0.3"/><circle cx="330" cy="230" r="1.2" fill="#58A6FF" opacity="0.3"/><circle cx="250" cy="320" r="1.2" fill="#58A6FF" opacity="0.3"/><circle cx="100" cy="250" r="1.2" fill="#58A6FF" opacity="0.3"/><circle cx="70" cy="200" r="1.2" fill="#58A6FF" opacity="0.3"/>
+          <circle cx="200" cy="88" r="1.5" fill="#58A6FF"/><circle cx="232" cy="96" r="1.5" fill="#58A6FF"/>
+          <circle cx="260" cy="116" r="1.5" fill="#58A6FF"/><circle cx="280" cy="144" r="1.5" fill="#58A6FF"/>
+          <circle cx="292" cy="175" r="1.5" fill="#58A6FF"/><circle cx="292" cy="210" r="1.5" fill="#58A6FF"/>
+          <circle cx="282" cy="242" r="1.5" fill="#58A6FF"/><circle cx="264" cy="268" r="1.5" fill="#58A6FF"/>
+          <circle cx="240" cy="286" r="1.5" fill="#58A6FF"/><circle cx="212" cy="294" r="1.5" fill="#58A6FF"/>
+          <circle cx="184" cy="294" r="1.5" fill="#58A6FF"/><circle cx="156" cy="286" r="1.5" fill="#58A6FF"/>
+          <circle cx="132" cy="268" r="1.5" fill="#58A6FF"/><circle cx="114" cy="242" r="1.5" fill="#58A6FF"/>
+          <circle cx="104" cy="210" r="1.5" fill="#58A6FF"/><circle cx="104" cy="175" r="1.5" fill="#58A6FF"/>
+          <circle cx="116" cy="144" r="1.5" fill="#58A6FF"/><circle cx="136" cy="116" r="1.5" fill="#58A6FF"/>
+          <circle cx="162" cy="96" r="1.5"  fill="#58A6FF"/><circle cx="200" cy="70" r="1.5" fill="#58A6FF"/>
+          <circle cx="242" cy="78" r="1.5" fill="#58A6FF"/><circle cx="272" cy="104" r="1.5" fill="#58A6FF"/>
+          <circle cx="286" cy="150" r="1.5" fill="#58A6FF"/><circle cx="286" cy="200" r="1.5" fill="#58A6FF"/>
+          <circle cx="268" cy="260" r="1.5" fill="#58A6FF"/><circle cx="200" cy="306" r="1.5" fill="#58A6FF"/>
         </g>
-        <!-- Dots on rings -->
-        <g class="dot-ring" style="animation-delay:0s">
-          <circle cx="200" cy="100" r="3" fill="#58A6FF" opacity="0.5"/><circle cx="271" cy="129" r="3" fill="#58A6FF" opacity="0.5"/><circle cx="306" cy="200" r="3" fill="#58A6FF" opacity="0.5"/><circle cx="271" cy="271" r="3" fill="#58A6FF" opacity="0.5"/><circle cx="200" cy="300" r="3" fill="#58A6FF" opacity="0.5"/><circle cx="129" cy="271" r="3" fill="#58A6FF" opacity="0.5"/><circle cx="94" cy="200" r="3" fill="#58A6FF" opacity="0.5"/><circle cx="129" cy="129" r="3" fill="#58A6FF" opacity="0.5"/>
-        </g>
-        <g class="dot-ring" style="animation-delay:2s">
-          <circle cx="200" cy="50" r="2.5" fill="#58A6FF" opacity="0.35"/><circle cx="250" cy="94" r="2.5" fill="#58A6FF" opacity="0.35"/><circle cx="350" cy="150" r="2.5" fill="#58A6FF" opacity="0.35"/><circle cx="350" cy="250" r="2.5" fill="#58A6FF" opacity="0.35"/><circle cx="250" cy="306" r="2.5" fill="#58A6FF" opacity="0.35"/><circle cx="150" cy="350" r="2.5" fill="#58A6FF" opacity="0.35"/><circle cx="94" cy="250" r="2.5" fill="#58A6FF" opacity="0.35"/><circle cx="94" cy="150" r="2.5" fill="#58A6FF" opacity="0.35"/>
-        </g>
-        <!-- Rotating sweep arc -->
+        <!-- Rotating sweep (smooth, slow) -->
         <g class="sweep-arc">
-          <path d="M 200 200 L 200 10 A 190 190 0 0 1 390 200 Z" fill="rgba(88,166,255,0.04)"/>
+          <path d="M 200 200 L 200 12 A 188 188 0 0 1 388 200 Z" fill="rgba(88,166,255,0.03)"/>
         </g>
-        <!-- Center fusion node -->
-        <circle cx="200" cy="200" r="5" fill="#58A6FF" opacity="0.7" class="center-dot"/>
-        <circle cx="200" cy="200" r="10" fill="none" stroke="rgba(88,166,255,0.2)" stroke-width="1" class="center-ring"/>
-        <!-- Glow -->
-        <circle cx="200" cy="200" r="18" fill="rgba(88,166,255,0.04)" class="center-glow"/>
+        <!-- 3 input streams (symmetric: evenly spaced on left) -->
+        <g class="input-stream is1"><line x1="0" y1="120" x2="155" y2="165" stroke="#58A6FF" stroke-width="0.6" stroke-dasharray="5,7"/><circle r="3.5" fill="#58A6FF"><animateMotion dur="3.5s" repeatCount="indefinite" path="M8,122 L148,163" begin="0s"/></circle></g>
+        <g class="input-stream is2"><line x1="0" y1="200" x2="155" y2="200" stroke="#58A6FF" stroke-width="0.6" stroke-dasharray="5,7"/><circle r="3.5" fill="#58A6FF"><animateMotion dur="3.5s" repeatCount="indefinite" path="M8,200 L148,200" begin="0.7s"/></circle></g>
+        <g class="input-stream is3"><line x1="0" y1="280" x2="155" y2="235" stroke="#58A6FF" stroke-width="0.6" stroke-dasharray="5,7"/><circle r="3.5" fill="#58A6FF"><animateMotion dur="3.5s" repeatCount="indefinite" path="M8,278 L148,237" begin="1.4s"/></circle></g>
+        <!-- Center fusion node (anticipation: dips before brightening) -->
+        <circle cx="200" cy="200" r="22" fill="rgba(88,166,255,0.04)" class="center-glow"/>
+        <circle cx="200" cy="200" r="10" fill="none" stroke="rgba(88,166,255,0.22)" stroke-width="1" class="center-ring"/>
+        <circle cx="200" cy="200" r="3" fill="#fff" opacity="0.8" class="center-dot"/>
       </svg>
     </div>
   </div>
@@ -126,53 +129,45 @@
   <div class="grid g-right" data-reveal>
     <div class="g-viz">
       <svg class="neural-mesh" viewBox="0 0 400 400">
-        <!-- Outer faint rings -->
-        <circle cx="200" cy="200" r="170" fill="none" stroke="rgba(34,197,94,0.04)" stroke-width="0.5" class="ai-outer-ring"/>
-        <circle cx="200" cy="200" r="185" fill="none" stroke="rgba(34,197,94,0.02)" stroke-width="0.3"/>
-        <!-- Connection lines -->
-        <g stroke="rgba(34,197,94,0.08)" stroke-width="0.5">
-          <line x1="80" y1="120" x2="200" y2="200"/><line x1="200" y1="60" x2="200" y2="200"/><line x1="320" y1="120" x2="200" y2="200"/>
-          <line x1="340" y1="240" x2="200" y2="200"/><line x1="280" y1="350" x2="200" y2="200"/><line x1="120" y1="350" x2="200" y2="200"/>
-          <line x1="60" y1="240" x2="200" y2="200"/>
+        <!-- Outer hex ring (faint) -->
+        <g fill="none" stroke="rgba(34,197,94,0.05)" stroke-width="0.5">
+          <polygon points="200,40 339,120 339,280 200,360 61,280 61,120" class="hex-outer"/>
+          <line x1="200" y1="40"  x2="200" y2="200"/><line x1="339" y1="120" x2="200" y2="200"/>
+          <line x1="339" y1="280" x2="200" y2="200"/><line x1="200" y1="360" x2="200" y2="200"/>
+          <line x1="61"  y1="280" x2="200" y2="200"/><line x1="61"  y1="120" x2="200" y2="200"/>
         </g>
-        <!-- Inner ring connections -->
-        <g stroke="rgba(34,197,94,0.05)" stroke-width="0.4">
-          <line x1="140" y1="140" x2="200" y2="200"/><line x1="260" y1="140" x2="200" y2="200"/><line x1="300" y1="240" x2="200" y2="200"/>
-          <line x1="200" y1="290" x2="200" y2="200"/><line x1="100" y1="240" x2="200" y2="200"/>
+        <!-- Inner hex ring -->
+        <g fill="none" stroke="rgba(34,197,94,0.06)" stroke-width="0.4">
+          <polygon points="200,90 295,145 295,255 200,310 105,255 105,145"/>
+          <line x1="200" y1="90"  x2="200" y2="200"/><line x1="295" y1="145" x2="200" y2="200"/>
+          <line x1="295" y1="255" x2="200" y2="200"/><line x1="200" y1="310" x2="200" y2="200"/>
+          <line x1="105" y1="255" x2="200" y2="200"/><line x1="105" y1="145" x2="200" y2="200"/>
         </g>
-        <!-- Outer ring nodes (14) -->
-        <g class="node-ring">
-          <circle cx="80" cy="120" r="3.5" fill="#22C55E" opacity="0.3" style="--delay:0s"/>
-          <circle cx="160" cy="72" r="3.5" fill="#22C55E" opacity="0.3" style="--delay:0.15s"/>
-          <circle cx="240" cy="72" r="3.5" fill="#22C55E" opacity="0.3" style="--delay:0.3s"/>
-          <circle cx="320" cy="120" r="3.5" fill="#22C55E" opacity="0.3" style="--delay:0.45s"/>
-          <circle cx="340" cy="240" r="3.5" fill="#22C55E" opacity="0.3" style="--delay:0.6s"/>
-          <circle cx="280" cy="350" r="3.5" fill="#22C55E" opacity="0.3" style="--delay:0.75s"/>
-          <circle cx="120" cy="350" r="3.5" fill="#22C55E" opacity="0.3" style="--delay:0.9s"/>
-          <circle cx="60" cy="240" r="3.5" fill="#22C55E" opacity="0.3" style="--delay:1.05s"/>
+        <!-- Outer nodes (hexagon vertices, 6 nodes) — wave stagger -->
+        <g class="node-hex">
+          <circle cx="200" cy="40"  r="4" fill="#22C55E" style="--nd:0s"/><circle cx="339" cy="120" r="4" fill="#22C55E" style="--nd:0.3s"/>
+          <circle cx="339" cy="280" r="4" fill="#22C55E" style="--nd:0.6s"/><circle cx="200" cy="360" r="4" fill="#22C55E" style="--nd:0.9s"/>
+          <circle cx="61"  cy="280" r="4" fill="#22C55E" style="--nd:1.2s"/><circle cx="61"  cy="120" r="4" fill="#22C55E" style="--nd:1.5s"/>
         </g>
-        <!-- Middle ring nodes (6) -->
-        <g class="node-ring-mid">
-          <circle cx="140" cy="140" r="2.5" fill="#22C55E" opacity="0.25" style="--delay:0.1s"/>
-          <circle cx="260" cy="140" r="2.5" fill="#22C55E" opacity="0.25" style="--delay:0.4s"/>
-          <circle cx="300" cy="240" r="2.5" fill="#22C55E" opacity="0.25" style="--delay:0.7s"/>
-          <circle cx="200" cy="290" r="2.5" fill="#22C55E" opacity="0.25" style="--delay:1.0s"/>
-          <circle cx="100" cy="240" r="2.5" fill="#22C55E" opacity="0.25" style="--delay:1.3s"/>
+        <!-- Inner nodes (6 nodes, rotated 30°, smaller) -->
+        <g class="node-inner">
+          <circle cx="200" cy="90"  r="3" fill="#22C55E" style="--nd:0.15s"/><circle cx="295" cy="145" r="3" fill="#22C55E" style="--nd:0.45s"/>
+          <circle cx="295" cy="255" r="3" fill="#22C55E" style="--nd:0.75s"/><circle cx="200" cy="310" r="3" fill="#22C55E" style="--nd:1.05s"/>
+          <circle cx="105" cy="255" r="3" fill="#22C55E" style="--nd:1.35s"/><circle cx="105" cy="145" r="3" fill="#22C55E" style="--nd:1.65s"/>
         </g>
-        <!-- Orbiting signal pulse -->
-        <circle r="5" fill="#4ADE80" opacity="0" class="orbit-pulse"/>
-        <!-- Central node -->
-        <circle cx="200" cy="200" r="14" fill="rgba(34,197,94,0.08)" stroke="rgba(34,197,94,0.25)" stroke-width="1" class="core-node"/>
-        <circle cx="200" cy="200" r="5" fill="#22C55E" opacity="0.6" class="core-inner"/>
-        <circle cx="200" cy="200" r="24" fill="rgba(34,197,94,0.03)" class="core-glow"/>
-        <!-- Spark particles -->
-        <circle cx="80" cy="120" r="2" fill="#4ADE80" class="spark s1"/>
-        <circle cx="280" cy="350" r="2" fill="#4ADE80" class="spark s2"/>
-        <circle cx="320" cy="120" r="2" fill="#4ADE80" class="spark s3"/>
-        <circle cx="60" cy="240" r="1.5" fill="#86EFAC" class="spark s4"/>
-        <circle cx="200" cy="60" r="1.5" fill="#86EFAC" class="spark s5"/>
-        <!-- Feedback arc -->
-        <path d="M 320 260 Q 320 350 200 350 Q 80 350 80 260" fill="none" stroke="rgba(34,197,94,0.06)" stroke-width="0.5" stroke-dasharray="3,5" class="feedback-arc"/>
+        <!-- Orbiting signal — travels the outer hexagon -->
+        <circle r="5" fill="#4ADE80" opacity="0" class="hex-pulse"/>
+        <circle r="12" fill="none" stroke="rgba(52,211,153,0.12)" stroke-width="1" opacity="0" class="hex-pulse-ring"/>
+        <!-- Central node — breathing with anticipation (dip before rise, overshoot) -->
+        <circle cx="200" cy="200" r="36" fill="rgba(34,197,94,0.03)" class="core-aura"/>
+        <circle cx="200" cy="200" r="16" fill="rgba(34,197,94,0.08)" stroke="rgba(34,197,94,0.28)" stroke-width="1" class="core-node"/>
+        <circle cx="200" cy="200" r="4" fill="#fff" opacity="0.5" class="core-inner"/>
+        <!-- Sparks — 6 symmetric positions (between hex vertices, 30° offset) -->
+        <circle cx="270" cy="80"  r="2" fill="#86EFAC" class="spark s1"/><circle cx="370" cy="200" r="2" fill="#86EFAC" class="spark s2"/>
+        <circle cx="270" cy="320" r="2" fill="#86EFAC" class="spark s3"/><circle cx="130" cy="320" r="2" fill="#86EFAC" class="spark s4"/>
+        <circle cx="30"  cy="200" r="2" fill="#86EFAC" class="spark s5"/><circle cx="130" cy="80"  r="2" fill="#86EFAC" class="spark s6"/>
+        <!-- Feedback ring (dashed circle around core, flow animation) -->
+        <circle cx="200" cy="200" r="140" fill="none" stroke="rgba(34,197,94,0.06)" stroke-width="0.6" stroke-dasharray="4,8" class="fb-ring"/>
       </svg>
     </div>
     <div class="g-text">
