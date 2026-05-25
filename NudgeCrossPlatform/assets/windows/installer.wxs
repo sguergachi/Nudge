@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<?define Version = "1.5.9" ?>
+<?define Version = "1.6.0" ?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product Id="*" Name="Nudge" Language="1033" Version="$(var.Version)" Manufacturer="Nudge" UpgradeCode="C9E4B8D1-5A3F-4E7B-9C6D-2F8A1B4E3C7D">
     <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" Platform="x64" />
