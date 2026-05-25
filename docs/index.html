@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nudge &#x2014; Still focused?</title>
+  <title>Nudge — Still focused?</title>
   <meta name="description" content="A local AI that learns your attention patterns and asks at the right moment.">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='2' width='28' height='28' rx='5' fill='%230B0B0E'/%3E%3Ctext x='16' y='23' font-family='system-ui' font-size='17' fill='%2358A6FF' text-anchor='middle' font-weight='700'%3EN%3C/text%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -17,321 +17,96 @@
   <div class="nav-inner">
     <span class="logo">Nudge</span>
     <nav class="nav-links">
-      <a href="#features">Features</a>
-      <a href="#download" class="nav-dl">Download</a>
       <a href="https://github.com/sguergachi/Nudge" target="_blank">GitHub</a>
+      <a href="https://github.com/sguergachi/Nudge/releases/latest" class="nav-dl">Download</a>
     </nav>
   </div>
 </header>
 
 <main>
 
-<!-- ═══ Hero ═══ -->
 <section class="hero">
-  <div class="hero-inner">
-    <h1>Still&nbsp;focused?</h1>
-    <p class="hero-sub">A local AI that learns your attention patterns and asks at the right moment.</p>
-    <div class="hero-actions">
-      <a class="btn btn-primary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Download for Windows
-      </a>
-      <a class="btn btn-secondary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-installer.run">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Download for Linux
-      </a>
-    </div>
-    <p class="hero-foot">Free &#xB7; Open source &#xB7; No account needed</p>
-    <div class="hero-image">
-      <img src="screenshots/notification_active.png" alt="Nudge check-in notification">
-    </div>
+  <h1>Still focused?</h1>
+  <p class="hero-sub">A local AI that learns when to ask. No cloud. No account. No telemetry.</p>
+  <div class="hero-actions">
+    <a class="btn btn-primary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download for Windows
+    </a>
+    <a class="btn btn-secondary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-installer.run">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download for Linux
+    </a>
+  </div>
+  <div class="hero-shot">
+    <img src="screenshots/notification_active.png" alt="Nudge check-in notification" loading="eager">
   </div>
 </section>
 
-<!-- ═══ Features ═══ -->
-<section class="features" id="features">
-
-  <!-- 01 ─ Harvest Engine -->
-  <article class="feature">
-    <div class="feature-text">
-      <span class="feature-label">01</span>
-      <h2>Harvest Engine</h2>
-      <p>Tracks your foreground app, idle time and browser domain at 1Hz. Fuses three signals into 26 dimensions through a rolling 300-second window.</p>
-    </div>
-    <div class="feature-viz">
-      <svg viewBox="0 0 440 320" class="harvest-svg" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <radialGradient id="glow-blue" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#58A6FF" stop-opacity="0.5"/><stop offset="100%" stop-color="#58A6FF" stop-opacity="0"/></radialGradient>
-          <radialGradient id="glow-green" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#22C55E" stop-opacity="0.5"/><stop offset="100%" stop-color="#22C55E" stop-opacity="0"/></radialGradient>
-          <radialGradient id="glow-purple" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#A78BFA" stop-opacity="0.5"/><stop offset="100%" stop-color="#A78BFA" stop-opacity="0"/></radialGradient>
-          <radialGradient id="glow-center" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#58A6FF" stop-opacity="0.35"/><stop offset="100%" stop-color="#58A6FF" stop-opacity="0"/></radialGradient>
-        </defs>
-        <!-- Background grid -->
-        <g stroke="rgba(88,166,255,0.04)" stroke-width="0.5">
-          <line x1="0" y1="40" x2="440" y2="40"/><line x1="0" y1="80" x2="440" y2="80"/><line x1="0" y1="120" x2="440" y2="120"/><line x1="0" y1="160" x2="440" y2="160"/><line x1="0" y1="200" x2="440" y2="200"/><line x1="0" y1="240" x2="440" y2="240"/><line x1="0" y1="280" x2="440" y2="280"/>
-          <line x1="40" y1="0" x2="40" y2="320"/><line x1="80" y1="0" x2="80" y2="320"/><line x1="120" y1="0" x2="120" y2="320"/><line x1="160" y1="0" x2="160" y2="320"/><line x1="200" y1="0" x2="200" y2="320"/><line x1="240" y1="0" x2="240" y2="320"/><line x1="280" y1="0" x2="280" y2="320"/><line x1="320" y1="0" x2="320" y2="320"/><line x1="360" y1="0" x2="360" y2="320"/><line x1="400" y1="0" x2="400" y2="320"/>
-        </g>
-        <!-- Sensor nodes -->
-        <g transform="translate(60,80)">
-          <circle r="28" fill="url(#glow-blue)" opacity="0.4"><animate attributeName="opacity" values="0.4;0.6;0.4" dur="3s" repeatCount="indefinite"/></circle>
-          <circle r="20" fill="none" stroke="#58A6FF" stroke-width="1.5"/>
-          <circle r="4" fill="#58A6FF"><animate attributeName="r" values="4;6;4" dur="2s" repeatCount="indefinite"/></circle>
-          <text x="0" y="42" fill="#58A6FF" font-size="9" text-anchor="middle" font-family="Inter, sans-serif" font-weight="600">App</text>
-        </g>
-        <g transform="translate(60,160)">
-          <circle r="28" fill="url(#glow-green)" opacity="0.4"><animate attributeName="opacity" values="0.4;0.6;0.4" dur="3.5s" repeatCount="indefinite"/></circle>
-          <circle r="20" fill="none" stroke="#22C55E" stroke-width="1.5"/>
-          <circle r="4" fill="#22C55E"><animate attributeName="r" values="4;6;4" dur="2.5s" repeatCount="indefinite"/></circle>
-          <text x="0" y="42" fill="#22C55E" font-size="9" text-anchor="middle" font-family="Inter, sans-serif" font-weight="600">Idle</text>
-        </g>
-        <g transform="translate(60,240)">
-          <circle r="28" fill="url(#glow-purple)" opacity="0.4"><animate attributeName="opacity" values="0.4;0.6;0.4" dur="4s" repeatCount="indefinite"/></circle>
-          <circle r="20" fill="none" stroke="#A78BFA" stroke-width="1.5"/>
-          <circle r="4" fill="#A78BFA"><animate attributeName="r" values="4;6;4" dur="3s" repeatCount="indefinite"/></circle>
-          <text x="0" y="42" fill="#A78BFA" font-size="9" text-anchor="middle" font-family="Inter, sans-serif" font-weight="600">Browser</text>
-        </g>
-        <!-- Data flow lines -->
-        <path d="M80 80 Q160 80 200 160" fill="none" stroke="url(#line-blue)" stroke-width="2" stroke-dasharray="5,5"><animate attributeName="stroke-dashoffset" values="0;-20" dur="1.5s" repeatCount="indefinite"/></path>
-        <path d="M80 160 Q140 160 200 160" fill="none" stroke="url(#line-green)" stroke-width="2" stroke-dasharray="5,5"><animate attributeName="stroke-dashoffset" values="0;-20" dur="1.2s" repeatCount="indefinite"/></path>
-        <path d="M80 240 Q160 240 200 160" fill="none" stroke="url(#line-purple)" stroke-width="2" stroke-dasharray="5,5"><animate attributeName="stroke-dashoffset" values="0;-20" dur="1.8s" repeatCount="indefinite"/></path>
-        <!-- Center fusion -->
-        <g transform="translate(220,160)">
-          <circle r="45" fill="url(#glow-center)" opacity="0.5"/>
-          <circle r="36" fill="none" stroke="#58A6FF" stroke-width="1.5" stroke-dasharray="6,4"><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="20s" repeatCount="indefinite"/></circle>
-          <circle r="24" fill="none" stroke="#58A6FF" stroke-width="1" opacity="0.4"/>
-          <circle r="10" fill="#58A6FF" opacity="0.8"><animate attributeName="r" values="10;12;10" dur="3s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.8;0.5;0.8" dur="3s" repeatCount="indefinite"/></circle>
-          <text x="0" y="62" fill="#58A6FF" font-size="9" text-anchor="middle" font-family="Inter, sans-serif" font-weight="700" opacity="0.7">FUSION</text>
-        </g>
-        <!-- Output rays -->
-        <g>
-          <line x1="256" y1="160" x2="340" y2="60" stroke="rgba(88,166,255,0.15)" stroke-width="1"><animate attributeName="stroke-opacity" values="0.15;0.35;0.15" dur="3s" repeatCount="indefinite"/></line>
-          <line x1="256" y1="160" x2="340" y2="90" stroke="rgba(88,166,255,0.15)" stroke-width="1"><animate attributeName="stroke-opacity" values="0.15;0.35;0.15" dur="3.5s" repeatCount="indefinite"/></line>
-          <line x1="256" y1="160" x2="340" y2="120" stroke="rgba(88,166,255,0.15)" stroke-width="1"><animate attributeName="stroke-opacity" values="0.15;0.35;0.15" dur="2.8s" repeatCount="indefinite"/></line>
-          <line x1="256" y1="160" x2="340" y2="150" stroke="rgba(88,166,255,0.15)" stroke-width="1"><animate attributeName="stroke-opacity" values="0.15;0.35;0.15" dur="3.2s" repeatCount="indefinite"/></line>
-          <line x1="256" y1="160" x2="340" y2="180" stroke="rgba(88,166,255,0.15)" stroke-width="1"><animate attributeName="stroke-opacity" values="0.15;0.35;0.15" dur="2.5s" repeatCount="indefinite"/></line>
-          <line x1="256" y1="160" x2="340" y2="210" stroke="rgba(88,166,255,0.15)" stroke-width="1"><animate attributeName="stroke-opacity" values="0.15;0.35;0.15" dur="3.8s" repeatCount="indefinite"/></line>
-          <line x1="256" y1="160" x2="340" y2="240" stroke="rgba(88,166,255,0.15)" stroke-width="1"><animate attributeName="stroke-opacity" values="0.15;0.35;0.15" dur="2.2s" repeatCount="indefinite"/></line>
-        </g>
-        <!-- Output nodes -->
-        <g>
-          <circle cx="340" cy="60" r="3" fill="#58A6FF" opacity="0.6"><animate attributeName="opacity" values="0.6;1;0.6" dur="2s" repeatCount="indefinite"/></circle>
-          <circle cx="340" cy="90" r="3" fill="#58A6FF" opacity="0.6"><animate attributeName="opacity" values="0.6;1;0.6" dur="2.3s" repeatCount="indefinite"/></circle>
-          <circle cx="340" cy="120" r="3" fill="#58A6FF" opacity="0.6"><animate attributeName="opacity" values="0.6;1;0.6" dur="1.8s" repeatCount="indefinite"/></circle>
-          <circle cx="340" cy="150" r="3" fill="#58A6FF" opacity="0.6"><animate attributeName="opacity" values="0.6;1;0.6" dur="2.5s" repeatCount="indefinite"/></circle>
-          <circle cx="340" cy="180" r="3" fill="#58A6FF" opacity="0.6"><animate attributeName="opacity" values="0.6;1;0.6" dur="1.9s" repeatCount="indefinite"/></circle>
-          <circle cx="340" cy="210" r="3" fill="#58A6FF" opacity="0.6"><animate attributeName="opacity" values="0.6;1;0.6" dur="2.7s" repeatCount="indefinite"/></circle>
-          <circle cx="340" cy="240" r="3" fill="#58A6FF" opacity="0.6"><animate attributeName="opacity" values="0.6;1;0.6" dur="2.1s" repeatCount="indefinite"/></circle>
-          <!-- Second row -->
-          <circle cx="380" cy="75" r="2.5" fill="#58A6FF" opacity="0.4"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="2.4s" repeatCount="indefinite"/></circle>
-          <circle cx="380" cy="105" r="2.5" fill="#58A6FF" opacity="0.4"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="1.7s" repeatCount="indefinite"/></circle>
-          <circle cx="380" cy="135" r="2.5" fill="#58A6FF" opacity="0.4"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="2.9s" repeatCount="indefinite"/></circle>
-          <circle cx="380" cy="165" r="2.5" fill="#58A6FF" opacity="0.4"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="2s" repeatCount="indefinite"/></circle>
-          <circle cx="380" cy="195" r="2.5" fill="#58A6FF" opacity="0.4"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="2.6s" repeatCount="indefinite"/></circle>
-          <circle cx="380" cy="225" r="2.5" fill="#58A6FF" opacity="0.4"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="1.5s" repeatCount="indefinite"/></circle>
-        </g>
-        <text x="390" y="155" fill="#58A6FF" font-size="13" text-anchor="middle" font-family="Inter, sans-serif" font-weight="700" opacity="0.8">26</text>
-        <text x="390" y="170" fill="#58A6FF" font-size="8" text-anchor="middle" font-family="Inter, sans-serif" opacity="0.5">DIMS</text>
-        <!-- Signal quality -->
-        <g transform="translate(220, 300)">
-          <text x="-70" y="0" fill="#22C55E" font-size="9" font-family="Inter, sans-serif" font-weight="600" opacity="0.8">TRUSTED</text>
-          <text x="0" y="0" fill="#FBBF24" font-size="9" font-family="Inter, sans-serif" font-weight="600" opacity="0.8">USABLE</text>
-          <text x="70" y="0" fill="#EF4444" font-size="9" font-family="Inter, sans-serif" font-weight="600" opacity="0.8">POOR</text>
-          <circle cx="-50" cy="-12" r="3" fill="#22C55E" opacity="0.8"><animate attributeName="opacity" values="0.8;0.3;0.8" dur="3s" repeatCount="indefinite"/></circle>
-          <circle cx="5" cy="-12" r="3" fill="#FBBF24" opacity="0.8"><animate attributeName="opacity" values="0.8;0.3;0.8" dur="2.5s" repeatCount="indefinite"/></circle>
-          <circle cx="65" cy="-12" r="3" fill="#EF4444" opacity="0.8"><animate attributeName="opacity" values="0.8;0.3;0.8" dur="4s" repeatCount="indefinite"/></circle>
-        </g>
-        <defs>
-          <linearGradient id="line-blue" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#58A6FF" stop-opacity="0.3"/><stop offset="100%" stop-color="#58A6FF" stop-opacity="0.8"/></linearGradient>
-          <linearGradient id="line-green" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#22C55E" stop-opacity="0.3"/><stop offset="100%" stop-color="#22C55E" stop-opacity="0.8"/></linearGradient>
-          <linearGradient id="line-purple" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#A78BFA" stop-opacity="0.3"/><stop offset="100%" stop-color="#A78BFA" stop-opacity="0.8"/></linearGradient>
-        </defs>
-      </svg>
-    </div>
-  </article>
-
-  <!-- 02 ─ AI Brain -->
-  <article class="feature feature-reverse">
-    <div class="feature-viz">
-      <svg viewBox="0 0 440 320" class="brain-svg" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <radialGradient id="nn-glow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#58A6FF" stop-opacity="0.45"/><stop offset="100%" stop-color="#58A6FF" stop-opacity="0"/></radialGradient>
-          <radialGradient id="nn-red" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#EF4444" stop-opacity="0.45"/><stop offset="100%" stop-color="#EF4444" stop-opacity="0"/></radialGradient>
-        </defs>
-        <!-- Grid -->
-        <g stroke="rgba(88,166,255,0.02)" stroke-width="0.5">
-          <line x1="0" y1="40" x2="440" y2="40"/><line x1="0" y1="80" x2="440" y2="80"/><line x1="0" y1="120" x2="440" y2="120"/><line x1="0" y1="160" x2="440" y2="160"/><line x1="0" y1="200" x2="440" y2="200"/><line x1="0" y1="240" x2="440" y2="240"/><line x1="0" y1="280" x2="440" y2="280"/>
-          <line x1="40" y1="0" x2="40" y2="320"/><line x1="80" y1="0" x2="80" y2="320"/><line x1="120" y1="0" x2="120" y2="320"/><line x1="160" y1="0" x2="160" y2="320"/><line x1="200" y1="0" x2="200" y2="320"/><line x1="240" y1="0" x2="240" y2="320"/><line x1="280" y1="0" x2="280" y2="320"/><line x1="320" y1="0" x2="320" y2="320"/><line x1="360" y1="0" x2="360" y2="320"/><line x1="400" y1="0" x2="400" y2="320"/>
-        </g>
-        <!-- Input layer -->
-        <g class="layer-input">
-          <circle cx="70" cy="55" r="6" fill="rgba(88,166,255,0.2)" stroke="#58A6FF" stroke-width="1.5"><animate attributeName="fill-opacity" values="0.2;0.55;0.2" dur="3s" repeatCount="indefinite"/></circle>
-          <circle cx="70" cy="105" r="6" fill="rgba(88,166,255,0.2)" stroke="#58A6FF" stroke-width="1.5"><animate attributeName="fill-opacity" values="0.2;0.55;0.2" dur="3.5s" repeatCount="indefinite"/></circle>
-          <circle cx="70" cy="155" r="6" fill="rgba(88,166,255,0.2)" stroke="#58A6FF" stroke-width="1.5"><animate attributeName="fill-opacity" values="0.2;0.55;0.2" dur="2.8s" repeatCount="indefinite"/></circle>
-          <circle cx="70" cy="205" r="6" fill="rgba(88,166,255,0.2)" stroke="#58A6FF" stroke-width="1.5"><animate attributeName="fill-opacity" values="0.2;0.55;0.2" dur="4s" repeatCount="indefinite"/></circle>
-          <circle cx="70" cy="255" r="6" fill="rgba(88,166,255,0.2)" stroke="#58A6FF" stroke-width="1.5"><animate attributeName="fill-opacity" values="0.2;0.55;0.2" dur="3.2s" repeatCount="indefinite"/></circle>
-        </g>
-        <!-- Hidden layer 1 -->
-        <g class="layer-hidden">
-          <circle cx="170" cy="40" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="2.5s" repeatCount="indefinite"/></circle>
-          <circle cx="170" cy="85" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="3s" repeatCount="indefinite"/></circle>
-          <circle cx="170" cy="130" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="2s" repeatCount="indefinite"/></circle>
-          <circle cx="170" cy="175" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="3.5s" repeatCount="indefinite"/></circle>
-          <circle cx="170" cy="220" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="2.8s" repeatCount="indefinite"/></circle>
-          <circle cx="170" cy="265" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="3.8s" repeatCount="indefinite"/></circle>
-          <circle cx="170" cy="310" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="2.2s" repeatCount="indefinite"/></circle>
-        </g>
-        <!-- Hidden layer 2 -->
-        <g class="layer-hidden-2">
-          <circle cx="270" cy="65" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="2.7s" repeatCount="indefinite"/></circle>
-          <circle cx="270" cy="115" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="3.3s" repeatCount="indefinite"/></circle>
-          <circle cx="270" cy="165" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="1.9s" repeatCount="indefinite"/></circle>
-          <circle cx="270" cy="215" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="2.4s" repeatCount="indefinite"/></circle>
-          <circle cx="270" cy="265" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="3.1s" repeatCount="indefinite"/></circle>
-          <circle cx="270" cy="310" r="5" fill="rgba(88,166,255,0.15)" stroke="#58A6FF" stroke-width="1"><animate attributeName="fill-opacity" values="0.15;0.45;0.15" dur="2.6s" repeatCount="indefinite"/></circle>
-        </g>
-        <!-- Output layer -->
-        <g class="layer-output">
-          <circle cx="370" cy="130" r="10" fill="url(#nn-glow)" opacity="0.8"><animate attributeName="opacity" values="0.8;0.4;0.8" dur="2s" repeatCount="indefinite"/></circle>
-          <circle cx="370" cy="130" r="8" fill="rgba(88,166,255,0.25)" stroke="#58A6FF" stroke-width="2"><animate attributeName="r" values="8;10;8" dur="2s" repeatCount="indefinite"/></circle>
-          <text x="370" y="155" fill="#58A6FF" font-size="9" text-anchor="middle" font-family="Inter, sans-serif" font-weight="600">Productive</text>
-
-          <circle cx="370" cy="210" r="10" fill="url(#nn-red)" opacity="0.8"><animate attributeName="opacity" values="0.8;0.4;0.8" dur="2.5s" repeatCount="indefinite"/></circle>
-          <circle cx="370" cy="210" r="8" fill="rgba(239,68,68,0.25)" stroke="#EF4444" stroke-width="2"><animate attributeName="r" values="8;10;8" dur="2.5s" repeatCount="indefinite"/></circle>
-          <text x="370" y="235" fill="#EF4444" font-size="9" text-anchor="middle" font-family="Inter, sans-serif" font-weight="600">Distracted</text>
-        </g>
-        <!-- Connections -->
-        <g stroke="rgba(88,166,255,0.08)" stroke-width="1" fill="none">
-          <path d="M76 55 Q120 40 164 40" opacity="0.3"><animate attributeName="stroke-opacity" values="0.3;0.6;0.3" dur="3s" repeatCount="indefinite"/></path>
-          <path d="M76 105 Q120 85 164 85" opacity="0.3"><animate attributeName="stroke-opacity" values="0.3;0.6;0.3" dur="3.5s" repeatCount="indefinite"/></path>
-          <path d="M76 155 Q120 130 164 130" opacity="0.3"><animate attributeName="stroke-opacity" values="0.3;0.6;0.3" dur="2.8s" repeatCount="indefinite"/></path>
-          <path d="M76 205 Q120 175 164 175" opacity="0.3"><animate attributeName="stroke-opacity" values="0.3;0.6;0.3" dur="4s" repeatCount="indefinite"/></path>
-          <path d="M76 255 Q120 220 164 220" opacity="0.3"><animate attributeName="stroke-opacity" values="0.3;0.6;0.3" dur="3.2s" repeatCount="indefinite"/></path>
-
-          <path d="M175 40 Q220 65 264 65" opacity="0.3"><animate attributeName="stroke-opacity" values="0.3;0.6;0.3" dur="2.5s" repeatCount="indefinite"/></path>
-          <path d="M175 130 Q220 115 264 115" opacity="0.3"><animate attributeName="stroke-opacity" values="0.3;0.6;0.3" dur="3s" repeatCount="indefinite"/></path>
-          <path d="M175 175 Q220 165 264 165" opacity="0.3"><animate attributeName="stroke-opacity" values="0.3;0.6;0.3" dur="2s" repeatCount="indefinite"/></path>
-          <path d="M175 220 Q220 215 264 215" opacity="0.3"><animate attributeName="stroke-opacity" values="0.3;0.6;0.3" dur="3.5s" repeatCount="indefinite"/></path>
-          <path d="M175 265 Q220 265 264 265" opacity="0.3"><animate attributeName="stroke-opacity" values="0.3;0.6;0.3" dur="2.8s" repeatCount="indefinite"/></path>
-
-          <path d="M275 115 Q320 130 360 130" opacity="0.5" stroke-width="1.5"><animate attributeName="stroke-opacity" values="0.5;1;0.5" dur="2s" repeatCount="indefinite"/></path>
-          <path d="M275 165 Q320 180 360 180" opacity="0.5" stroke-width="1.5"><animate attributeName="stroke-opacity" values="0.5;1;0.5" dur="2.5s" repeatCount="indefinite"/></path>
-          <path d="M275 215 Q320 200 360 200" opacity="0.5" stroke-width="1.5"><animate attributeName="stroke-opacity" values="0.5;1;0.5" dur="3s" repeatCount="indefinite"/></path>
-        </g>
-        <!-- Data flow particles -->
-        <g class="data-flow">
-          <circle r="2.5" fill="#58A6FF"><animateMotion dur="2s" repeatCount="indefinite" path="M76 55 Q120 40 164 40"/></circle>
-          <circle r="2.5" fill="#58A6FF"><animateMotion dur="2.5s" repeatCount="indefinite" path="M76 155 Q120 130 164 130"/></circle>
-          <circle r="2.5" fill="#58A6FF"><animateMotion dur="3s" repeatCount="indefinite" path="M175 40 Q220 65 264 65"/></circle>
-          <circle r="2.5" fill="#58A6FF"><animateMotion dur="2.8s" repeatCount="indefinite" path="M175 175 Q220 165 264 165"/></circle>
-          <circle r="2.5" fill="#58A6FF"><animateMotion dur="2.2s" repeatCount="indefinite" path="M275 115 Q320 130 360 130"/></circle>
-          <circle r="2.5" fill="#EF4444"><animateMotion dur="2.7s" repeatCount="indefinite" path="M275 165 Q320 180 360 180"/></circle>
-          <circle r="2.5" fill="#EF4444"><animateMotion dur="3.2s" repeatCount="indefinite" path="M275 215 Q320 200 360 200"/></circle>
-        </g>
-        <!-- Confidence meter -->
-        <g transform="translate(370, 295)">
-          <rect x="-25" y="-5" width="50" height="8" rx="2" fill="none" stroke="rgba(88,166,255,0.2)" stroke-width="1"/>
-          <rect x="-25" y="-5" width="42" height="8" rx="2" fill="rgba(88,166,255,0.3)"><animate attributeName="width" values="28;46;28" dur="5s" repeatCount="indefinite"/></rect>
-          <text x="0" y="18" fill="#58A6FF" font-size="8" text-anchor="middle" font-family="Inter, sans-serif" opacity="0.5">Confidence</text>
-        </g>
-        <!-- Layer labels -->
-        <text x="70" y="315" fill="rgba(255,255,255,0.15)" font-size="8" text-anchor="middle" font-family="Inter, sans-serif" font-weight="600">INPUT</text>
-        <text x="170" y="315" fill="rgba(255,255,255,0.15)" font-size="8" text-anchor="middle" font-family="Inter, sans-serif" font-weight="600">HIDDEN</text>
-        <text x="270" y="315" fill="rgba(255,255,255,0.15)" font-size="8" text-anchor="middle" font-family="Inter, sans-serif" font-weight="600">HIDDEN</text>
-        <text x="370" y="315" fill="rgba(255,255,255,0.15)" font-size="8" text-anchor="middle" font-family="Inter, sans-serif" font-weight="600">OUTPUT</text>
-      </svg>
-    </div>
-    <div class="feature-text">
-      <span class="feature-label">02</span>
-      <h2>AI Brain</h2>
-      <p>Model trained exclusively on your YES/NO responses. Sub-100ms inference. Activates after 100 samples, retrains every 50 new answers. No cloud, no telemetry.</p>
-    </div>
-  </article>
-
-  <!-- 03 ─ Analytics -->
-  <article class="feature">
-    <div class="feature-text">
-      <span class="feature-label">03</span>
-      <h2>Analytics</h2>
-      <p>Track focus across Today, Week, Month and All Time. Hourly breakdowns, most-used apps with category colors, and AI prediction history with confidence sparklines.</p>
-    </div>
-    <div class="feature-image">
-      <img src="screenshots/analytics_today.png" alt="Nudge analytics dashboard showing productivity insights">
-    </div>
-  </article>
-
-  <!-- 04 ─ Smart Interruptions -->
-  <article class="feature feature-reverse">
-    <div class="feature-image">
-      <img src="screenshots/notification_active.png" alt="Nudge check-in notification">
-    </div>
-    <div class="feature-text">
-      <span class="feature-label">04</span>
-      <h2>Smart Interruptions</h2>
-      <p>Checks every 60 seconds when ML is active. Random 5&#x2013;10 minute fallback when the model is still learning. Keyboard shortcuts: Ctrl+Shift+Y for YES, Ctrl+Shift+N for NO.</p>
-    </div>
-  </article>
-
+<section class="showcase">
+  <div class="showcase-item">
+    <img src="screenshots/analytics_today.png" alt="Analytics dashboard" loading="lazy">
+    <p>Analytics dashboard with hourly breakdowns and app usage.</p>
+  </div>
+  <div class="showcase-item">
+    <img src="screenshots/analytics_ai_brain.png" alt="AI Brain tab" loading="lazy">
+    <p>AI Brain shows live model status, prediction history, and training progress.</p>
+  </div>
+  <div class="showcase-item">
+    <img src="screenshots/settings.png" alt="Settings window" loading="lazy">
+    <p>Settings with harvest data, model stats, and controls.</p>
+  </div>
 </section>
 
-<!-- ═══ Specs ═══ -->
 <section class="specs">
-  <div class="specs-inner">
-    <div class="spec"><span class="spec-num">26</span><span class="spec-label">feature dimensions</span></div>
-    <div class="spec"><span class="spec-num">&#x2265;98%</span><span class="spec-label">confidence threshold</span></div>
-    <div class="spec"><span class="spec-num">100</span><span class="spec-label">samples to activate</span></div>
-    <div class="spec"><span class="spec-num">6</span><span class="spec-label">app categories</span></div>
-    <div class="spec"><span class="spec-num">5</span><span class="spec-label">desktop environments</span></div>
-    <div class="spec"><span class="spec-num">2</span><span class="spec-label">operating systems</span></div>
-  </div>
+  <div class="spec"><strong>26</strong> feature dimensions</div>
+  <div class="spec"><strong>&#x2265;98%</strong> confidence threshold</div>
+  <div class="spec"><strong>100</strong> samples to activate</div>
+  <div class="spec"><strong>6</strong> app categories</div>
+  <div class="spec"><strong>5</strong> desktop environments</div>
+  <div class="spec"><strong>2</strong> operating systems</div>
 </section>
 
-<!-- ═══ Download ═══ -->
 <section class="download" id="download">
-  <div class="download-inner">
-    <h2>Try Nudge on your machine</h2>
-    <p class="download-desc">Free and open source. No account, no telemetry, no strings.</p>
-    <div class="download-btns">
-      <a class="btn btn-primary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Download for Windows
-      </a>
-      <a class="btn btn-secondary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-installer.run">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Download for Linux
-      </a>
-    </div>
-    <div class="terminal">
-      <div class="terminal-bar">
-        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-        <span class="t-title">terminal</span>
-      </div>
-      <div class="terminal-body">
-        <div><span class="prompt">$</span> tar -xzf nudge-linux-x64.tar.gz &amp;&amp; cd linux</div>
-        <div><span class="prompt">$</span> ./install-linux-app.sh</div>
-        <div><span class="prompt">$</span> nudge-tray</div>
-        <div class="t-dim">harvest daemon started</div>
-        <div class="t-dim">waiting for 100 training samples <span class="cursor">&#9608;</span></div>
-      </div>
-    </div>
-    <p class="download-foot">
-      <a href="https://github.com/sguergachi/Nudge/releases/latest">All releases</a>
-      &nbsp;&#xB7;&nbsp;
-      <a href="https://github.com/sguergachi/Nudge">Source code</a>
-      &nbsp;&#xB7;&nbsp;
-      Requires <code>pip install scikit-learn joblib</code> for ML
-    </p>
+  <h2>Try Nudge on your machine</h2>
+  <p class="download-sub">Free and open source. No strings attached.</p>
+  <div class="download-actions">
+    <a class="btn btn-primary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download for Windows
+    </a>
+    <a class="btn btn-secondary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-installer.run">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download for Linux
+    </a>
   </div>
+  <div class="terminal">
+    <div class="terminal-bar">
+      <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+      <span class="t-title">terminal</span>
+    </div>
+    <div class="terminal-body">
+      <div><span class="prompt">$</span> tar -xzf nudge-linux-x64.tar.gz &amp;&amp; cd linux</div>
+      <div><span class="prompt">$</span> ./install-linux-app.sh</div>
+      <div><span class="prompt">$</span> nudge-tray</div>
+      <div class="t-dim">harvest daemon started</div>
+      <div class="t-dim">waiting for 100 training samples <span class="cursor">&#9608;</span></div>
+    </div>
+  </div>
+  <p class="download-foot">
+    <a href="https://github.com/sguergachi/Nudge/releases/latest">All releases</a>
+    &#xB7;
+    <a href="https://github.com/sguergachi/Nudge">Source code</a>
+  </p>
 </section>
 
 </main>
 
 <footer>
-  <div class="footer-inner">
-    <span>Nudge &#x2014; Free &amp; open source (MIT)</span>
-    <div class="footer-links">
-      <a href="https://github.com/sguergachi/Nudge">GitHub</a>
-      <a href="https://github.com/sguergachi/Nudge/issues/new">Feedback</a>
-    </div>
+  <span>Nudge &#x2014; Free &amp; open source (MIT)</span>
+  <div class="footer-links">
+    <a href="https://github.com/sguergachi/Nudge">GitHub</a>
+    <a href="https://github.com/sguergachi/Nudge/issues/new">Feedback</a>
   </div>
 </footer>
 
