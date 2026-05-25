@@ -12,11 +12,11 @@
             <File Id="NudgeTrayExe" Name="nudge-tray.exe" Source="..\..\..\dist\win-x64\nudge-tray.exe" KeyPath="yes" />
             <File Id="NudgeExe" Name="nudge.exe" Source="..\..\..\dist\win-x64\nudge.exe" />
             <File Id="NudgeNotifyExe" Name="nudge-notify.exe" Source="..\..\..\dist\win-x64\nudge-notify.exe" />
-            <File Id="ModelInferencePy" Name="model_inference.py" Source="..\..\..\model_inference.py" />
-            <File Id="TrainModelPy" Name="train_model.py" Source="..\..\..\train_model.py" />
-            <File Id="BackgroundTrainerPy" Name="background_trainer.py" Source="..\..\..\background_trainer.py" />
-            <File Id="RequirementsCpuTxt" Name="requirements-cpu.txt" Source="..\..\..\requirements-cpu.txt" />
-            <File Id="RequirementsTxt" Name="requirements.txt" Source="..\..\..\requirements.txt" />
+            <File Id="ModelInferencePy" Name="model_inference.py" Source="..\..\..\dist\win-x64\model_inference.py" />
+            <File Id="TrainModelPy" Name="train_model.py" Source="..\..\..\dist\win-x64\train_model.py" />
+            <File Id="BackgroundTrainerPy" Name="background_trainer.py" Source="..\..\..\dist\win-x64\background_trainer.py" />
+            <File Id="RequirementsCpuTxt" Name="requirements-cpu.txt" Source="..\..\..\dist\win-x64\requirements-cpu.txt" />
+            <File Id="RequirementsTxt" Name="requirements.txt" Source="..\..\..\dist\win-x64\requirements.txt" />
           </Component>
           <Component Id="ShortcutComponent" Guid="B2C3D4E5-F6A7-8901-BCDE-F12345678901">
             <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="Nudge" Target="[INSTALLFOLDER]nudge-tray.exe" WorkingDirectory="INSTALLFOLDER" />
