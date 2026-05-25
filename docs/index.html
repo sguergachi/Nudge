@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -182,285 +182,72 @@
 
 <script>
 // ============================================================
-// Three.js Flow Field Particle System
-// Abstract canvas processing art for Nudge hero background
+// Soft ambient orbs — calm, slow, no flicker, no grain
 // ============================================================
 
 (function() {
   const canvas = document.getElementById('hero-canvas');
   if (!canvas) return;
 
-  // Check for reduced motion preference
+  const ctx = canvas.getContext('2d');
   const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // Renderer
-  const renderer = new THREE.WebGLRenderer({
-    canvas: canvas,
-    alpha: true,
-    antialias: true
-  });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-
-  const scene = new THREE.Scene();
-  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-
-  // Simplex noise implementation (compact)
-  const SimplexNoise = {
-    grad3: [
-      [1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],
-      [1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],
-      [0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]
-    ],
-    p: new Uint8Array(256),
-    perm: new Uint8Array(512),
-    init: function() {
-      for (let i = 0; i < 256; i++) this.p[i] = Math.floor(Math.random() * 256);
-      for (let i = 0; i < 512; i++) this.perm[i] = this.p[i & 255];
-    },
-    dot3: function(g, x, y, z) {
-      return g[0]*x + g[1]*y + g[2]*z;
-    },
-    noise3d: function(x, y, z) {
-      const F3 = 1.0/3.0, G3 = 1.0/6.0;
-      let s = (x+y+z)*F3;
-      let i = Math.floor(x+s), j = Math.floor(y+s), k = Math.floor(z+s);
-      let t = (i+j+k)*G3;
-      let X0 = i-t, Y0 = j-t, Z0 = k-t;
-      let x0 = x-X0, y0 = y-Y0, z0 = z-Z0;
-      let i1, j1, k1, i2, j2, k2;
-      if (x0 >= y0) {
-        if (y0 >= z0) { i1=1; j1=0; k1=0; i2=1; j2=1; k2=0; }
-        else if (x0 >= z0) { i1=1; j1=0; k1=0; i2=1; j2=0; k2=1; }
-        else { i1=0; j1=0; k1=1; i2=1; j2=0; k2=1; }
-      } else {
-        if (y0 < z0) { i1=0; j1=0; k1=1; i2=0; j2=1; k2=1; }
-        else if (x0 < z0) { i1=0; j1=1; k1=0; i2=0; j2=1; k2=1; }
-        else { i1=0; j1=1; k1=0; i2=1; j2=1; k2=0; }
-      }
-      let x1 = x0 - i1 + G3, y1 = y0 - j1 + G3, z1 = z0 - k1 + G3;
-      let x2 = x0 - i2 + 2.0*G3, y2 = y0 - j2 + 2.0*G3, z2 = z0 - k2 + 2.0*G3;
-      let x3 = x0 - 1.0 + 3.0*G3, y3 = y0 - 1.0 + 3.0*G3, z3 = z0 - 1.0 + 3.0*G3;
-      let ii = i & 255, jj = j & 255, kk = k & 255;
-      let n0, n1, n2, n3;
-      let t0 = 0.6 - x0*x0 - y0*y0 - z0*z0;
-      if (t0 < 0) n0 = 0;
-      else { t0 *= t0; n0 = t0 * t0 * this.dot3(this.grad3[this.perm[ii+this.perm[jj+this.perm[kk]]] % 12], x0, y0, z0); }
-      let t1 = 0.6 - x1*x1 - y1*y1 - z1*z1;
-      if (t1 < 0) n1 = 0;
-      else { t1 *= t1; n1 = t1 * t1 * this.dot3(this.grad3[this.perm[ii+i1+this.perm[jj+j1+this.perm[kk+k1]]] % 12], x1, y1, z1); }
-      let t2 = 0.6 - x2*x2 - y2*y2 - z2*z2;
-      if (t2 < 0) n2 = 0;
-      else { t2 *= t2; n2 = t2 * t2 * this.dot3(this.grad3[this.perm[ii+i2+this.perm[jj+j2+this.perm[kk+k2]]] % 12], x2, y2, z2); }
-      let t3 = 0.6 - x3*x3 - y3*y3 - z3*z3;
-      if (t3 < 0) n3 = 0;
-      else { t3 *= t3; n3 = t3 * t3 * this.dot3(this.grad3[this.perm[ii+1+this.perm[jj+1+this.perm[kk+1]]] % 12], x3, y3, z3); }
-      return 32.0 * (n0 + n1 + n2 + n3);
-    }
-  };
-  SimplexNoise.init();
-
-  // Particle system
-  const PARTICLE_COUNT = prefersReducedMotion ? 800 : 3500;
-  const particles = new Float32Array(PARTICLE_COUNT * 3);
-  const velocities = new Float32Array(PARTICLE_COUNT * 3);
-  const ages = new Float32Array(PARTICLE_COUNT);
-  const maxAges = new Float32Array(PARTICLE_COUNT);
-  const sizes = new Float32Array(PARTICLE_COUNT);
-  const opacities = new Float32Array(PARTICLE_COUNT);
-
-  function resetParticle(i) {
-    particles[i*3] = (Math.random() - 0.5) * 3;
-    particles[i*3+1] = (Math.random() - 0.5) * 3;
-    particles[i*3+2] = (Math.random() - 0.5) * 0.5;
-    velocities[i*3] = 0;
-    velocities[i*3+1] = 0;
-    velocities[i*3+2] = 0;
-    ages[i] = 0;
-    maxAges[i] = 200 + Math.random() * 400;
-    sizes[i] = 1.5 + Math.random() * 3.5;
-    opacities[i] = 0.1 + Math.random() * 0.4;
-  }
-
-  for (let i = 0; i < PARTICLE_COUNT; i++) {
-    resetParticle(i);
-    ages[i] = Math.random() * maxAges[i];
-  }
-
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(particles, 3));
-  geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-  geometry.setAttribute('opacity', new THREE.BufferAttribute(opacities, 1));
-
-  // Custom shader for soft glowy particles
-  const vertexShader = `
-    attribute float size;
-    attribute float opacity;
-    varying float vOpacity;
-    void main() {
-      vOpacity = opacity;
-      vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-      gl_PointSize = size * (250.0 / -mvPosition.z);
-      gl_Position = projectionMatrix * mvPosition;
-    }
-  `;
-
-  const fragmentShader = `
-    uniform vec3 color1;
-    uniform vec3 color2;
-    uniform vec3 color3;
-    uniform float time;
-    varying float vOpacity;
-
-    void main() {
-      float r = distance(gl_PointCoord, vec2(0.5));
-      if (r > 0.5) discard;
-
-      float glow = 1.0 - (r * 2.0);
-      glow = pow(glow, 1.8);
-
-      // Color variation based on position and time
-      float t = sin(time * 0.3 + gl_PointCoord.x * 3.14159) * 0.5 + 0.5;
-      vec3 color = mix(color1, color2, t);
-      color = mix(color, color3, sin(time * 0.2 + gl_PointCoord.y * 3.14159) * 0.5 + 0.5);
-
-      gl_FragColor = vec4(color, glow * vOpacity);
-    }
-  `;
-
-  const material = new THREE.ShaderMaterial({
-    uniforms: {
-      color1: { value: new THREE.Color(0x58A6FF) },
-      color2: { value: new THREE.Color(0x22C55E) },
-      color3: { value: new THREE.Color(0xA78BFA) },
-      time: { value: 0 }
-    },
-    vertexShader: vertexShader,
-    fragmentShader: fragmentShader,
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending
-  });
-
-  const pointCloud = new THREE.Points(geometry, material);
-  scene.add(pointCloud);
-
-  // Mouse interaction
-  let mouseX = 0, mouseY = 0;
-  let targetMouseX = 0, targetMouseY = 0;
-  document.addEventListener('mousemove', (e) => {
-    targetMouseX = (e.clientX / window.innerWidth - 0.5) * 2;
-    targetMouseY = -(e.clientY / window.innerHeight - 0.5) * 2;
-  });
-
-  // Resize handler
+  let w, h;
   function resize() {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    renderer.setSize(w, h);
-    const aspect = w / h;
-    camera.left = -aspect;
-    camera.right = aspect;
-    camera.top = 1;
-    camera.bottom = -1;
-    camera.updateProjectionMatrix();
+    const dpr = Math.min(window.devicePixelRatio, 2);
+    w = window.innerWidth;
+    h = window.innerHeight;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
   resize();
   window.addEventListener('resize', resize);
 
-  // Animation loop
-  const clock = new THREE.Clock();
-  let time = 0;
+  // Three large, slow, heavily-blurred colour masses
+  // Only RGB, no white. Opacities extremely low.
+  const blobs = [
+    { cx: 0.35, cy: 0.40, r: 0.55, col: [30,  80, 160], a: 0.018, spd: 0.00025, off: 0.0  }, // deep blue
+    { cx: 0.70, cy: 0.55, r: 0.50, col: [20, 110,  70], a: 0.012, spd: 0.00020, off: 2.4  }, // muted teal
+    { cx: 0.50, cy: 0.65, r: 0.45, col: [50,  60, 130], a: 0.015, spd: 0.00030, off: 4.1  }, // slate purple
+  ];
 
-  function animate() {
-    requestAnimationFrame(animate);
+  let t = 0;
 
-    const delta = Math.min(clock.getDelta(), 0.05);
-    time += delta;
-    material.uniforms.time.value = time;
+  function frame() {
+    requestAnimationFrame(frame);
+    if (prefersReducedMotion) return;
+    t += 1;
 
-    // Smooth mouse follow
-    mouseX += (targetMouseX - mouseX) * 0.05;
-    mouseY += (targetMouseY - mouseY) * 0.05;
+    // Base fill
+    ctx.fillStyle = '#0B0B0E';
+    ctx.fillRect(0, 0, w, h);
 
-    const timeScale = 0.15;
-    const noiseScale = 1.2;
-    const mouseInfluence = 0.008;
+    // Feather everything so edges are butter-soft
+    ctx.filter = 'blur(90px)';
 
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-      ages[i] += 1;
+    for (const b of blobs) {
+      const phase = t * b.spd + b.off;
+      const x = (b.cx + Math.sin(phase)        * 0.10) * w;
+      const y = (b.cy + Math.cos(phase * 0.73) * 0.08) * h;
+      const r = b.r * Math.min(w, h) * (1 + Math.sin(phase * 0.4) * 0.08);
 
-      if (ages[i] > maxAges[i]) {
-        resetParticle(i);
-        continue;
-      }
+      const g = ctx.createRadialGradient(x, y, r * 0.15, x, y, r);
+      const [R, G, B] = b.col;
+      g.addColorStop(0,   `rgba(${R},${G},${B},${b.a})`);
+      g.addColorStop(0.6, `rgba(${R},${G},${B},${b.a * 0.35})`);
+      g.addColorStop(1,   'rgba(0,0,0,0)');
 
-      const px = particles[i*3];
-      const py = particles[i*3+1];
-      const pz = particles[i*3+2];
-
-      // Sample flow field
-      const nx = SimplexNoise.noise3d(px * noiseScale + time * timeScale, py * noiseScale, pz * noiseScale);
-      const ny = SimplexNoise.noise3d(px * noiseScale, py * noiseScale + time * timeScale, pz * noiseScale);
-      const nz = SimplexNoise.noise3d(px * noiseScale, py * noiseScale, pz * noiseScale + time * timeScale);
-
-      // Update velocity
-      velocities[i*3] += nx * 0.0008;
-      velocities[i*3+1] += ny * 0.0008;
-      velocities[i*3+2] += nz * 0.0002;
-
-      // Mouse repulsion
-      const dx = px - mouseX;
-      const dy = py - mouseY;
-      const dist = Math.sqrt(dx*dx + dy*dy);
-      if (dist < 0.8 && dist > 0.01) {
-        const force = (0.8 - dist) * mouseInfluence;
-        velocities[i*3] += (dx / dist) * force;
-        velocities[i*3+1] += (dy / dist) * force;
-      }
-
-      // Damping
-      velocities[i*3] *= 0.985;
-      velocities[i*3+1] *= 0.985;
-      velocities[i*3+2] *= 0.98;
-
-      // Update position
-      particles[i*3] += velocities[i*3];
-      particles[i*3+1] += velocities[i*3+1];
-      particles[i*3+2] += velocities[i*3+2];
-
-      // Wrap around
-      if (particles[i*3] > 2) particles[i*3] -= 4;
-      if (particles[i*3] < -2) particles[i*3] += 4;
-      if (particles[i*3+1] > 2) particles[i*3+1] -= 4;
-      if (particles[i*3+1] < -2) particles[i*3+1] += 4;
-
-      // Fade based on age
-      const lifeRatio = ages[i] / maxAges[i];
-      if (lifeRatio < 0.1) {
-        opacities[i] = (lifeRatio / 0.1) * (0.1 + Math.random() * 0.4);
-      } else if (lifeRatio > 0.8) {
-        opacities[i] = ((1 - lifeRatio) / 0.2) * (0.1 + Math.random() * 0.4);
-      }
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
     }
 
-    geometry.attributes.position.needsUpdate = true;
-    geometry.attributes.opacity.needsUpdate = true;
-
-    renderer.render(scene, camera);
+    ctx.filter = 'none';
   }
 
-  animate();
-
-  // Pause when not visible
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (!entry.isIntersecting) {
-        // Stop rendering when hero is not visible
-        // But keep the animation loop running for smooth resume
-      }
-    });
-  }, { threshold: 0 });
-  observer.observe(canvas);
+  frame();
 })();
 
 // ============================================================
