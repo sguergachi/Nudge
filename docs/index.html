@@ -67,7 +67,12 @@
       </details>
     </div>
     <div class="g-viz">
-      <canvas id="engine-canvas"></canvas>
+      <div class="orb-field">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+        <div class="orb orb-core"></div>
+      </div>
     </div>
   </div>
 </section>
@@ -76,7 +81,16 @@
 <section class="section" id="ai">
   <div class="grid g-right" data-reveal>
     <div class="g-viz">
-      <canvas id="ai-canvas"></canvas>
+      <div class="orb-field-ai">
+        <div class="ai-core"></div>
+        <div class="ai-ring"></div>
+        <div class="ai-orb ai-o1"></div>
+        <div class="ai-orb ai-o2"></div>
+        <div class="ai-orb ai-o3"></div>
+        <div class="ai-orb ai-o4"></div>
+        <div class="ai-orb ai-o5"></div>
+        <div class="ai-orb ai-o6"></div>
+      </div>
     </div>
     <div class="g-text">
       <div class="g-num t-green">02</div>
@@ -163,7 +177,6 @@
   </div>
 </footer>
 
-<script src="animations.js"></script>
 <script>
 const observer = new IntersectionObserver((entries) => {
   entries.forEach(entry => {
