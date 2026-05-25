@@ -162,7 +162,7 @@ jobs:
           $bundleDir = Resolve-Path "NudgeCrossPlatform\assets\windows"
           Write-Host "Building bundle..."
           Push-Location $bundleDir
-          & $wix build bundle.wxs -d Version=$version -o "$outDir\NudgeInstaller.exe" 2>&1
+          & $wix build bundle.wxs -ext WixBalExtension -d Version=$version -o "$outDir\NudgeInstaller.exe" 2>&1
           Pop-Location
           if ($LASTEXITCODE -ne 0) { throw "wix build failed (exit $LASTEXITCODE)" }
           $bundle = Join-Path $outDir "NudgeInstaller.exe"
