@@ -316,6 +316,46 @@ private static async void ShowDbusNotification()
 - The `resident:true` hint only works while the connection is active
 - Timeout set to 60 seconds to prevent resource leaks
 
+## MSIX Code Signing Certificate
+
+MSIX packages must be signed. The release pipeline generates a self-signed certificate and exports it as `Nudge.cer` alongside the installer. End users install the certificate once (to their Trusted People store), then they can install Nudge.msix directly.
+
+### For end users
+
+1. Download `Nudge.cer`, `Nudge.msix`, and `Install-Nudge.ps1` into the same folder.
+2. Right-click `Install-Nudge.ps1` → *Run with PowerShell*, or:
+   ```
+   powershell -ExecutionPolicy Bypass -File .\Install-Nudge.ps1
+   ```
+
+This adds the certificate to your Trusted People store (current user only — not system-wide) and installs the app.
+
+### For repo maintainers — using a stable certificate
+
+By default, CI generates a new self-signed cert for every release. This means each release ships a different `Nudge.cer`, and users must re-trust the new cert. To avoid this, create a **stable** certificate once and store it as a GitHub Actions secret:
+
+**Step 1 — Generate the certificate (Windows PowerShell, run once):**
+```powershell
+$cert = New-SelfSignedCertificate -Type Custom -Subject "CN=Nudge" `
+  -KeyUsage DigitalSignature `
+  -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3") `
+  -CertStoreLocation "Cert:\CurrentUser\My" `
+  -NotAfter (Get-Date).AddYears(10)
+
+$pwd = ConvertTo-SecureString -String "choose-a-password" -Force -AsPlainText
+Export-PfxCertificate -Cert $cert -FilePath nudge-stable.pfx -Password $pwd
+
+# Base64-encode for the secret
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("nudge-stable.pfx")) | Set-Clipboard
+Write-Host "PFX copied to clipboard — paste as WINDOWS_CERT_PFX secret"
+```
+
+**Step 2 — Add GitHub Actions secrets:**
+- `WINDOWS_CERT_PFX`: the base64-encoded PFX from above
+- `WINDOWS_CERT_PASSWORD`: the password you chose
+
+Once set, all future releases reuse the same certificate. Users who installed `Nudge.cer` from any previous release will not need to re-trust it.
+
 ## Future Improvements
 
 Potential enhancements for Windows support:
