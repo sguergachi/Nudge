@@ -15,7 +15,7 @@ The build script automatically installs dependencies using **winget** (Windows P
 
 When you run `.\build.ps1`, it will automatically:
 
-- Install .NET SDK 9 if not found
+- Install .NET SDK 10 if not found
 - Install Python 3.12 if not found (required for ML functionality)
 - Install all required Python ML dependencies
 
@@ -25,7 +25,7 @@ If you prefer manual installation or don't have winget:
 
 1. **.NET SDK 8.0 or later** (required)
   - Download from: [https://dotnet.microsoft.com/download](https://dotnet.microsoft.com/download)
-  - Or install via winget: `winget install Microsoft.DotNet.SDK.9`
+  - Or install via winget: `winget install Microsoft.DotNet.SDK.10`
 2. **Python 3.x** (required)
   - Required for ML functionality
   - Download from: [https://www.python.org/downloads/](https://www.python.org/downloads/)
@@ -34,18 +34,29 @@ If you prefer manual installation or don't have winget:
 
 ## Building on Windows
 
-1. Open PowerShell in the `NudgeCrossPlatform` directory
-2. Run the build script:
+1. Open a terminal (`cmd.exe`, PowerShell, or Windows Terminal) in the `NudgeCrossPlatform` directory.
+2. Run the build script using one of the two options below.
+
+**Option A — `build.cmd` (recommended, works in cmd.exe and PowerShell):**
+
+```batch
+cd NudgeCrossPlatform
+build.cmd
+```
+
+**Option B — PowerShell directly (may require execution policy change):**
+
+Windows 10 blocks unsigned PowerShell scripts by default. Either use Option A above, or run:
 
 ```powershell
 cd NudgeCrossPlatform
-.\build.ps1
+powershell -ExecutionPolicy Bypass -File build.ps1
 ```
 
 To clean before building:
 
-```powershell
-.\build.ps1 -Clean
+```batch
+build.cmd -Clean
 ```
 
 ## Running Nudge
