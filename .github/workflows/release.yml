@@ -80,7 +80,11 @@ jobs:
       - name: Build Windows MSI installer
         shell: pwsh
         run: |
+          Write-Host "RUNNER_TEMP: $env:RUNNER_TEMP"
           $candle = "$env:RUNNER_TEMP\wix\bin\candle.exe"
+          Write-Host "Looking for: $candle"
+          Write-Host "Exists: $(Test-Path $candle)"
+          Get-ChildItem "$env:RUNNER_TEMP\wix" -Recurse -Filter "candle.exe" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  Found: $_" }
           if (-not (Test-Path $candle)) { Write-Host "candle.exe not found — skipping MSI"; exit 0 }
           $version = Select-String -Path "NudgeCrossPlatform\nudge-tray.cs" -Pattern 'const string VERSION = "([.\d]+)"' | ForEach-Object { $_.Matches.Groups[1].Value }
           if (-not $version) { Write-Host "Failed to extract version — skipping MSI"; exit 0 }
