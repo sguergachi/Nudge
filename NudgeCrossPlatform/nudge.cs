@@ -18,21 +18,6 @@
 //
 // Example:
 //   nudge                    # Use defaults
-//   nudge /data/harvest.csv  # Custom CSV path
-//   nudge --interval 2       # Snapshot every 2 minutes
-//   nudge --ml               # Enable ML-based predictions
-//   nudge --ml --force-model # Force trained model usage
-//
-// Requirements:
-//   - Windows 10+, or Linux with Wayland/X11 (Sway, GNOME, KDE, Cinnamon)
-//   - .NET 10.0 SDK/runtime
-//
-// Hot paths keep the same direct architecture, but a few hot spots are tighter now:
-// - Browser title parsing uses cached lookup tables and span-based token scanning.
-// - KDE Wayland /proc scanning streams process directories and parses cmdline/stat data in place.
-// - ML JSON payloads use source-generated metadata instead of runtime reflection.
-//
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 using System;
 using System.Collections.Frozen;
@@ -334,7 +319,7 @@ publish();
         {
             try
             {
-                _display = WlDisplay.Connect();
+                _display = WlDisplay.Connect(null);
                 var registry = _display.GetRegistry();
 
                 registry.OnGlobal += (name, interfaceName, version) =>
@@ -353,9 +338,9 @@ publish();
                     return false;
                 }
 
-                _notification = _notifier.GetIdleNotification(0, _seat);
+                _notification = _notifier.GetIdleNotification(0u, _seat);
 
-                Console.Error.WriteLine($"[wayland-idle] using ext-idle-notify-v1 (seat: {_seat.Handle})");
+                Console.Error.WriteLine($"[wayland-idle] using ext-idle-notify-v1");
 
                 _notification.OnIdled += () =>
                 {
@@ -402,11 +387,8 @@ publish();
             _notification?.Destroy();
             _notifier?.Destroy();
             if (_display != null)
-                DisplayDisconnect(_display.Handle);
+                _display.Disconnect();
         }
-
-        [DllImport("libwayland-client.so.0", EntryPoint = "wl_display_disconnect")]
-        private static extern void DisplayDisconnect(IntPtr display);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

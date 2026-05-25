@@ -407,40 +407,38 @@ namespace NudgeTray
         {
             var headerStack = new StackPanel { Spacing = 0 };
 
-            // Top bar with title, AI status, and close button
+            // ── Title bar (title row + countdown subtitle + progress separator) ──
             var topBar = new Border
             {
                 Background = new SolidColorBrush(SurfaceColor),
-                Padding = new Thickness(16, 12, 12, 12),
+                Padding = new Thickness(16, 14, 12, 0),
                 CornerRadius = new CornerRadius(12, 12, 0, 0)
             };
 
-            // Title anchored left, AI status + pin + close anchored right
+            var topContent = new StackPanel { Spacing = 0 };
+
+            // Row 1 — title + controls
             var topGrid = new Grid
             {
                 ColumnDefinitions = new ColumnDefinitions("*,Auto,8,Auto,4,Auto")
             };
 
-            // Title — chrome-weight: present but not competing with content
             var titleText = new TextBlock
             {
                 Text = "Nudge",
-                FontSize = 13,
+                FontSize = 14,
                 FontWeight = FontWeight.SemiBold,
                 Foreground = new SolidColorBrush(TextPrimary),
                 VerticalAlignment = VerticalAlignment.Center
             };
             Grid.SetColumn(titleText, 0);
 
-            // Pause/Active toggle — right-justified group
             var pauseToggle = CreatePauseToggle();
             Grid.SetColumn(pauseToggle, 1);
 
-            // Pin Button (col 3)
             var pinButton = CreatePinButton();
             Grid.SetColumn(pinButton, 3);
 
-            // Close Button (col 5)
             var closeButton = CreateCloseButton();
             Grid.SetColumn(closeButton, 5);
 
@@ -448,16 +446,75 @@ namespace NudgeTray
             topGrid.Children.Add(pauseToggle);
             topGrid.Children.Add(pinButton);
             topGrid.Children.Add(closeButton);
-            topBar.Child = topGrid;
+            topContent.Children.Add(topGrid);
 
-            // Tabs bar — two-column grid so AI tab is always right-anchored and
-            // never competes with the time-filter tabs for horizontal space.
+            // Row 2 — countdown subtitle: clearly secondary
+            var cdRow = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"),
+                Margin = new Thickness(0, 8, 0, 5)
+            };
+
+            var cdIconCanvas = new Canvas { Width = 24, Height = 24 };
+            cdIconCanvas.Children.Add(new Avalonia.Controls.Shapes.Path
+            {
+                Fill = new SolidColorBrush(TextSecondary),
+                Data = Geometry.Parse(GetIconPath("clock"))
+            });
+            var cdIcon = new Viewbox
+            {
+                Width = 12,
+                Height = 12,
+                Stretch = Stretch.Uniform,
+                Child = cdIconCanvas,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 5, 0)
+            };
+            Grid.SetColumn(cdIcon, 0);
+
+            var cdPrefix = new TextBlock
+            {
+                Text = "Next check: ",
+                FontSize = 10,
+                Foreground = new SolidColorBrush(TextSecondary),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(cdPrefix, 1);
+
+            _cdLabel = new TextBlock
+            {
+                Text = "--",
+                FontSize = 10,
+                FontWeight = FontWeight.Medium,
+                Foreground = new SolidColorBrush(PrimaryBlue),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(_cdLabel, 2);
+
+            cdRow.Children.Add(cdIcon);
+            cdRow.Children.Add(cdPrefix);
+            cdRow.Children.Add(_cdLabel);
+            topContent.Children.Add(cdRow);
+
+            // Row 3 — 1px progress line, reads as a border/separator
+            _progressTrack = new Border
+            {
+                Height = 1,
+                Background = new SolidColorBrush(Color.FromArgb(25, 255, 255, 255)),
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            topContent.Children.Add(_progressTrack);
+
+            topBar.Child = topContent;
+            headerStack.Children.Add(topBar);
+
+            // ── Tabs bar ────────────────────────────────────────────────────────
             var tabsBar = new Border
             {
                 Background = new SolidColorBrush(SurfaceColor),
                 BorderBrush = new SolidColorBrush(BorderColor),
                 BorderThickness = new Thickness(0, 0, 0, 1),
-                Padding = new Thickness(16, 0, 16, 0)
+                Padding = new Thickness(16, 4, 16, 0)
             };
 
             var tabsGrid = new Grid
@@ -466,16 +523,15 @@ namespace NudgeTray
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
 
-            // Left: time-filter tabs
-            _todayTab = CreateTab(StrTabToday, true);
-            _weekTab = CreateTab(StrTabThisWeek, false);
-            _monthTab = CreateTab(StrTabThisMonth, false);
-            _allTimeTab = CreateTab(StrTabAllTime, false);
+            _todayTab   = CreateTab(StrTabToday,     true);
+            _weekTab    = CreateTab(StrTabThisWeek,  false);
+            _monthTab   = CreateTab(StrTabThisMonth, false);
+            _allTimeTab = CreateTab(StrTabAllTime,   false);
 
             var leftTabs = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                Spacing = 0                              // tabs carry their own padding
+                Spacing = 0
             };
             leftTabs.Children.Add(_todayTab);
             leftTabs.Children.Add(_weekTab);
@@ -483,7 +539,6 @@ namespace NudgeTray
             leftTabs.Children.Add(_allTimeTab);
             Grid.SetColumn(leftTabs, 0);
 
-            // Right: thin separator + AI tab, pinned to the right edge
             _aiLiveTab = CreateAIBrainTab();
             var rightGroup = new StackPanel
             {
@@ -495,7 +550,7 @@ namespace NudgeTray
             {
                 Width = 1,
                 Background = new SolidColorBrush(BorderColor),
-                Margin = new Thickness(0, 8, 0, 8),     // vertical inset so it doesn't span full height
+                Margin = new Thickness(0, 8, 0, 8),
                 VerticalAlignment = VerticalAlignment.Stretch
             });
             rightGroup.Children.Add(_aiLiveTab);
@@ -504,83 +559,9 @@ namespace NudgeTray
             tabsGrid.Children.Add(leftTabs);
             tabsGrid.Children.Add(rightGroup);
             tabsBar.Child = tabsGrid;
-
-            headerStack.Children.Add(topBar);
-
-            // ── Countdown + progress strip ──────────────────────────────────
-            var countdownSection = new Border
-            {
-                Background = new SolidColorBrush(SurfaceColor),
-                Padding = new Thickness(16, 4, 16, 6)
-            };
-            var countdownStack = new StackPanel { Spacing = 4 };
-
-            _progressTrack = new Border
-            {
-                Height = 2,
-                CornerRadius = new CornerRadius(1),
-                Background = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255)),
-                HorizontalAlignment = HorizontalAlignment.Stretch
-            };
-            countdownStack.Children.Add(_progressTrack);
-
-            var cdRow = new Grid
-            {
-                ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*")
-            };
-
-            var cdIconCanvas = new Canvas { Width = 24, Height = 24 };
-            cdIconCanvas.Children.Add(new Avalonia.Controls.Shapes.Path
-            {
-                Fill = new SolidColorBrush(TextSecondary),
-                Data = Geometry.Parse(GetIconPath("clock"))
-            });
-            var cdIcon = new Viewbox
-            {
-                Width = 14,
-                Height = 14,
-                Stretch = Stretch.Uniform,
-                Child = cdIconCanvas,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 5, 0)
-            };
-            Grid.SetColumn(cdIcon, 0);
-
-            var cdPrefix = new TextBlock
-            {
-                Text = "Next check: ",
-                FontSize = 11,
-                Foreground = new SolidColorBrush(TextSecondary),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            Grid.SetColumn(cdPrefix, 1);
-
-            _cdLabel = new TextBlock
-            {
-                Text = "--",
-                FontSize = 11,
-                FontWeight = FontWeight.Medium,
-                Foreground = new SolidColorBrush(PrimaryBlue),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            Grid.SetColumn(_cdLabel, 2);
-
-            cdRow.Children.Add(cdIcon);
-            cdRow.Children.Add(cdPrefix);
-            cdRow.Children.Add(_cdLabel);
-            countdownStack.Children.Add(cdRow);
-
-            countdownSection.Child = countdownStack;
-            headerStack.Children.Add(countdownSection);
-
             headerStack.Children.Add(tabsBar);
 
-            var headerBorder = new Border
-            {
-                Child = headerStack
-            };
-
-            return headerBorder;
+            return new Border { Child = headerStack };
         }
 
         private Border CreateTab(string label, bool isActive)

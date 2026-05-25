@@ -54,6 +54,7 @@ namespace NudgeTray
         static Process? _mlTrainerProcess;
         internal static bool _mlEnabled;
         internal static bool _notificationsPaused;
+        private static DateTime _lastHarvestRefresh = DateTime.MinValue;
         static bool _forceTrainedModel;
         static DateTime? _nextSnapshotTime;
         static int _intervalMinutes;
@@ -1592,7 +1593,17 @@ namespace NudgeTray
                                     e.Data.AsSpan(8),
                                     NudgeJsonContext.Default.HarvestSignal);
                                 if (sig != null)
+                                {
                                     LiveAIState.LastHarvest = sig;
+                                    // Throttle UI refresh to at most once per second
+                                    // so we don't flood the UI thread on every 2s tick
+                                    var now = DateTime.UtcNow;
+                                    if ((now - _lastHarvestRefresh).TotalSeconds >= 1)
+                                    {
+                                        _lastHarvestRefresh = now;
+                                        _analyticsWindow?.RequestTrainingViewRefresh();
+                                    }
+                                }
                             }
                             catch { /* non-critical */ }
                         }

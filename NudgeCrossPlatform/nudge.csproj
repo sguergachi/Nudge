@@ -21,6 +21,6 @@
 
   <ItemGroup Condition="'$(OS)' != 'Windows_NT'">
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.92.0" />
-    <ProjectReference Include="../WaylandDotnet/WaylandDotnet/WaylandDotnet.csproj" />
+    <PackageReference Include="WaylandDotnet" Version="0.5.0" />
   </ItemGroup>
 </Project>
