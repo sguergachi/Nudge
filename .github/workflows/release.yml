@@ -66,26 +66,30 @@ jobs:
           name: nudge-win-x64
           path: nudge-win-x64.zip
 
-      - name: Build Windows MSI installer
-        continue-on-error: true
+      - name: Install WiX and build MSI
         shell: pwsh
         run: |
-          choco install wixtoolset -y --no-progress 2>&1 | Out-Host
-          $candle = Get-ChildItem "C:\Program Files*\WiX*\candle.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
-          if (-not $candle) { $candle = Get-ChildItem "$env:ChocolateyInstall" -Filter "candle.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName }
-          if (-not $candle) { Write-Host "candle not found"; exit 0 }
+          choco install wixtoolset -y --no-progress
+          refreshenv
+          $candle = where.exe candle 2>$null
+          if (-not $candle) { $candle = where.exe candle.exe 2>$null }
+          if (-not $candle) { $candle = Get-ChildItem "C:\Program Files (x86)\WiX*\bin\candle.exe" | Select-Object -First 1 -ExpandProperty FullName }
+          if (-not $candle) { Write-Host "candle not found - checking paths:"; dir "C:\Program Files (x86)\WiX*" -Recurse -Filter "candle.exe" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" }; throw "candle.exe not found" }
           Write-Host "candle: $candle"
           $light = $candle -replace 'candle\.exe$', 'light.exe'
           $version = Select-String -Path "NudgeCrossPlatform\nudge-tray.cs" -Pattern 'const string VERSION = "([.\d]+)"' | ForEach-Object { $_.Matches.Groups[1].Value }
-          if (-not $version) { Write-Host "no version"; exit 0 }
+          if (-not $version) { throw "version not found" }
           $outDir = Join-Path $PWD "dist"
           $wxs = Resolve-Path "NudgeCrossPlatform\assets\windows\installer.wxs"
           $msi = Join-Path $outDir "Nudge-Setup-$version.msi"
+          Write-Host "Compiling..."
           & $candle -dVersion=$version -out "$outDir\installer.wixobj" $wxs 2>&1
-          if ($LASTEXITCODE -ne 0) { Write-Host "candle failed"; exit 0 }
+          if ($LASTEXITCODE -ne 0) { throw "candle failed (exit $LASTEXITCODE)" }
+          Write-Host "Linking..."
           & $light -out $msi "$outDir\installer.wixobj" 2>&1
-          if ($LASTEXITCODE -ne 0) { Write-Host "light failed"; exit 0 }
+          if ($LASTEXITCODE -ne 0) { throw "light failed (exit $LASTEXITCODE)" }
           if (Test-Path $msi) { Write-Host "MSI: $((Get-Item $msi).Length/1KB) KB" }
+          else { throw "MSI not produced" }
 
       - name: Upload Windows MSI installer
         if: success() || failure()
