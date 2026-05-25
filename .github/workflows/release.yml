@@ -86,6 +86,8 @@ jobs:
           $msi = Join-Path $outDir "Nudge-Setup-$version.msi"
           Write-Host "Compiling..."
           Push-Location $wxsDir
+          Get-ChildItem "..\..\..\dist\win-x64" -Name | ForEach-Object { Write-Host "  dist: $_" }
+          Get-ChildItem "..\..\.." -Name "*.py" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  root: $_" }
           & $candle -out "$outDir\installer.wixobj" "installer.wxs" 2>&1
           if ($LASTEXITCODE -ne 0) { Pop-Location; throw "candle failed (exit $LASTEXITCODE)" }
           Write-Host "Linking..."
