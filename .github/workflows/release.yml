@@ -156,7 +156,10 @@ jobs:
           $version = if ($m) { $m.Matches[0].Groups[1].Value } else { "1.5.7" }
           Write-Host "Installing WiX v5..."
           dotnet tool install --global wix --version 5.* 2>&1 | Out-Host
-          wix extension add WixToolset.Bal.wixext 2>&1 | Out-Host
+          wix extension list 2>&1 | Out-Host
+          wix extension add WixToolset.Bal.wixext --version 5.0.2 2>&1 | Out-Host
+          wix extension add WixToolset.StandardBootstrapperApplication --version 5.0.2 2>&1 | Out-Host
+          wix extension list 2>&1 | Out-Host
           $wix = where.exe wix 2>$null
           if (-not $wix) { $wix = where.exe wix.exe 2>$null }
           Write-Host "wix: $wix"
