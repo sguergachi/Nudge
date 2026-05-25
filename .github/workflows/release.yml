@@ -32,7 +32,7 @@ jobs:
 
   build-windows:
     needs: check-version
-    if: always() && needs.check-version.result == 'success'
+    if: needs.check-version.outputs.should_release == 'true'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6
@@ -112,7 +112,7 @@ jobs:
 
   build-linux:
     needs: check-version
-    if: always() && needs.check-version.result == 'success'
+    if: needs.check-version.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
