@@ -41,6 +41,10 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Publish self-contained Windows binaries
         working-directory: NudgeCrossPlatform
         run: |
@@ -212,8 +216,8 @@ jobs:
           ## Install
 
           ### Windows
-          1. Download **nudge-win-x64.zip** and extract
-          2. Run **nudge-tray.exe**
+          1. Download **Nudge-Setup-*.msi** and run it
+          2. Or download **nudge-win-x64.zip** and run **nudge-tray.exe**
 
           ### Linux
           1. Download **nudge-linux-installer.run** and run: `chmod +x nudge-linux-installer.run && ./nudge-linux-installer.run`
