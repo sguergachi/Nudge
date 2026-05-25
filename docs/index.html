@@ -3,233 +3,155 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nudge — Still focused?</title>
-  <meta name="description" content="Local AI that learns your attention patterns and asks at the right moment. Free, private, open source.">
+  <title>Nudge</title>
+  <meta name="description" content="A local AI that learns your attention patterns and asks at the right moment.">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='2' width='28' height='28' rx='5' fill='%230B0B0E'/%3E%3Ctext x='16' y='23' font-family='system-ui' font-size='17' fill='%2358A6FF' text-anchor='middle' font-weight='700'%3EN%3C/text%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<nav>
+<header class="nav">
   <div class="nav-inner">
     <span class="logo">Nudge</span>
-    <ul class="nav-links">
-      <li><a href="#engine">Engine</a></li>
-      <li><a href="#categories">Categories</a></li>
-      <li><a href="#ai">AI Brain</a></li>
-      <li><a href="#analytics">Analytics</a></li>
-      <li><a href="#interrupt">Interrupt</a></li>
-      <li><a href="#download" class="nav-cta">Download &rarr;</a></li>
-      <li><a href="https://github.com/sguergachi/Nudge" target="_blank">GitHub</a></li>
-    </ul>
+    <nav class="nav-links">
+      <a href="#how-it-works">How it works</a>
+      <a href="#download" class="nav-dl">Download</a>
+      <a href="https://github.com/sguergachi/Nudge" target="_blank">GitHub</a>
+    </nav>
   </div>
-</nav>
+</header>
+
+<main>
 
 <!-- ═══ Hero ═══ -->
-<section class="hero" data-reveal>
-  <div class="hero-bg"></div>
-  <div class="hero-grid-bg"></div>
-  <h1 data-reveal>Still&nbsp;focused?</h1>
-  <p class="hero-desc" data-reveal data-delay="1">
-    Local AI that learns your attention patterns<br>
-    and asks at the right moment.
-  </p>
-  <div class="hero-actions" data-reveal data-delay="2">
-    <a class="btn btn-primary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip">Download for Windows</a>
-    <a class="btn btn-secondary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-installer.run">Download for Linux</a>
+<section class="hero">
+  <div class="hero-text">
+    <h1>Still&nbsp;focused?</h1>
+    <p>A local AI that learns your attention patterns and asks at the right moment.</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip">Download for Windows</a>
+      <a class="btn btn-secondary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-installer.run">Download for Linux</a>
+    </div>
+    <p class="hero-foot">Free &middot; Open source &middot; No account needed</p>
   </div>
-  <p class="hero-note" data-reveal data-delay="3">Free &middot; Open source &middot; No account needed</p>
-  <div class="hero-media" data-reveal data-delay="4">
-    <img src="screenshots/notification_active.png" alt="Nudge notification" class="hero-shot">
-  </div>
-  <div class="hero-stats" data-reveal data-delay="5">
-    <div class="hs-item"><span class="hs-num">26</span><span class="hs-label">feature dimensions</span></div>
-    <div class="hs-item"><span class="hs-num">&ge;98%</span><span class="hs-label">drift confidence</span></div>
-    <div class="hs-item"><span class="hs-num">6</span><span class="hs-label">app categories</span></div>
-    <div class="hs-item"><span class="hs-num">5</span><span class="hs-label">desktop environments</span></div>
-  </div>
-  <div class="scroll-hint">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+  <div class="hero-image">
+    <img src="screenshots/notification_active.png" alt="Nudge notification">
   </div>
 </section>
 
-<!-- ═══ 01: Harvest Engine ═══ -->
-<section class="section section-alt" id="engine">
-  <div class="section-bg-line"></div>
-  <div class="grid g-left" data-reveal>
-    <div class="g-text">
-      <div class="g-num t-blue">01</div>
-      <div class="g-cat">Sensor Fusion</div>
-      <h2 class="g-head">Harvest Engine</h2>
-      <div class="g-claims">
-        <p>Samples your <strong>foreground app</strong>, <strong>idle time</strong> &amp; <strong>browser domain</strong> at 1&thinsp;Hz. Every reading graded for signal quality.</p>
-        <p>Rolling <strong>300-second window</strong> computes switch velocity, distinct-app count, per-app time share, and anchor-return events.</p>
-        <p>Three raw signals fused into a <strong>26-dimension feature vector</strong> — the full snapshot the AI evaluates every 60 seconds.</p>
-      </div>
-      <div class="g-spec">Cross-platform &middot; Windows &amp; Linux &middot; Wayland &amp; X11</div>
+<!-- ═══ How it works ═══ -->
+<section class="features" id="how-it-works">
+
+  <article class="feature">
+    <div class="feature-text">
+      <span class="feature-num">01</span>
+      <h2>Harvest Engine</h2>
+      <p>Samples your foreground app, idle time and browser domain at 1Hz. Rolling 300-second window tracks switch velocity, app share and anchor returns. Three signals fused into 26 dimensions.</p>
     </div>
-    <div class="g-viz">
-      <img src="screenshots/sensor-fusion.svg" alt="Sensor fusion pipeline" class="infographic">
+    <div class="feature-image">
+      <img src="screenshots/sensor-fusion.svg" alt="Nudge Harvest Engine sensor fusion pipeline">
     </div>
-  </div>
+  </article>
+
+  <article class="feature reverse">
+    <div class="feature-text">
+      <span class="feature-num">02</span>
+      <h2>Analytics</h2>
+      <p>Track focus across Today, Week, Month and All Time. Hourly breakdowns, most-used apps with category colors, and AI prediction history with confidence sparklines.</p>
+    </div>
+    <div class="feature-image">
+      <img src="screenshots/analytics_today.png" alt="Nudge analytics dashboard">
+    </div>
+  </article>
+
+  <article class="feature">
+    <div class="feature-text">
+      <span class="feature-num">03</span>
+      <h2>AI Brain</h2>
+      <p>Model trained exclusively on your YES/NO responses. Sub-100ms inference. Activates after 100 samples, retrains every 50 new answers. No cloud, no telemetry.</p>
+    </div>
+    <div class="feature-image">
+      <img src="screenshots/analytics_ai_brain.png" alt="Nudge AI Brain tab">
+    </div>
+  </article>
+
+  <article class="feature reverse">
+    <div class="feature-text">
+      <span class="feature-num">04</span>
+      <h2>Settings</h2>
+      <p>Toggle ML on or off. Adjust check interval. Manage sounds. See live model stats — samples collected, accuracy, last trained timestamp.</p>
+    </div>
+    <div class="feature-image">
+      <img src="screenshots/settings.png" alt="Nudge settings">
+    </div>
+  </article>
+
 </section>
 
-<!-- ═══ 02: Smart Categories ═══ -->
-<section class="section" id="categories">
-  <div class="grid g-right" data-reveal>
-    <div class="g-viz">
-      <img src="screenshots/categories.svg" alt="App category classification" class="infographic">
-    </div>
-    <div class="g-text">
-      <div class="g-num t-green">02</div>
-      <div class="g-cat">Auto-Classification</div>
-      <h2 class="g-head">App Categories</h2>
-      <div class="g-claims">
-        <p>Every app and browser domain is classified into <strong>6 categories</strong>, not just a raw process name.</p>
-        <p><strong>5 confidence tiers</strong> — from OS-installed metadata (ground truth) down to keyword matching and sensible defaults.</p>
-        <p>Browser tabs <strong>inherit the anchor app's category</strong> — research on documentation doesn't get flagged as distraction.</p>
-      </div>
-      <div class="g-spec">Development &middot; Creative &middot; Office &middot; Communication &middot; Entertainment &middot; Utility</div>
-    </div>
+<!-- ═══ Tech specs ═══ -->
+<section class="specs">
+  <div class="specs-inner">
+    <div class="spec"><strong>26</strong> feature dimensions</div>
+    <div class="spec"><strong>&ge;98%</strong> confidence threshold</div>
+    <div class="spec"><strong>100</strong> samples to activate</div>
+    <div class="spec"><strong>6</strong> app categories</div>
+    <div class="spec"><strong>5</strong> desktop environments</div>
+    <div class="spec"><strong>2</strong> operating systems</div>
   </div>
 </section>
-
-<!-- ═══ 03: AI Brain ═══ -->
-<section class="section section-alt" id="ai">
-  <div class="section-bg-line"></div>
-  <div class="grid g-left" data-reveal>
-    <div class="g-text">
-      <div class="g-num t-amber">03</div>
-      <div class="g-cat">Inference Engine</div>
-      <h2 class="g-head">AI Brain</h2>
-      <div class="g-claims">
-        <p>Trained exclusively on <strong>your YES/NO responses</strong> — not a generic model from thousands of other users.</p>
-        <p>Compares every 26-dimension snapshot against patterns it has seen before. <strong>Sub-100ms inference</strong>.</p>
-        <p>Activates after 100 training samples. <strong>Retrains automatically</strong> at every 50 new responses.</p>
-      </div>
-      <div class="g-spec">Personal model &middot; No cloud &middot; Automatic retraining</div>
-    </div>
-    <div class="g-viz">
-      <img src="screenshots/ai-brain-flow.svg" alt="AI Brain prediction flow" class="infographic">
-    </div>
-  </div>
-</section>
-
-<!-- ═══ 04: Analytics Dashboard ═══ -->
-<section class="section" id="analytics">
-  <div class="grid g-right" data-reveal>
-    <div class="g-viz g-viz-shots">
-      <img src="screenshots/analytics_today.png" alt="Analytics dashboard" class="shot-main">
-      <img src="screenshots/analytics_ai_brain.png" alt="AI Brain analytics tab" class="shot-sub">
-    </div>
-    <div class="g-text">
-      <div class="g-num t-blue">04</div>
-      <div class="g-cat">Living Dashboard</div>
-      <h2 class="g-head">Analytics</h2>
-      <div class="g-claims">
-        <p>Track your focus across <strong>Today, This Week, This Month,</strong> and <strong>All Time</strong> views.</p>
-        <p>See <strong>hourly productivity breakdowns</strong>, most-used apps ranked by active time, and per-app category colors.</p>
-        <p>The <strong>AI Brain tab</strong> exposes prediction history, confidence sparklines, sensor signal quality, and model training statistics.</p>
-      </div>
-      <div class="g-spec">Access from system tray &middot; 4 time windows &middot; ML diagnostics</div>
-    </div>
-  </div>
-</section>
-
-<!-- ═══ 05: Adaptive Interrupt ═══ -->
-<section class="section section-alt" id="interrupt">
-  <div class="section-bg-line"></div>
-  <div class="grid g-left" data-reveal>
-    <div class="g-text">
-      <div class="g-num t-amber">05</div>
-      <div class="g-cat">Adaptive Interrupt</div>
-      <h2 class="g-head">Check-in</h2>
-      <div class="g-claims">
-        <p>No fixed schedule — fires only when drift confidence hits <strong>&ge;98%</strong>. Stays silent when you're in flow.</p>
-        <p><strong>Ctrl+Shift+Y</strong> / <strong>Ctrl+Shift+N</strong> — answer without leaving the keyboard.</p>
-        <p><strong>30-second auto-dismiss</strong> if you're busy. Every answer feeds back to sharpen the model.</p>
-      </div>
-      <div class="g-spec">&ge;98% confidence &middot; 30s dismiss &middot; Keyboard-first</div>
-      <p class="g-extra">Full settings panel — toggle ML, adjust check interval, manage sounds, inspect live model stats.</p>
-    </div>
-    <div class="g-viz g-viz-shots">
-      <img src="screenshots/notification_active.png" alt="Nudge check-in" class="shot-main">
-      <img src="screenshots/settings.png" alt="Nudge settings" class="shot-sub">
-    </div>
-  </div>
-</section>
-
-<!-- ═══ Stats Bar ═══ -->
-<div class="stats-bar" data-reveal>
-  <div class="stats-inner">
-    <div class="stat-cell"><span class="stat-val">100%</span><span class="stat-lbl">On-device, no cloud</span></div>
-    <div class="stat-cell"><span class="stat-val">~80%</span><span class="stat-lbl">Peak accuracy</span></div>
-    <div class="stat-cell"><span class="stat-val">50+</span><span class="stat-lbl">Samples to train</span></div>
-    <div class="stat-cell"><span class="stat-val">5</span><span class="stat-lbl">Desktop environments</span></div>
-  </div>
-</div>
 
 <!-- ═══ Download ═══ -->
-<section class="section cta-section" id="download">
-  <div class="cta" data-reveal>
-    <h2 class="cta-heading">Try Nudge on your machine</h2>
-    <p class="cta-desc">Free and open source. No account, no telemetry, no strings.</p>
-    <div class="download-group">
-      <a class="btn btn-primary btn-dl" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="4" y1="8" x2="20" y2="8"/><line x1="8" y1="4" x2="8" y2="20"/></svg>
-        <span class="dl-text"><span class="dl-label">Windows</span><span class="dl-fmt">nudge-win-x64.zip</span></span>
-        <span class="dl-arrow">&rarr;</span>
+<section class="download" id="download">
+  <div class="download-inner">
+    <h2>Try Nudge on your machine</h2>
+    <p class="download-desc">Free and open source. No account, no telemetry, no strings.</p>
+    <div class="download-btns">
+      <a class="btn btn-primary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-win-x64.zip">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download for Windows
       </a>
-      <a class="btn btn-secondary btn-dl" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-installer.run">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M3 21v-2a7 7 0 0 1 7-7h4a7 7 0 0 1 7 7v2"/></svg>
-        <span class="dl-text"><span class="dl-label">Linux</span><span class="dl-fmt">nudge-linux-installer.run</span></span>
-        <span class="dl-arrow">&rarr;</span>
+      <a class="btn btn-secondary" href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-installer.run">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download for Linux
       </a>
     </div>
     <div class="terminal">
       <div class="terminal-bar">
-        <span class="tb-dot tb-dot-r"></span><span class="tb-dot tb-dot-y"></span><span class="tb-dot tb-dot-g"></span>
-        <span class="tb-title">terminal</span>
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="t-title">terminal</span>
       </div>
       <div class="terminal-body">
-        <div class="t-line"><span class="prompt">$</span> tar -xzf nudge-linux-x64.tar.gz &amp;&amp; cd linux</div>
-        <div class="t-line"><span class="prompt">$</span> ./install-linux-app.sh</div>
-        <div class="t-line"><span class="prompt">$</span> nudge-tray</div>
-        <div class="t-line t-dim">harvest daemon started</div>
-        <div class="t-line t-live">waiting for 100 training samples<span class="cursor">&#9608;</span></div>
+        <div><span class="prompt">$</span> tar -xzf nudge-linux-x64.tar.gz &amp;&amp; cd linux</div>
+        <div><span class="prompt">$</span> ./install-linux-app.sh</div>
+        <div><span class="prompt">$</span> nudge-tray</div>
+        <div class="t-dim">harvest daemon started</div>
+        <div class="t-dim">waiting for 100 training samples <span class="cursor">&#9608;</span></div>
       </div>
     </div>
-    <p class="cta-footnote">
+    <p class="download-foot">
       <a href="https://github.com/sguergachi/Nudge/releases/latest">All releases</a>
-      &middot;
+      &nbsp;&middot;&nbsp;
       <a href="https://github.com/sguergachi/Nudge">Source code</a>
+      &nbsp;&middot;&nbsp;
+      Requires <code>pip install scikit-learn joblib</code> for ML
     </p>
   </div>
 </section>
 
+</main>
+
 <footer>
   <div class="footer-inner">
-    <span class="footer-brand">Nudge</span>
-    <span class="footer-copy">&mdash; Free &amp; open source (MIT)</span>
-    <span class="footer-status"><span class="status-dot"></span> running</span>
-    <span class="footer-links">
+    <span>Nudge &mdash; Free &amp; open source (MIT)</span>
+    <div class="footer-links">
       <a href="https://github.com/sguergachi/Nudge">GitHub</a>
       <a href="https://github.com/sguergachi/Nudge/issues/new">Feedback</a>
-    </span>
+    </div>
   </div>
 </footer>
-
-<script>
-const observer = new IntersectionObserver((entries) => {
-  entries.forEach(entry => {
-    if (entry.isIntersecting) { entry.target.classList.add('visible'); observer.unobserve(entry.target); }
-  });
-}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
-document.querySelectorAll('[data-reveal]').forEach(el => { el.classList.add('reveal'); observer.observe(el); });
-</script>
 
 </body>
 </html>
