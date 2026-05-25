@@ -66,39 +66,45 @@ jobs:
           name: nudge-win-x64
           path: nudge-win-x64.zip
 
-      - name: Install WiX Toolset
-        shell: pwsh
-        run: |
-          $tmp = "$env:RUNNER_TEMP\wix"
-          New-Item -ItemType Directory -Path $tmp -Force | Out-Null
-          curl.exe -sL -o "$tmp\wix.zip" "https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip"
-          Expand-Archive -Path "$tmp\wix.zip" -DestinationPath "$tmp" -Force
-          $candle = Get-ChildItem -Path $tmp -Filter "candle.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
-          if (-not $candle) { Write-Host "candle.exe not found in extracted zip — skipping MSI"; exit 0 }
-          $wixDir = Split-Path $candle
-          Add-Content -Path $env:GITHUB_PATH -Value $wixDir
-          Write-Host "WiX installed to $wixDir"
-
       - name: Build Windows MSI installer
         shell: pwsh
         run: |
-          $candle = Get-ChildItem -Path "$env:RUNNER_TEMP\wix" -Filter "candle.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
-          if (-not $candle) { Write-Host "candle.exe not found — skipping MSI"; exit 0 }
+          # Download and extract WiX toolset
+          $tmp = "$env:RUNNER_TEMP\wix"
+          New-Item -ItemType Directory -Path $tmp -Force | Out-Null
+          Write-Host "Downloading WiX..."
+          curl.exe -sL -o "$tmp\wix.zip" "https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip"
+          Write-Host "Extracting..."
+          Expand-Archive -Path "$tmp\wix.zip" -DestinationPath "$tmp" -Force
+          $candle = Get-ChildItem -Path $tmp -Filter "candle.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $candle) {
+            Write-Host "candle.exe not found - checking zip content:"
+            Get-ChildItem -Path $tmp -Depth 0 | Select-Object Name, Length | Format-Table -AutoSize
+            exit 0
+          }
           $light = $candle -replace 'candle\.exe$', 'light.exe'
+          Write-Host "Found: $candle"
+
+          # Extract version
           $version = Select-String -Path "NudgeCrossPlatform\nudge-tray.cs" -Pattern 'const string VERSION = "([.\d]+)"' | ForEach-Object { $_.Matches.Groups[1].Value }
           if (-not $version) { Write-Host "Failed to extract version — skipping MSI"; exit 0 }
+
+          # Build MSI
           $outDir = Join-Path $PWD "dist"
           New-Item -ItemType Directory -Path $outDir -Force | Out-Null
           $wxsFile = Resolve-Path "NudgeCrossPlatform\assets\windows\installer.wxs"
           $msiPath = Join-Path $outDir "Nudge-Setup-$version.msi"
-          Write-Host "Building $msiPath..."
+          Write-Host "Compiling $msiPath..."
           & $candle -dVersion=$version -out "$outDir\installer.wixobj" $wxsFile 2>&1
           if ($LASTEXITCODE -ne 0) { Write-Host "candle failed (exit $LASTEXITCODE) — skipping MSI"; exit 0 }
           & $light -out $msiPath "$outDir\installer.wixobj" 2>&1
           if ($LASTEXITCODE -ne 0) { Write-Host "light failed (exit $LASTEXITCODE) — skipping MSI"; exit 0 }
-          if (-not (Test-Path $msiPath)) { Write-Host "MSI not found — skipping"; exit 0 }
-          $size = (Get-Item $msiPath).Length / 1KB
-          Write-Host "MSI built: $size KB"
+          if (Test-Path $msiPath) {
+            $size = (Get-Item $msiPath).Length / 1KB
+            Write-Host "MSI built: $size KB"
+          } else {
+            Write-Host "MSI not found at $msiPath — skipping"
+          }
 
       - name: Upload Windows MSI installer
         if: success() || failure()
