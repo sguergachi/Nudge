@@ -238,8 +238,8 @@ jobs:
           ## Install
 
           ### Windows
-          1. Download **Nudge-Setup-*.msi** (installer) or **nudge-win-x64.zip** (portable)
-          2. Run the installer — one click, done
+          1. Download **nudge-win-x64.zip** and extract
+          2. Run **nudge-tray.exe**
 
           ### Linux
           1. Download **nudge-linux-installer.run** and run: `chmod +x nudge-linux-installer.run && ./nudge-linux-installer.run`
