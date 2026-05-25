@@ -113,6 +113,38 @@ a:hover{color:#8AC0FF}
 }
 
 /* ════════════════════════════════════════════════════════════
+   Feature Sections — Vanta.js backgrounds
+   ════════════════════════════════════════════════════════════ */
+.feature-section{
+  position:relative;
+  min-height:80vh;
+  display:flex;align-items:center;justify-content:center;
+  padding:100px 32px;
+  overflow:hidden
+}
+.feature-section>canvas{position:absolute;top:0;left:0;width:100%;height:100%;z-index:0}
+.feature-content{
+  position:relative;z-index:1;
+  width:100%;max-width:var(--container);
+  display:grid;grid-template-columns:1fr 1fr;gap:60px;
+  align-items:center
+}
+.feature-reverse .feature-content{direction:rtl}
+.feature-reverse .feature-content>*{direction:ltr}
+.feature-text h2{
+  font-size:2.2rem;font-weight:700;letter-spacing:-.03em;
+  margin-bottom:14px;line-height:1.15
+}
+.feature-text p{
+  font-size:1.05rem;color:var(--text-dim);line-height:1.65
+}
+.feature-shot{display:flex;justify-content:center}
+.feature-shot img{
+  width:100%;max-width:420px;
+  box-shadow:0 20px 60px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.05)
+}
+
+/* ════════════════════════════════════════════════════════════
    Showcase — 3 big screenshots
    ════════════════════════════════════════════════════════════ */
 .showcase{
@@ -190,11 +222,16 @@ footer{
    Responsive
    ════════════════════════════════════════════════════════════ */
 @media(max-width:700px){
-  .nav-inner,.hero,.showcase,.specs,.download,footer{padding:0 20px}
+  .nav-inner,.hero,.feature-section,.showcase,.specs,.download,footer{padding:0 20px}
   .hero{padding-top:120px;padding-bottom:40px}
   .hero h1{font-size:clamp(2.8rem,10vw,4.5rem)}
   .hero-sub{font-size:1rem}
   .hero-shot{max-width:320px}
+  .feature-section{min-height:auto;padding:60px 20px}
+  .feature-content{grid-template-columns:1fr;gap:32px;text-align:center}
+  .feature-reverse .feature-content{direction:ltr}
+  .feature-text h2{font-size:1.7rem}
+  .feature-shot img{max-width:320px}
   .showcase{padding-top:48px;padding-bottom:48px;gap:48px}
   .showcase-item img{max-width:100%}
   .specs{gap:6px 20px}
