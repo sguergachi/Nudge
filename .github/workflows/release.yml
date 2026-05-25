@@ -220,9 +220,8 @@ jobs:
            cat > release-notes.md << 'NOTES'
            ## Install
 
-           ### Windows
-           1. Download **Nudge-Setup-*.msi** and run it
-           2. Or download **nudge-win-x64.zip** and run **nudge-tray.exe**
+          ### Windows
+          1. Download **nudge-win-x64.zip** and run **nudge-tray.exe**
 
           ### Linux
           1. Download **nudge-linux-installer.run** and run: `chmod +x nudge-linux-installer.run && ./nudge-linux-installer.run`
