@@ -92,6 +92,18 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;height:var(--nav-h);backgrou
 @keyframes exR2{0%{r:8px;opacity:.14}5%{r:6px;opacity:.07}15%{r:30px;opacity:.18}100%{r:188px;opacity:0}}
 @keyframes exR3{0%{r:8px;opacity:.08}5%{r:6px;opacity:.04}15%{r:30px;opacity:.10}100%{r:188px;opacity:0}}
 
+/* Firefly particles — compound sinusoidal drift + twinkle */
+.firefly{animation-timing-function:ease-in-out;animation-iteration-count:infinite}
+.ff1{animation:fly1 11s ease-in-out infinite,twinkle 3.2s ease-in-out infinite}
+.ff2{animation:fly2 13s ease-in-out infinite,twinkle 2.8s ease-in-out infinite .4s}
+.ff3{animation:fly3 10s ease-in-out infinite,twinkle 3.6s ease-in-out infinite .8s}
+.ff4{animation:fly4 14s ease-in-out infinite,twinkle 3.0s ease-in-out infinite 1.2s}
+@keyframes fly1{0%,100%{transform:translate(0,0)}20%{transform:translate(15px,-12px)}45%{transform:translate(-8px,20px)}70%{transform:translate(-18px,-6px)}90%{transform:translate(6px,14px)}}
+@keyframes fly2{0%,100%{transform:translate(0,0)}25%{transform:translate(-20px,8px)}55%{transform:translate(12px,-18px)}80%{transform:translate(16px,10px)}}
+@keyframes fly3{0%,100%{transform:translate(0,0)}30%{transform:translate(10px,16px)}60%{transform:translate(-14px,-10px)}85%{transform:translate(6px,-20px)}}
+@keyframes fly4{0%,100%{transform:translate(0,0)}35%{transform:translate(-10px,-14px)}65%{transform:translate(18px,-8px)}}
+@keyframes twinkle{0%,100%{opacity:.3}50%{opacity:.85}}
+
 /* Dot rings — staggered pulse with dip before rise */
 .dr1{animation:drPulse 4.5s cubic-bezier(.4,0,.2,1) infinite}
 .dr2{animation:drPulse 4.5s cubic-bezier(.4,0,.2,1) infinite;animation-delay:2.25s}
@@ -122,7 +134,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;height:var(--nav-h);backgrou
 .hex-outer{animation:hexRotate 24s linear infinite;transform-origin:200px 200px}
 @keyframes hexRotate{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
 
-/* Hex nodes — wave propagation with anticipation (dip before brightening) */
+/* Hex nodes — wave propagation with anticipation */
 .node-hex circle,.node-inner circle{animation:hexNodePulse 1.8s cubic-bezier(.4,0,.2,1) infinite;animation-delay:var(--nd,0s)}
 @keyframes hexNodePulse{0%,100%{opacity:.25;r:4px}8%{opacity:.1;r:3.5px}22%{opacity:1;r:7px}45%{opacity:.4;r:4.5px}}
 
@@ -136,7 +148,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;height:var(--nav-h);backgrou
 .hex-pulse-ring{animation:hexOrbitRing 6s steps(6) infinite;animation-delay:.15s;transform-origin:200px 200px}
 @keyframes hexOrbitRing{0%{transform:translate(0,-160px);opacity:.6}16%{transform:translate(139px,-80px);opacity:.6}33%{transform:translate(139px,80px);opacity:.6}50%{transform:translate(0,160px);opacity:.6}66%{transform:translate(-139px,80px);opacity:.6}83%{transform:translate(-139px,-80px);opacity:.6}100%{transform:translate(0,-160px);opacity:.6}}
 
-/* Core — breathe with overshoot (anticipate dip, rise past center, settle back) */
+/* Core — breathe with overshoot */
 .core-node{animation:coreBreathe 4.5s cubic-bezier(.4,0,.2,1) infinite;transform-origin:200px 200px}
 @keyframes coreBreathe{0%,100%{transform:scale(1)}10%{transform:scale(.95)}28%{transform:scale(1.3)}38%{transform:scale(1.12)}55%{transform:scale(1.05)}}
 
@@ -146,10 +158,26 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;height:var(--nav-h);backgrou
 .core-aura{animation:auraBreathe 4.5s cubic-bezier(.4,0,.2,1) infinite;transform-origin:200px 200px}
 @keyframes auraBreathe{0%,100%{r:36px;opacity:.03}10%{r:34px;opacity:.015}28%{r:52px;opacity:.07}38%{r:42px;opacity:.04}55%{r:38px;opacity:.03}}
 
-/* Sparks — 6 symmetric, perfectly staggered (6 × 0.4s = 2.4s loop) */
+/* Sparks — 6 symmetric, perfectly staggered */
 .spark{animation:sparkPop 2.4s cubic-bezier(.4,0,.2,1) infinite}
 .s1{animation-delay:0s}.s2{animation-delay:.4s}.s3{animation-delay:.8s}.s4{animation-delay:1.2s}.s5{animation-delay:1.6s}.s6{animation-delay:2.0s}
 @keyframes sparkPop{0%,100%{opacity:0;r:1px}5%{opacity:0;r:1px}15%{opacity:1;r:3.5px}35%{opacity:.4;r:2px}60%{opacity:0;r:1px}}
+
+/* Drifting thought particles — compound sinusoidal wander + pulse */
+.drift{animation-timing-function:ease-in-out;animation-iteration-count:infinite}
+.d1{animation:drift1 12s ease-in-out infinite,pulseIn 4s ease-in-out infinite}
+.d2{animation:drift2 14s ease-in-out infinite,pulseIn 3.5s ease-in-out infinite .6s}
+.d3{animation:drift3 11s ease-in-out infinite,pulseIn 4.5s ease-in-out infinite 1.1s}
+.d4{animation:drift4 15s ease-in-out infinite,pulseIn 3.8s ease-in-out infinite 1.7s}
+.d5{animation:drift5 13s ease-in-out infinite,pulseIn 4.2s ease-in-out infinite .3s}
+.d6{animation:drift6 10s ease-in-out infinite,pulseIn 3.2s ease-in-out infinite .9s}
+@keyframes drift1{0%,100%{transform:translate(0,0)}25%{transform:translate(18px,10px)}55%{transform:translate(-12px,-16px)}80%{transform:translate(8px,22px)}}
+@keyframes drift2{0%,100%{transform:translate(0,0)}30%{transform:translate(-14px,8px)}60%{transform:translate(10px,-18px)}}
+@keyframes drift3{0%,100%{transform:translate(0,0)}20%{transform:translate(-20px,-6px)}50%{transform:translate(14px,12px)}75%{transform:translate(6px,-14px)}}
+@keyframes drift4{0%,100%{transform:translate(0,0)}35%{transform:translate(16px,-10px)}70%{transform:translate(-8px,20px)}}
+@keyframes drift5{0%,100%{transform:translate(0,0)}28%{transform:translate(-16px,-12px)}58%{transform:translate(12px,16px)}82%{transform:translate(-10px,8px)}}
+@keyframes drift6{0%,100%{transform:translate(0,0)}22%{transform:translate(8px,-14px)}48%{transform:translate(-18px,6px)}72%{transform:translate(14px,18px)}}
+@keyframes pulseIn{0%,100%{opacity:.25;r:2px}50%{opacity:.65;r:3.2px}}
 
 /* Feedback ring — dash flow */
 .fb-ring{animation:fbFlow 4s linear infinite}
