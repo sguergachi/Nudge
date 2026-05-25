@@ -134,12 +134,17 @@ jobs:
           else { throw "MSI not produced" }
           Copy-Item $msi (Join-Path $outDir "Nudge-Setup.msi")
 
+      - name: Stage MSI for upload
+        if: success() || failure()
+        shell: pwsh
+        run: Copy-Item dist/Nudge-Setup*.msi .
+
       - name: Upload Windows MSI installer
         if: success() || failure()
         uses: actions/upload-artifact@v7
         with:
           name: nudge-win-installer
-          path: dist\Nudge-Setup*.msi
+          path: Nudge-Setup*.msi
           if-no-files-found: warn
 
   build-linux:
