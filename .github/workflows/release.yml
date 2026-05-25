@@ -61,15 +61,19 @@ jobs:
           Compress-Archive -Path "$dist/*" -DestinationPath "nudge-win-x64.zip" -Force
 
       - name: Install WiX Toolset
-        run: choco install wixtoolset -y --no-progress --version 3.14.1
+        shell: pwsh
+        run: |
+          $tmp = "$env:RUNNER_TEMP\wix"
+          New-Item -ItemType Directory -Path $tmp -Force | Out-Null
+          curl.exe -sL -o "$tmp\wix.zip" "https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip"
+          Expand-Archive -Path "$tmp\wix.zip" -DestinationPath "$tmp\bin" -Force
+          Add-Content -Path $env:GITHUB_PATH -Value "$tmp\bin"
+          candle.exe -? 2>&1 | Select-Object -First 1
 
       - name: Build Windows MSI installer
         shell: pwsh
         run: |
-          $candle = Get-ChildItem "C:\Program Files*\WiX Toolset*\bin\candle.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $candle) { Write-Host "WiX candle.exe not found — skipping MSI"; exit 0 }
-          $wixRoot = $candle.Directory.FullName
-          Write-Host "WiX: $wixRoot"
+          try { $null = Get-Command candle.exe -ErrorAction Stop } catch { Write-Host "candle.exe not found — skipping MSI"; exit 0 }
           $version = Select-String -Path "NudgeCrossPlatform\nudge-tray.cs" -Pattern 'const string VERSION = "([.\d]+)"' | ForEach-Object { $_.Matches.Groups[1].Value }
           if (-not $version) { Write-Host "Failed to extract version — skipping MSI"; exit 0 }
           $outDir = Join-Path $PWD "dist"
@@ -77,11 +81,11 @@ jobs:
           $wxsFile = Resolve-Path "NudgeCrossPlatform\assets\windows\installer.wxs"
           $msiPath = Join-Path $outDir "Nudge-Setup-$version.msi"
           Write-Host "Building $msiPath..."
-          & "$wixRoot\candle.exe" -dVersion=$version -out "$outDir\installer.wixobj" $wxsFile 2>&1
+          candle.exe -dVersion=$version -out "$outDir\installer.wixobj" $wxsFile 2>&1
           if ($LASTEXITCODE -ne 0) { Write-Host "candle failed — skipping MSI"; exit 0 }
-          & "$wixRoot\light.exe" -out $msiPath "$outDir\installer.wixobj" 2>&1
+          light.exe -out $msiPath "$outDir\installer.wixobj" 2>&1
           if ($LASTEXITCODE -ne 0) { Write-Host "light failed — skipping MSI"; exit 0 }
-          if (-not (Test-Path $msiPath)) { Write-Host "MSI not found at $msiPath — skipping"; exit 0 }
+          if (-not (Test-Path $msiPath)) { Write-Host "MSI not found — skipping"; exit 0 }
           Write-Host "MSI built: $((Get-Item $msiPath).Length / 1KB) KB"
 
       - name: Build Windows MSI installer
