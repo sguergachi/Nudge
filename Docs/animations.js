@@ -1,369 +1,293 @@
 // ═══════════════════════════════════════════════════════════
 // Nudge — technical abstract animations (Canvas 2D, 60fps)
 // ═══════════════════════════════════════════════════════════
-
 (function () {
   'use strict';
 
-  // ── Colors ──────────────────────────────────────────────
   const BLUE = '#58A6FF';
-  const BLUE_LOW = 'rgba(88,166,255,0.12)';
+  const BLUE_LOW = 'rgba(88,166,255,0.15)';
   const GREEN = '#22C55E';
-  const GREEN_LOW = 'rgba(34,197,94,0.12)';
+  const GREEN_LOW = 'rgba(34,197,94,0.15)';
   const INDIGO = '#818CF8';
-  const TEAL = '#2DD4BF';
 
-  // ════════════════════════════════════════════════════════
-  //  ENGINE: 3 signals → fusion node → 26 radiating lines
-  // ════════════════════════════════════════════════════════
-
-  function initEngine(canvas) {
-    const ctx = canvas.getContext('2d');
+  // ── Throttled resize helper ────────────────────────────
+  function makeResizer(canvas, ctx, fallbackW, fallbackH) {
     const dpr = window.devicePixelRatio || 1;
+    let w = fallbackW, h = fallbackH;
 
-    function resize() {
+    function apply() {
       const rect = canvas.parentElement.getBoundingClientRect();
-      const w = rect.width;
-      const h = rect.height || w * 0.65;
+      w = rect.width || fallbackW;
+      h = rect.height || w * 0.65 || fallbackH;
       canvas.width = w * dpr;
       canvas.height = h * dpr;
       canvas.style.width = w + 'px';
       canvas.style.height = h + 'px';
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      return { w, h };
     }
 
-    let dims = resize();
+    apply();
+    new ResizeObserver(apply).observe(canvas.parentElement);
+    return { get w() { return w; }, get h() { return h; } };
+  }
 
-    // Particle streams — each stream has 20 particles
-    const N = 20;
+  // ════════════════════════════════════════════════════════
+  //  ENGINE: 3 signals → fusion node → 26 radiating lines
+  // ════════════════════════════════════════════════════════
+  function initEngine(canvas) {
+    const ctx = canvas.getContext('2d');
+    const dims = makeResizer(canvas, ctx, 520, 340);
+
+    const N = 22;
     const streams = [
-      { x1: 0, y1: dims.h * 0.22, x2: dims.w * 0.38, y2: dims.h * 0.5, color: BLUE, delay: 0 },
-      { x1: 0, y1: dims.h * 0.50, x2: dims.w * 0.38, y2: dims.h * 0.5, color: GREEN, delay: 600 },
-      { x1: 0, y1: dims.h * 0.78, x2: dims.w * 0.38, y2: dims.h * 0.5, color: INDIGO, delay: 1200 },
+      { x1: 0, y1: dims.h * 0.22, x2: dims.w * 0.35, y2: dims.h * 0.5, color: BLUE, delay: 0 },
+      { x1: 0, y1: dims.h * 0.50, x2: dims.w * 0.35, y2: dims.h * 0.5, color: GREEN, delay: 700 },
+      { x1: 0, y1: dims.h * 0.78, x2: dims.w * 0.35, y2: dims.h * 0.5, color: INDIGO, delay: 1400 },
     ];
 
     const particles = [];
-    streams.forEach((s) => {
-      for (let i = 0; i < N; i++) {
-        particles.push({ stream: s, t: -i * 0.05, speed: 0.008 + Math.random() * 0.004 });
-      }
+    streams.forEach(s => {
+      for (let i = 0; i < N; i++) particles.push({ stream: s, t: -i * 0.04, speed: 0.007 + Math.random() * 0.004 });
     });
 
-    const node = { x: dims.w * 0.42, y: dims.h * 0.5, r: dims.h * 0.06, pulse: 0 };
+    function easeInOut(t) { return t < 0.5 ? 2*t*t : -1 + (4 - 2*t)*t; }
 
-    function lerp(a, b, t) { return a + (b - a) * t; }
-    function easeInOut(t) { return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; }
-
-    let last = 0;
-    let totalTime = 0;
+    let last = 0, totalTime = 0, animStart = performance.now();
+    const node = { x: dims.w * 0.40, y: dims.h * 0.5, r: dims.h * 0.07, pulse: 0 };
 
     function render(now) {
-      const dt = last ? Math.min(now - last, 50) : 16;
+      const dt = last ? Math.min(now - last, 40) : 16;
       last = now;
       totalTime += dt;
+      const w = dims.w, h = dims.h;
+      if (w <= 0 || h <= 0) { requestAnimationFrame(render); return; }
 
-      dims = resize();
-      const { w, h } = dims;
       ctx.clearRect(0, 0, w, h);
 
-      // Update streams
-      streams.forEach(s => {
-        s.x1 = 0; s.y1 = h * 0.22;
-        s.x2 = w * 0.38; s.y2 = h * 0.5;
-        // if multiple streams use different starting y's
-      });
-      streams[0].y1 = h * 0.22;
-      streams[1].y1 = h * 0.50;
-      streams[2].y1 = h * 0.78;
-      node.x = w * 0.42;
-      node.y = h * 0.5;
-      node.r = h * 0.06;
+      // Update positions
+      streams[0].y1 = h * 0.22; streams[0].x2 = w * 0.35; streams[0].y2 = h * 0.5;
+      streams[1].y1 = h * 0.50; streams[1].x2 = w * 0.35; streams[1].y2 = h * 0.5;
+      streams[2].y1 = h * 0.78; streams[2].x2 = w * 0.35; streams[2].y2 = h * 0.5;
+      node.x = w * 0.40; node.y = h * 0.5; node.r = h * 0.07;
 
-      // ── Draw connection lines ──
+      // Connection lines (faint)
       streams.forEach(s => {
-        ctx.beginPath();
-        ctx.moveTo(s.x1, s.y1);
-        ctx.lineTo(node.x, node.y);
-        ctx.strokeStyle = 'rgba(88,166,255,0.08)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(node.x, node.y);
+        ctx.strokeStyle = 'rgba(88,166,255,0.06)'; ctx.lineWidth = 1; ctx.stroke();
       });
 
-      // ── Draw particles ──
-      particles.forEach((p) => {
+      // Particles
+      node.pulse = Math.max(0, node.pulse - dt * 0.0008);
+      particles.forEach(p => {
         const elapsed = totalTime - p.stream.delay;
         if (elapsed < 0) return;
         p.t += p.speed * (dt / 16);
         if (p.t > 1) p.t = 0;
         const et = easeInOut(p.t);
-        const x = lerp(p.stream.x1, p.stream.x2, et);
-        const y = lerp(p.stream.y1, p.stream.y2, et);
-        const alpha = p.t < 0.15 ? p.t / 0.15 : p.t > 0.85 ? (1 - p.t) / 0.15 : 1;
-        ctx.beginPath();
-        ctx.arc(x, y, 2.5, 0, Math.PI * 2);
-        ctx.fillStyle = p.stream.color;
-        ctx.globalAlpha = alpha * 0.8;
-        ctx.fill();
-
-        // Trigger node pulse when particle is near end
-        if (p.t > 0.88 && p.t < 0.92) {
-          node.pulse = 0.5;
-        }
+        const x = p.stream.x1 + (p.stream.x2 - p.stream.x1) * et;
+        const y = p.stream.y1 + (p.stream.y2 - p.stream.y1) * et;
+        const alpha = p.t < 0.12 ? p.t / 0.12 : p.t > 0.88 ? (1 - p.t) / 0.12 : 1;
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = p.stream.color; ctx.globalAlpha = alpha * 0.85; ctx.fill();
+        if (p.t > 0.85 && p.t < 0.95) node.pulse = 0.6;
       });
       ctx.globalAlpha = 1;
 
-      // ── Node glow ──
-      node.pulse = Math.max(0, node.pulse - dt * 0.001);
-      const pulseAlpha = 0.15 + node.pulse * 0.3;
-      const glow = ctx.createRadialGradient(node.x, node.y, node.r * 0.3, node.x, node.y, node.r * 2.5);
-      glow.addColorStop(0, `rgba(88,166,255,${pulseAlpha + 0.15})`);
-      glow.addColorStop(0.4, `rgba(88,166,255,${pulseAlpha})`);
+      // Node glow
+      const pulseA = 0.12 + node.pulse * 0.4;
+      const glow = ctx.createRadialGradient(node.x, node.y, node.r * 0.2, node.x, node.y, node.r * 3);
+      glow.addColorStop(0, `rgba(88,166,255,${pulseA + 0.2})`);
+      glow.addColorStop(0.35, `rgba(88,166,255,${pulseA})`);
       glow.addColorStop(1, 'rgba(88,166,255,0)');
       ctx.fillStyle = glow;
-      ctx.fillRect(node.x - node.r * 3, node.y - node.r * 3, node.r * 6, node.r * 6);
+      ctx.fillRect(node.x - node.r * 3.5, node.y - node.r * 3.5, node.r * 7, node.r * 7);
 
-      // Node circle
-      ctx.beginPath();
-      ctx.arc(node.x, node.y, node.r, 0, Math.PI * 2);
-      ctx.fillStyle = BLUE_LOW;
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(88,166,255,0.3)';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
+      // Node body
+      ctx.beginPath(); ctx.arc(node.x, node.y, node.r, 0, Math.PI * 2);
+      ctx.fillStyle = BLUE_LOW; ctx.fill();
+      ctx.strokeStyle = 'rgba(88,166,255,0.35)'; ctx.lineWidth = 1.5; ctx.stroke();
 
-      // ── Radiating lines ──
+      // Radiating lines — animate in from 0 length with stagger
+      const lineAnimTime = (totalTime % 3500) / 3500;
       for (let i = 0; i < 26; i++) {
+        const stagger = (i / 26) * 0.3;
+        const progress = Math.min(1, Math.max(0, (lineAnimTime - stagger) / 0.5));
         const angle = (i / 26) * Math.PI * 2 - Math.PI * 0.5;
-        const endX = node.x + Math.cos(angle) * w * 0.38;
-        const endY = node.y + Math.sin(angle) * h * 0.7;
-        const grad = ctx.createLinearGradient(node.x, node.y, endX, endY);
-        grad.addColorStop(0, 'rgba(88,166,255,0.2)');
+        const maxLen = node.r * 5 + (i % 3 + 1) * node.r * 1.5;
+        const len = maxLen * easeInOut(progress);
+        const ex = node.x + Math.cos(angle) * len;
+        const ey = node.y + Math.sin(angle) * len;
+        const grad = ctx.createLinearGradient(node.x, node.y, ex, ey);
+        grad.addColorStop(0, `rgba(88,166,255,${0.25 * progress})`);
         grad.addColorStop(1, 'rgba(88,166,255,0)');
-        ctx.beginPath();
-        ctx.moveTo(node.x, node.y);
-        ctx.lineTo(endX, endY);
-        ctx.strokeStyle = grad;
-        ctx.lineWidth = 0.6;
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(node.x, node.y); ctx.lineTo(ex, ey);
+        ctx.strokeStyle = grad; ctx.lineWidth = 0.7; ctx.stroke();
       }
 
       // Labels
-      ctx.font = `${Math.max(8, h * 0.045)}px system-ui, -apple-system, sans-serif`;
-      ctx.fillStyle = 'rgba(88,166,255,0.45)';
-      ctx.fillText('app', 6, h * 0.24);
-      ctx.fillText('idle', 6, h * 0.52);
-      ctx.fillText('domain', 6, h * 0.80);
+      ctx.font = `${Math.max(9, h * 0.048)}px system-ui, -apple-system, sans-serif`;
+      ctx.fillStyle = 'rgba(88,166,255,0.4)';
+      ctx.fillText('app', 8, h * 0.235);
+      ctx.fillText('idle', 8, h * 0.515);
+      ctx.fillText('domain', 8, h * 0.795);
 
       requestAnimationFrame(render);
     }
-
     requestAnimationFrame(render);
   }
 
   // ════════════════════════════════════════════════════════
   //  AI MODEL: data pulse → model → YES/NO + feedback loop
   // ════════════════════════════════════════════════════════
-
   function initAI(canvas) {
     const ctx = canvas.getContext('2d');
-    const dpr = window.devicePixelRatio || 1;
+    const dims = makeResizer(canvas, ctx, 520, 340);
 
-    function resize() {
-      const rect = canvas.parentElement.getBoundingClientRect();
-      const w = rect.width;
-      const h = rect.height || w * 0.65;
-      canvas.width = w * dpr;
-      canvas.height = h * dpr;
-      canvas.style.width = w + 'px';
-      canvas.style.height = h + 'px';
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      return { w, h };
-    }
-
-    let dims = resize();
-    let last = 0;
-    let cycleTime = 0;
-    let coreBrightness = 0.08; // starts dim, brightens over cycles
-    let cycleCount = 0;
+    let last = 0, cycleTime = 0, coreBrightness = 0.10, cycleCount = 0;
 
     function render(now) {
-      const dt = last ? Math.min(now - last, 50) : 16;
+      const dt = last ? Math.min(now - last, 40) : 16;
       last = now;
       cycleTime += dt;
-      if (cycleTime > 8000) { cycleTime = 0; cycleCount++; coreBrightness = 0.08 + cycleCount * 0.05; if (coreBrightness > 0.25) { coreBrightness = 0.08; cycleCount = 0; } }
+      if (cycleTime > 7000) { cycleTime = 0; cycleCount++; coreBrightness = 0.10 + cycleCount * 0.04; if (coreBrightness > 0.28) { coreBrightness = 0.10; cycleCount = 0; } }
 
-      dims = resize();
-      const { w, h } = dims;
-
-      const inputX = 0;
-      const inputW = w * 0.22;
-      const nodeX = w * 0.28;
-      const nodeW = w * 0.36;
-      const nodeH = h * 0.5;
-      const nodeY = h * 0.25;
-      const outputY1 = h * 0.30;
-      const outputY2 = h * 0.60;
-      const outputEnd = w * 0.9;
-
+      const w = dims.w, h = dims.h;
+      if (w <= 0 || h <= 0) { requestAnimationFrame(render); return; }
       ctx.clearRect(0, 0, w, h);
 
-      // ── Input pulse ──
-      const pulseProgress = (cycleTime % 3000) / 3000;
-      const pulseX = lerp(inputX + inputW * 0.2, nodeX - 4, pulseProgress);
-      const dashOffset = cycleTime * 0.05 % 12;
+      const centerY = h * 0.5;
+      const coreW = w * 0.30, coreH = h * 0.42;
+      const coreX = w * 0.35, coreY = centerY - coreH * 0.5;
+      const inputStart = w * 0.05, inputEnd = coreX - 6;
+      const outputStart = coreX + coreW + 6, outputEndX = w * 0.92;
 
-      // Input line
-      ctx.beginPath();
-      ctx.moveTo(inputX + inputW * 0.2, h * 0.5);
-      ctx.lineTo(nodeX - 4, h * 0.5);
-      ctx.setLineDash([4, 4]);
-      ctx.lineDashOffset = -dashOffset;
-      ctx.strokeStyle = GREEN_LOW;
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.setLineDash([]);
+      // ── Input pulse (brighter, leaves trail) ──
+      const pulseP = (cycleTime % 2800) / 2800;
+      const dashOff = cycleTime * 0.04 % 10;
+      ctx.beginPath(); ctx.moveTo(inputStart, centerY); ctx.lineTo(inputEnd, centerY);
+      ctx.setLineDash([5, 4]); ctx.lineDashOffset = -dashOff;
+      ctx.strokeStyle = GREEN_LOW; ctx.lineWidth = 1.2; ctx.stroke(); ctx.setLineDash([]);
 
-      // Input dot
-      ctx.beginPath();
-      ctx.arc(pulseX, h * 0.5, 3, 0, Math.PI * 2);
-      ctx.fillStyle = GREEN;
-      ctx.globalAlpha = 0.9;
-      ctx.fill();
-      ctx.globalAlpha = 1;
-
-      // ── Model core ──
-      const bx = nodeX, by = nodeY, bw = nodeW, bh = nodeH;
-      ctx.fillStyle = `rgba(34,197,94,${coreBrightness})`;
-      ctx.strokeStyle = `rgba(34,197,94,${0.3 + coreBrightness})`;
-      ctx.lineWidth = 1.5;
-      roundRect(ctx, bx, by, bw, bh, 8);
-      ctx.fill();
-      ctx.stroke();
-
-      // Core inner particles
-      for (let i = 0; i < 6; i++) {
-        const angle = (cycleTime * 0.001 + i * 1.05) % (Math.PI * 2);
-        const dist = (i % 2 === 0 ? 0.3 : 0.6) * bw * 0.3;
-        const px = bx + bw * 0.5 + Math.cos(angle) * dist;
-        const py = by + bh * 0.5 + Math.sin(angle) * dist * 0.6;
-        ctx.beginPath();
-        ctx.arc(px, py, 1.5, 0, Math.PI * 2);
-        ctx.fillStyle = GREEN;
-        ctx.globalAlpha = 0.6;
-        ctx.fill();
+      // Input dot with trail
+      const px = inputStart + (inputEnd - inputStart) * pulseP;
+      for (let tr = 0; tr < 3; tr++) {
+        const tp = pulseP - tr * 0.04; if (tp < 0) continue;
+        const tx = inputStart + (inputEnd - inputStart) * tp;
+        ctx.beginPath(); ctx.arc(tx, centerY, 4 - tr * 0.8, 0, Math.PI * 2);
+        ctx.fillStyle = GREEN; ctx.globalAlpha = (1 - tr * 0.3) * 0.8; ctx.fill();
       }
       ctx.globalAlpha = 1;
 
-      // Core label
-      ctx.font = `${Math.max(8, h * 0.055)}px system-ui, -apple-system, sans-serif`;
-      ctx.fillStyle = GREEN;
-      ctx.textAlign = 'center';
-      ctx.fillText('scikit-learn', bx + bw * 0.5, by + bh * 0.45);
-      ctx.font = `${Math.max(7, h * 0.04)}px system-ui, -apple-system, sans-serif`;
+      // ── Model core ──
+      const bx = coreX, by = coreY, bw = coreW, bh = coreH;
+      // Core glow
+      const cGlow = ctx.createRadialGradient(bx + bw * 0.5, by + bh * 0.5, bw * 0.1, bx + bw * 0.5, by + bh * 0.5, bw * 0.8);
+      cGlow.addColorStop(0, `rgba(34,197,94,${coreBrightness + 0.15})`);
+      cGlow.addColorStop(1, 'rgba(34,197,94,0)');
+      ctx.fillStyle = cGlow;
+      ctx.fillRect(bx - bw * 0.3, by - bh * 0.3, bw * 1.6, bh * 1.6);
+
+      // Core box with pulse
+      const corePulse = (Math.sin(cycleTime * 0.003) + 1) * 0.5;
+      ctx.fillStyle = `rgba(34,197,94,${coreBrightness + corePulse * 0.04})`;
+      ctx.strokeStyle = `rgba(34,197,94,${0.25 + coreBrightness + corePulse * 0.15})`;
+      ctx.lineWidth = 1.5;
+      roundRect(ctx, bx, by, bw, bh, 8); ctx.fill(); ctx.stroke();
+
+      // Core inner particles (more, brighter)
+      for (let i = 0; i < 8; i++) {
+        const angle = (cycleTime * 0.0012 + i * 0.8) % (Math.PI * 2);
+        const dist = (0.25 + (i % 3) * 0.12) * bw * 0.35;
+        const ppx = bx + bw * 0.5 + Math.cos(angle) * dist;
+        const ppy = by + bh * 0.5 + Math.sin(angle) * dist * 0.55;
+        ctx.beginPath(); ctx.arc(ppx, ppy, 2, 0, Math.PI * 2);
+        ctx.fillStyle = GREEN; ctx.globalAlpha = 0.55 + corePulse * 0.3; ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      // Labels
+      ctx.font = `${Math.max(9, h * 0.055)}px system-ui, -apple-system, sans-serif`;
+      ctx.fillStyle = GREEN; ctx.textAlign = 'center';
+      ctx.fillText('scikit-learn', bx + bw * 0.5, by + bh * 0.42);
+      ctx.font = `${Math.max(8, h * 0.042)}px system-ui, -apple-system, sans-serif`;
       ctx.fillStyle = 'rgba(34,197,94,0.5)';
-      ctx.fillText('classifier', bx + bw * 0.5, by + bh * 0.65);
+      ctx.fillText('binary classifier', bx + bw * 0.5, by + bh * 0.65);
       ctx.textAlign = 'start';
 
       // ── Output lines ──
       const outX = bx + bw;
-      ctx.beginPath();
-      ctx.moveTo(outX, by + bh * 0.3);
-      ctx.lineTo(outputEnd, outputY1);
-      ctx.strokeStyle = GREEN_LOW;
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(outX, by + bh * 0.7);
-      ctx.lineTo(outputEnd, outputY2);
-      ctx.strokeStyle = GREEN_LOW;
-      ctx.lineWidth = 1;
-      ctx.stroke();
+      const o1y = by + bh * 0.28, o2y = by + bh * 0.72;
+      ctx.beginPath(); ctx.moveTo(outX, o1y); ctx.lineTo(outputEndX, o1y - bh * 0.15);
+      ctx.strokeStyle = GREEN_LOW; ctx.lineWidth = 1; ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(outX, o2y); ctx.lineTo(outputEndX, o2y + bh * 0.15);
+      ctx.strokeStyle = GREEN_LOW; ctx.lineWidth = 1; ctx.stroke();
 
-      // Output dots
-      const outProgress = (cycleTime % 2000) / 2000;
-      const dot1X = lerp(outX + 4, outputEnd - 20, outProgress);
-      const dot1Y = lerp(by + bh * 0.3, outputY1, outProgress);
-      const dot2X = lerp(outX + 4, outputEnd - 20, (outProgress + 0.3) % 1);
-      const dot2Y = lerp(by + bh * 0.7, outputY2, (outProgress + 0.3) % 1);
-
-      ctx.beginPath();
-      ctx.arc(dot1X, dot1Y, 2.5, 0, Math.PI * 2);
-      ctx.fillStyle = GREEN;
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(dot2X, dot2Y, 2.5, 0, Math.PI * 2);
-      ctx.fillStyle = GREEN;
-      ctx.fill();
-
-      // Output labels
-      ctx.font = `${Math.max(8, h * 0.05)}px system-ui, -apple-system, sans-serif`;
-      ctx.fillStyle = GREEN;
-      ctx.textAlign = 'center';
-      ctx.fillText('YES', outputEnd, outputY1 - 12);
-      ctx.fillText('NO', outputEnd, outputY2 + 16);
-      ctx.textAlign = 'start';
-
-      // ── Feedback arc ──
-      const arcProgress = (cycleTime % 4000) / 4000;
-      const feedbackPath = new Path2D();
-      feedbackPath.moveTo(outputEnd - 10, by + bh * 0.5);
-      feedbackPath.quadraticCurveTo(w * 0.5, h * 0.85, nodeX + bw * 0.5, by + bh + 4);
-      ctx.strokeStyle = 'rgba(34,197,94,0.15)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([3, 5]);
-      ctx.lineDashOffset = -arcProgress * 16;
-      ctx.stroke(feedbackPath);
-      ctx.setLineDash([]);
-
-      // Feedback dot
-      const ax = lerp(outputEnd - 10, nodeX + bw * 0.5, arcProgress);
-      const ay = quadLerp(outputEnd - 10, by + bh * 0.5, w * 0.5, h * 0.85, nodeX + bw * 0.5, by + bh + 4, arcProgress);
-      ctx.beginPath();
-      ctx.arc(ax, ay, 2, 0, Math.PI * 2);
-      ctx.fillStyle = GREEN;
-      ctx.globalAlpha = 0.8;
-      ctx.fill();
+      // Output dots (larger, brighter)
+      const outP = (cycleTime % 1800) / 1800;
+      function drawOutDot(t, baseY, dir) {
+        const x = outX + 4 + (outputEndX - outX - 20) * t;
+        const y = baseY + dir * bh * 0.15 * t;
+        for (let tr = 0; tr < 2; tr++) {
+          const tt = t - tr * 0.03; if (tt < 0) continue;
+          const ttx = outX + 4 + (outputEndX - outX - 20) * tt;
+          const tty = baseY + dir * bh * 0.15 * tt;
+          ctx.beginPath(); ctx.arc(ttx, tty, 4 - tr, 0, Math.PI * 2);
+          ctx.fillStyle = GREEN; ctx.globalAlpha = (1 - tr * 0.35) * 0.8; ctx.fill();
+        }
+      }
+      drawOutDot(outP, o1y, -1); drawOutDot((outP + 0.35) % 1, o2y, 1);
       ctx.globalAlpha = 1;
 
-      // Feedback label
-      if (arcProgress > 0.3 && arcProgress < 0.8) {
-        ctx.font = `${Math.max(6, h * 0.035)}px system-ui, -apple-system, sans-serif`;
-        ctx.fillStyle = 'rgba(34,197,94,0.35)';
-        ctx.textAlign = 'center';
-        ctx.fillText('retrains at 50+', w * 0.5, h * 0.88);
+      ctx.font = `${Math.max(9, h * 0.05)}px system-ui, -apple-system, sans-serif`;
+      ctx.fillStyle = GREEN; ctx.textAlign = 'center';
+      ctx.fillText('YES', outputEndX, o1y - bh * 0.15 - 10);
+      ctx.fillText('NO', outputEndX, o2y + bh * 0.15 + 18);
+      ctx.textAlign = 'start';
+
+      // ── Feedback arc (brighter) ──
+      const arcP = (cycleTime % 3500) / 3500;
+      const arcPath = new Path2D();
+      arcPath.moveTo(outputEndX - 8, centerY);
+      arcPath.quadraticCurveTo(w * 0.52, h * 0.82, coreX + coreW * 0.5, coreY + coreH + 3);
+      ctx.strokeStyle = 'rgba(34,197,94,0.2)'; ctx.lineWidth = 1.2;
+      ctx.setLineDash([4, 6]); ctx.lineDashOffset = -arcP * 20; ctx.stroke(arcPath); ctx.setLineDash([]);
+
+      // Feedback dot with trail
+      for (let tr = 0; tr < 2; tr++) {
+        const at = arcP - tr * 0.03; if (at < 0) continue;
+        const ax = (outputEndX - 8) + (coreX + coreW * 0.5 - (outputEndX - 8)) * at;
+        const cp1x = w * 0.52, cp1y = h * 0.82;
+        const t = at, mt = 1 - t;
+        const ay = mt*mt*centerY + 2*mt*t*cp1y + t*t*(coreY + coreH + 3);
+        ctx.beginPath(); ctx.arc(ax, ay, 3 - tr * 0.5, 0, Math.PI * 2);
+        ctx.fillStyle = GREEN; ctx.globalAlpha = (1 - tr * 0.3) * 0.7; ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      if (arcP > 0.25 && arcP < 0.75) {
+        ctx.font = `${Math.max(7, h * 0.035)}px system-ui, -apple-system, sans-serif`;
+        ctx.fillStyle = 'rgba(34,197,94,0.35)'; ctx.textAlign = 'center';
+        ctx.fillText('retrains at 50+ samples', w * 0.52, h * 0.87);
         ctx.textAlign = 'start';
       }
 
       requestAnimationFrame(render);
     }
-
     requestAnimationFrame(render);
   }
 
-  function lerp(a, b, t) { return a + (b - a) * t; }
-  function quadLerp(p0x, p0y, p1x, p1y, p2x, p2y, t) {
-    const mt = 1 - t;
-    const x = mt * mt * p0x + 2 * mt * t * p1x + t * t * p2x;
-    const y = mt * mt * p0y + 2 * mt * t * p1y + t * t * p2y;
-    return y;
-  }
   function roundRect(ctx, x, y, w, h, r) {
     ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.arcTo(x + w, y, x + w, y + r, r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
-    ctx.lineTo(x + r, y + h);
-    ctx.arcTo(x, y + h, x, y + h - r, r);
-    ctx.lineTo(x, y + r);
-    ctx.arcTo(x, y, x + r, y, r);
-    ctx.closePath();
+    ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r); ctx.closePath();
   }
 
-  // ── Init ──────────────────────────────────────────────
-  window.addEventListener('DOMContentLoaded', () => {
+  // ════════════════════════════════════════════════════════
+  //  INIT — fires reliably after layout settles
+  // ════════════════════════════════════════════════════════
+  window.addEventListener('load', () => {
     const engineCanvas = document.getElementById('engine-canvas');
     const aiCanvas = document.getElementById('ai-canvas');
 
@@ -375,7 +299,7 @@
           if (entry.target === aiCanvas) initAI(aiCanvas);
         }
       });
-    }, { threshold: 0.2 });
+    }, { threshold: 0.01, rootMargin: '0px 0px 200px 0px' });
 
     if (engineCanvas) observer.observe(engineCanvas);
     if (aiCanvas) observer.observe(aiCanvas);
