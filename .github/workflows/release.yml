@@ -97,9 +97,9 @@ jobs:
           $rect = New-Object System.Drawing.Rectangle 0, 0, 493, 58
           $brushBg = New-Object System.Drawing.Drawing2D.LinearGradientBrush $rect, ([System.Drawing.Color]::FromArgb(30,30,46)), ([System.Drawing.Color]::FromArgb(15,15,25)), 0
           $g.FillRectangle($brushBg, $rect)
-          $font = New-Object System.Drawing.Font "Segoe UI", 18, [System.Drawing.FontStyle]::Bold
+           $font = [System.Drawing.Font]::new("Segoe UI", [System.Single]18, [System.Drawing.FontStyle]::Bold)
           $g.DrawString("Nudge", $font, [System.Drawing.Brushes]::White, 18, 10)
-          $font2 = New-Object System.Drawing.Font "Segoe UI", 8
+          $font2 = [System.Drawing.Font]::new("Segoe UI", [System.Single]8)
           $g.DrawString("Stay focused. Stay productive.", $font2, [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(160,160,180)), 18, 36)
           $pen = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(180,140,255)), 2
           $g.DrawLine($pen, 18, 32, 140, 32)
@@ -113,7 +113,7 @@ jobs:
           $brushBg = New-Object System.Drawing.Drawing2D.LinearGradientBrush $rect, ([System.Drawing.Color]::FromArgb(25,25,40)), ([System.Drawing.Color]::FromArgb(10,10,18)), 90
           $g.FillRectangle($brushBg, $rect)
           $g.DrawString("Nudge", $font, [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(200,200,220,80)), 30, 120)
-          $font3 = New-Object System.Drawing.Font "Segoe UI", 11
+          $font3 = [System.Drawing.Font]::new("Segoe UI", [System.Single]11)
           $g.DrawString("Stay focused. Stay productive.", $font3, [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(200,200,220,40)), 32, 155)
           $dialog.Save("$outDir\dialog.bmp")
           $g.Dispose(); $dialog.Dispose()
