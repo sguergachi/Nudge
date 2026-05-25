@@ -19,8 +19,8 @@ a{color:var(--accent);text-decoration:none}
 a:hover{color:#8AC0FF}
 code{font-family:var(--font-mono);font-size:.85em;color:var(--accent)}
 
-/* ── Three.js Hero Canvas ──────────────────────────────── */
-#hero-canvas{position:absolute;top:0;left:0;width:100%;height:100vh;z-index:0;pointer-events:none;opacity:.85}
+/* ── Hero Canvas (ambient orbs) ──────────────────────── */
+#hero-canvas{position:absolute;top:0;left:0;width:100%;height:100vh;z-index:0;pointer-events:none}
 
 /* ── Nav ─────────────────────────────────────────────── */
 .nav{position:fixed;top:0;left:0;right:0;z-index:100;height:60px;display:flex;align-items:center;justify-content:center;background:rgba(11,11,14,.65);backdrop-filter:blur(20px) saturate(1.2);-webkit-backdrop-filter:blur(20px) saturate(1.2);border-bottom:1px solid var(--border);transition:background .3s}
