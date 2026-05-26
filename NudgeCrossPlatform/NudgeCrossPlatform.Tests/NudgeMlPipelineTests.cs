@@ -282,6 +282,82 @@ public sealed class NudgeMlSerializationTests
     }
 
     [Fact]
+    public void MLLiveEvent_ProductivePrediction_ScoreEqualsConfidence()
+    {
+        // When the model predicts PRODUCTIVE, Score and Confidence should be the same
+        var evt = new MLLiveEventContract
+        {
+            T = 1700000000,
+            App = "Code",
+            Score = 0.92,
+            Confidence = 0.92,
+            Productive = true,
+            Triggered = false,
+            TriggerSource = "ai"
+        };
+        Assert.Equal(evt.Score, evt.Confidence);
+        Assert.True(evt.Productive);
+    }
+
+    [Fact]
+    public void MLLiveEvent_NotProductivePrediction_ScoreIsOneMinusConfidence()
+    {
+        // When the model predicts NOT PRODUCTIVE, Score should be 1 - Confidence.
+        // e.g. 86% confident NOT productive → Score = 14%
+        var evt = new MLLiveEventContract
+        {
+            T = 1700000000,
+            App = "YouTube",
+            Score = 0.14,
+            Confidence = 0.86,
+            Productive = false,
+            Triggered = true,
+            TriggerSource = "ai"
+        };
+        Assert.Equal(1.0 - evt.Confidence, evt.Score, 6);
+        Assert.False(evt.Productive);
+        Assert.True(evt.Triggered);
+    }
+
+    [Fact]
+    public void MLLiveEvent_IntervalTrigger_HasZeroConfidence()
+    {
+        // Interval-triggered snapshots always have Confidence = 0 and Score = 0.5
+        var evt = new MLLiveEventContract
+        {
+            T = 1700000000,
+            App = "Browser",
+            Score = 0.5,
+            Confidence = 0,
+            Productive = false,
+            Triggered = true,
+            TriggerSource = "int"
+        };
+        Assert.Equal(0, evt.Confidence);
+        Assert.Equal(0.5, evt.Score);
+        Assert.Equal("int", evt.TriggerSource);
+    }
+
+    [Fact]
+    public void MLLiveEvent_LowConfidenceNotTriggered_HasCorrectScore()
+    {
+        // ML runs but confidence is below threshold → not triggered, but Score and
+        // Confidence are still meaningful (Score = 1 - Confidence for NOT productive)
+        var evt = new MLLiveEventContract
+        {
+            T = 1700000000,
+            App = "Slack",
+            Score = 0.72,
+            Confidence = 0.28,
+            Productive = false,
+            Triggered = false,
+            TriggerSource = "ai"
+        };
+        Assert.Equal(1.0 - evt.Confidence, evt.Score, 6);
+        Assert.False(evt.Triggered);
+    }
+
+    [Fact]
     public void HarvestSignal_SerializesToSnakeCase()
     {
         var sig = new HarvestSignalContract

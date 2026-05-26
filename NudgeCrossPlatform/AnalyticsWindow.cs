@@ -1172,8 +1172,9 @@ namespace NudgeTray
 
             bool productive = latest.Productive;
             double score = latest.Score;
+            double confidence = latest.Confidence;
             // Amber for low-confidence predictions, green/red for high-confidence
-            Color stateColor = latest.Confidence < 0.5
+            Color stateColor = confidence < 0.5
                 ? AIStatusLearning
                 : (productive ? ProductiveGreen : UnproductiveRed);
 
@@ -1210,7 +1211,7 @@ namespace NudgeTray
 
             var scoreText = new TextBlock
             {
-                Text = $"{score * 100:F0}%",
+                Text = $"{confidence * 100:F0}%",
                 FontSize = 14,
                 FontWeight = FontWeight.SemiBold,
                 Foreground = new SolidColorBrush(stateColor),
@@ -1910,7 +1911,7 @@ namespace NudgeTray
                 };
                 scoreStack.Children.Add(new TextBlock
                 {
-                    Text = $"{latest.Score * 100:F0}%",
+                    Text = $"{(latest.Confidence > 0 ? latest.Confidence : latest.Score) * 100:F0}%",
                     FontSize = 15,
                     FontWeight = FontWeight.Bold,
                     Foreground = new SolidColorBrush(mlColor),
@@ -2128,7 +2129,7 @@ namespace NudgeTray
                 {
                     var scoreLabel = new TextBlock
                     {
-                        Text = $"{ev.Score * 100:F0}%",
+                        Text = $"{(ev.Confidence > 0 ? ev.Confidence : ev.Score) * 100:F0}%",
                         FontSize = 9,
                         FontWeight = FontWeight.SemiBold,
                         Foreground = new SolidColorBrush(dotColor)
@@ -2244,7 +2245,7 @@ namespace NudgeTray
                     Color evColor = nev.Confidence < 0.5
                         ? AIStatusLearning
                         : (nev.Productive ? ProductiveGreen : UnproductiveRed);
-                    scoreTb.Text = $"{nev.Score * 100:F0}% · {(nev.Productive ? StrProductive : StrNotProductive)}";
+                    scoreTb.Text = $"{(nev.Confidence > 0 ? nev.Confidence : nev.Score) * 100:F0}% · {(nev.Productive ? StrProductive : StrNotProductive)}";
                     scoreTb.Foreground = new SolidColorBrush(evColor);
 
                     // Position tooltip above the dot, centered horizontally
@@ -2328,7 +2329,7 @@ namespace NudgeTray
 
             var scoreTb = new TextBlock
             {
-                Text = $"{evt.Score * 100:F0}% · {(evt.Productive ? StrProductive : StrNotProductive)}",
+                Text = $"{(evt.Confidence > 0 ? evt.Confidence : evt.Score) * 100:F0}% · {(evt.Productive ? StrProductive : StrNotProductive)}",
                 FontSize = 11,
                 Foreground = new SolidColorBrush(dotColor)
             };
@@ -2449,7 +2450,7 @@ namespace NudgeTray
                 });
                 scoreRow.Children.Add(new TextBlock
                 {
-                    Text = $"{evt.Score * 100:F0}%",
+                    Text = $"{(evt.Confidence > 0 ? evt.Confidence : evt.Score) * 100:F0}%",
                     FontSize = 10,
                     Foreground = new SolidColorBrush(TextSecondary),
                     VerticalAlignment = VerticalAlignment.Center
