@@ -69,10 +69,12 @@ namespace NudgeTray
         private Arc? _backgroundArc;
         private StackPanel? _pauseIconView;
         private readonly string _appName;
+        private readonly string _detail;
 
-        public CustomNotificationWindow(string? appName = null)
+        public CustomNotificationWindow(string? appName = null, string? detail = null)
         {
             _appName = appName ?? "";
+            _detail = detail ?? "";
             InitializeWindow();
             InitializeContent();
             LoadPosition();
@@ -164,10 +166,12 @@ namespace NudgeTray
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
 
-            // Title - recedes so the question becomes the visual anchor
+            // Title - show app and detail/site when available
             var titleText = new TextBlock
             {
-                Text = string.IsNullOrEmpty(_appName) ? "Nudge" : $"Nudge  ›  {_appName}",
+                Text = string.IsNullOrEmpty(_appName) ? "Nudge"
+                     : string.IsNullOrEmpty(_detail) ? $"Nudge  ›  {_appName}"
+                     : $"Nudge  ›  {_appName} ({_detail})",
                 FontSize = 11,
                 FontWeight = FontWeight.Normal,
                 Foreground = new SolidColorBrush(TitleText),

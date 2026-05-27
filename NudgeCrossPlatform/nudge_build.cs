@@ -89,7 +89,7 @@ sealed class Nudge
     const int RESPONSE_TIMEOUT_MS = 60000;
     const double ML_CONFIDENCE_THRESHOLD = 0.85;
     const int MIN_SAMPLES_THRESHOLD = 100;
-    const int ML_CHECK_INTERVAL_MS = 60000;
+    static int ML_CHECK_INTERVAL_MS = 60000;
     const int ACTIVITY_LOG_INTERVAL_MS = 60000;
     const string ML_HOST = "127.0.0.1";
     const int ML_PORT = 45002;
@@ -1147,6 +1147,10 @@ sealed class Nudge
             SNAPSHOT_INTERVAL_MS = minutes * 60 * 1000;
             _customInterval = true;
         }
+        if (parsed.MlCheckIntervalMinutes is int mlMinutes)
+        {
+            ML_CHECK_INTERVAL_MS = mlMinutes * 60 * 1000;
+        }
         _mlEnabled = parsed.MlEnabled;
         _forceTrainedModel = parsed.ForceTrainedModel;
         if (!string.IsNullOrWhiteSpace(parsed.CsvPath))
@@ -1184,6 +1188,7 @@ sealed class Nudge
         {
             Info($"  {Color.BGREEN}ML-powered adaptive notifications enabled{Color.RESET}");
             Info($"  Confidence threshold: {ML_CONFIDENCE_THRESHOLD*100:F0}%");
+            Info($"  AI check frequency: {ML_CHECK_INTERVAL_MS/1000/60} minutes");
             if (_forceTrainedModel)
             {
                 Warning($"  {Color.BYELLOW}Force trained model: enabled{Color.RESET} (ignoring sample threshold)");

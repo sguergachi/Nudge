@@ -59,6 +59,8 @@ namespace NudgeTray
         static DateTime? _nextSnapshotTime;
         static int _intervalMinutes;
         public static int IntervalMinutes => _intervalMinutes;
+        static int _mlCheckIntervalMinutes;
+        public static int MlCheckIntervalMinutes => _mlCheckIntervalMinutes;
         static Mutex? _singleInstanceMutex;
         internal const string SingleInstanceMutexName = NudgeCoreLogic.TraySingleInstanceMutexName;
         static readonly string _baseDir = AppContext.BaseDirectory;
@@ -186,6 +188,7 @@ namespace NudgeTray
 #endif
 
             int interval = 5; // default 5 minutes
+            int mlInterval = 1; // default 1 minute
 
             // Parse arguments
             for (int i = 0; i < args.Length; i++)
@@ -193,6 +196,11 @@ namespace NudgeTray
                 if (args[i] == "--interval" && i + 1 < args.Length)
                 {
                     _ = int.TryParse(args[i + 1], out interval);
+                    i++; // Skip the interval value
+                }
+                else if (args[i] == "--ml-interval" && i + 1 < args.Length)
+                {
+                    _ = int.TryParse(args[i + 1], out mlInterval);
                     i++; // Skip the interval value
                 }
                 else if (args[i] == "--ml")
@@ -237,11 +245,18 @@ namespace NudgeTray
                     _mlEnabled = true;
                     Console.WriteLine("[INFO] ML re-enabled from saved settings");
                 }
-
+                
+                // If intervals weren't passed on CLI, use saved values
+                if (interval == 5 && savedSettings.IntervalMinutes != 5 && savedSettings.IntervalMinutes > 0)
+                    interval = savedSettings.IntervalMinutes;
+                
+                if (mlInterval == 1 && savedSettings.MlCheckIntervalMinutes > 0)
+                    mlInterval = savedSettings.MlCheckIntervalMinutes;
             }
 
             // Persist whatever state we ended up with
             _intervalMinutes = interval; // ensure field is set before SaveSettings
+            _mlCheckIntervalMinutes = mlInterval;
             SaveSettings();
 
             // Print banner
@@ -1503,6 +1518,10 @@ namespace NudgeTray
 
                 // Build arguments
                 string args = $"--interval {interval}";
+                if (_mlCheckIntervalMinutes > 0)
+                {
+                    args += $" --ml-interval {_mlCheckIntervalMinutes}";
+                }
                 if (_mlEnabled)
                 {
                     args += " --ml";
@@ -1687,7 +1706,8 @@ namespace NudgeTray
                     try
                     {
                         var appName = LiveAIState.CurrentApp ?? "";
-                        var notificationWindow = new CustomNotificationWindow(appName);
+                        var detail = LiveAIState.CurrentDetail ?? "";
+                        var notificationWindow = new CustomNotificationWindow(appName, detail);
                         notificationWindow.Closed += (s, e) => RestorePreviousAppFocus(previousApp);
                         notificationWindow.ShowWithAnimation((productive) =>
                         {
@@ -2122,8 +2142,9 @@ namespace NudgeTray
             {
                 var settings = new TraySettings
                 {
-                    MlEnabled       = _mlEnabled,
-                    IntervalMinutes = _intervalMinutes > 0 ? _intervalMinutes : 5,
+                    MlEnabled              = _mlEnabled,
+                    IntervalMinutes        = _intervalMinutes > 0 ? _intervalMinutes : 5,
+                    MlCheckIntervalMinutes = _mlCheckIntervalMinutes > 0 ? _mlCheckIntervalMinutes : 1,
                 };
                 File.WriteAllText(
                     SettingsPath,
@@ -2166,6 +2187,27 @@ namespace NudgeTray
             if (NativeTray.IsInitialized)
                 NativeTray.SetStatusText(GetMenuStatusText());
 #endif
+        }
+
+        public static void UpdateSettings(int? mlInterval = null, int? interval = null)
+        {
+            bool changed = false;
+            if (mlInterval.HasValue && mlInterval.Value != _mlCheckIntervalMinutes)
+            {
+                _mlCheckIntervalMinutes = mlInterval.Value;
+                changed = true;
+            }
+            if (interval.HasValue && interval.Value != _intervalMinutes)
+            {
+                _intervalMinutes = interval.Value;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                SaveSettings();
+                RestartHarvestProcess();
+            }
         }
 
         public static bool RestartWithML()

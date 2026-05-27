@@ -4,6 +4,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 using System;
 using System.Globalization;
 using System.IO;
@@ -48,6 +49,26 @@ namespace NudgeTray
             TransparencyLevelHint  = new[] { WindowTransparencyLevel.Transparent };
             Focusable              = true;
 
+            var thumbColor = new SolidColorBrush(Color.FromArgb(170, 180, 180, 190));
+
+            Styles.Add(new Style(x => x.OfType<ScrollBar>())
+            {
+                Setters =
+                {
+                    new Setter(ScrollBar.ForegroundProperty, thumbColor),
+                    new Setter(ScrollBar.BackgroundProperty, new SolidColorBrush(Color.FromArgb(25, 255, 255, 255)))
+                }
+            });
+
+            Styles.Add(new Style(x => x.OfType<Slider>())
+            {
+                Setters =
+                {
+                    new Setter(Slider.ForegroundProperty, new SolidColorBrush(PrimaryBlue)),
+                    new Setter(Slider.BackgroundProperty, new SolidColorBrush(Color.FromArgb(50, 255, 255, 255)))
+                }
+            });
+
             Content = BuildRoot();
         }
 
@@ -70,16 +91,24 @@ namespace NudgeTray
                 )
             };
 
-            var outer = new StackPanel { Spacing = 0 };
-            outer.Children.Add(BuildTitleBar());
-            outer.Children.Add(new Border
+            var dock = new DockPanel { LastChildFill = true };
+
+            var titleBar = BuildTitleBar();
+            DockPanel.SetDock(titleBar, Dock.Top);
+            dock.Children.Add(titleBar);
+
+            var separator = new Border
             {
                 Height     = 1,
                 Background = new SolidColorBrush(BorderSubtle)
-            });
-            outer.Children.Add(BuildScrollBody());
+            };
+            DockPanel.SetDock(separator, Dock.Top);
+            dock.Children.Add(separator);
 
-            shell.Child = outer;
+            var scrollBody = BuildScrollBody();
+            dock.Children.Add(scrollBody);
+
+            shell.Child = dock;
             return shell;
         }
 
@@ -132,7 +161,7 @@ namespace NudgeTray
             Grid.SetColumn(minimizeBtn, 2);
 
             // Close button
-            var closeBtn = MakeChromeButton("✕", 13, Close, "Close", danger: true);
+            var closeBtn = MakeChromeButton("✖", 13, Close, "Close", danger: true);
             Grid.SetColumn(closeBtn, 4);
 
             grid.Children.Add(gear);
@@ -205,15 +234,137 @@ namespace NudgeTray
             var stack = new StackPanel { Spacing = 16, Margin = new Thickness(16) };
 
             stack.Children.Add(BuildVersionChip());
+            stack.Children.Add(BuildFrequencyCard());
             stack.Children.Add(BuildHarvestCard());
             stack.Children.Add(BuildModelCard());
 
-            return new ScrollViewer
+            var sv = new ScrollViewer
             {
                 Content = stack,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Focusable = true
             };
+
+            sv.Styles.Add(new Style(x => x.OfType<ScrollBar>())
+            {
+                Setters =
+                {
+                    new Setter(ScrollBar.ForegroundProperty, new SolidColorBrush(Color.FromArgb(170, 180, 180, 190))),
+                    new Setter(ScrollBar.BackgroundProperty, new SolidColorBrush(Color.FromArgb(25, 255, 255, 255)))
+                }
+            });
+
+            return sv;
+        }
+
+        // ── Frequency settings card ───────────────────────────────────────────
+        private Border BuildFrequencyCard()
+        {
+            var card = MakeCard(AccentModel);
+            var inner = new StackPanel { Spacing = 0 };
+
+            inner.Children.Add(BuildSectionHeader("Check Frequency", "⏲", AccentModel));
+
+            var body = new StackPanel { Spacing = 12, Margin = new Thickness(14, 14, 14, 14) };
+
+            // AI Check Frequency
+            body.Children.Add(BuildSliderRow(
+                "AI Focus Checks",
+                "How often the AI analyzes your focus patterns",
+                Program.MlCheckIntervalMinutes,
+                1, 10, "min",
+                val => {
+                    // Update state, save, and restart nudge
+                    // We need a way to update Program fields from here
+                    UpdateIntervals(ml: (int)val);
+                }));
+
+            // Interval Check Frequency
+            body.Children.Add(BuildSliderRow(
+                "Interval Checks",
+                "Fallback random check-in frequency (when AI is learning)",
+                Program.IntervalMinutes,
+                1, 30, "min",
+                val => {
+                    UpdateIntervals(interval: (int)val);
+                }));
+
+            inner.Children.Add(body);
+            card.Child = inner;
+            return card;
+        }
+
+        private static void UpdateIntervals(int? ml = null, int? interval = null)
+        {
+            // This needs to be implemented in Program or a shared static class
+            Program.UpdateSettings(ml, interval);
+        }
+
+        private StackPanel BuildSliderRow(string label, string desc, int currentVal, int min, int max, string unit, Action<double> onChanged)
+        {
+            var stack = new StackPanel { Spacing = 4 };
+
+            var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            header.Children.Add(new TextBlock
+            {
+                Text = label,
+                FontSize = 13,
+                FontWeight = FontWeight.SemiBold,
+                Foreground = new SolidColorBrush(TextPrimary)
+            });
+
+            var valText = new TextBlock
+            {
+                Text = $"{currentVal} {unit}",
+                FontSize = 12,
+                FontWeight = FontWeight.Medium,
+                Foreground = new SolidColorBrush(PrimaryBlue),
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            Grid.SetColumn(valText, 1);
+            header.Children.Add(valText);
+
+            stack.Children.Add(header);
+
+            if (!string.IsNullOrEmpty(desc))
+            {
+                stack.Children.Add(new TextBlock
+                {
+                    Text = desc,
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(TextMuted),
+                    TextWrapping = TextWrapping.Wrap
+                });
+            }
+
+            var slider = new Slider
+            {
+                Minimum = min,
+                Maximum = max,
+                Value = currentVal,
+                IsSnapToTickEnabled = true,
+                TickFrequency = 1,
+                Margin = new Thickness(0, 4, 0, 0),
+                Foreground = new SolidColorBrush(PrimaryBlue),
+                Background = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255))
+            };
+
+            slider.PropertyChanged += (s, e) =>
+            {
+                if (e.Property == Slider.ValueProperty)
+                {
+                    var val = (double)e.NewValue!;
+                    valText.Text = $"{(int)val} {unit}";
+                }
+            };
+
+            // Only trigger update on pointer release or lost focus to avoid spamming restarts
+            slider.PointerReleased += (s, e) => onChanged(slider.Value);
+            slider.LostFocus += (s, e) => onChanged(slider.Value);
+
+            stack.Children.Add(slider);
+            return stack;
         }
 
         // ── Version chip ──────────────────────────────────────────────────────
