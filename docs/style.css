@@ -135,8 +135,27 @@ footer{padding:40px;display:flex;justify-content:space-between;align-items:cente
 /* Technology Section */
 .tech-section{padding:140px 40px;max-width:1200px;margin:0 auto;text-align:center;border-bottom:1px solid rgba(255,255,255,.06)}
 .tech-section h2{font-size:clamp(2.5rem,5vw,3.5rem);font-weight:800;letter-spacing:-.04em;margin-bottom:60px}
-.tech-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:32px}
-.tech-card{background:var(--bg-elevated);padding:48px 32px;border-radius:var(--radius);border:1px solid var(--border);text-align:left;transition:transform .3s ease,border-color .3s ease;position:relative;overflow:hidden}
+.tech-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:32px;position:relative}
+
+/* Connecting arrows */
+.tech-connector{position:absolute;top:50%;width:32px;height:2px;background:var(--accent-soft);z-index:1;display:flex;align-items:center;justify-content:center}
+.tech-connector::after{content:'';position:absolute;right:-4px;width:0;height:0;border-top:4px solid transparent;border-bottom:4px solid transparent;border-left:6px solid var(--accent-soft)}
+.tech-connector.c1{left:calc(33.33% - 16px)}
+.tech-connector.c2{left:calc(66.66% - 16px)}
+
+.tech-connector-pulse{position:absolute;width:100%;height:100%;background:var(--accent);box-shadow:0 0 12px var(--accent);opacity:0;animation:flow-pulse 3s infinite}
+.tech-connector.c2 .tech-connector-pulse{animation-delay:1.5s}
+
+@keyframes flow-pulse{
+  0%{transform:scaleX(0);transform-origin:left;opacity:0}
+  20%{opacity:1}
+  50%{transform:scaleX(1);transform-origin:left;opacity:1}
+  51%{transform:scaleX(1);transform-origin:right;opacity:1}
+  80%{opacity:1}
+  100%{transform:scaleX(0);transform-origin:right;opacity:0}
+}
+
+.tech-card{background:var(--bg-elevated);padding:48px 32px;border-radius:var(--radius);border:1px solid var(--border);text-align:left;transition:transform .3s ease,border-color .3s ease;position:relative;overflow:hidden;z-index:2}
 .tech-card::before{content:'';position:absolute;top:0;left:0;width:100%;height:100%;background:radial-gradient(circle at top left,rgba(88,166,255,.05),transparent 70%);opacity:0;transition:opacity .3s ease}
 .tech-card:hover{transform:translateY(-8px);border-color:rgba(88,166,255,.2)}
 .tech-card:hover::before{opacity:1}
@@ -147,4 +166,5 @@ footer{padding:40px;display:flex;justify-content:space-between;align-items:cente
 @media(max-width:900px){
   .tech-section{padding:80px 24px}
   .tech-grid{grid-template-columns:1fr;gap:24px}
+  .tech-connector{display:none}
 }
