@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
@@ -36,6 +37,14 @@ namespace NudgeTray
         private TextBlock? _modelStatus;
         private Button?    _harvestDeleteBtn;
         private Button?    _modelDeleteBtn;
+        private Slider?    _aiSlider;
+        private Slider?    _intervalSlider;
+        private Button?    _saveBtn;
+
+        private static string FormatSec(int totalSec) =>
+            totalSec < 60 ? $"{totalSec} sec" :
+            totalSec % 60 == 0 ? $"{totalSec / 60} min" :
+            $"{totalSec / 60} min {totalSec % 60} sec";
 
         public SettingsWindow()
         {
@@ -48,26 +57,7 @@ namespace NudgeTray
             Background             = Brushes.Transparent;
             TransparencyLevelHint  = new[] { WindowTransparencyLevel.Transparent };
             Focusable              = true;
-
-            var thumbColor = new SolidColorBrush(Color.FromArgb(170, 180, 180, 190));
-
-            Styles.Add(new Style(x => x.OfType<ScrollBar>())
-            {
-                Setters =
-                {
-                    new Setter(ScrollBar.ForegroundProperty, thumbColor),
-                    new Setter(ScrollBar.BackgroundProperty, new SolidColorBrush(Color.FromArgb(25, 255, 255, 255)))
-                }
-            });
-
-            Styles.Add(new Style(x => x.OfType<Slider>())
-            {
-                Setters =
-                {
-                    new Setter(Slider.ForegroundProperty, new SolidColorBrush(PrimaryBlue)),
-                    new Setter(Slider.BackgroundProperty, new SolidColorBrush(Color.FromArgb(50, 255, 255, 255)))
-                }
-            });
+            RequestedThemeVariant  = ThemeVariant.Dark;
 
             Content = BuildRoot();
         }
@@ -246,15 +236,6 @@ namespace NudgeTray
                 Focusable = true
             };
 
-            sv.Styles.Add(new Style(x => x.OfType<ScrollBar>())
-            {
-                Setters =
-                {
-                    new Setter(ScrollBar.ForegroundProperty, new SolidColorBrush(Color.FromArgb(170, 180, 180, 190))),
-                    new Setter(ScrollBar.BackgroundProperty, new SolidColorBrush(Color.FromArgb(25, 255, 255, 255)))
-                }
-            });
-
             return sv;
         }
 
@@ -268,40 +249,69 @@ namespace NudgeTray
 
             var body = new StackPanel { Spacing = 12, Margin = new Thickness(14, 14, 14, 14) };
 
-            // AI Check Frequency
-            body.Children.Add(BuildSliderRow(
+            // AI Check Frequency — store reference instead of auto-saving
+            _aiSlider = BuildSlider(
                 "AI Focus Checks",
                 "How often the AI analyzes your focus patterns",
-                Program.MlCheckIntervalMinutes,
-                1, 10, "min",
-                val => {
-                    // Update state, save, and restart nudge
-                    // We need a way to update Program fields from here
-                    UpdateIntervals(ml: (int)val);
-                }));
+                Program.MlCheckIntervalMinutes * 60,
+                1, 600, FormatSec);
+            body.Children.Add(_aiSlider.Parent is StackPanel sp ? sp : _aiSlider);
 
             // Interval Check Frequency
-            body.Children.Add(BuildSliderRow(
+            _intervalSlider = BuildSlider(
                 "Interval Checks",
                 "Fallback random check-in frequency (when AI is learning)",
-                Program.IntervalMinutes,
-                1, 30, "min",
-                val => {
-                    UpdateIntervals(interval: (int)val);
-                }));
+                Program.IntervalMinutes * 60,
+                1, 600, FormatSec);
+            body.Children.Add(_intervalSlider.Parent is StackPanel sp2 ? sp2 : _intervalSlider);
+
+            // Save button
+            body.Children.Add(new Border { Height = 4 });
+
+            _saveBtn = new Button
+            {
+                Content = "Save Changes",
+                FontSize = 12,
+                FontWeight = FontWeight.Medium,
+                Padding = new Thickness(14, 8),
+                Background = new SolidColorBrush(PrimaryBlue),
+                Foreground = Brushes.White,
+                BorderThickness = new Thickness(0),
+                CornerRadius = new CornerRadius(6),
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                Cursor = new Cursor(StandardCursorType.Hand),
+                IsEnabled = false
+            };
+            _saveBtn.Click += OnSaveClicked;
+            body.Children.Add(_saveBtn);
 
             inner.Children.Add(body);
             card.Child = inner;
             return card;
         }
 
-        private static void UpdateIntervals(int? ml = null, int? interval = null)
+        private void OnSaveClicked(object? sender, EventArgs e)
         {
-            // This needs to be implemented in Program or a shared static class
-            Program.UpdateSettings(ml, interval);
+            if (_aiSlider == null || _intervalSlider == null) return;
+
+            var mlSec = (int)_aiSlider.Value;
+            var mlMin = Math.Max(1, (int)Math.Round(mlSec / 60.0));
+            var intSec = (int)_intervalSlider.Value;
+            var intMin = Math.Max(1, (int)Math.Round(intSec / 60.0));
+
+            Program.UpdateSettings(ml: mlMin, interval: intMin);
+            _saveBtn!.IsEnabled = false;
         }
 
-        private StackPanel BuildSliderRow(string label, string desc, int currentVal, int min, int max, string unit, Action<double> onChanged)
+        private void MarkDirty()
+        {
+            if (_saveBtn != null)
+                _saveBtn.IsEnabled = true;
+        }
+
+        private Slider BuildSlider(string label, string desc, int currentVal, int min, int max,
+            Func<int, string> formatValue)
         {
             var stack = new StackPanel { Spacing = 4 };
 
@@ -316,7 +326,7 @@ namespace NudgeTray
 
             var valText = new TextBlock
             {
-                Text = $"{currentVal} {unit}",
+                Text = formatValue(currentVal),
                 FontSize = 12,
                 FontWeight = FontWeight.Medium,
                 Foreground = new SolidColorBrush(PrimaryBlue),
@@ -345,6 +355,8 @@ namespace NudgeTray
                 Value = currentVal,
                 IsSnapToTickEnabled = true,
                 TickFrequency = 1,
+                SmallChange = 1,
+                LargeChange = 30,
                 Margin = new Thickness(0, 4, 0, 0),
                 Foreground = new SolidColorBrush(PrimaryBlue),
                 Background = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255))
@@ -355,17 +367,16 @@ namespace NudgeTray
                 if (e.Property == Slider.ValueProperty)
                 {
                     var val = (double)e.NewValue!;
-                    valText.Text = $"{(int)val} {unit}";
+                    valText.Text = formatValue((int)val);
+                    MarkDirty();
                 }
             };
 
-            // Only trigger update on pointer release or lost focus to avoid spamming restarts
-            slider.PointerReleased += (s, e) => onChanged(slider.Value);
-            slider.LostFocus += (s, e) => onChanged(slider.Value);
-
             stack.Children.Add(slider);
-            return stack;
+            return slider;
         }
+
+
 
         // ── Version chip ──────────────────────────────────────────────────────
         private static Border BuildVersionChip()
@@ -441,6 +452,61 @@ namespace NudgeTray
             return g;
         }
 
+        // ── Clickable location row ────────────────────────────────────────────
+        private Grid MakeClickableLocationRow(string path)
+        {
+            var g = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+                Margin = new Thickness(0, 2, 0, 2),
+                Cursor = new Cursor(StandardCursorType.Hand)
+            };
+
+            var lbl = new TextBlock
+            {
+                Text = "Location",
+                FontSize = 12,
+                Foreground = new SolidColorBrush(TextMuted),
+                MinWidth = 110
+            };
+            Grid.SetColumn(lbl, 0);
+
+            var val = new TextBlock
+            {
+                Text = path,
+                FontSize = 12,
+                FontWeight = FontWeight.Medium,
+                Foreground = new SolidColorBrush(TextSecondary),
+                TextAlignment = TextAlignment.Right,
+                TextWrapping = TextWrapping.NoWrap,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            Grid.SetColumn(val, 1);
+
+            g.Children.Add(lbl);
+            g.Children.Add(val);
+
+            var normalBg = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
+            var hoverBg = new SolidColorBrush(Color.FromArgb(15, 255, 255, 255));
+            g.PointerEntered += (_, _) => g.Background = hoverBg;
+            g.PointerExited += (_, _) => g.Background = normalBg;
+            g.PointerPressed += async (_, _) =>
+            {
+                if (Clipboard != null)
+                {
+                    await Clipboard.SetValueAsync(DataFormat.Text, path);
+                    val.Text = "Copied!";
+                    val.Foreground = new SolidColorBrush(SuccessGreen);
+                    await System.Threading.Tasks.Task.Delay(1500);
+                    val.Text = path;
+                    val.Foreground = new SolidColorBrush(TextSecondary);
+                }
+            };
+
+            return g;
+        }
+
         // ── Harvest Data card ─────────────────────────────────────────────────
         private Border BuildHarvestCard()
         {
@@ -458,7 +524,7 @@ namespace NudgeTray
             var body = new StackPanel { Spacing = 2, Margin = new Thickness(14, 10, 14, 14) };
             body.Children.Add(MakeStatRow("Samples collected", sampleCount.ToString("N0", CultureInfo.InvariantCulture)));
             body.Children.Add(MakeStatRow("File size", FormatFileSize(fileSize)));
-            body.Children.Add(MakeStatRow("Location", csvPath, dimValue: true));
+            body.Children.Add(MakeClickableLocationRow(csvPath));
 
             body.Children.Add(new Border { Height = 10 });
 
@@ -516,7 +582,10 @@ namespace NudgeTray
                     body.Children.Add(MakeStatRow("Version",
                         TrainerState.ModelVersion.ToString(CultureInfo.InvariantCulture)));
                 if (TrainerState.Architecture.Length > 0)
-                    body.Children.Add(MakeStatRow("Architecture", TrainerState.Architecture));
+                {
+                    var archDisplay = TrainerState.Architecture == "pending" ? "Training..." : TrainerState.Architecture;
+                    body.Children.Add(MakeStatRow("Architecture", archDisplay));
+                }
             }
             body.Children.Add(MakeStatRow("Size", FormatFileSize(dirSize)));
 

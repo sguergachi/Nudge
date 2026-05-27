@@ -16,5 +16,7 @@
 
   <ItemGroup>
     <Compile Include="../NudgeCore.TestableLogic.cs" Link="NudgeCore.TestableLogic.cs" />
+    <Compile Include="../BrowserDetector.cs" Link="BrowserDetector.cs" />
+    <Compile Include="../KWinScripts.cs" Link="KWinScripts.cs" />
   </ItemGroup>
 </Project>

@@ -11,5 +11,7 @@
   <ItemGroup>
     <Compile Include="nudge-notify_build.cs" />
     <Compile Include="NudgeCore.TestableLogic.cs" />
+    <Compile Include="BrowserDetector.cs" />
+    <Compile Include="KWinScripts.cs" />
   </ItemGroup>
 </Project>

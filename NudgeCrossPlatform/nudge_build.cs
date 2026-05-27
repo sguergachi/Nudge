@@ -218,14 +218,14 @@ sealed class Nudge
         {
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(ScriptMainJsPath)!);
             if (!File.Exists(ScriptMetadataPath) ||
-                File.ReadAllText(ScriptMetadataPath) != NudgeCoreLogic.KWinMetadataJson)
+                File.ReadAllText(ScriptMetadataPath) != KWinScripts.MetadataJson)
             {
-                File.WriteAllText(ScriptMetadataPath, NudgeCoreLogic.KWinMetadataJson);
+                File.WriteAllText(ScriptMetadataPath, KWinScripts.MetadataJson);
             }
             if (!File.Exists(ScriptMainJsPath) ||
-                File.ReadAllText(ScriptMainJsPath) != NudgeCoreLogic.KWinMainJs)
+                File.ReadAllText(ScriptMainJsPath) != KWinScripts.MainJs)
             {
-                File.WriteAllText(ScriptMainJsPath, NudgeCoreLogic.KWinMainJs);
+                File.WriteAllText(ScriptMainJsPath, KWinScripts.MainJs);
             }
         }
 

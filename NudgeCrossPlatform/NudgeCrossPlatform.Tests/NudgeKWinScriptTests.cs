@@ -11,7 +11,7 @@ namespace NudgeCrossPlatform.Tests
         public void KWinMetadataJson_IsValidJsonAndHasRequiredFields()
         {
             // Verify MetadataJson is valid JSON
-            var doc = JsonDocument.Parse(NudgeCoreLogic.KWinMetadataJson);
+            var doc = JsonDocument.Parse(KWinScripts.MetadataJson);
             var root = doc.RootElement;
 
             // KWin 6 requires KPackageStructure to be KWin/Script
@@ -34,7 +34,7 @@ namespace NudgeCrossPlatform.Tests
         [Fact]
         public void KWinMainJs_IsNotEmptyAndContainsRequiredLogic()
         {
-            var js = NudgeCoreLogic.KWinMainJs;
+            var js = KWinScripts.MainJs;
             Assert.False(string.IsNullOrWhiteSpace(js));
 
             // Should use callDBus for passive background IPC (no crosshair/UI)

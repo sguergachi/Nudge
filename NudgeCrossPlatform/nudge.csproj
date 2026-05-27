@@ -13,6 +13,8 @@
     <Compile Include="nudge_build.cs" />
     <Compile Include="NudgeCore.TestableLogic.cs" />
     <Compile Include="NudgeJsonContext.cs" />
+    <Compile Include="BrowserDetector.cs" />
+    <Compile Include="KWinScripts.cs" />
   </ItemGroup>
 
   <PropertyGroup Condition="'$(OS)' == 'Windows_NT'">
