@@ -117,4 +117,47 @@ public sealed class NudgeBrowserParsingTests
     {
         Assert.Equal("example.com", BrowserDetector.ExtractSite("https://example.com/path - Chrome"));
     }
+
+    // ── New domain aliases ────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("Adam Billal Guergachi | Messenger — Zen Browser", "messenger.com")]
+    [InlineData("Inbox - Messenger - Google Chrome", "messenger.com")]
+    [InlineData("Someone | Messenger — Zen Browser", "messenger.com")]
+    public void ExtractSite_MessengerPages_ReturnsMessengerDotCom(string title, string expected)
+    {
+        Assert.Equal(expected, BrowserDetector.ExtractSite(title));
+    }
+
+    [Theory]
+    [InlineData("How to focus better - Medium - Mozilla Firefox", "medium.com")]
+    [InlineData("JavaScript Weekly - Medium - Google Chrome", "medium.com")]
+    public void ExtractSite_MediumPages_ReturnsMediumDotCom(string title, string expected)
+    {
+        Assert.Equal(expected, BrowserDetector.ExtractSite(title));
+    }
+
+    [Theory]
+    [InlineData("Group Chat — Telegram — Zen Browser", "telegram.org")]
+    [InlineData("Telegram - Mozilla Firefox", "telegram.org")]
+    public void ExtractSite_TelegramPages_ReturnsTelegramDotOrg(string title, string expected)
+    {
+        Assert.Equal(expected, BrowserDetector.ExtractSite(title));
+    }
+
+    [Theory]
+    [InlineData("Family Group - WhatsApp - Google Chrome", "whatsapp.com")]
+    [InlineData("WhatsApp - Mozilla Firefox", "whatsapp.com")]
+    public void ExtractSite_WhatsAppPages_ReturnsWhatsAppDotCom(string title, string expected)
+    {
+        Assert.Equal(expected, BrowserDetector.ExtractSite(title));
+    }
+
+    [Theory]
+    [InlineData("Adam Billal Guergachi | Messenger — Zen Browser", "Zen (messenger.com)")]
+    [InlineData("YouTube - Zen Browser", "Zen (youtube.com)")]
+    public void GetAppAndSite_ZenBrowser_ReturnsFormattedLabel(string title, string expected)
+    {
+        Assert.Equal(expected, BrowserDetector.GetAppAndSite("zen-browser", title));
+    }
 }

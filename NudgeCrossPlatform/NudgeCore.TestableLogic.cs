@@ -25,6 +25,7 @@ internal sealed class NudgeParsedArgs
 {
     public NudgeStartupAction Action { get; init; } = NudgeStartupAction.Run;
     public int? IntervalMinutes { get; init; }
+    public int? MlCheckIntervalMinutes { get; init; }
     public bool MlEnabled { get; init; }
     public bool ForceTrainedModel { get; init; }
     public string? CsvPath { get; init; }
@@ -815,12 +816,13 @@ internal static class BrowserDetector
     private static readonly FrozenSet<string> KnownSiteDomains = new[]
     {
         "amazon.com", "bitbucket.org", "chat.openai.com", "chatgpt.com", "claude.ai",
-        "confluence.atlassian.com", "copilot.microsoft.com", "discord.com", "docs.google.com",
+"confluence.atlassian.com", "copilot.microsoft.com", "discord.com", "docs.google.com",
         "drive.google.com", "ebay.com", "facebook.com", "figma.com", "github.com",
         "gitlab.com", "instagram.com", "jira.atlassian.com", "linear.app", "linkedin.com",
-        "mail.google.com", "meet.google.com", "netflix.com", "news.ycombinator.com",
-        "notion.so", "office.com", "outlook.office.com", "reddit.com", "slack.com",
-        "stackoverflow.com", "stackexchange.com", "tiktok.com", "twitch.tv", "x.com",
+        "mail.google.com", "medium.com", "meet.google.com", "messenger.com", "netflix.com",
+        "news.ycombinator.com", "notion.so", "office.com", "outlook.office.com",
+        "reddit.com", "slack.com", "stackoverflow.com", "stackexchange.com",
+        "telegram.org", "tiktok.com", "twitch.tv", "whatsapp.com", "x.com",
         "youtube.com", "zoom.us"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
@@ -846,6 +848,8 @@ internal static class BrowserDetector
         ("Jira", "jira.atlassian.com"),
         ("Linear", "linear.app"),
         ("LinkedIn", "linkedin.com"),
+        ("Medium", "medium.com"),
+        ("Messenger", "messenger.com"),
         ("Netflix", "netflix.com"),
         ("Notion", "notion.so"),
         ("Outlook", "outlook.office.com"),
@@ -853,8 +857,10 @@ internal static class BrowserDetector
         ("Slack", "slack.com"),
         ("Stack Exchange", "stackexchange.com"),
         ("Stack Overflow", "stackoverflow.com"),
+        ("Telegram", "telegram.org"),
         ("TikTok", "tiktok.com"),
         ("Twitch", "twitch.tv"),
+        ("WhatsApp", "whatsapp.com"),
         ("YouTube", "youtube.com"),
         ("Zoom", "zoom.us")
     ];
@@ -1692,6 +1698,7 @@ publish();
     internal static NudgeParsedArgs ParseNudgeArgs(string[] args)
     {
         int? intervalMinutes = null;
+        int? mlIntervalMinutes = null;
         bool mlEnabled = false;
         bool forceModel = false;
         string? csvPath = null;
@@ -1718,6 +1725,16 @@ publish();
                 }
                 continue;
             }
+            if (arg == "--ml-interval")
+            {
+                if (i + 1 < args.Length)
+                {
+                    if (int.TryParse(args[i + 1], out int minutes))
+                        mlIntervalMinutes = minutes;
+                    i++;
+                }
+                continue;
+            }
             if (arg == "--ml")
             {
                 mlEnabled = true;
@@ -1738,6 +1755,7 @@ publish();
         {
             Action = NudgeStartupAction.Run,
             IntervalMinutes = intervalMinutes,
+            MlCheckIntervalMinutes = mlIntervalMinutes,
             MlEnabled = mlEnabled,
             ForceTrainedModel = forceModel,
             CsvPath = csvPath

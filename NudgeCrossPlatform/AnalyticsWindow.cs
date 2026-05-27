@@ -2302,7 +2302,7 @@ namespace NudgeTray
 
             var tipGrid = new Grid
             {
-                RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto"),
+                RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto"),
                 ColumnDefinitions = new ColumnDefinitions("Auto,*"),
                 Width = 180
             };
@@ -2316,6 +2316,16 @@ namespace NudgeTray
             Grid.SetColumn(timeTb, 1);
             tipGrid.Children.Add(timeTb);
 
+            var triggerTb = new TextBlock
+            {
+                Text = evt.TriggerSource == "int" ? "Interval-based check" : "AI-predicted check",
+                FontSize = 10,
+                Foreground = new SolidColorBrush(evt.TriggerSource == "int" ? AIStatusLearning : ProductiveGreen)
+            };
+            Grid.SetColumn(triggerTb, 1);
+            Grid.SetRow(triggerTb, 1);
+            tipGrid.Children.Add(triggerTb);
+
             var appTb = new TextBlock
             {
                 Text = evt.App,
@@ -2323,7 +2333,7 @@ namespace NudgeTray
                 FontWeight = FontWeight.SemiBold,
                 Foreground = new SolidColorBrush(Color.FromArgb(230, 255, 255, 255))
             };
-            Grid.SetRow(appTb, 1);
+            Grid.SetRow(appTb, 2);
             Grid.SetColumnSpan(appTb, 2);
             tipGrid.Children.Add(appTb);
 
@@ -2333,7 +2343,7 @@ namespace NudgeTray
                 FontSize = 11,
                 Foreground = new SolidColorBrush(dotColor)
             };
-            Grid.SetRow(scoreTb, 2);
+            Grid.SetRow(scoreTb, 3);
             Grid.SetColumnSpan(scoreTb, 2);
             tipGrid.Children.Add(scoreTb);
 
@@ -2343,7 +2353,7 @@ namespace NudgeTray
                 FontSize = 11,
                 Foreground = new SolidColorBrush(actionColor)
             };
-            Grid.SetRow(responseTb, 3);
+            Grid.SetRow(responseTb, 4);
             Grid.SetColumnSpan(responseTb, 2);
             tipGrid.Children.Add(responseTb);
 
