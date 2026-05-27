@@ -705,7 +705,8 @@ internal static class PlatformConfig
             var srcDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", ".."));
             var dev = Path.Combine(srcDir, "venv", "Scripts", "python.exe");
             if (File.Exists(dev)) return dev;
-            return "py";
+            // Probe candidates in priority order: py launcher, python, python3
+            return ProbeSystemPython("py", "python", "python3") ?? "py";
         }
         var localNix = Path.Combine(baseDir, "venv", "bin", "python");
         if (File.Exists(localNix)) return localNix;
@@ -713,6 +714,33 @@ internal static class PlatformConfig
         var devNix = Path.Combine(srcDirNix, "venv", "bin", "python");
         if (File.Exists(devNix)) return devNix;
         return PythonCommand;
+    }
+
+    static string? ProbeSystemPython(params string[] candidates)
+    {
+        foreach (var cmd in candidates)
+        {
+            try
+            {
+                var p = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = cmd,
+                        Arguments = "--version",
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true
+                    }
+                };
+                p.Start();
+                if (p.WaitForExit(3000) && p.ExitCode == 0)
+                    return cmd;
+            }
+            catch { }
+        }
+        return null;
     }
 
     /// <summary>

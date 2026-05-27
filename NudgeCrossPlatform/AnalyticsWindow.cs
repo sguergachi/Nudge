@@ -2589,8 +2589,23 @@ namespace NudgeTray
             {
                 enableBtn.IsEnabled = false;
                 enableBtn.Content = "Starting AI…";
-                descText.Text = "Installing Python dependencies and starting ML services…";
+                descText.Text = "Setting up AI — this can take 1–3 minutes on first run…";
+
+                var progressTimer = new Avalonia.Threading.DispatcherTimer
+                {
+                    Interval = TimeSpan.FromMilliseconds(400)
+                };
+                progressTimer.Tick += (_, _) =>
+                {
+                    var step = Program.MlLoadingStep;
+                    if (!string.IsNullOrEmpty(step))
+                        descText.Text = step;
+                };
+                progressTimer.Start();
+
                 bool success = await Task.Run(() => Program.RestartWithML());
+                progressTimer.Stop();
+
                 if (!success)
                 {
                     enableBtn.IsEnabled = true;
