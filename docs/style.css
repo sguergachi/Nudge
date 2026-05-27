@@ -80,7 +80,10 @@ header h1{font-size:clamp(5rem,12vw,9rem);font-weight:900;line-height:.9;letter-
 .feature-content{max-width:440px}
 .feature-num{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.15em;color:var(--accent);margin-bottom:16px;display:block}
 .feature-content h2{font-size:clamp(2.5rem,5vw,3.5rem);font-weight:800;letter-spacing:-.04em;margin-bottom:20px;line-height:1.05}
-.feature-content p{font-size:1.15rem;color:var(--text-secondary);line-height:1.7;margin-bottom:28px}
+.feature-content p{font-size:1.05rem;color:var(--text-secondary);line-height:1.6;margin-bottom:16px}
+.feature-bullets{list-style:none;padding:0;margin:0 0 24px 0;display:flex;flex-direction:column;gap:8px}
+.feature-bullets li{font-size:.95rem;color:var(--text-secondary);padding-left:20px;position:relative;line-height:1.5}
+.feature-bullets li::before{content:'→';position:absolute;left:0;color:var(--accent);font-weight:600}
 .feature-meta{display:flex;flex-wrap:wrap;gap:12px}
 .feature-meta span{font-size:.8rem;color:var(--text-muted);background:rgba(255,255,255,.04);padding:6px 14px;border-radius:100px;border:1px solid rgba(255,255,255,.08)}
 
