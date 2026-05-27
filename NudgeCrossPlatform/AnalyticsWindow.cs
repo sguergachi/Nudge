@@ -747,13 +747,13 @@ namespace NudgeTray
         }
 
         /// <summary>Builds the entire AI Brain tab content panel.</summary>
-        private static StackPanel CreateAILiveView()
+        private static StackPanel CreateAILiveView(AnalyticsWindow window)
         {
             var panel = new StackPanel { Spacing = 10 };
 
             if (!Program._mlEnabled)
             {
-                panel.Children.Add(CreateAINotEnabledCard());
+                panel.Children.Add(CreateAINotEnabledCard(window));
                 return panel;
             }
 
@@ -2627,7 +2627,7 @@ namespace NudgeTray
         }
 
         /// <summary>"Enable AI" placeholder shown when ML is not running.</summary>
-        private static Border CreateAINotEnabledCard()
+        private static Border CreateAINotEnabledCard(AnalyticsWindow window)
         {
             var panel = new StackPanel
             {
@@ -2704,7 +2704,7 @@ namespace NudgeTray
 
                 if (success)
                 {
-                    RefreshContent();
+                    window.RefreshContent();
                 }
                 else
                 {
