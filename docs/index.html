@@ -50,6 +50,20 @@
         text-align: left;
       }
     }
+    .dim-link { color: var(--accent); text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; cursor: pointer; }
+    .dim-link:hover { color: var(--text); }
+    #dim-modal { display: none; position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.75); backdrop-filter: blur(6px); align-items: center; justify-content: center; padding: 24px; }
+    #dim-modal.open { display: flex; }
+    #dim-modal-box { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius); max-width: 680px; width: 100%; max-height: 85vh; overflow-y: auto; padding: 40px; position: relative; }
+    #dim-modal-box h2 { font-size: 1.4rem; font-weight: 700; margin-bottom: 6px; }
+    #dim-modal-box .modal-sub { font-size: .9rem; color: var(--text-secondary); margin-bottom: 28px; }
+    #dim-modal-close { position: absolute; top: 20px; right: 20px; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.4rem; line-height: 1; padding: 4px 8px; border-radius: 6px; transition: color .2s; }
+    #dim-modal-close:hover { color: var(--text); }
+    .dim-list { display: flex; flex-direction: column; gap: 16px; }
+    .dim-item { display: grid; grid-template-columns: 28px 1fr; gap: 12px; align-items: start; }
+    .dim-num { font-size: .72rem; font-weight: 700; color: var(--accent); padding-top: 3px; text-align: right; }
+    .dim-name { font-size: .85rem; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+    .dim-desc { font-size: .82rem; color: var(--text-secondary); line-height: 1.5; }
   </style>
 </head>
 <body>
@@ -117,10 +131,10 @@
     <ul class="feature-bullets">
       <li>Today, Week, Month, and All Time views</li>
       <li>Hourly breakdowns with category colors</li>
-      <li>26 feature dimensions analyzed</li>
+      <li><a href="#" class="dim-link" onclick="openDimensions(event)">26 feature dimensions</a> analyzed</li>
     </ul>
     <div class="feature-meta">
-      <span>26 feature dimensions</span>
+      <span><a href="#" class="dim-link" onclick="openDimensions(event)">26 feature dimensions</a></span>
       <span>6 app categories</span>
     </div>
   </div>
@@ -162,7 +176,7 @@
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
       </div>
       <h3>Harvest Engine</h3>
-      <p>Sensor fusion that tracks 26 dimensions of activity in real time &mdash; silently, locally, privately.</p>
+      <p>Uses sensor fusion technology to monitor your desktop activity across <a href="#" class="dim-link" onclick="openDimensions(event)">26 dimensions</a> in real time &mdash; silently, locally, privately.</p>
     </div>
     <div class="tech-card">
       <div class="tech-icon">
@@ -218,6 +232,42 @@
   </div>
 </footer>
 
+<div id="dim-modal" onclick="closeDimensionsOnBackdrop(event)" role="dialog" aria-modal="true" aria-labelledby="dim-modal-title">
+  <div id="dim-modal-box">
+    <button id="dim-modal-close" onclick="closeDimensions()" aria-label="Close">&times;</button>
+    <h2 id="dim-modal-title">26 Feature Dimensions</h2>
+    <p class="modal-sub">Every time Nudge considers checking in, it reads these 26 signals from your desktop and feeds them to the local ML model.</p>
+    <div class="dim-list">
+      <div class="dim-item"><span class="dim-num">1</span><div><div class="dim-name">Hour of Day</div><div class="dim-desc">Current hour (0–23). Captures your daily productivity rhythm and when you're naturally most or least focused.</div></div></div>
+      <div class="dim-item"><span class="dim-num">2</span><div><div class="dim-name">Day of Week</div><div class="dim-desc">Day of the week (0–6). Accounts for weekday vs. weekend patterns in your work habits.</div></div></div>
+      <div class="dim-item"><span class="dim-num">3</span><div><div class="dim-name">Active App</div><div class="dim-desc">Hashed identifier of the foreground app. Lets Nudge learn which applications you associate with productive work — without storing app names in the cloud.</div></div></div>
+      <div class="dim-item"><span class="dim-num">4</span><div><div class="dim-name">Active Domain</div><div class="dim-desc">Hashed identifier of the active browser domain. Distinguishes productive research from distracting websites, personalized to your habits.</div></div></div>
+      <div class="dim-item"><span class="dim-num">5</span><div><div class="dim-name">Idle Time</div><div class="dim-desc">Milliseconds since your last keyboard or mouse input. Detects inactivity, drift, and away-from-keyboard periods.</div></div></div>
+      <div class="dim-item"><span class="dim-num">6</span><div><div class="dim-name">Time in Current App</div><div class="dim-desc">How long the current app has been continuously in focus. Longer sustained focus is a strong signal of deep work.</div></div></div>
+      <div class="dim-item"><span class="dim-num">7</span><div><div class="dim-name">Title Stability</div><div class="dim-desc">How long the active window title has been unchanged. A stable title suggests you're engaged with the same content rather than jumping around.</div></div></div>
+      <div class="dim-item"><span class="dim-num">8</span><div><div class="dim-name">App Switches (60s)</div><div class="dim-desc">Number of app switches in the last 60 seconds. Rapid switching is one of the earliest and strongest signals of distraction.</div></div></div>
+      <div class="dim-item"><span class="dim-num">9</span><div><div class="dim-name">App Switches (5 min)</div><div class="dim-desc">App switches over the last 5 minutes. Provides a broader window of your switching behavior beyond the immediate moment.</div></div></div>
+      <div class="dim-item"><span class="dim-num">10</span><div><div class="dim-name">Distinct Apps (5 min)</div><div class="dim-desc">Count of unique apps used in the last 5 minutes. High variety often signals unfocused multitasking.</div></div></div>
+      <div class="dim-item"><span class="dim-num">11</span><div><div class="dim-name">Distinct Domains (5 min)</div><div class="dim-desc">Unique browser domains visited in the last 5 minutes. Measures the breadth of your web browsing activity.</div></div></div>
+      <div class="dim-item"><span class="dim-num">12</span><div><div class="dim-name">Returned to Primary App</div><div class="dim-desc">Whether you returned to your main work app within the last 5 minutes. A strong indicator of intentional refocusing after a detour.</div></div></div>
+      <div class="dim-item"><span class="dim-num">13</span><div><div class="dim-name">Current App Share (5 min)</div><div class="dim-desc">Fraction of the last 5 minutes spent in the current app. A high share means you've been consistently focused on one task.</div></div></div>
+      <div class="dim-item"><span class="dim-num">14</span><div><div class="dim-name">Current Domain Share (5 min)</div><div class="dim-desc">Fraction of the last 5 minutes on the current browser domain. Same concept as app share, applied to websites.</div></div></div>
+      <div class="dim-item"><span class="dim-num">15</span><div><div class="dim-name">Browser in Focus</div><div class="dim-desc">Whether a web browser is the foreground app. Activates domain-level signals and adjusts how the model interprets other features.</div></div></div>
+      <div class="dim-item"><span class="dim-num">16</span><div><div class="dim-name">Communication App Active</div><div class="dim-desc">Whether a messaging or email app is in focus. Short bursts are expected; prolonged stays often indicate distraction.</div></div></div>
+      <div class="dim-item"><span class="dim-num">17</span><div><div class="dim-name">Entertainment Domain</div><div class="dim-desc">Whether the active site is a known entertainment or distraction domain (e.g. YouTube, Reddit, social media).</div></div></div>
+      <div class="dim-item"><span class="dim-num">18</span><div><div class="dim-name">Work Domain</div><div class="dim-desc">Whether the active site is a recognized work or productivity domain. Weighted positively by the model.</div></div></div>
+      <div class="dim-item"><span class="dim-num">19</span><div><div class="dim-name">Away from Keyboard</div><div class="dim-desc">Set when idle time exceeds a threshold. Tells the model you've physically stepped away rather than just pausing to think.</div></div></div>
+      <div class="dim-item"><span class="dim-num">20</span><div><div class="dim-name">Fullscreen Mode</div><div class="dim-desc">Whether the foreground app is running fullscreen. Correlates with both deep focus (presentations, coding) and passive consumption (video).</div></div></div>
+      <div class="dim-item"><span class="dim-num">21</span><div><div class="dim-name">Workspace Switches (5 min)</div><div class="dim-desc">Virtual desktop or workspace switches in the last 5 minutes. Frequent changes between workspaces can indicate restlessness.</div></div></div>
+      <div class="dim-item"><span class="dim-num">22</span><div><div class="dim-name">Dev Tool Active</div><div class="dim-desc">Whether a development tool (IDE, terminal, code editor) is in focus. Typically a strong indicator of a productive context.</div></div></div>
+      <div class="dim-item"><span class="dim-num">23</span><div><div class="dim-name">Creative App Active</div><div class="dim-desc">Whether a creative application (design tool, video editor, audio workstation) is the foreground app.</div></div></div>
+      <div class="dim-item"><span class="dim-num">24</span><div><div class="dim-name">Office App Active</div><div class="dim-desc">Whether an office productivity app (document editor, spreadsheet, presentation tool) is in focus.</div></div></div>
+      <div class="dim-item"><span class="dim-num">25</span><div><div class="dim-name">Communication App Category</div><div class="dim-desc">Category-level flag for communication apps, based on app type rather than individual identity. Complements the specific communication app signal.</div></div></div>
+      <div class="dim-item"><span class="dim-num">26</span><div><div class="dim-name">Entertainment App Active</div><div class="dim-desc">Whether a known entertainment app (media player, game client) is the foreground application.</div></div></div>
+    </div>
+  </div>
+</div>
+
 <script>
 // Scroll reveal
 const reveal = (entries) => {
@@ -251,6 +301,21 @@ if (isLinux) {
   if (winHero && linuxHero) swapClasses(winHero, linuxHero);
   if (winFooter && linuxFooter) swapClasses(winFooter, linuxFooter);
 }
+
+// 26 Dimensions modal
+function openDimensions(e) {
+  e.preventDefault();
+  document.getElementById('dim-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeDimensions() {
+  document.getElementById('dim-modal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+function closeDimensionsOnBackdrop(e) {
+  if (e.target === document.getElementById('dim-modal')) closeDimensions();
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDimensions(); });
 </script>
 
 </body>
