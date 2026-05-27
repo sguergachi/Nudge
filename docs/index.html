@@ -131,10 +131,10 @@
     <ul class="feature-bullets">
       <li>Today, Week, Month, and All Time views</li>
       <li>Hourly breakdowns with category colors</li>
-      <li><button class="dim-link" data-open-dimensions>26 feature dimensions</button> analyzed</li>
+      <li><button class="dim-link" onclick="openDimModal()">26 feature dimensions</button> analyzed</li>
     </ul>
     <div class="feature-meta">
-      <span><button class="dim-link" data-open-dimensions>26 feature dimensions</button></span>
+      <span><button class="dim-link" onclick="openDimModal()">26 feature dimensions</button></span>
       <span>6 app categories</span>
     </div>
   </div>
@@ -176,7 +176,7 @@
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
       </div>
       <h3>Harvest Engine</h3>
-      <p>Uses sensor fusion technology to monitor your desktop activity across <button class="dim-link" data-open-dimensions>26 dimensions</button> in real time &mdash; silently, locally, privately.</p>
+      <p>Uses sensor fusion technology to monitor your desktop activity across <button class="dim-link" onclick="openDimModal()">26 dimensions</button> in real time &mdash; silently, locally, privately.</p>
     </div>
     <div class="tech-connector-v"><div class="tech-connector-pulse"></div></div>
     <div class="tech-card">
@@ -236,7 +236,7 @@
 
 <div id="dim-modal" role="dialog" aria-modal="true" aria-labelledby="dim-modal-title">
   <div id="dim-modal-box">
-    <button id="dim-modal-close" aria-label="Close">&times;</button>
+    <button id="dim-modal-close" onclick="closeDimModal()" aria-label="Close">&times;</button>
     <h2 id="dim-modal-title">26 Feature Dimensions</h2>
     <p class="modal-sub">Every time Nudge considers checking in, it reads these 26 signals from your desktop and feeds them to the local ML model.</p>
     <div class="dim-list">
@@ -305,21 +305,25 @@ if (isLinux) {
 }
 
 // 26 Dimensions modal
-function closeDimensions() {
-  document.getElementById('dim-modal').classList.remove('open');
+function openDimModal() {
+  var m = document.getElementById('dim-modal');
+  m.style.visibility = 'visible';
+  m.style.opacity = '1';
+  m.style.pointerEvents = 'auto';
+  document.body.style.overflow = 'hidden';
+}
+function closeDimModal() {
+  var m = document.getElementById('dim-modal');
+  m.style.visibility = 'hidden';
+  m.style.opacity = '0';
+  m.style.pointerEvents = 'none';
   document.body.style.overflow = '';
 }
-document.querySelectorAll('[data-open-dimensions]').forEach(function(btn) {
-  btn.addEventListener('click', function() {
-    document.getElementById('dim-modal').classList.add('open');
-    document.body.style.overflow = 'hidden';
-  });
-});
 document.getElementById('dim-modal').addEventListener('click', function(e) {
-  if (e.target === this) closeDimensions();
+  if (e.target === this) closeDimModal();
 });
-document.getElementById('dim-modal-close').addEventListener('click', closeDimensions);
-document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeDimensions(); });
+document.getElementById('dim-modal-close').addEventListener('click', closeDimModal);
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeDimModal(); });
 </script>
 
 </body>

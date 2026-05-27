@@ -173,7 +173,7 @@ button.dim-link{background:none;border:none;font:inherit;padding:0;display:inlin
 }
 
 .tech-card{background:var(--bg-elevated);padding:48px 32px;border-radius:var(--radius);border:1px solid var(--border);text-align:left;transition:transform .3s ease,border-color .3s ease;position:relative;overflow:hidden;z-index:2}
-.tech-card::before{content:'';position:absolute;top:0;left:0;width:100%;height:100%;background:radial-gradient(circle at top left,rgba(88,166,255,.05),transparent 70%);opacity:0;transition:opacity .3s ease}
+.tech-card::before{content:'';position:absolute;top:0;left:0;width:100%;height:100%;background:radial-gradient(circle at top left,rgba(88,166,255,.05),transparent 70%);opacity:0;transition:opacity .3s ease;pointer-events:none}
 .tech-card:hover{transform:translateY(-8px);border-color:rgba(88,166,255,.2)}
 .tech-card:hover::before{opacity:1}
 .tech-icon{width:48px;height:48px;background:var(--accent-soft);color:var(--accent);border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:28px}
