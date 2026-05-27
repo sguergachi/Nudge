@@ -24,6 +24,8 @@ internal static class BrowserDetector
         ("safari", "Safari"),
         ("zen-browser", "Zen"),
         ("zen", "Zen"),
+        ("iexplore", "Explorer"),
+        ("explorer", "Explorer"),
         ("browser", "Browser")
     ];
 
@@ -43,7 +45,9 @@ internal static class BrowserDetector
         " - Safari", " | Safari", " — Safari", " – Safari", " · Safari", " : Safari",
         " - LibreWolf", " | LibreWolf", " — LibreWolf", " – LibreWolf", " · LibreWolf", " : LibreWolf",
         " - Zen Browser", " | Zen Browser", " — Zen Browser", " – Zen Browser", " · Zen Browser", " : Zen Browser",
-        " - Zen", " | Zen", " — Zen", " – Zen", " · Zen", " : Zen"
+        " - Zen", " | Zen", " — Zen", " – Zen", " · Zen", " : Zen",
+        " - Internet Explorer", " | Internet Explorer", " — Internet Explorer", " – Internet Explorer", " · Internet Explorer", " : Internet Explorer",
+        " - Explorer", " | Explorer", " — Explorer", " – Explorer", " · Explorer", " : Explorer"
     ];
 
     private static readonly FrozenSet<string> KnownSiteDomains = new[]

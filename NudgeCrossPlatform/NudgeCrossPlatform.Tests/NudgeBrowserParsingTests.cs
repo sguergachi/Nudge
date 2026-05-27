@@ -49,6 +49,8 @@ public sealed class NudgeBrowserParsingTests
     [InlineData("zen-browser", true)]
     [InlineData("zen", true)]
     [InlineData("librewolf", true)]
+    [InlineData("iexplore", true)]
+    [InlineData("explorer", true)]
     [InlineData("code", false)]
     [InlineData("konsole", false)]
     [InlineData("", false)]
