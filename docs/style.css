@@ -149,6 +149,12 @@ footer{padding:40px;display:flex;justify-content:space-between;align-items:cente
 .tech-connector-pulse{position:absolute;width:100%;height:100%;background:var(--accent);box-shadow:0 0 12px var(--accent);opacity:0;animation:flow-pulse 3s infinite}
 .tech-connector.c2 .tech-connector-pulse{animation-delay:1.5s}
 
+/* Mobile-only vertical connectors */
+.tech-connector-v{display:none}
+
+/* 26 dimensions button link */
+button.dim-link{background:none;border:none;font:inherit;padding:0;display:inline;cursor:pointer}
+
 @keyframes flow-pulse{
   0%{transform:scaleX(0);transform-origin:left;opacity:0}
   20%{opacity:1}
@@ -176,13 +182,10 @@ footer{padding:40px;display:flex;justify-content:space-between;align-items:cente
 
 @media(max-width:900px){
   .tech-section{padding:80px 24px}
-  .tech-grid{display:flex;flex-direction:column;gap:0}
-  .tech-connector{position:relative;top:auto;left:auto;width:2px;height:32px;margin:0 auto;display:flex}
-  .tech-connector::after{right:auto;bottom:-5px;left:50%;transform:translateX(-50%);border-top:6px solid var(--accent-soft);border-bottom:none;border-left:4px solid transparent;border-right:4px solid transparent}
-  .tech-connector-pulse{animation-name:flow-pulse-y}
-  .tech-connector.c1{order:2}
-  .tech-connector.c2{order:4}
-  .tech-grid .tech-card:nth-child(3){order:1;margin-bottom:0}
-  .tech-grid .tech-card:nth-child(4){order:3;margin-bottom:0}
-  .tech-grid .tech-card:nth-child(5){order:5}
+  .tech-grid{grid-template-columns:1fr;gap:0}
+  .tech-connector{display:none}
+  .tech-connector-v{display:flex;width:2px;height:36px;background:var(--accent-soft);margin:0 auto;position:relative;align-items:center;justify-content:center;flex-shrink:0}
+  .tech-connector-v::after{content:'';position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:6px solid var(--accent-soft)}
+  .tech-connector-v .tech-connector-pulse{animation-name:flow-pulse-y}
+  .tech-connector-v:last-of-type .tech-connector-pulse{animation-delay:1.5s}
 }
