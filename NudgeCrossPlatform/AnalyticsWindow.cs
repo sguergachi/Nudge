@@ -209,7 +209,7 @@ namespace NudgeTray
                 if (nextAt > 0)
                 {
                     long nowSec = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                    totalSec = Math.Max(60, Program.MlCheckIntervalMinutes * 60);
+                    totalSec = Math.Max(10, Program.MlCheckIntervalSeconds);
                     secLeft = Math.Max(0, nextAt - nowSec);
                     isAi = true;
                     goto show;

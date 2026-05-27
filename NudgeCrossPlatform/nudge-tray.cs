@@ -2213,9 +2213,9 @@ namespace NudgeTray
                 // Immediately update the countdown so the Prediction History bar
                 // reflects the new interval without waiting for the daemon restart.
                 if (mlInterval.HasValue)
-                    LiveAIState.NextCheckAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + mlInterval.Value * 60;
+                    LiveAIState.NextCheckAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + mlInterval.Value;
                 else if (_mlCheckIntervalSeconds > 0)
-                    LiveAIState.NextCheckAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + _mlCheckIntervalSeconds * 60;
+                    LiveAIState.NextCheckAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + _mlCheckIntervalSeconds;
 
                 SaveSettings();
                 RestartHarvestProcess();

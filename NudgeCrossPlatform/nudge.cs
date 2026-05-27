@@ -1189,7 +1189,7 @@ sealed class Nudge
         {
             Info($"  {Color.BGREEN}ML-powered adaptive notifications enabled{Color.RESET}");
             Info($"  Confidence threshold: {ML_CONFIDENCE_THRESHOLD*100:F0}%");
-            Info($"  AI check frequency: {ML_CHECK_INTERVAL_MS/1000/60} minutes");
+            Info($"  AI check frequency: {ML_CHECK_INTERVAL_MS/1000} seconds");
             if (_forceTrainedModel)
             {
                 Warning($"  {Color.BYELLOW}Force trained model: enabled{Color.RESET} (ignoring sample threshold)");

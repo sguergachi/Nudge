@@ -253,7 +253,7 @@ namespace NudgeTray
             var aiPanel = BuildSlider(
                 "AI Focus Checks",
                 "How often the AI analyzes your focus patterns",
-                Program.MlCheckIntervalMinutes * 60,
+                Program.MlCheckIntervalSeconds,
                 1, 600, FormatSec, out _aiSlider);
             body.Children.Add(aiPanel);
 
@@ -295,12 +295,11 @@ namespace NudgeTray
             if (_aiSlider == null || _intervalSlider == null) return;
 
             var mlSec = (int)_aiSlider.Value;
-            var mlMin = Math.Max(1, (int)Math.Round(mlSec / 60.0));
             var intSec = (int)_intervalSlider.Value;
             var intMin = Math.Max(1, (int)Math.Round(intSec / 60.0));
 
-            Console.WriteLine($"[Settings] Save: AI interval {mlMin} min, Snapshot interval {intMin} min");
-            Program.UpdateSettings(mlInterval: mlMin, interval: intMin);
+            Console.WriteLine($"[Settings] Save: AI interval {mlSec} sec, Snapshot interval {intMin} min");
+            Program.UpdateSettings(mlInterval: mlSec, interval: intMin);
         }
 
         private StackPanel BuildSlider(string label, string desc, int currentVal, int min, int max,
