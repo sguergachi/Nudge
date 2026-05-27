@@ -9,6 +9,28 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <style>
+    .platforms {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 12px;
+      line-height: 1.4;
+    }
+    .hero-actions {
+      flex-wrap: wrap;
+    }
+    .download-actions-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+    }
+    @media(min-width: 901px) {
+      .hero-actions .download-actions-wrapper {
+        align-items: flex-start;
+      }
+    }
+  </style>
 </head>
 <body>
 
@@ -27,15 +49,20 @@
   <h1>Still<br>focused?</h1>
   <p class="lead">An AI that learns when you lose focus and asks at the right moment. No cloud. No account. No telemetry.</p>
   <div class="hero-actions">
-    <a href="https://github.com/sguergachi/Nudge/releases/latest/download/Nudge.msix" class="btn btn-primary">
+    <div class="download-actions-wrapper">
+      <a href="https://github.com/sguergachi/Nudge/releases/latest/download/Nudge.msix" class="btn btn-primary" id="win-download-hero">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Download for Windows
       </a>
+    </div>
 
-      <a href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-installer.run" class="btn btn-secondary">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      Download for Linux
-    </a>
+    <div class="download-actions-wrapper">
+      <a href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-installer.run" class="btn btn-secondary" id="linux-download-hero">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download for Linux
+      </a>
+      <p class="platforms">Supports KDE Plasma, GNOME, XFCE, Cinnamon, and Sway.</p>
+    </div>
   </div>
   <div class="hero-shot">
     <img src="screenshots/notification_active.png" alt="Nudge check-in notification">
@@ -94,14 +121,19 @@
     <h2>Try it on your<br>machine</h2>
     <p>Free and open source. No strings attached.</p>
     <div class="download-actions">
-      <a href="https://github.com/sguergachi/Nudge/releases/latest/download/Nudge.msix" class="btn btn-primary btn-lg">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Download for Windows
-      </a>
-      <a href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-installer.run" class="btn btn-secondary btn-lg">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Download for Linux
-      </a>
+      <div class="download-actions-wrapper">
+        <a href="https://github.com/sguergachi/Nudge/releases/latest/download/Nudge.msix" class="btn btn-primary btn-lg" id="win-download-footer">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download for Windows
+        </a>
+      </div>
+      <div class="download-actions-wrapper">
+        <a href="https://github.com/sguergachi/Nudge/releases/latest/download/nudge-linux-installer.run" class="btn btn-secondary btn-lg" id="linux-download-footer">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download for Linux
+        </a>
+        <p class="platforms">Supports KDE, GNOME, XFCE, Cinnamon, and Sway.</p>
+      </div>
     </div>
     <p class="download-links">
       <a href="https://github.com/sguergachi/Nudge/releases/latest">All releases</a>
@@ -133,6 +165,27 @@ const reveal = (entries) => {
 };
 const observer = new IntersectionObserver(reveal, { threshold: 0.15, rootMargin: '0px 0px -40px' });
 document.querySelectorAll('.feature, .download').forEach(el => observer.observe(el));
+
+// OS Detection and Button Swap
+const isLinux = navigator.platform.toLowerCase().includes('linux') || 
+                navigator.userAgent.toLowerCase().includes('linux');
+
+if (isLinux) {
+  const winHero = document.getElementById('win-download-hero');
+  const linuxHero = document.getElementById('linux-download-hero');
+  const winFooter = document.getElementById('win-download-footer');
+  const linuxFooter = document.getElementById('linux-download-footer');
+
+  const swapClasses = (btn1, btn2) => {
+    btn1.classList.remove('btn-primary');
+    btn1.classList.add('btn-secondary');
+    btn2.classList.remove('btn-secondary');
+    btn2.classList.add('btn-primary');
+  };
+
+  if (winHero && linuxHero) swapClasses(winHero, linuxHero);
+  if (winFooter && linuxFooter) swapClasses(winFooter, linuxFooter);
+}
 </script>
 
 </body>
