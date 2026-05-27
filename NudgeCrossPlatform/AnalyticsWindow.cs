@@ -209,7 +209,7 @@ namespace NudgeTray
                 if (nextAt > 0)
                 {
                     long nowSec = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                    totalSec = 60;
+                    totalSec = Math.Max(60, Program.MlCheckIntervalMinutes * 60);
                     secLeft = Math.Max(0, nextAt - nowSec);
                     isAi = true;
                     goto show;
@@ -1784,8 +1784,6 @@ namespace NudgeTray
         /// </summary>
         private static Border CreatePredictionHistorySection(IReadOnlyList<MLLiveEvent> events, MLLiveEvent? latest)
         {
-            const long totalInterval = 60;
-
             Color mlColor = latest == null ? TextTertiary
                 : latest.Confidence < 0.5 ? AIStatusLearning
                 : latest.Productive       ? ProductiveGreen
@@ -1816,6 +1814,8 @@ namespace NudgeTray
             panel.Children.Add(headerGrid);
 
             // ── Countdown progress bar ────────────────────────────────────────
+            const long totalInterval = 60;
+
             var barContainer = new Border
             {
                 Height = 4,
@@ -1949,11 +1949,11 @@ namespace NudgeTray
         private static Canvas BuildGradientChart(IReadOnlyList<MLLiveEvent> events)
         {
             const double W = 328;
-            const double H = 80;
+            const double H = 92;
             const double dotR = 3.5;
             const double yPad = dotR + 4;
             const double yTop = yPad;
-            const double yBottom = H - yPad;
+            const double yBottom = H - yPad - 12;
             const double yRange = yBottom - yTop;
 
             var canvas = new Canvas { Width = W, Height = H };
@@ -1996,7 +1996,7 @@ namespace NudgeTray
                 Foreground = new SolidColorBrush(Color.FromArgb(40, 244, 67, 54))
             };
             Canvas.SetLeft(notProdLabel, 4);
-            Canvas.SetTop(notProdLabel, H - 13);
+            Canvas.SetTop(notProdLabel, yBottom - 11);
             canvas.Children.Add(notProdLabel);
 
             // Midline at score = 0.5
@@ -2020,7 +2020,7 @@ namespace NudgeTray
                     TextAlignment = TextAlignment.Center
                 };
                 Canvas.SetLeft(tb, 0);
-                Canvas.SetTop(tb, H / 2 - 7);
+                Canvas.SetTop(tb, yBottom / 2);
                 canvas.Children.Add(tb);
                 return canvas;
             }
@@ -2267,6 +2267,50 @@ namespace NudgeTray
                 };
 
                 canvas.Children.Add(overlay);
+            }
+
+            // ── Time axis ───────────────────────────────────────────────────
+            if (events.Count >= 2)
+            {
+                var firstDt = DateTimeOffset.FromUnixTimeSeconds(events[0].T).LocalDateTime;
+                var lastDt  = DateTimeOffset.FromUnixTimeSeconds(events[^1].T).LocalDateTime;
+                double spanHours = (lastDt - firstDt).TotalHours;
+                int stepHours = spanHours <= 3 ? 1 : spanHours <= 8 ? 2 : spanHours <= 16 ? 3 : 6;
+
+                var start = new DateTime(firstDt.Year, firstDt.Month, firstDt.Day,
+                    firstDt.Hour - (firstDt.Hour % stepHours), 0, 0);
+                if (start < firstDt) start = start.AddHours(stepHours);
+
+                double timeW = W - dotR * 2;
+                double totalSec = (lastDt - firstDt).TotalSeconds;
+
+                for (var t = start; t <= lastDt; t = t.AddHours(stepHours))
+                {
+                    double frac = (t - firstDt).TotalSeconds / totalSec;
+                    double x = dotR + frac * timeW;
+
+                    if (x < dotR || x > W - dotR) continue;
+
+                    var label = new TextBlock
+                    {
+                        Text = t.ToString("h tt", CultureInfo.InvariantCulture),
+                        FontSize = 8,
+                        Foreground = new SolidColorBrush(Color.FromArgb(80, 180, 180, 190))
+                    };
+                    Canvas.SetLeft(label, x - 10);
+                    Canvas.SetTop(label, yBottom + 3);
+                    canvas.Children.Add(label);
+
+                    var tick = new Border
+                    {
+                        Width = 1,
+                        Height = 3,
+                        Background = new SolidColorBrush(Color.FromArgb(60, 180, 180, 190))
+                    };
+                    Canvas.SetLeft(tick, x);
+                    Canvas.SetTop(tick, yBottom);
+                    canvas.Children.Add(tick);
+                }
             }
 
             return canvas;
