@@ -25,7 +25,8 @@ internal static class BrowserDetector
         ("zen-browser", "Zen"),
         ("zen", "Zen"),
         ("iexplore", "Explorer"),
-        ("explorer", "Explorer"),
+        ("waterfox", "Waterfox"),
+        ("palemoon", "Pale Moon"),
         ("browser", "Browser")
     ];
 
@@ -47,19 +48,22 @@ internal static class BrowserDetector
         " - Zen Browser", " | Zen Browser", " — Zen Browser", " – Zen Browser", " · Zen Browser", " : Zen Browser",
         " - Zen", " | Zen", " — Zen", " – Zen", " · Zen", " : Zen",
         " - Internet Explorer", " | Internet Explorer", " — Internet Explorer", " – Internet Explorer", " · Internet Explorer", " : Internet Explorer",
-        " - Explorer", " | Explorer", " — Explorer", " – Explorer", " · Explorer", " : Explorer"
+        " - Explorer", " | Explorer", " — Explorer", " – Explorer", " · Explorer", " : Explorer",
+        " - Waterfox", " | Waterfox", " — Waterfox", " – Waterfox", " · Waterfox", " : Waterfox",
+        " - Pale Moon", " | Pale Moon", " — Pale Moon", " – Pale Moon", " · Pale Moon", " : Pale Moon"
     ];
 
     private static readonly FrozenSet<string> KnownSiteDomains = new[]
     {
         "amazon.com", "bitbucket.org", "chat.openai.com", "chatgpt.com", "claude.ai",
-"confluence.atlassian.com", "copilot.microsoft.com", "discord.com", "docs.google.com",
-        "drive.google.com", "ebay.com", "facebook.com", "figma.com", "github.com",
-        "gitlab.com", "instagram.com", "jira.atlassian.com", "linear.app", "linkedin.com",
-        "mail.google.com", "medium.com", "meet.google.com", "messenger.com", "netflix.com",
-        "news.ycombinator.com", "notion.so", "office.com", "outlook.office.com",
+        "confluence.atlassian.com", "copilot.microsoft.com", "dev.azure.com", "discord.com",
+        "docs.google.com", "drive.google.com", "ebay.com", "facebook.com", "figma.com",
+        "github.com", "gitlab.com", "instagram.com", "jira.atlassian.com", "linear.app",
+        "linkedin.com", "mail.google.com", "medium.com", "meet.google.com", "messenger.com",
+        "netflix.com", "news.ycombinator.com", "notion.so", "office.com", "outlook.office.com",
         "reddit.com", "slack.com", "stackoverflow.com", "stackexchange.com",
-        "telegram.org", "tiktok.com", "twitch.tv", "whatsapp.com", "x.com",
+        "teams.microsoft.com", "telegram.org", "tiktok.com", "twitch.tv",
+        "web.telegram.org", "web.whatsapp.com", "whatsapp.com", "x.com",
         "youtube.com", "zoom.us"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
@@ -94,6 +98,9 @@ internal static class BrowserDetector
         ("Slack", "slack.com"),
         ("Stack Exchange", "stackexchange.com"),
         ("Stack Overflow", "stackoverflow.com"),
+        ("Azure DevOps", "dev.azure.com"),
+        ("Microsoft Teams", "teams.microsoft.com"),
+        ("Teams", "teams.microsoft.com"),
         ("Telegram", "telegram.org"),
         ("TikTok", "tiktok.com"),
         ("Twitch", "twitch.tv"),

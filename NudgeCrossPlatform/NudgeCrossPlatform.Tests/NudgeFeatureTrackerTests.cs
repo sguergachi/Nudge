@@ -428,4 +428,75 @@ public sealed class NudgeFeatureTrackerTests
         Assert.Equal(SignalQuality.Poor, tick.Context.SignalQuality);
         Assert.Equal(1, tick.Features.AfkFlag);
     }
+
+    // ── Windows app classification ────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("winword")]
+    [InlineData("excel")]
+    [InlineData("powerpnt")]
+    [InlineData("onenote")]
+    public void WindowsOfficeApps_ClassifiedAsOffice(string processName)
+    {
+        var tracker = new ActivityFeatureTracker();
+        var tick = tracker.Capture(
+            new DateTime(2026, 5, 23, 10, 0, 0),
+            Win(processName, "Document1"),
+            Active());
+
+        Assert.Equal(AppCategory.Office, tick.AppCategory);
+        Assert.Equal(1, tick.Features.OfficeAppFlag);
+    }
+
+    [Theory]
+    [InlineData("devenv")]
+    [InlineData("idea")]
+    [InlineData("pycharm")]
+    [InlineData("rider")]
+    [InlineData("webstorm")]
+    [InlineData("clion")]
+    [InlineData("goland")]
+    [InlineData("datagrip")]
+    [InlineData("eclipse")]
+    public void WindowsDevApps_ClassifiedAsDevelopment(string processName)
+    {
+        var tracker = new ActivityFeatureTracker();
+        var tick = tracker.Capture(
+            new DateTime(2026, 5, 23, 10, 0, 0),
+            Win(processName, "Project"),
+            Active());
+
+        Assert.Equal(AppCategory.Development, tick.AppCategory);
+        Assert.Equal(1, tick.Features.DevAppFlag);
+    }
+
+    [Theory]
+    [InlineData("skype")]
+    [InlineData("whatsapp")]
+    [InlineData("msteams")]
+    public void WindowsCommunicationApps_CommunicationFlagSet(string processName)
+    {
+        var tracker = new ActivityFeatureTracker();
+        var tick = tracker.Capture(
+            new DateTime(2026, 5, 23, 10, 0, 0),
+            Win(processName, "Chat"),
+            Active());
+
+        Assert.Equal(1, tick.Features.CommAppFlag);
+    }
+
+    [Theory]
+    [InlineData("teams.microsoft.com")]
+    [InlineData("web.whatsapp.com")]
+    [InlineData("web.telegram.org")]
+    public void CommunicationDomains_BrowserFocused_ClassifiedAsCommunication(string domain)
+    {
+        var tracker = new ActivityFeatureTracker();
+        var tick = tracker.Capture(
+            new DateTime(2026, 5, 23, 10, 0, 0),
+            new WindowObservation("firefox", $"{domain} - Mozilla Firefox", "f1", "1", FocusSource.KWinScript, false, 1),
+            Active());
+
+        Assert.Equal(AppCategory.Communication, tick.AppCategory);
+    }
 }

@@ -495,12 +495,15 @@ internal sealed class ActivityFeatureTracker
 
     private static readonly FrozenSet<string> CommunicationAppIds = new[]
     {
-        "discord", "microsoft teams", "outlook", "signal", "slack", "teams", "thunderbird", "zoom"
+        "discord", "microsoft teams", "msteams", "outlook", "signal", "skype", "slack",
+        "teams", "thunderbird", "whatsapp", "zoom"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenSet<string> CommunicationDomains = new[]
     {
-        "calendar.google.com", "discord.com", "mail.google.com", "meet.google.com", "outlook.office.com", "slack.com", "zoom.us"
+        "calendar.google.com", "discord.com", "mail.google.com", "meet.google.com",
+        "outlook.office.com", "slack.com", "teams.microsoft.com", "web.telegram.org",
+        "web.whatsapp.com", "zoom.us"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenSet<string> EntertainmentDomains = new[]
@@ -511,9 +514,10 @@ internal sealed class ActivityFeatureTracker
     private static readonly FrozenSet<string> WorkDomains = new[]
     {
         "bitbucket.org", "chat.openai.com", "chatgpt.com", "claude.ai", "confluence.atlassian.com",
-        "copilot.microsoft.com", "docs.google.com", "drive.google.com", "figma.com", "github.com",
-        "gitlab.com", "jira.atlassian.com", "linear.app", "localhost", "mail.google.com",
-        "meet.google.com", "notion.so", "outlook.office.com", "slack.com", "stackoverflow.com"
+        "copilot.microsoft.com", "dev.azure.com", "docs.google.com", "drive.google.com", "figma.com",
+        "github.com", "gitlab.com", "jira.atlassian.com", "linear.app", "localhost",
+        "mail.google.com", "meet.google.com", "notion.so", "office.com", "outlook.office.com",
+        "slack.com", "stackoverflow.com", "teams.microsoft.com"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 }
 
@@ -826,13 +830,16 @@ internal static class AppCategoryClassifier
     [
         (["konsole", "kitty", "alacritty", "wezterm", "tilix", "hyper", "xterm", "urxvt",
           "neovim", "codium", "helix", "sublime", "antigravity",
+          "devenv", "idea", "pycharm", "clion", "rider", "webstorm", "goland", "datagrip", "eclipse", "netbeans",
           "shell", "git", "debug", "sql", "database", "diff", "term", "terminal", "code"], AppCategory.Development),
         (["openshot", "blender", "gimp", "krita", "inkscape", "darktable", "rawtherapee", "kdenlive", "pitivi",
           "obs", "audacity", "ardour", "resolve",
           "paint", "draw", "sketch", "design", "cad", "render", "synth", "studio"], AppCategory.Creative),
         (["libreoffice", "writer", "calc", "impress", "okular", "evince", "mupdf", "zathura",
+          "winword", "excel", "powerpnt", "onenote", "msaccess", "mspub",
           "sheet", "xls", "pdf", "present", "note", "organizer"], AppCategory.Office),
         (["discord", "slack", "teams", "zoom", "signal", "telegram", "thunderbird", "evolution",
+          "skype", "whatsapp", "webex", "mattermost",
           "chat", "mail", "message", "meet", "call", "collab"], AppCategory.Communication),
         (["spotify", "vlc", "mpv", "mplayer", "totem", "rhythmbox", "clementine", "amarok",
           "steam", "lutris", "heroic",
