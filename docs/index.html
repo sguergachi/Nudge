@@ -18,9 +18,32 @@
       margin-top: 12px;
       line-height: 1.4;
     }
-    .hero-actions .download-actions-wrapper {
-      width: auto;
-      min-width: 240px;
+    .hero-actions, .download-actions {
+      flex-wrap: wrap;
+    }
+    .download-actions-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+      width: 280px;
+    }
+    .btn {
+      width: 100%;
+      justify-content: center;
+      white-space: nowrap;
+    }
+    .platforms {
+      text-align: center;
+      width: 100%;
+    }
+    @media(min-width: 901px) {
+      .hero-actions .download-actions-wrapper {
+        align-items: flex-start;
+      }
+      .hero-actions .platforms {
+        text-align: left;
+      }
     }
     .hero-actions .btn {
       width: 100%;
