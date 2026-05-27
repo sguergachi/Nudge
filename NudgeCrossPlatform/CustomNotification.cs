@@ -89,7 +89,7 @@ namespace NudgeTray
             ShowInTaskbar = false;
             WindowStartupLocation = WindowStartupLocation.Manual;
             WindowDecorations = WindowDecorations.None;
-            TransparencyLevelHint = new[] { WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.Blur, WindowTransparencyLevel.Transparent };
+            TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Background = Brushes.Transparent;
             Topmost = true;
 
