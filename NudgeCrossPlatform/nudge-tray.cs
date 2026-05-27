@@ -1423,6 +1423,7 @@ namespace NudgeTray
 
                 Console.WriteLine("  ✓ Background trainer started");
                 Console.WriteLine($"✓ ML services ready (CSV: {csvPath})");
+                _mlEnabled = true;
                 MlLoadingStep = "";
             }
             catch (Exception ex)
@@ -2255,17 +2256,24 @@ namespace NudgeTray
         {
             try
             {
-                Console.WriteLine("[INFO] Restarting with ML enabled...");
+                Console.WriteLine("[INFO] Starting AI setup...");
 
-                // Enable ML and persist the choice immediately
-                _mlEnabled = true;
-                SaveSettings();
-
-                // Clean up existing processes
+                // Clean up existing processes before installation begins
                 CleanupOldProcesses();
 
-                // Start ML services
+                // Install dependencies and start services.
+                // StartMLServices() sets _mlEnabled = true on success, false on failure.
                 StartMLServices();
+
+                if (!_mlEnabled)
+                {
+                    Console.WriteLine("[INFO] AI setup failed — ML not enabled.");
+                    return false;
+                }
+
+                // Persist only after a successful install so a failed attempt
+                // doesn't leave MlEnabled=true in settings on the next startup.
+                SaveSettings();
 
                 // Restart nudge process with ML flag
                 if (_nudgeProcess != null && !_nudgeProcess.HasExited)
@@ -2280,11 +2288,12 @@ namespace NudgeTray
 
                 StartNudge(_intervalMinutes);
                 Console.WriteLine("[INFO] ML mode enabled and nudge restarted");
-                return _mlEnabled;
+                return true;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[ERROR] Failed to enable ML: {ex.Message}");
+                _mlEnabled = false;
                 return false;
             }
         }
