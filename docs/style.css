@@ -117,9 +117,10 @@ footer{padding:40px;display:flex;justify-content:space-between;align-items:cente
 /* Responsive */
 @media(max-width:900px){
   nav{padding:0 24px;height:60px}
-  header{padding:120px 24px 60px}
-  header h1{font-size:clamp(3.5rem,12vw,6rem)}
-  .lead{font-size:1.1rem}
+  header{padding:100px 24px 60px}
+  header h1{font-size:clamp(2.4rem,9vw,3.5rem);line-height:1.05;letter-spacing:-.035em;margin-bottom:20px}
+  .eyebrow{margin-bottom:14px}
+  .lead{font-size:1rem;line-height:1.6;margin-bottom:32px}
   .hero-actions{flex-direction:column;align-items:flex-start}
   .hero-shot{max-width:380px}
   .feature{grid-template-columns:1fr;gap:48px;padding:80px 24px}
