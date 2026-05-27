@@ -164,16 +164,16 @@ jobs:
             --icon "NudgeCrossPlatform/assets/windows/nudge.ico" `
             -o "dist/velopack"
           if ($LASTEXITCODE -ne 0) { throw "vpk pack failed (exit $LASTEXITCODE)" }
-          $setup = "dist/velopack/NudgeSetup.exe"
-          if (Test-Path $setup) { Write-Host "NudgeSetup.exe: $((Get-Item $setup).Length/1KB) KB" }
-          else { throw "NudgeSetup.exe not produced" }
+          $setup = "dist/velopack/Nudge-win-Setup.exe"
+          if (Test-Path $setup) { Write-Host "Nudge-win-Setup.exe: $((Get-Item $setup).Length/1KB) KB" }
+          else { throw "Nudge-win-Setup.exe not produced" }
 
       - name: Stage installers for upload
         if: success() || failure()
         shell: pwsh
         run: |
           Copy-Item dist/Nudge-Setup*.msi . -ErrorAction SilentlyContinue
-          Copy-Item dist/velopack/NudgeSetup.exe . -ErrorAction SilentlyContinue
+          Copy-Item dist/velopack/Nudge-win-Setup.exe . -ErrorAction SilentlyContinue
 
       - name: Upload Windows installers
         if: success() || failure()
@@ -182,7 +182,7 @@ jobs:
           name: nudge-win-installer
           path: |
             Nudge-Setup*.msi
-            NudgeSetup.exe
+            Nudge-win-Setup.exe
           if-no-files-found: warn
 
   build-linux:
@@ -296,7 +296,7 @@ jobs:
       - name: Tag and publish release
         run: |
           ASSETS=()
-          for f in NudgeSetup.exe Nudge-Setup*.msi nudge-win-x64.zip nudge-linux-installer.run nudge-linux-x64.tar.gz; do
+          for f in Nudge-win-Setup.exe Nudge-Setup*.msi nudge-win-x64.zip nudge-linux-installer.run nudge-linux-x64.tar.gz; do
             [ -f "$f" ] && ASSETS+=("$f")
           done
           echo "Release assets: ${ASSETS[*]}"
@@ -308,7 +308,7 @@ jobs:
           ## Install
 
           ### Windows — Setup (recommended)
-          Download **NudgeSetup.exe** and run it. Installs to your user folder — no admin or UAC prompt required. Adds a Start Menu shortcut.
+          Download **Nudge-win-Setup.exe** and run it. Installs to your user folder — no admin or UAC prompt required. Adds a Start Menu shortcut.
 
           ### Windows — MSI (system-wide / enterprise)
           Download **Nudge-Setup.msi** for a system-wide install (requires admin).

@@ -33,7 +33,7 @@ public sealed class NudgeInstallerTests
     [Fact]
     public void ReleaseWorkflow_StagingAndReleaseAssets_IncludeNudgeSetupExe()
     {
-        Assert.Contains("NudgeSetup.exe", ReleaseYml);
+        Assert.Contains("Nudge-win-Setup.exe", ReleaseYml);
     }
 
     [Fact]
