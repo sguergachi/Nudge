@@ -131,10 +131,10 @@
     <ul class="feature-bullets">
       <li>Today, Week, Month, and All Time views</li>
       <li>Hourly breakdowns with category colors</li>
-      <li><a href="#" class="dim-link" onclick="openDimensions(event)">26 feature dimensions</a> analyzed</li>
+      <li><a href="javascript:void(0)" class="dim-link" data-open-dimensions>26 feature dimensions</a> analyzed</li>
     </ul>
     <div class="feature-meta">
-      <span><a href="#" class="dim-link" onclick="openDimensions(event)">26 feature dimensions</a></span>
+      <span><a href="javascript:void(0)" class="dim-link" data-open-dimensions>26 feature dimensions</a></span>
       <span>6 app categories</span>
     </div>
   </div>
@@ -176,7 +176,7 @@
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
       </div>
       <h3>Harvest Engine</h3>
-      <p>Uses sensor fusion technology to monitor your desktop activity across <a href="#" class="dim-link" onclick="openDimensions(event)">26 dimensions</a> in real time &mdash; silently, locally, privately.</p>
+      <p>Uses sensor fusion technology to monitor your desktop activity across <a href="javascript:void(0)" class="dim-link" data-open-dimensions>26 dimensions</a> in real time &mdash; silently, locally, privately.</p>
     </div>
     <div class="tech-card">
       <div class="tech-icon">
@@ -232,9 +232,9 @@
   </div>
 </footer>
 
-<div id="dim-modal" onclick="closeDimensionsOnBackdrop(event)" role="dialog" aria-modal="true" aria-labelledby="dim-modal-title">
+<div id="dim-modal" role="dialog" aria-modal="true" aria-labelledby="dim-modal-title">
   <div id="dim-modal-box">
-    <button id="dim-modal-close" onclick="closeDimensions()" aria-label="Close">&times;</button>
+    <button id="dim-modal-close" aria-label="Close">&times;</button>
     <h2 id="dim-modal-title">26 Feature Dimensions</h2>
     <p class="modal-sub">Every time Nudge considers checking in, it reads these 26 signals from your desktop and feeds them to the local ML model.</p>
     <div class="dim-list">
@@ -303,19 +303,23 @@ if (isLinux) {
 }
 
 // 26 Dimensions modal
-function openDimensions(e) {
-  e.preventDefault();
-  document.getElementById('dim-modal').classList.add('open');
-  document.body.style.overflow = 'hidden';
-}
 function closeDimensions() {
   document.getElementById('dim-modal').classList.remove('open');
   document.body.style.overflow = '';
 }
-function closeDimensionsOnBackdrop(e) {
-  if (e.target === document.getElementById('dim-modal')) closeDimensions();
-}
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDimensions(); });
+document.addEventListener('click', function(e) {
+  var link = e.target.closest('[data-open-dimensions]');
+  if (link) {
+    e.preventDefault();
+    document.getElementById('dim-modal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+});
+document.getElementById('dim-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeDimensions();
+});
+document.getElementById('dim-modal-close').addEventListener('click', closeDimensions);
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeDimensions(); });
 </script>
 
 </body>
