@@ -254,11 +254,12 @@ sealed class Nudge
         }
 
         private const string MetadataJson = @"{
+    ""KPackageStructure"": ""KWin/Script"",
     ""KPlugin"": {
         ""Id"": ""nudge-window-tracker"",
         ""Name"": ""Nudge Window Tracker"",
         ""Description"": ""Publishes the active window's app id and title to org.nudge.WindowTracker on the session bus, for the Nudge productivity tracker. Invisible: no UI."",
-        ""Version"": ""1.1"",
+        ""Version"": ""1.2"",
         ""EnabledByDefault"": true,
         ""ServiceTypes"": [""KWin/Script""]
     },
@@ -268,7 +269,7 @@ sealed class Nudge
 ";
 
         private const string MainJs = @"// Auto-installed by Nudge. Publishes active window info via D-Bus.
-// Fully passive: listens to windowActivated + captionChanged for idle tracking.
+// Fully passive: listens to windowActivated + captionChanged.
 var _trackedWin = null;
 
 function publish() {
@@ -285,13 +286,15 @@ function publish() {
         }
         var cls = (w && w.resourceClass) ? w.resourceClass.toString() : """";
         var title = (w && w.caption) ? w.caption.toString() : """";
+        
+        // Use callDBus for background IPC.
         callDBus(""org.nudge.WindowTracker"", ""/"", ""org.nudge.WindowTracker"", ""Update"", cls, title);
     } catch (e) {
-        print(""nudge-window-tracker error: "" + e);
+        console.error(""nudge-window-tracker error: "" + e);
     }
 }
 
-if (typeof workspace.windowActivated !== ""undefined"") {
+if (workspace.windowActivated !== undefined) {
     workspace.windowActivated.connect(publish);
 }
 publish();
