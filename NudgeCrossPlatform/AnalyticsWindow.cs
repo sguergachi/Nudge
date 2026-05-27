@@ -2710,7 +2710,10 @@ namespace NudgeTray
                 {
                     enableBtn.IsEnabled = true;
                     enableBtn.Content = StrEnableAI;
-                    descText.Text = "Failed to start AI. Check the logs for details.\nAI learns from your Yes/No responses to predict\nwhen you're productive vs distracted.";
+                    var reason = Program.MlSetupError;
+                    descText.Text = string.IsNullOrEmpty(reason)
+                        ? "Failed to start AI. Check the logs for details."
+                        : $"Could not enable AI:\n{reason}";
                 }
             };
             panel.Children.Add(enableBtn);

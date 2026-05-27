@@ -57,6 +57,7 @@ namespace NudgeTray
         internal static bool _mlEnabled;
         internal static bool _notificationsPaused;
         internal static volatile string MlLoadingStep = "";
+        internal static volatile string MlSetupError = "";
         private static DateTime _lastHarvestRefresh = DateTime.MinValue;
         static bool _forceTrainedModel;
         static DateTime? _nextSnapshotTime;
@@ -1171,6 +1172,34 @@ namespace NudgeTray
                 SetMlStatus("🐍 Checking Python…");
                 string systemPython = FindPython();
 
+                // Verify Python actually runs before attempting venv creation
+                bool pythonWorks = false;
+                try
+                {
+                    var testProc = new Process
+                    {
+                        StartInfo = new ProcessStartInfo
+                        {
+                            FileName = systemPython,
+                            Arguments = "--version",
+                            UseShellExecute = false,
+                            CreateNoWindow = true,
+                            RedirectStandardOutput = true,
+                            RedirectStandardError = true
+                        }
+                    };
+                    testProc.Start();
+                    pythonWorks = testProc.WaitForExit(5000) && testProc.ExitCode == 0;
+                }
+                catch { }
+
+                if (!pythonWorks)
+                {
+                    MlSetupError = "Python 3 is not installed.\nPlease install Python 3.8+ from python.org and try again.";
+                    Console.WriteLine("  ✗ Python not found or not working");
+                    return false;
+                }
+
                 // Create/reuse user-level venv at ~/.nudge/venv/
                 if (!File.Exists(PlatformConfig.VenvPythonPath))
                 {
@@ -1244,6 +1273,7 @@ namespace NudgeTray
 
                 if (selectedRequirementsPath == null)
                 {
+                    MlSetupError = "Requirements file not found.\nPlease reinstall Nudge.";
                     Console.WriteLine("  ✗ No requirements files found");
                     return false;
                 }
@@ -1262,6 +1292,7 @@ namespace NudgeTray
                         }
                     }
 
+                    MlSetupError = $"Failed to install Python packages.\nTry running manually:\n{python} -m pip install -r \"{selectedRequirementsPath}\"";
                     Console.WriteLine("  ✗ Failed to install Python dependencies");
                     Console.WriteLine("  Please try installing manually:");
                     Console.WriteLine($"    {python} -m pip install -r \"{selectedRequirementsPath}\"");
@@ -1273,6 +1304,7 @@ namespace NudgeTray
             }
             catch (Exception ex)
             {
+                MlSetupError = $"Python error: {ex.Message}";
                 Console.WriteLine($"  ⚠ Error checking dependencies: {ex.Message}");
                 return false;
             }
@@ -1428,6 +1460,8 @@ namespace NudgeTray
             }
             catch (Exception ex)
             {
+                if (string.IsNullOrEmpty(MlSetupError))
+                    MlSetupError = $"Unexpected error: {ex.Message}";
                 Console.WriteLine($"⚠ Failed to start ML services: {ex.Message}");
                 Console.WriteLine("  Continuing without ML...");
                 MlLoadingStep = "";
@@ -2257,6 +2291,7 @@ namespace NudgeTray
             try
             {
                 Console.WriteLine("[INFO] Starting AI setup...");
+                MlSetupError = "";
 
                 // Clean up existing processes before installation begins
                 CleanupOldProcesses();
