@@ -299,6 +299,7 @@ namespace NudgeTray
             var intSec = (int)_intervalSlider.Value;
             var intMin = Math.Max(1, (int)Math.Round(intSec / 60.0));
 
+            Console.WriteLine($"[Settings] Save: AI interval {mlMin} min, Snapshot interval {intMin} min");
             Program.UpdateSettings(mlInterval: mlMin, interval: intMin);
         }
 

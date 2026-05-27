@@ -25,7 +25,7 @@ internal sealed class NudgeParsedArgs
 {
     public NudgeStartupAction Action { get; init; } = NudgeStartupAction.Run;
     public int? IntervalMinutes { get; init; }
-    public int? MlCheckIntervalMinutes { get; init; }
+    public int? MlCheckIntervalSeconds { get; init; }
     public bool MlEnabled { get; init; }
     public bool ForceTrainedModel { get; init; }
     public string? CsvPath { get; init; }
@@ -1207,7 +1207,7 @@ internal static class NudgeCoreLogic
     internal static NudgeParsedArgs ParseNudgeArgs(string[] args)
     {
         int? intervalMinutes = null;
-        int? mlIntervalMinutes = null;
+        int? mlIntervalSeconds = null;
         bool mlEnabled = false;
         bool forceModel = false;
         string? csvPath = null;
@@ -1238,8 +1238,8 @@ internal static class NudgeCoreLogic
             {
                 if (i + 1 < args.Length)
                 {
-                    if (int.TryParse(args[i + 1], out int minutes))
-                        mlIntervalMinutes = minutes;
+                    if (int.TryParse(args[i + 1], out int sec))
+                        mlIntervalSeconds = sec;
                     i++;
                 }
                 continue;
@@ -1264,7 +1264,7 @@ internal static class NudgeCoreLogic
         {
             Action = NudgeStartupAction.Run,
             IntervalMinutes = intervalMinutes,
-            MlCheckIntervalMinutes = mlIntervalMinutes,
+            MlCheckIntervalSeconds = mlIntervalSeconds,
             MlEnabled = mlEnabled,
             ForceTrainedModel = forceModel,
             CsvPath = csvPath

@@ -1147,9 +1147,9 @@ sealed class Nudge
             SNAPSHOT_INTERVAL_MS = minutes * 60 * 1000;
             _customInterval = true;
         }
-        if (parsed.MlCheckIntervalMinutes is int mlMinutes)
+        if (parsed.MlCheckIntervalSeconds is int mlSeconds)
         {
-            ML_CHECK_INTERVAL_MS = mlMinutes * 60 * 1000;
+            ML_CHECK_INTERVAL_MS = mlSeconds * 1000;
         }
         _mlEnabled = parsed.MlEnabled;
         _forceTrainedModel = parsed.ForceTrainedModel;

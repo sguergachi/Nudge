@@ -48,7 +48,7 @@ namespace NudgeTray
     sealed class Program
     {
         const int UDP_PORT = 45001;
-        const string VERSION = "1.6.3";
+        const string VERSION = "1.6.4";
         const string NudgeExeName = "nudge";
         const string NudgeDllName = "nudge.dll";
         static Process? _nudgeProcess;
@@ -61,8 +61,8 @@ namespace NudgeTray
         static DateTime? _nextSnapshotTime;
         static int _intervalMinutes;
         public static int IntervalMinutes => _intervalMinutes;
-        static int _mlCheckIntervalMinutes;
-        public static int MlCheckIntervalMinutes => _mlCheckIntervalMinutes;
+        static int _mlCheckIntervalSeconds;
+        public static int MlCheckIntervalSeconds => _mlCheckIntervalSeconds;
         static Mutex? _singleInstanceMutex;
         internal const string SingleInstanceMutexName = NudgeCoreLogic.TraySingleInstanceMutexName;
         static readonly string _baseDir = AppContext.BaseDirectory;
@@ -255,13 +255,13 @@ namespace NudgeTray
                 if (interval == 5 && savedSettings.IntervalMinutes != 5 && savedSettings.IntervalMinutes > 0)
                     interval = savedSettings.IntervalMinutes;
                 
-                if (mlInterval == 1 && savedSettings.MlCheckIntervalMinutes > 0)
-                    mlInterval = savedSettings.MlCheckIntervalMinutes;
+                if (mlInterval == 1 && savedSettings.MlCheckIntervalSeconds > 0)
+                    mlInterval = savedSettings.MlCheckIntervalSeconds;
             }
 
             // Persist whatever state we ended up with
             _intervalMinutes = interval; // ensure field is set before SaveSettings
-            _mlCheckIntervalMinutes = mlInterval;
+            _mlCheckIntervalSeconds = mlInterval;
             SaveSettings();
 
             // Print banner
@@ -1523,9 +1523,9 @@ namespace NudgeTray
 
                 // Build arguments
                 string args = $"--interval {interval}";
-                if (_mlCheckIntervalMinutes > 0)
+                if (_mlCheckIntervalSeconds > 0)
                 {
-                    args += $" --ml-interval {_mlCheckIntervalMinutes}";
+                    args += $" --ml-interval {_mlCheckIntervalSeconds}";
                 }
                 if (_mlEnabled)
                 {
@@ -2149,7 +2149,7 @@ namespace NudgeTray
                 {
                     MlEnabled              = _mlEnabled,
                     IntervalMinutes        = _intervalMinutes > 0 ? _intervalMinutes : 5,
-                    MlCheckIntervalMinutes = _mlCheckIntervalMinutes > 0 ? _mlCheckIntervalMinutes : 1,
+                    MlCheckIntervalSeconds = _mlCheckIntervalSeconds > 0 ? _mlCheckIntervalSeconds : 60,
                 };
                 File.WriteAllText(
                     SettingsPath,
@@ -2197,9 +2197,9 @@ namespace NudgeTray
         public static void UpdateSettings(int? mlInterval = null, int? interval = null)
         {
             bool changed = false;
-            if (mlInterval.HasValue && mlInterval.Value != _mlCheckIntervalMinutes)
+            if (mlInterval.HasValue && mlInterval.Value != _mlCheckIntervalSeconds)
             {
-                _mlCheckIntervalMinutes = mlInterval.Value;
+                _mlCheckIntervalSeconds = mlInterval.Value;
                 changed = true;
             }
             if (interval.HasValue && interval.Value != _intervalMinutes)
@@ -2214,8 +2214,8 @@ namespace NudgeTray
                 // reflects the new interval without waiting for the daemon restart.
                 if (mlInterval.HasValue)
                     LiveAIState.NextCheckAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + mlInterval.Value * 60;
-                else if (_mlCheckIntervalMinutes > 0)
-                    LiveAIState.NextCheckAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + _mlCheckIntervalMinutes * 60;
+                else if (_mlCheckIntervalSeconds > 0)
+                    LiveAIState.NextCheckAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + _mlCheckIntervalSeconds * 60;
 
                 SaveSettings();
                 RestartHarvestProcess();

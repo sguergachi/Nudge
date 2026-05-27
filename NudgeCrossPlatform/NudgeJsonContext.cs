@@ -100,8 +100,8 @@ internal sealed class TraySettings
     public bool MlEnabled { get; set; }
     /// <summary>Last-used snapshot interval in minutes.</summary>
     public int IntervalMinutes { get; set; } = 5;
-    /// <summary>How often the AI should run focus checks in minutes.</summary>
-    public int MlCheckIntervalMinutes { get; set; } = 1;
+    /// <summary>How often the AI should run focus checks in seconds.</summary>
+    public int MlCheckIntervalSeconds { get; set; } = 60;
 }
 
 /// <summary>
