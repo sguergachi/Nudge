@@ -148,95 +148,32 @@ jobs:
           $g.Dispose(); $logo.Dispose()
           Write-Host "Logo generated."
 
-      - name: Build MSIX package
+      - name: Build Velopack installer
         shell: pwsh
-        env:
-          WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
-          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         run: |
-          # Locate MakeAppx.exe in Windows SDK
-          $makeAppx = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\MakeAppx.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
-          if (-not $makeAppx) { $makeAppx = where.exe MakeAppx 2>$null }
-          if (-not $makeAppx) { $makeAppx = where.exe MakeAppx.exe 2>$null }
-          if (-not $makeAppx) { Write-Host "Windows SDK not found, searching..."; Get-ChildItem "C:\Program Files (x86)\Windows Kits" -Recurse -Filter "MakeAppx.exe" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" }; throw "MakeAppx.exe not found" }
-          Write-Host "MakeAppx: $makeAppx"
-          $signTool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\SignTool.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
-          if (-not $signTool) { $signTool = where.exe SignTool 2>$null }
-          if (-not $signTool) { $signTool = where.exe SignTool.exe 2>$null }
-          if (-not $signTool) { throw "SignTool.exe not found" }
-          Write-Host "SignTool: $signTool"
-
-          # Use a stored certificate from secrets when available, otherwise generate one.
-          # A stable cert lets users install it once and trust all future releases.
-          if ($env:WINDOWS_CERT_PFX) {
-            Write-Host "Importing signing certificate from WINDOWS_CERT_PFX secret..."
-            $pfxBytes = [Convert]::FromBase64String($env:WINDOWS_CERT_PFX)
-            $pfxPath = Join-Path $env:TEMP "nudge-sign.pfx"
-            [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
-            if ($env:WINDOWS_CERT_PASSWORD) {
-              $certPwd = ConvertTo-SecureString -String $env:WINDOWS_CERT_PASSWORD -Force -AsPlainText
-              $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation "Cert:\CurrentUser\My" -Password $certPwd
-            } else {
-              $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation "Cert:\CurrentUser\My"
-            }
-            Remove-Item $pfxPath -Force
-          } else {
-            Write-Host "No WINDOWS_CERT_PFX secret found — generating a new self-signed certificate."
-            Write-Host "::warning::Using an ephemeral certificate. For a stable cert that users install once, see WINDOWS_README.md."
-            $cert = New-SelfSignedCertificate -Type Custom -Subject "CN=Nudge" -KeyUsage DigitalSignature `
-              -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3") `
-              -CertStoreLocation "Cert:\CurrentUser\My" -NotAfter (Get-Date).AddYears(3)
-          }
-          $thumbprint = $cert.Thumbprint
-          Write-Host "Cert thumbprint: $thumbprint"
-
-          # Export the public certificate so users can trust it before installing the MSIX
-          Export-Certificate -Cert "Cert:\CurrentUser\My\$thumbprint" -FilePath "dist\Nudge.cer" -Type CERT | Out-Null
-          Write-Host "Exported public certificate to dist\Nudge.cer"
-
-          # Prepare package layout
-          $pkg = "msix-package"
-          New-Item -ItemType Directory -Force -Path $pkg/assets | Out-Null
-          Copy-Item "NudgeCrossPlatform/assets/windows/AppxManifest.xml" $pkg/
-          Copy-Item "dist/win-x64/*" $pkg/ -Recurse -ErrorAction SilentlyContinue
-
-          # Generate logo PNGs
-          Add-Type -AssemblyName System.Drawing
-          foreach ($size in @(44, 150)) {
-            $bmp = New-Object System.Drawing.Bitmap $size, $size
-            $g = [System.Drawing.Graphics]::FromImage($bmp)
-            $g.SmoothingMode = 'HighQuality'
-            $g.Clear([System.Drawing.Color]::Transparent)
-            $brush = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(40,40,60))
-            $g.FillEllipse($brush, [int]($size*0.15), [int]($size*0.15), [int]($size*0.7), [int]($size*0.7))
-            $fs = [System.Single]($size * 0.5)
-            $font = [System.Drawing.Font]::new("Segoe UI", $fs, [System.Drawing.FontStyle]::Bold)
-            $g.DrawString("N", $font, [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(180,140,255)), [int]($size*0.3), [int]($size*0.22))
-            $bmp.Save("$pkg/assets/logo.png")
-            $g.Dispose(); $bmp.Dispose()
-          }
-
-          Write-Host "Creating MSIX package..."
-          & $makeAppx pack /d $pkg /p "dist/Nudge.msix" /l 2>&1
-          if ($LASTEXITCODE -ne 0) { throw "MakeAppx failed (exit $LASTEXITCODE)" }
-
-          Write-Host "Signing MSIX..."
-          & $signTool sign /fd SHA256 /sha1 $thumbprint /v "dist/Nudge.msix" 2>&1
-          if ($LASTEXITCODE -ne 0) { throw "SignTool failed (exit $LASTEXITCODE)" }
-
-          $msix = Join-Path $PWD "dist/Nudge.msix"
-          if (Test-Path $msix) { Write-Host "MSIX: $((Get-Item $msix).Length/1KB) KB" }
-          else { throw "MSIX not produced" }
-          Remove-Item -Recurse -Force $pkg
+          dotnet tool install -g vpk
+          $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
+          $m = Select-String -Path "NudgeCrossPlatform\nudge-tray.cs" -Pattern 'const string VERSION = "([.\d]+)"'
+          $version = if ($m) { $m.Matches[0].Groups[1].Value } else { "1.0.0" }
+          Write-Host "Building Velopack installer for v$version..."
+          vpk pack `
+            --packId "Nudge" `
+            --packVersion $version `
+            --packDir "dist/win-x64" `
+            --mainExe "nudge-tray.exe" `
+            --icon "NudgeCrossPlatform/assets/windows/nudge.ico" `
+            -o "dist/velopack"
+          if ($LASTEXITCODE -ne 0) { throw "vpk pack failed (exit $LASTEXITCODE)" }
+          $setup = "dist/velopack/NudgeSetup.exe"
+          if (Test-Path $setup) { Write-Host "NudgeSetup.exe: $((Get-Item $setup).Length/1KB) KB" }
+          else { throw "NudgeSetup.exe not produced" }
 
       - name: Stage installers for upload
         if: success() || failure()
         shell: pwsh
         run: |
-          Copy-Item dist/Nudge-Setup*.msi .
-          Copy-Item dist/Nudge.msix . -ErrorAction SilentlyContinue
-          Copy-Item dist/Nudge.cer  . -ErrorAction SilentlyContinue
-          Copy-Item NudgeCrossPlatform/assets/windows/Install-Nudge.ps1 . -ErrorAction SilentlyContinue
+          Copy-Item dist/Nudge-Setup*.msi . -ErrorAction SilentlyContinue
+          Copy-Item dist/velopack/NudgeSetup.exe . -ErrorAction SilentlyContinue
 
       - name: Upload Windows installers
         if: success() || failure()
@@ -245,9 +182,7 @@ jobs:
           name: nudge-win-installer
           path: |
             Nudge-Setup*.msi
-            Nudge.msix
-            Nudge.cer
-            Install-Nudge.ps1
+            NudgeSetup.exe
           if-no-files-found: warn
 
   build-linux:
@@ -361,7 +296,7 @@ jobs:
       - name: Tag and publish release
         run: |
           ASSETS=()
-          for f in Nudge.msix Nudge.cer Install-Nudge.ps1 Nudge-Setup*.msi nudge-win-x64.zip nudge-linux-installer.run nudge-linux-x64.tar.gz; do
+          for f in NudgeSetup.exe Nudge-Setup*.msi nudge-win-x64.zip nudge-linux-installer.run nudge-linux-x64.tar.gz; do
             [ -f "$f" ] && ASSETS+=("$f")
           done
           echo "Release assets: ${ASSETS[*]}"
@@ -372,19 +307,11 @@ jobs:
           cat > release-notes.md << 'NOTES'
           ## Install
 
-          ### Windows — MSIX (recommended)
-          The MSIX package requires trusting the signing certificate once:
-          1. Download **Nudge.cer**, **Nudge.msix**, and **Install-Nudge.ps1** into the same folder
-          2. Right-click **Install-Nudge.ps1** → *Run with PowerShell* (or run `powershell -ExecutionPolicy Bypass -File .\Install-Nudge.ps1`)
+          ### Windows — Setup (recommended)
+          Download **NudgeSetup.exe** and run it. Installs to your user folder — no admin or UAC prompt required. Adds a Start Menu shortcut.
 
-          The script installs the certificate to your Trusted People store (current user only), then installs Nudge. You only need to do this once — future updates will install without re-trusting the certificate.
-
-          **Manual steps (if you prefer):**
-          1. Double-click **Nudge.cer** → Install → Current User → Trusted People
-          2. Double-click **Nudge.msix** to install
-
-          ### Windows — MSI (alternative)
-          Download **Nudge Setup** (`.msi`) for a traditional installer with shortcuts. No certificate required.
+          ### Windows — MSI (system-wide / enterprise)
+          Download **Nudge-Setup.msi** for a system-wide install (requires admin).
 
           ### Windows — Portable
           Download **nudge-win-x64.zip**, extract, and run **nudge-tray.exe**.

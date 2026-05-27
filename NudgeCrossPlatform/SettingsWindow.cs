@@ -50,7 +50,7 @@ namespace NudgeTray
         {
             Title                  = "Nudge Settings";
             Width                  = 440;
-            Height                 = 590;
+            Height                 = 650;
             CanResize              = false;
             ShowInTaskbar          = false;
             WindowDecorations      = WindowDecorations.None;
@@ -250,20 +250,20 @@ namespace NudgeTray
             var body = new StackPanel { Spacing = 12, Margin = new Thickness(14, 14, 14, 14) };
 
             // AI Check Frequency — store reference instead of auto-saving
-            _aiSlider = BuildSlider(
+            var aiPanel = BuildSlider(
                 "AI Focus Checks",
                 "How often the AI analyzes your focus patterns",
                 Program.MlCheckIntervalMinutes * 60,
-                1, 600, FormatSec);
-            body.Children.Add(_aiSlider.Parent is StackPanel sp ? sp : _aiSlider);
+                1, 600, FormatSec, out _aiSlider);
+            body.Children.Add(aiPanel);
 
             // Interval Check Frequency
-            _intervalSlider = BuildSlider(
+            var intPanel = BuildSlider(
                 "Interval Checks",
                 "Fallback random check-in frequency (when AI is learning)",
                 Program.IntervalMinutes * 60,
-                1, 600, FormatSec);
-            body.Children.Add(_intervalSlider.Parent is StackPanel sp2 ? sp2 : _intervalSlider);
+                1, 600, FormatSec, out _intervalSlider);
+            body.Children.Add(intPanel);
 
             // Save button
             body.Children.Add(new Border { Height = 4 });
@@ -280,8 +280,7 @@ namespace NudgeTray
                 CornerRadius = new CornerRadius(6),
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Center,
-                Cursor = new Cursor(StandardCursorType.Hand),
-                IsEnabled = false
+                Cursor = new Cursor(StandardCursorType.Hand)
             };
             _saveBtn.Click += OnSaveClicked;
             body.Children.Add(_saveBtn);
@@ -300,18 +299,11 @@ namespace NudgeTray
             var intSec = (int)_intervalSlider.Value;
             var intMin = Math.Max(1, (int)Math.Round(intSec / 60.0));
 
-            Program.UpdateSettings(ml: mlMin, interval: intMin);
-            _saveBtn!.IsEnabled = false;
+            Program.UpdateSettings(mlInterval: mlMin, interval: intMin);
         }
 
-        private void MarkDirty()
-        {
-            if (_saveBtn != null)
-                _saveBtn.IsEnabled = true;
-        }
-
-        private Slider BuildSlider(string label, string desc, int currentVal, int min, int max,
-            Func<int, string> formatValue)
+        private StackPanel BuildSlider(string label, string desc, int currentVal, int min, int max,
+            Func<int, string> formatValue, out Slider slider)
         {
             var stack = new StackPanel { Spacing = 4 };
 
@@ -348,7 +340,7 @@ namespace NudgeTray
                 });
             }
 
-            var slider = new Slider
+            slider = new Slider
             {
                 Minimum = min,
                 Maximum = max,
@@ -368,12 +360,11 @@ namespace NudgeTray
                 {
                     var val = (double)e.NewValue!;
                     valText.Text = formatValue((int)val);
-                    MarkDirty();
                 }
             };
 
             stack.Children.Add(slider);
-            return slider;
+            return stack;
         }
 
 
