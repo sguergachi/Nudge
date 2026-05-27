@@ -100,6 +100,8 @@ namespace NudgeTray
         private const string StrWaitingFirstCheck = "Waiting for first check…";
         private const string StrWaitingFirstAICheck = "Waiting for first AI check…";
         private const string StrCheckingNow = "Checking now…";
+        private const string StrNoModelAvailable = "No model available yet";
+        private const string StrNoModelSubtext = "AI predictions will begin once training completes";
         private const string StrEnableAI = "Enable AI";
         private const string StrActive = "Active";
         private const string StrDetails = "Details";
@@ -1804,6 +1806,8 @@ namespace NudgeTray
         /// </summary>
         private static Border CreatePredictionHistorySection(IReadOnlyList<MLLiveEvent> events, MLLiveEvent? latest)
         {
+            bool hasModel = TrainerState.ModelVersion > 0 || TrainerState.LastAccuracy >= 0f;
+
             Color mlColor = latest == null ? TextTertiary
                 : latest.Confidence < 0.5 ? AIStatusLearning
                 : latest.Productive       ? ProductiveGreen
@@ -1823,9 +1827,9 @@ namespace NudgeTray
             });
             var cdLabel = new TextBlock
             {
-                Text = StrWaitingFirstCheck,
+                Text = hasModel ? StrWaitingFirstCheck : StrNoModelAvailable,
                 FontSize = 10,
-                Foreground = new SolidColorBrush(TextTertiary),
+                Foreground = new SolidColorBrush(hasModel ? TextTertiary : AIStatusLearning),
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -1833,83 +1837,108 @@ namespace NudgeTray
             headerGrid.Children.Add(cdLabel);
             panel.Children.Add(headerGrid);
 
-            // ── Countdown progress bar ────────────────────────────────────────
-            const long totalInterval = 60;
-
-            var barContainer = new Border
+            if (!hasModel)
             {
-                Height = 4,
-                CornerRadius = new CornerRadius(2),
-                Background = new SolidColorBrush(ProgressBarBg),
-                ClipToBounds = true,
-                HorizontalAlignment = HorizontalAlignment.Stretch
-            };
-            Action rebuildProgressBar = () =>
-            {
-                long nextAt = LiveAIState.NextCheckAt;
-                long nowSec = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                long secLeft = nextAt > 0 ? Math.Max(0, nextAt - nowSec) : 0;
-                long secDone = totalInterval - secLeft;
-                double prog = nextAt > 0
-                    ? Math.Min(1.0, Math.Max(0.0, (double)secDone / totalInterval))
-                    : 0;
-
-                if (nextAt > 0 && secLeft == 0)
+                // ── Disabled state: no model trained yet ─────────────────────
+                panel.Children.Add(new TextBlock
                 {
-                    barContainer.Child = CreateIndeterminateBar();
-                }
-                else
+                    Text = StrNoModelSubtext,
+                    FontSize = 9,
+                    Foreground = new SolidColorBrush(TextTertiary),
+                    TextWrapping = TextWrapping.Wrap,
+                    Opacity = 0.7
+                });
+
+                var emptyBar = new Border
                 {
-                    var barGrid = new Grid();
-                    if (prog >= 0.995)
-                    {
-                        barGrid.ColumnDefinitions = new ColumnDefinitions("*");
-                        barGrid.Children.Add(new Border
-                        {
-                            Background = new SolidColorBrush(PrimaryBlue),
-                            CornerRadius = new CornerRadius(2),
-                            HorizontalAlignment = HorizontalAlignment.Stretch
-                        });
-                    }
-                    else if (prog > 0.005)
-                    {
-                        double rem = 1.0 - prog;
-                        barGrid.ColumnDefinitions = new ColumnDefinitions($"{prog * 100:F1}*,{rem * 100:F1}*");
-                        var fill = new Border
-                        {
-                            Background = new SolidColorBrush(PrimaryBlue),
-                            CornerRadius = new CornerRadius(2, 0, 0, 2),
-                            HorizontalAlignment = HorizontalAlignment.Stretch
-                        };
-                        Grid.SetColumn(fill, 0);
-                        barGrid.Children.Add(fill);
-                    }
-                    barContainer.Child = barGrid;
-                }
-            };
-            rebuildProgressBar();
-            panel.Children.Add(barContainer);
-
-            // ── Live countdown update every second (text only) ───────────────
-            Action updateCountdown = () =>
+                    Height = 4,
+                    CornerRadius = new CornerRadius(2),
+                    Background = new SolidColorBrush(ProgressBarBg),
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    Opacity = 0.4
+                };
+                panel.Children.Add(emptyBar);
+            }
+            else
             {
-                long nextAt = LiveAIState.NextCheckAt;
-                long nowSec = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                long secLeft = nextAt > 0 ? Math.Max(0, nextAt - nowSec) : 0;
+                // ── Countdown progress bar ────────────────────────────────────
+                const long totalInterval = 60;
 
-                cdLabel.Text = nextAt == 0 ? StrWaitingFirstCheck
-                    : secLeft == 0 ? StrCheckingNow
-                    : $"{secLeft / 60}:{secLeft % 60:D2} until next check";
-                cdLabel.HorizontalAlignment = nextAt == 0
-                    ? HorizontalAlignment.Left
-                    : HorizontalAlignment.Right;
-            };
-            updateCountdown();
+                var barContainer = new Border
+                {
+                    Height = 4,
+                    CornerRadius = new CornerRadius(2),
+                    Background = new SolidColorBrush(ProgressBarBg),
+                    ClipToBounds = true,
+                    HorizontalAlignment = HorizontalAlignment.Stretch
+                };
+                Action rebuildProgressBar = () =>
+                {
+                    long nextAt = LiveAIState.NextCheckAt;
+                    long nowSec = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                    long secLeft = nextAt > 0 ? Math.Max(0, nextAt - nowSec) : 0;
+                    long secDone = totalInterval - secLeft;
+                    double prog = nextAt > 0
+                        ? Math.Min(1.0, Math.Max(0.0, (double)secDone / totalInterval))
+                        : 0;
 
-            var countdownTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-            countdownTimer.Tick += (_, _) => updateCountdown();
-            countdownTimer.Start();
-            barContainer.Unloaded += (_, _) => countdownTimer.Stop();
+                    if (nextAt > 0 && secLeft == 0)
+                    {
+                        barContainer.Child = CreateIndeterminateBar();
+                    }
+                    else
+                    {
+                        var barGrid = new Grid();
+                        if (prog >= 0.995)
+                        {
+                            barGrid.ColumnDefinitions = new ColumnDefinitions("*");
+                            barGrid.Children.Add(new Border
+                            {
+                                Background = new SolidColorBrush(PrimaryBlue),
+                                CornerRadius = new CornerRadius(2),
+                                HorizontalAlignment = HorizontalAlignment.Stretch
+                            });
+                        }
+                        else if (prog > 0.005)
+                        {
+                            double rem = 1.0 - prog;
+                            barGrid.ColumnDefinitions = new ColumnDefinitions($"{prog * 100:F1}*,{rem * 100:F1}*");
+                            var fill = new Border
+                            {
+                                Background = new SolidColorBrush(PrimaryBlue),
+                                CornerRadius = new CornerRadius(2, 0, 0, 2),
+                                HorizontalAlignment = HorizontalAlignment.Stretch
+                            };
+                            Grid.SetColumn(fill, 0);
+                            barGrid.Children.Add(fill);
+                        }
+                        barContainer.Child = barGrid;
+                    }
+                };
+                rebuildProgressBar();
+                panel.Children.Add(barContainer);
+
+                // ── Live countdown update every second (text only) ───────────
+                Action updateCountdown = () =>
+                {
+                    long nextAt = LiveAIState.NextCheckAt;
+                    long nowSec = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                    long secLeft = nextAt > 0 ? Math.Max(0, nextAt - nowSec) : 0;
+
+                    cdLabel.Text = nextAt == 0 ? StrWaitingFirstCheck
+                        : secLeft == 0 ? StrCheckingNow
+                        : $"{secLeft / 60}:{secLeft % 60:D2} until next check";
+                    cdLabel.HorizontalAlignment = nextAt == 0
+                        ? HorizontalAlignment.Left
+                        : HorizontalAlignment.Right;
+                };
+                updateCountdown();
+
+                var countdownTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+                countdownTimer.Tick += (_, _) => updateCountdown();
+                countdownTimer.Start();
+                barContainer.Unloaded += (_, _) => countdownTimer.Stop();
+            }
 
             // ── Latest score row ──────────────────────────────────────────────
             if (latest != null)
