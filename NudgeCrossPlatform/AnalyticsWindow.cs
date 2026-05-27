@@ -1465,15 +1465,6 @@ namespace NudgeTray
                 FontWeight = FontWeight.Medium,
                 Foreground = new SolidColorBrush(fusionColor)
             });
-            if (!string.IsNullOrEmpty(qualityReason))
-            {
-                qualityRow.Children.Add(new TextBlock
-                {
-                    Text       = $"({qualityReason})",
-                    FontSize   = 9,
-                    Foreground = new SolidColorBrush(Color.FromArgb(180, fusionColor.R, fusionColor.G, fusionColor.B))
-                });
-            }
             qualityRow.Children.Add(new TextBlock
             {
                 Text       = "· In Focus Now",
@@ -1498,7 +1489,9 @@ namespace NudgeTray
             var signalPanel = new StackPanel { Spacing = 5, IsVisible = _sensorSignalsOpen, Margin = new Thickness(0, 6, 0, 2) };
             if (harvest != null)
             {
-                AddFusionRow(signalPanel, "Signal Quality", qualityLabel, fusionColor);
+                AddFusionRow(signalPanel, "Signal Quality",
+                    string.IsNullOrEmpty(qualityReason) ? qualityLabel : $"{qualityLabel} ({qualityReason})",
+                    fusionColor);
                 AddFusionRow(signalPanel, "Win Tracking",  FormatKWinStatus(harvest.FocusSrc),
                     harvest.FocusSrc == "KWinScript" ? ProductiveGreen : AIStatusLearning);
                 AddFusionRow(signalPanel, "Idle",           FormatMs(harvest.IdleMs),      TextSecondary);
