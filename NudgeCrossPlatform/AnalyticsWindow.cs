@@ -2702,7 +2702,11 @@ namespace NudgeTray
                 bool success = await Task.Run(() => Program.RestartWithML());
                 progressTimer.Stop();
 
-                if (!success)
+                if (success)
+                {
+                    RefreshContent();
+                }
+                else
                 {
                     enableBtn.IsEnabled = true;
                     enableBtn.Content = StrEnableAI;
