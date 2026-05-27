@@ -56,6 +56,7 @@ namespace NudgeTray
         static Process? _mlTrainerProcess;
         internal static bool _mlEnabled;
         internal static bool _notificationsPaused;
+        internal static volatile string MlLoadingStep = "";
         private static DateTime _lastHarvestRefresh = DateTime.MinValue;
         static bool _forceTrainedModel;
         static DateTime? _nextSnapshotTime;
@@ -647,6 +648,9 @@ namespace NudgeTray
 
         static string GetMenuStatusText()
         {
+            var mlStep = MlLoadingStep;
+            if (!string.IsNullOrEmpty(mlStep))
+                return mlStep;
             if (_notificationsPaused)
             {
                 return "⏸ Notifications Paused";
@@ -664,6 +668,20 @@ namespace NudgeTray
                 var remaining = nextSnapshot.Value - DateTime.Now;
                 return NudgeCoreLogic.FormatCountdown(remaining);
             }
+        }
+
+        static void SetMlStatus(string step)
+        {
+            MlLoadingStep = step;
+            Console.WriteLine($"[ML] {step}");
+            if (_statusItem != null)
+                Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    if (_statusItem != null) _statusItem.Header = GetMenuStatusText();
+#if WINDOWS
+                    if (NativeTray.IsInitialized) NativeTray.SetStatusText(GetMenuStatusText());
+#endif
+                });
         }
 
         static void HandleQuitClicked()
@@ -1150,10 +1168,14 @@ namespace NudgeTray
         {
             try
             {
-                Console.WriteLine("  Checking Python...");
+                SetMlStatus("🐍 Checking Python…");
                 string systemPython = FindPython();
 
                 // Create/reuse user-level venv at ~/.nudge/venv/
+                if (!File.Exists(PlatformConfig.VenvPythonPath))
+                {
+                    SetMlStatus("🐍 Creating Python environment…");
+                }
                 if (PlatformConfig.EnsureVenv(systemPython))
                 {
                     string venvPy = PlatformConfig.VenvPythonPath;
@@ -1165,6 +1187,7 @@ namespace NudgeTray
                 Console.WriteLine($"  Using Python: {python}");
 
                 // Check if required packages are installed inside the venv
+                SetMlStatus("🐍 Checking ML packages…");
                 var requiredPackages = new[] { "sklearn", "joblib", "pandas", "numpy" };
                 bool allInstalled = true;
 
@@ -1199,7 +1222,7 @@ namespace NudgeTray
                     return true;
                 }
 
-                Console.WriteLine("  Installing Python dependencies (this may take several minutes)...");
+                SetMlStatus("📦 Installing ML packages (1–3 min)…");
 
                 // Try different requirements files in order
                 var requirementsFiles = new[]
@@ -1231,7 +1254,7 @@ namespace NudgeTray
                     // Try minimal fallback
                     if (selectedRequirementsPath != requirementsFiles[2] && File.Exists(requirementsFiles[2]))
                     {
-                        Console.WriteLine("  ⚠ Full dependencies failed, trying minimal...");
+                        SetMlStatus("📦 Full install failed, trying minimal…");
                         if (RunPipInstall(python, requirementsFiles[2], 120_000))
                         {
                             Console.WriteLine("  ✓ Minimal dependencies installed (ML features limited)");
@@ -1284,13 +1307,14 @@ namespace NudgeTray
         {
             try
             {
-                Console.WriteLine("🧠 Starting ML services...");
+                SetMlStatus("🧠 Starting AI services…");
 
                 // Ensure Python dependencies are installed
                 if (!EnsurePythonDependencies())
                 {
                     Console.WriteLine("⚠ Python dependencies not available. ML services will be disabled.");
                     Console.WriteLine("  You can still use Nudge without ML by running without the --ml flag.");
+                    MlLoadingStep = "";
                     _mlEnabled = false;
                     return;
                 }
@@ -1298,7 +1322,7 @@ namespace NudgeTray
                 string csvPath = PlatformConfig.CsvPath;
 
                 // Start ML inference service (TCP on port 45002)
-                Console.WriteLine("  Starting ML inference service...");
+                SetMlStatus("🧠 Launching inference server…");
                 _mlInferenceProcess = new Process
                 {
                     StartInfo = new ProcessStartInfo
@@ -1332,25 +1356,28 @@ namespace NudgeTray
                 _mlInferenceProcess.BeginOutputReadLine();
                 _mlInferenceProcess.BeginErrorReadLine();
 
-                // Wait for service to start
-                Thread.Sleep(2000);
-
-                // Try to verify TCP connection
-                try
+                // Wait for service to start — poll up to 15s so fast machines don't wait unnecessarily
+                SetMlStatus("🧠 Waiting for inference server…");
+                bool serverReady = false;
+                for (int attempt = 0; attempt < 15 && !serverReady; attempt++)
                 {
-                    using (var client = new System.Net.Sockets.TcpClient())
+                    Thread.Sleep(1000);
+                    try
                     {
+                        using var client = new System.Net.Sockets.TcpClient();
                         client.Connect("127.0.0.1", 45002);
-                        Console.WriteLine("  ✓ ML inference service started (TCP port 45002)");
+                        serverReady = true;
                     }
+                    catch { }
                 }
-                catch
-                {
+
+                if (serverReady)
+                    Console.WriteLine("  ✓ ML inference service started (TCP port 45002)");
+                else
                     Console.WriteLine("  ⚠ ML inference service may not be ready yet");
-                }
 
                 // Start background trainer
-                Console.WriteLine("  Starting background trainer...");
+                SetMlStatus("🧠 Starting background trainer…");
                 string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --seed --csv \"{csvPath}\" --model-dir \"{_modelDirPath}\" --check-interval 300";
                 if (_forceTrainedModel)
                 {
@@ -1396,11 +1423,13 @@ namespace NudgeTray
 
                 Console.WriteLine("  ✓ Background trainer started");
                 Console.WriteLine($"✓ ML services ready (CSV: {csvPath})");
+                MlLoadingStep = "";
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"⚠ Failed to start ML services: {ex.Message}");
                 Console.WriteLine("  Continuing without ML...");
+                MlLoadingStep = "";
                 _mlEnabled = false;
             }
         }
