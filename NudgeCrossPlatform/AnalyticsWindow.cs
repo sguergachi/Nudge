@@ -1431,7 +1431,7 @@ namespace NudgeTray
             var textStack = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
             textStack.Children.Add(new TextBlock
             {
-                Text       = hasApp ? TruncateAppName(displayApp, 24) : "Waiting…",
+                Text       = hasApp ? TruncateAppName(displayApp, 24) : "Engine starting up…",
                 FontSize   = 13,
                 FontWeight = FontWeight.SemiBold,
                 Foreground = new SolidColorBrush(hasApp ? TextPrimary : TextTertiary)
@@ -1497,7 +1497,8 @@ namespace NudgeTray
             if (harvest != null)
             {
                 AddFusionRow(signalPanel, "Signal Quality", qualityLabel, fusionColor);
-                AddFusionRow(signalPanel, "Focus Source",   FormatFocusSource(harvest.FocusSrc), TextSecondary);
+                AddFusionRow(signalPanel, "Win Tracking",  FormatKWinStatus(harvest.FocusSrc),
+                    harvest.FocusSrc == "KWinScript" ? ProductiveGreen : AIStatusLearning);
                 AddFusionRow(signalPanel, "Idle",           FormatMs(harvest.IdleMs),      TextSecondary);
                 AddFusionRow(signalPanel, "In Focus",       FormatMs(harvest.FocusedMs),   TextSecondary);
                 {
@@ -1520,9 +1521,16 @@ namespace NudgeTray
             {
                 signalPanel.Children.Add(new TextBlock
                 {
-                    Text       = "Waiting for Harvest Engine data…",
+                    Text       = "Win Tracking: detecting…",
                     FontSize   = 10,
-                    Foreground = new SolidColorBrush(TextTertiary)
+                    Foreground = new SolidColorBrush(Color.FromArgb(120, 255, 193, 7))
+                });
+                signalPanel.Children.Add(new TextBlock
+                {
+                    Text       = "Signal Quality: initializing",
+                    FontSize   = 10,
+                    Foreground = new SolidColorBrush(TextTertiary),
+                    Margin     = new Thickness(0, 2, 0, 0)
                 });
             }
 
@@ -1626,6 +1634,18 @@ namespace NudgeTray
 
             return "degraded signal";
         }
+
+        private static string FormatKWinStatus(string src) => src switch
+        {
+            "KWinScript"              => "KWin Script ✓",
+            "X11Ewmh"                 => "X11 EWMH",
+            "WaylandActivatedProtocol"=> "Wayland Protocol",
+            "SwayIpc"                 => "Sway IPC",
+            "GnomeShell"              => "GNOME Shell",
+            "WindowsApi"              => "Windows API",
+            "HeuristicProcessScan"    => "Process Scan (fallback)",
+            _                         => "detecting…"
+        };
 
         private static string FormatFocusSource(string src) => src switch
         {
