@@ -184,8 +184,8 @@ button.dim-link{background:none;border:none;font:inherit;padding:0;display:inlin
   .tech-section{padding:80px 24px}
   .tech-grid{grid-template-columns:1fr;gap:0}
   .tech-connector{display:none}
-  .tech-connector-v{display:flex;width:2px;height:36px;background:var(--accent-soft);margin:0 auto;position:relative;align-items:center;justify-content:center;flex-shrink:0}
-  .tech-connector-v::after{content:'';position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:6px solid var(--accent-soft)}
+  .tech-connector-v{display:flex;width:2px;height:36px;background:var(--accent);margin:0 auto;position:relative;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 8px var(--accent),0 0 20px rgba(88,166,255,.4)}
+  .tech-connector-v::after{content:'';position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:6px solid var(--accent);filter:drop-shadow(0 0 4px var(--accent))}
   .tech-connector-v .tech-connector-pulse{animation-name:flow-pulse-y}
   .tech-connector-v:last-of-type .tech-connector-pulse{animation-delay:1.5s}
 }
