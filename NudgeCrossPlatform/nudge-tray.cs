@@ -2300,6 +2300,20 @@ namespace NudgeTray
                 // StartMLServices() sets _mlEnabled = true on success, false on failure.
                 StartMLServices();
 
+                // Always restart nudge after cleanup, regardless of ML setup result.
+                // On failure we still need the nudge process running so the countdown
+                // and snapshot cycle keep working.
+                if (_nudgeProcess != null && !_nudgeProcess.HasExited)
+                {
+                    try
+                    {
+                        _nudgeProcess.Kill(entireProcessTree: true);
+                        _nudgeProcess.WaitForExit(2000);
+                    }
+                    catch { }
+                }
+                StartNudge(_intervalMinutes);
+
                 if (!_mlEnabled)
                 {
                     Console.WriteLine("[INFO] AI setup failed — ML not enabled.");
@@ -2310,18 +2324,6 @@ namespace NudgeTray
                 // doesn't leave MlEnabled=true in settings on the next startup.
                 SaveSettings();
 
-                // Restart nudge process with ML flag
-                if (_nudgeProcess != null && !_nudgeProcess.HasExited)
-                {
-                    try
-                    {
-                        _nudgeProcess.Kill(entireProcessTree: true);
-                        _nudgeProcess.WaitForExit(2000);
-                    }
-                    catch { }
-                }
-
-                StartNudge(_intervalMinutes);
                 Console.WriteLine("[INFO] ML mode enabled and nudge restarted");
                 return true;
             }
@@ -2329,6 +2331,8 @@ namespace NudgeTray
             {
                 Console.WriteLine($"[ERROR] Failed to enable ML: {ex.Message}");
                 _mlEnabled = false;
+                // Ensure nudge keeps running even if setup threw
+                try { StartNudge(_intervalMinutes); } catch { }
                 return false;
             }
         }
