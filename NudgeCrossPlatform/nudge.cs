@@ -1022,7 +1022,10 @@ sealed class Nudge
             var len = GetWindowText(hwnd, buf, buf.Length);
             var title = len > 0 ? new string(buf, 0, len) : "";
 
-            GetWindowThreadProcessId(hwnd, out uint pid);
+            uint tid = GetWindowThreadProcessId(hwnd, out uint pid);
+            if (tid == 0)
+                return ("unknown", title);
+
             try
             {
                 using var proc = Process.GetProcessById((int)pid);
