@@ -1013,7 +1013,7 @@ sealed class Nudge
         public (string app, string title) GetForegroundAppWithTitle()
         {
             var hwnd = GetForegroundWindow();
-            if (hwnd == IntPtr.Zero)
+            if (hwnd == IntPtr.Zero || !IsWindow(hwnd))
                 return ("unknown", "");
 
             var buf = new char[512];
@@ -1027,6 +1027,8 @@ sealed class Nudge
             try
             {
                 using var proc = Process.GetProcessById((int)pid);
+                if (proc.HasExited)
+                    return ("unknown", title);
                 return (proc.ProcessName.ToLowerInvariant(), title);
             }
             catch
@@ -1048,6 +1050,9 @@ sealed class Nudge
 
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll")]
+        private static extern bool IsWindow(IntPtr hWnd);
 
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         private static extern int GetWindowText(IntPtr hWnd, char[] text, int count);
