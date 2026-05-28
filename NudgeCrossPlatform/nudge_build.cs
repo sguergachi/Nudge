@@ -88,7 +88,6 @@ sealed class Nudge
     const int UDP_PORT = 45001;
     const int RESPONSE_TIMEOUT_MS = 60000;
     const double ML_CONFIDENCE_THRESHOLD = 0.85;
-    const int MIN_SAMPLES_THRESHOLD = 100;
     static int ML_CHECK_INTERVAL_MS = 60000;
     const int ACTIVITY_LOG_INTERVAL_MS = 60000;
     const string ML_HOST = "127.0.0.1";
@@ -96,7 +95,6 @@ sealed class Nudge
     static int SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;
     static bool _customInterval;
     static bool _mlEnabled;
-    static bool _forceTrainedModel;
     static bool _mlAvailable;
 
 #if !WINDOWS
@@ -1155,7 +1153,6 @@ sealed class Nudge
             ML_CHECK_INTERVAL_MS = mlSeconds * 1000;
         }
         _mlEnabled = parsed.MlEnabled;
-        _forceTrainedModel = parsed.ForceTrainedModel;
         if (!string.IsNullOrWhiteSpace(parsed.CsvPath))
         {
             _csvPath = parsed.CsvPath;
@@ -1192,14 +1189,7 @@ sealed class Nudge
             Info($"  {Color.BGREEN}ML-powered adaptive notifications enabled{Color.RESET}");
             Info($"  Confidence threshold: {ML_CONFIDENCE_THRESHOLD*100:F0}%");
             Info($"  AI check frequency: {ML_CHECK_INTERVAL_MS/1000} seconds");
-            if (_forceTrainedModel)
-            {
-                Warning($"  {Color.BYELLOW}Force trained model: enabled{Color.RESET} (ignoring sample threshold)");
-            }
-            else
-            {
-                Info($"  Minimum samples required: {MIN_SAMPLES_THRESHOLD}");
-            }
+            Info($"  Pretrained model: active from first launch, refined as samples accumulate");
         }
         Info($"  Respond with: {Color.BCYAN}nudge-notify YES{Color.RESET} or {Color.BCYAN}nudge-notify NO{Color.RESET}");
         Console.WriteLine();
@@ -1559,7 +1549,7 @@ sealed class Nudge
         Console.WriteLine($"  {Color.BOLD}ML Low-Confidence:{Color.RESET}     {_mlLowConfidenceSkips} {Color.DIM}(deferred to interval){Color.RESET}");
         Console.WriteLine($"  {Color.BOLD}Interval Fallbacks:{Color.RESET}     {_intervalTriggeredSnapshots} {Color.DIM}(ML disabled/unavailable/low conf){Color.RESET}");
         Console.WriteLine();
-        Console.WriteLine($"  {Color.BOLD}Training Samples:{Color.RESET}       {_mlSampleCount} total ({_mlProductiveSamples} productive, {_mlUnproductiveSamples} unproductive) {Color.DIM}(min required: {MIN_SAMPLES_THRESHOLD}){Color.RESET}");
+        Console.WriteLine($"  {Color.BOLD}Training Samples:{Color.RESET}       {_mlSampleCount} total ({_mlProductiveSamples} productive, {_mlUnproductiveSamples} unproductive){Color.RESET}");
         Console.WriteLine();
 
         if (totalMLDecisions > 0)
@@ -2077,13 +2067,6 @@ sealed class Nudge
         // ML not available — let the regular interval fallback handle notification timing
         if (!_mlAvailable)
         {
-            return false;
-        }
-
-        // Require minimum training samples before trusting ML predictions
-        if (!_forceTrainedModel && _mlSampleCount < MIN_SAMPLES_THRESHOLD)
-        {
-            Dim($"  ML: {_mlSampleCount} samples < {MIN_SAMPLES_THRESHOLD} minimum — using interval fallback");
             return false;
         }
 

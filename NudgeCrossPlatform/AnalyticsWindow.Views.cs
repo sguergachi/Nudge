@@ -241,7 +241,7 @@ namespace NudgeTray
             if (_aiTabActive)
             {
                 _contentPanel.Children.Clear();
-                _contentPanel.Children.Add(CreateAILiveView(this));
+                _contentPanel.Children.Add(CreateAILiveView());
                 Dispatcher.UIThread.Post(ClampContentScrollOffset, DispatcherPriority.Background);
                 return;
             }
