@@ -11,6 +11,9 @@ public sealed class NudgeWindowsPlatformTests
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
 
+    [DllImport("user32.dll")]
+    private static extern bool IsWindow(IntPtr hWnd);
+
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int GetWindowText(IntPtr hWnd, char[] text, int count);
 
@@ -63,6 +66,25 @@ public sealed class NudgeWindowsPlatformTests
 
         Assert.True(pid > 0);
         Assert.True(threadId > 0);
+    }
+
+    [Fact]
+    public void IsWindow_ForegroundWindow_ReturnsTrue()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        var hwnd = GetForegroundWindow();
+        if (hwnd == IntPtr.Zero) return;
+
+        Assert.True(IsWindow(hwnd));
+    }
+
+    [Fact]
+    public void IsWindow_ZeroHandle_ReturnsFalse()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        Assert.False(IsWindow(IntPtr.Zero));
     }
 
     [Fact]
