@@ -147,11 +147,13 @@ namespace NudgeTray
             Height = 640;
             CanResize = false;
             ShowInTaskbar = false;
+            WindowStartupLocation = WindowStartupLocation.Manual;
             WindowDecorations = WindowDecorations.None;
             Title = "Nudge";
             Background = Brushes.Transparent;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Focusable = true;
+            PositionNearBottomRight();
 
             // Live AI Brain tab refresh — only runs when AI tab is active
             _aiLiveRefreshTimer = new DispatcherTimer
@@ -288,7 +290,7 @@ namespace NudgeTray
         {
             var screen = Screens.Primary;
             if (screen == null) return;
-            double scale = RenderScaling;
+            double scale = screen.Scaling;
             Position = new PixelPoint(
                 screen.WorkingArea.Right - (int)(Width * scale + 20 * scale),
                 screen.WorkingArea.Bottom - (int)(Height * scale + 20 * scale)
@@ -381,7 +383,7 @@ namespace NudgeTray
                 Child = _contentPanel,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Stretch,
-                Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0))
+                Background = Brushes.Transparent
             };
 
             _contentViewport.PointerWheelChanged += (s, e) =>
