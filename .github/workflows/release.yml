@@ -20,15 +20,17 @@ jobs:
 
       - name: Extract version and check if release needed
         id: ver
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION=$(grep -oP 'const string VERSION = "\K[^"]+' NudgeCrossPlatform/nudge-tray.cs)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          if git ls-remote --tags origin "refs/tags/v$VERSION" | grep -q "v$VERSION"; then
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "should_release=false" >> "$GITHUB_OUTPUT"
-            echo "Tag v$VERSION already exists — skipping release."
+            echo "Release v$VERSION already exists — skipping release."
           else
             echo "should_release=true" >> "$GITHUB_OUTPUT"
-            echo "New version v$VERSION — will create release."
+            echo "No release for v$VERSION — will build and release."
           fi
 
   build-windows:
@@ -317,8 +319,8 @@ jobs:
 
           cat .github/release-notes-footer.md >> release-notes.md
 
-          git tag "v$VERSION"
-          git push origin "v$VERSION"
+          git tag "v$VERSION" 2>/dev/null || echo "Tag v$VERSION already exists, reusing it"
+          git push origin "v$VERSION" 2>/dev/null || echo "Tag v$VERSION already pushed, continuing"
           gh release create "v$VERSION" \
             --title "Nudge v$VERSION" \
             --notes-file release-notes.md \
