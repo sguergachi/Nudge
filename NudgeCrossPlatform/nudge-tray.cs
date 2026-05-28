@@ -48,7 +48,7 @@ namespace NudgeTray
     sealed class Program
     {
         const int UDP_PORT = 45001;
-        const string VERSION = "1.6.9";
+        const string VERSION = "1.6.10";
         const string NudgeExeName = "nudge";
         const string NudgeDllName = "nudge.dll";
         static Process? _nudgeProcess;
