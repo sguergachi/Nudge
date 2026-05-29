@@ -302,7 +302,7 @@ namespace NudgeTray
             Program.UpdateSettings(mlInterval: mlSec, interval: intMin);
         }
 
-        private StackPanel BuildSlider(string label, string desc, int currentVal, int min, int max,
+        private static StackPanel BuildSlider(string label, string desc, int currentVal, int min, int max,
             Func<int, string> formatValue, out Slider slider)
         {
             var stack = new StackPanel { Spacing = 4 };

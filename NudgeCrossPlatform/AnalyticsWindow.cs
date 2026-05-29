@@ -101,8 +101,6 @@ namespace NudgeTray
         private const string StrWaitingFirstCheck = "Waiting for first check…";
         private const string StrWaitingFirstAICheck = "Waiting for first AI check…";
         private const string StrCheckingNow = "Checking now…";
-        private const string StrNoModelAvailable = "No model available yet";
-        private const string StrNoModelSubtext = "AI predictions will begin once training completes";
         private const string StrEnableAI = "Enable AI";
         private const string StrActive = "Active";
         private const string StrDetails = "Details";
@@ -150,11 +148,13 @@ namespace NudgeTray
             Height = 640;
             CanResize = false;
             ShowInTaskbar = false;
+            WindowStartupLocation = WindowStartupLocation.Manual;
             WindowDecorations = WindowDecorations.None;
             Title = "Nudge";
             Background = Brushes.Transparent;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Focusable = true;
+            PositionNearBottomRight();
 
             // Live AI Brain tab refresh — only runs when AI tab is active
             _aiLiveRefreshTimer = new DispatcherTimer
@@ -291,7 +291,7 @@ namespace NudgeTray
         {
             var screen = Screens.Primary;
             if (screen == null) return;
-            double scale = RenderScaling;
+            double scale = screen.Scaling;
             Position = new PixelPoint(
                 screen.WorkingArea.Right - (int)(Width * scale + 20 * scale),
                 screen.WorkingArea.Bottom - (int)(Height * scale + 20 * scale)
@@ -384,7 +384,7 @@ namespace NudgeTray
                 Child = _contentPanel,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Stretch,
-                Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0))
+                Background = Brushes.Transparent
             };
 
             _contentViewport.PointerWheelChanged += (s, e) =>
@@ -1466,6 +1466,15 @@ namespace NudgeTray
                 FontWeight = FontWeight.Medium,
                 Foreground = new SolidColorBrush(fusionColor)
             });
+            if (!string.IsNullOrEmpty(qualityReason))
+            {
+                qualityRow.Children.Add(new TextBlock
+                {
+                    Text       = $"({qualityReason})",
+                    FontSize   = 9,
+                    Foreground = new SolidColorBrush(Color.FromArgb(180, fusionColor.R, fusionColor.G, fusionColor.B))
+                });
+            }
             qualityRow.Children.Add(new TextBlock
             {
                 Text       = "· In Focus Now",
@@ -1490,9 +1499,7 @@ namespace NudgeTray
             var signalPanel = new StackPanel { Spacing = 5, IsVisible = _sensorSignalsOpen, Margin = new Thickness(0, 6, 0, 2) };
             if (harvest != null)
             {
-                AddFusionRow(signalPanel, "Signal Quality",
-                    string.IsNullOrEmpty(qualityReason) ? qualityLabel : $"{qualityLabel} ({qualityReason})",
-                    fusionColor);
+                AddFusionRow(signalPanel, "Signal Quality", qualityLabel, fusionColor);
                 AddFusionRow(signalPanel, "Win Tracking",  FormatKWinStatus(harvest.FocusSrc),
                     harvest.FocusSrc == "KWinScript" ? ProductiveGreen : AIStatusLearning);
                 AddFusionRow(signalPanel, "Idle",           FormatMs(harvest.IdleMs),      TextSecondary);
@@ -1800,8 +1807,6 @@ namespace NudgeTray
         /// </summary>
         private static Border CreatePredictionHistorySection(IReadOnlyList<MLLiveEvent> events, MLLiveEvent? latest)
         {
-            bool hasModel = TrainerState.ModelVersion > 0 || TrainerState.LastAccuracy >= 0f;
-
             Color mlColor = latest == null ? TextTertiary
                 : latest.Confidence < 0.5 ? AIStatusLearning
                 : latest.Productive       ? ProductiveGreen
@@ -1821,9 +1826,9 @@ namespace NudgeTray
             });
             var cdLabel = new TextBlock
             {
-                Text = hasModel ? StrWaitingFirstCheck : StrNoModelAvailable,
+                Text = StrWaitingFirstCheck,
                 FontSize = 10,
-                Foreground = new SolidColorBrush(hasModel ? TextTertiary : AIStatusLearning),
+                Foreground = new SolidColorBrush(TextTertiary),
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -1831,108 +1836,116 @@ namespace NudgeTray
             headerGrid.Children.Add(cdLabel);
             panel.Children.Add(headerGrid);
 
-            if (!hasModel)
+            // ── Countdown progress bar ────────────────────────────────────────
+            var barContainer = new Border
             {
-                // ── Disabled state: no model trained yet ─────────────────────
-                panel.Children.Add(new TextBlock
-                {
-                    Text = StrNoModelSubtext,
-                    FontSize = 9,
-                    Foreground = new SolidColorBrush(TextTertiary),
-                    TextWrapping = TextWrapping.Wrap,
-                    Opacity = 0.7
-                });
-
-                var emptyBar = new Border
-                {
-                    Height = 4,
-                    CornerRadius = new CornerRadius(2),
-                    Background = new SolidColorBrush(ProgressBarBg),
-                    HorizontalAlignment = HorizontalAlignment.Stretch,
-                    Opacity = 0.4
-                };
-                panel.Children.Add(emptyBar);
-            }
-            else
+                Height = 4,
+                CornerRadius = new CornerRadius(2),
+                Background = new SolidColorBrush(ProgressBarBg),
+                ClipToBounds = true,
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            Action rebuildProgressBar = () =>
             {
-                // ── Countdown progress bar ────────────────────────────────────
-                const long totalInterval = 60;
+                long nextAt = LiveAIState.NextCheckAt;
+                long nowSec = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                long total = Math.Max(10, Program.MlCheckIntervalSeconds);
+                long secLeft = nextAt > 0 ? Math.Max(0, nextAt - nowSec) : 0;
+                long secDone = Math.Max(0, total - secLeft);
+                double prog = nextAt > 0
+                    ? Math.Min(1.0, Math.Max(0.0, (double)secDone / total))
+                    : 0;
 
-                var barContainer = new Border
+                if (nextAt > 0 && secLeft == 0)
                 {
-                    Height = 4,
-                    CornerRadius = new CornerRadius(2),
-                    Background = new SolidColorBrush(ProgressBarBg),
-                    ClipToBounds = true,
-                    HorizontalAlignment = HorizontalAlignment.Stretch
-                };
-                Action rebuildProgressBar = () =>
+                    barContainer.Child = CreateIndeterminateBar();
+                }
+                else
                 {
-                    long nextAt = LiveAIState.NextCheckAt;
-                    long nowSec = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                    long secLeft = nextAt > 0 ? Math.Max(0, nextAt - nowSec) : 0;
-                    long secDone = totalInterval - secLeft;
-                    double prog = nextAt > 0
-                        ? Math.Min(1.0, Math.Max(0.0, (double)secDone / totalInterval))
-                        : 0;
-
-                    if (nextAt > 0 && secLeft == 0)
+                    var barGrid = new Grid();
+                    if (prog >= 0.995)
                     {
-                        barContainer.Child = CreateIndeterminateBar();
+                        barGrid.ColumnDefinitions = new ColumnDefinitions("*");
+                        barGrid.Children.Add(new Border
+                        {
+                            Background = new SolidColorBrush(PrimaryBlue),
+                            CornerRadius = new CornerRadius(2),
+                            HorizontalAlignment = HorizontalAlignment.Stretch
+                        });
                     }
-                    else
+                    else if (prog > 0.005)
                     {
-                        var barGrid = new Grid();
-                        if (prog >= 0.995)
+                        double rem = 1.0 - prog;
+                        barGrid.ColumnDefinitions = new ColumnDefinitions($"{prog * 100:F1}*,{rem * 100:F1}*");
+                        var fill = new Border
                         {
-                            barGrid.ColumnDefinitions = new ColumnDefinitions("*");
-                            barGrid.Children.Add(new Border
-                            {
-                                Background = new SolidColorBrush(PrimaryBlue),
-                                CornerRadius = new CornerRadius(2),
-                                HorizontalAlignment = HorizontalAlignment.Stretch
-                            });
-                        }
-                        else if (prog > 0.005)
-                        {
-                            double rem = 1.0 - prog;
-                            barGrid.ColumnDefinitions = new ColumnDefinitions($"{prog * 100:F1}*,{rem * 100:F1}*");
-                            var fill = new Border
-                            {
-                                Background = new SolidColorBrush(PrimaryBlue),
-                                CornerRadius = new CornerRadius(2, 0, 0, 2),
-                                HorizontalAlignment = HorizontalAlignment.Stretch
-                            };
-                            Grid.SetColumn(fill, 0);
-                            barGrid.Children.Add(fill);
-                        }
-                        barContainer.Child = barGrid;
+                            Background = new SolidColorBrush(PrimaryBlue),
+                            CornerRadius = new CornerRadius(2, 0, 0, 2),
+                            HorizontalAlignment = HorizontalAlignment.Stretch
+                        };
+                        Grid.SetColumn(fill, 0);
+                        barGrid.Children.Add(fill);
                     }
-                };
-                rebuildProgressBar();
-                panel.Children.Add(barContainer);
+                    barContainer.Child = barGrid;
+                }
+            };
+            panel.Children.Add(barContainer);
 
-                // ── Live countdown update every second (text only) ───────────
-                Action updateCountdown = () =>
+            // ── Live countdown update every second (bar + text) ──────────────
+            Action tick = () =>
+            {
+                long nextAt = LiveAIState.NextCheckAt;
+                long nowSec = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                long total = Math.Max(10, Program.MlCheckIntervalSeconds);
+                long secLeft = nextAt > 0 ? Math.Max(0, nextAt - nowSec) : 0;
+                double prog = nextAt > 0
+                    ? Math.Min(1.0, Math.Max(0.0, (double)(total - secLeft) / total))
+                    : 0;
+
+                if (nextAt > 0 && secLeft == 0)
+                    barContainer.Child = CreateIndeterminateBar();
+                else
                 {
-                    long nextAt = LiveAIState.NextCheckAt;
-                    long nowSec = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                    long secLeft = nextAt > 0 ? Math.Max(0, nextAt - nowSec) : 0;
+                    var barGrid = new Grid();
+                    if (prog >= 0.995)
+                    {
+                        barGrid.ColumnDefinitions = new ColumnDefinitions("*");
+                        barGrid.Children.Add(new Border
+                        {
+                            Background = new SolidColorBrush(PrimaryBlue),
+                            CornerRadius = new CornerRadius(2),
+                            HorizontalAlignment = HorizontalAlignment.Stretch
+                        });
+                    }
+                    else if (prog > 0.005)
+                    {
+                        double rem = 1.0 - prog;
+                        barGrid.ColumnDefinitions = new ColumnDefinitions($"{prog * 100:F1}*,{rem * 100:F1}*");
+                        var fill = new Border
+                        {
+                            Background = new SolidColorBrush(PrimaryBlue),
+                            CornerRadius = new CornerRadius(2, 0, 0, 2),
+                            HorizontalAlignment = HorizontalAlignment.Stretch
+                        };
+                        Grid.SetColumn(fill, 0);
+                        barGrid.Children.Add(fill);
+                    }
+                    barContainer.Child = barGrid;
+                }
 
-                    cdLabel.Text = nextAt == 0 ? StrWaitingFirstCheck
-                        : secLeft == 0 ? StrCheckingNow
-                        : $"{secLeft / 60}:{secLeft % 60:D2} until next check";
-                    cdLabel.HorizontalAlignment = nextAt == 0
-                        ? HorizontalAlignment.Left
-                        : HorizontalAlignment.Right;
-                };
-                updateCountdown();
+                cdLabel.Text = nextAt == 0 ? StrWaitingFirstCheck
+                    : secLeft == 0 ? "next check pending…"
+                    : $"{secLeft / 60}:{secLeft % 60:D2} until next check";
+                cdLabel.HorizontalAlignment = nextAt == 0
+                    ? HorizontalAlignment.Left
+                    : HorizontalAlignment.Right;
+            };
+            tick();
 
-                var countdownTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-                countdownTimer.Tick += (_, _) => updateCountdown();
-                countdownTimer.Start();
-                barContainer.Unloaded += (_, _) => countdownTimer.Stop();
-            }
+            var countdownTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            countdownTimer.Tick += (_, _) => tick();
+            countdownTimer.Start();
+            barContainer.Unloaded += (_, _) => countdownTimer.Stop();
 
             // ── Latest score row ──────────────────────────────────────────────
             if (latest != null)
@@ -2739,23 +2752,8 @@ namespace NudgeTray
             {
                 enableBtn.IsEnabled = false;
                 enableBtn.Content = "Starting AI…";
-                descText.Text = "Setting up AI — this can take 1–3 minutes on first run…";
-
-                var progressTimer = new Avalonia.Threading.DispatcherTimer
-                {
-                    Interval = TimeSpan.FromMilliseconds(400)
-                };
-                progressTimer.Tick += (_, _) =>
-                {
-                    var step = Program.MlLoadingStep;
-                    if (!string.IsNullOrEmpty(step))
-                        descText.Text = step;
-                };
-                progressTimer.Start();
-
+                descText.Text = "Installing Python dependencies and starting ML services…";
                 bool success = await Task.Run(() => Program.RestartWithML());
-                progressTimer.Stop();
-
                 if (!success)
                 {
                     enableBtn.IsEnabled = true;

@@ -128,6 +128,7 @@ footer{padding:40px;display:flex;justify-content:space-between;align-items:cente
   .feature-content{text-align:left;max-width:100%}
   .feature-visual{max-width:480px;margin:0 auto}
   .feature-visual img,.feature-rev .feature-visual img{transform:none}
+  #brain .feature-content{order:-1}
   .feature-visual:hover img{transform:translateY(-6px)}
   .download{padding:100px 24px}
   .download-actions{flex-direction:column;align-items:center}

@@ -90,6 +90,43 @@ public sealed class NudgeCliParserTests
     }
 
     [Fact]
+    public void ParseNudgeArgs_MlIntervalInSeconds_ParsesAsSeconds()
+    {
+        // --ml-interval now accepts seconds (not minutes)
+        var parsed = NudgeCoreLogic.ParseNudgeArgs(["--ml-interval", "30"]);
+        Assert.Equal(30, parsed.MlCheckIntervalSeconds);
+    }
+
+    [Fact]
+    public void ParseNudgeArgs_MlIntervalWithMlFlag_SetsBoth()
+    {
+        var parsed = NudgeCoreLogic.ParseNudgeArgs(["--ml", "--ml-interval", "5"]);
+        Assert.True(parsed.MlEnabled);
+        Assert.Equal(5, parsed.MlCheckIntervalSeconds);
+    }
+
+    [Fact]
+    public void ParseNudgeArgs_MlIntervalWithNonNumericValue_DoesNotSetInterval()
+    {
+        var parsed = NudgeCoreLogic.ParseNudgeArgs(["--ml-interval", "bad"]);
+        Assert.Null(parsed.MlCheckIntervalSeconds);
+    }
+
+    [Fact]
+    public void ParseNudgeArgs_MlIntervalAtEndOfArgs_DoesNotSetInterval()
+    {
+        var parsed = NudgeCoreLogic.ParseNudgeArgs(["--ml-interval"]);
+        Assert.Null(parsed.MlCheckIntervalSeconds);
+    }
+
+    [Fact]
+    public void ParseNudgeArgs_MlIntervalDefault_IsNull()
+    {
+        var parsed = NudgeCoreLogic.ParseNudgeArgs([]);
+        Assert.Null(parsed.MlCheckIntervalSeconds);
+    }
+
+    [Fact]
     public void ParseNudgeArgs_HelpTakesPrecedenceOverOtherFlags()
     {
         // --help should short-circuit, even when other flags precede it

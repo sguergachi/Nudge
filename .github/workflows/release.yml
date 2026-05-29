@@ -20,15 +20,17 @@ jobs:
 
       - name: Extract version and check if release needed
         id: ver
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION=$(grep -oP 'const string VERSION = "\K[^"]+' NudgeCrossPlatform/nudge-tray.cs)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          if git ls-remote --tags origin "refs/tags/v$VERSION" | grep -q "v$VERSION"; then
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "should_release=false" >> "$GITHUB_OUTPUT"
-            echo "Tag v$VERSION already exists — skipping release."
+            echo "Release v$VERSION already exists — skipping release."
           else
             echo "should_release=true" >> "$GITHUB_OUTPUT"
-            echo "New version v$VERSION — will create release."
+            echo "No release for v$VERSION — will build and release."
           fi
 
   build-windows:
@@ -272,6 +274,8 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - uses: actions/download-artifact@v8
         continue-on-error: true
@@ -302,33 +306,21 @@ jobs:
           echo "Release assets: ${ASSETS[*]}"
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "v$VERSION"
-          git push origin "v$VERSION"
-          cat > release-notes.md << 'NOTES'
-          ## Install
 
-          ### Windows — Setup (recommended)
-          Download **Nudge-win-Setup.exe** and run it. Installs to your user folder — no admin or UAC prompt required. Adds a Start Menu shortcut.
+          # Generate changelog from commits since the previous release tag
+          PREV_TAG=$(git tag --sort=-version:refname | grep "^v" | head -1)
+          if [ -n "$PREV_TAG" ]; then
+            printf "## What's Changed\n\n" > release-notes.md
+            git log --pretty=format:"- %s" "$PREV_TAG..HEAD" | grep -v "^- $" | head -50 >> release-notes.md
+            printf "\n\n---\n\n" >> release-notes.md
+          else
+            > release-notes.md
+          fi
 
-          ### Windows — MSI (system-wide / enterprise)
-          Download **Nudge-Setup.msi** for a system-wide install (requires admin).
+          cat .github/release-notes-footer.md >> release-notes.md
 
-          ### Windows — Portable
-          Download **nudge-win-x64.zip**, extract, and run **nudge-tray.exe**.
-
-          ### Linux
-          1. Download **nudge-linux-installer.run** and run: `chmod +x nudge-linux-installer.run && ./nudge-linux-installer.run`
-          2. Or use **nudge-linux-x64.tar.gz**: extract and run `./install-linux-app.sh`
-
-          ### ML features
-          When you enable ML mode (in Settings or via `--ml`), Nudge automatically:
-          - Creates a Python virtual environment in `~/.nudge/venv/`
-          - Installs scikit-learn, joblib, pandas, and numpy
-          - No manual pip install needed
-
-          ---
-          **Feedback?** [Open an issue](https://github.com/sguergachi/Nudge/issues/new) — every report shapes what gets built next.
-          NOTES
+          git tag "v$VERSION" 2>/dev/null || echo "Tag v$VERSION already exists, reusing it"
+          git push origin "v$VERSION" 2>/dev/null || echo "Tag v$VERSION already pushed, continuing"
           gh release create "v$VERSION" \
             --title "Nudge v$VERSION" \
             --notes-file release-notes.md \
