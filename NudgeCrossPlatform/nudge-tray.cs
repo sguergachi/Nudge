@@ -310,7 +310,15 @@ namespace NudgeTray
 
                     if (!_uiAuditMode)
                     {
-                        StartNudge(interval);
+                        try
+                        {
+                            StartNudge(interval);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"✗ Fatal: could not start Nudge Harvest on launch: {ex.Message}");
+                            Environment.Exit(1);
+                        }
 #if WINDOWS
                         InitializeNotifications();
 #endif
@@ -1112,18 +1120,29 @@ namespace NudgeTray
 
                 if (PlatformConfig.IsWindows)
                 {
-                    // Windows: use taskkill
+                    // Windows: use taskkill for harvest process
                     try
                     {
                         var psi = new ProcessStartInfo
                         {
                             FileName = "taskkill",
-                            Arguments = $"/F /IM {NudgeExeName}{(PlatformConfig.IsWindows ? ".exe" : "")} /T",
+                            Arguments = $"/F /IM {NudgeExeName}.exe /T",
                             CreateNoWindow = true
                         };
                         Process.Start(psi)?.WaitForExit(2000);
                     }
                     catch { /* Ignore - processes might not exist */ }
+
+                    // Kill any leftover ML Python processes by reference
+                    foreach (var mlProc in new[] { _mlInferenceProcess, _mlTrainerProcess })
+                    {
+                        if (mlProc != null && !mlProc.HasExited)
+                        {
+                            try { mlProc.Kill(entireProcessTree: true); mlProc.WaitForExit(2000); } catch { }
+                        }
+                    }
+                    _mlInferenceProcess = null;
+                    _mlTrainerProcess = null;
                 }
                 else
                 {
@@ -1331,7 +1350,13 @@ namespace NudgeTray
             proc.Start();
             proc.BeginOutputReadLine();
             proc.BeginErrorReadLine();
-            proc.WaitForExit(timeoutMs);
+            bool finished = proc.WaitForExit(timeoutMs);
+            if (!finished)
+            {
+                try { proc.Kill(entireProcessTree: true); } catch { }
+                Console.WriteLine($"    ✗ pip install timed out after {timeoutMs / 1000}s");
+                return false;
+            }
             return proc.ExitCode == 0;
         }
 
@@ -1745,7 +1770,7 @@ namespace NudgeTray
             catch (Exception ex)
             {
                 Console.WriteLine($"✗ Failed to start Nudge Harvest: {ex.Message}");
-                Environment.Exit(1);
+                throw;
             }
         }
 
