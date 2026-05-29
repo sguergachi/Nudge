@@ -154,6 +154,8 @@ namespace NudgeTray
             Background = Brushes.Transparent;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Focusable = true;
+            Opacity = 0;
+            Position = new PixelPoint(-32000, -32000); // Keep off-screen until OnOpened; avoids DWM ghost at (0,0)
             PositionNearBottomRight();
 
             // Live AI Brain tab refresh — only runs when AI tab is active
@@ -180,6 +182,7 @@ namespace NudgeTray
         {
             base.OnOpened(e);
             PositionNearBottomRight();
+            Opacity = 1;
             StartCountdown();
         }
 
