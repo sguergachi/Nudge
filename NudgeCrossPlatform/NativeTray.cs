@@ -28,9 +28,10 @@ static class NativeTray
     const int IDM_STATUS = 0;
     const int IDM_ANALYTICS = 1;
     const int IDM_SETTINGS = 2;
-    const int IDM_FEEDBACK = 3;
-    const int IDM_UPDATES = 4;
-    const int IDM_QUIT = 5;
+    const int IDM_LOGS = 3;
+    const int IDM_FEEDBACK = 4;
+    const int IDM_UPDATES = 5;
+    const int IDM_QUIT = 6;
 
     static string _statusText = "Nudge Tracker";
     static string _updateText = "Check for Updates";
@@ -41,6 +42,7 @@ static class NativeTray
     public static event Action? LeftClicked;
     public static event Action? AnalyticsClicked;
     public static event Action? SettingsClicked;
+    public static event Action? LogsClicked;
     public static event Action? FeedbackClicked;
     public static event Action? UpdatesClicked;
     public static event Action? QuitClicked;
@@ -137,6 +139,7 @@ static class NativeTray
                 {
                     case IDM_ANALYTICS: AnalyticsClicked?.Invoke(); break;
                     case IDM_SETTINGS: SettingsClicked?.Invoke(); break;
+                    case IDM_LOGS: LogsClicked?.Invoke(); break;
                     case IDM_FEEDBACK: FeedbackClicked?.Invoke(); break;
                     case IDM_UPDATES: UpdatesClicked?.Invoke(); break;
                     case IDM_QUIT: QuitClicked?.Invoke(); break;
@@ -161,6 +164,7 @@ static class NativeTray
         AppendMenuW(hMenu, MF_STRING, IDM_ANALYTICS, "📊 Analytics");
         AppendMenuW(hMenu, MF_SEPARATOR, 0, null);
         AppendMenuW(hMenu, MF_STRING, IDM_SETTINGS, "Settings");
+        AppendMenuW(hMenu, MF_STRING, IDM_LOGS, "View Logs Folder");
         AppendMenuW(hMenu, MF_SEPARATOR, 0, null);
         AppendMenuW(hMenu, MF_STRING, IDM_FEEDBACK, "Send Feedback");
         AppendMenuW(hMenu, MF_STRING, IDM_UPDATES, _updateText);

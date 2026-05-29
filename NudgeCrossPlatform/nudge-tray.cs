@@ -786,6 +786,14 @@ namespace NudgeTray
                 try { ShowSettingsWindow(); }
                 catch (Exception ex) { Console.WriteLine($"[ERROR] Settings handler failed: {ex.Message}"); }
             };
+            NativeTray.LogsClicked += () =>
+            {
+                try
+                {
+                    Process.Start(new ProcessStartInfo(PlatformConfig.DataDirectory) { UseShellExecute = true });
+                }
+                catch (Exception ex) { Console.WriteLine($"[ERROR] Could not open logs folder: {ex.Message}"); }
+            };
             NativeTray.FeedbackClicked += () =>
             {
                 try
@@ -933,6 +941,20 @@ namespace NudgeTray
                     }
                 };
                 menu.Add(settingsItem);
+
+                var logsItem = new NativeMenuItem { Header = "View Logs Folder" };
+                logsItem.Click += (s, e) =>
+                {
+                    try
+                    {
+                        Process.Start(new ProcessStartInfo(PlatformConfig.DataDirectory) { UseShellExecute = true });
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[ERROR] Could not open logs folder: {ex.Message}");
+                    }
+                };
+                menu.Add(logsItem);
 
                 menu.Add(new NativeMenuItemSeparator());
 
