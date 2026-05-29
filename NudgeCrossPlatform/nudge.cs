@@ -49,6 +49,7 @@ interface IPlatformService
     string GetForegroundApp();
     (string app, string title) GetForegroundAppWithTitle();
     int GetIdleTime();
+    PresenceState GetPresenceState();
 }
 
 sealed class Nudge
@@ -831,6 +832,27 @@ sealed class Nudge
             }
         }
 
+        public PresenceState GetPresenceState()
+        {
+            // Try PipeWire first — covers mic, camera, and screen-share in one pass.
+            if (CommandExists("pw-dump"))
+            {
+                string pwOut = NudgeCoreLogic.RunCommand("pw-dump", "", timeoutMs: 4000);
+                if (!string.IsNullOrWhiteSpace(pwOut))
+                    return PipeWireParser.Parse(pwOut);
+            }
+
+            // Fall back to PulseAudio for mic detection (no screen-share signal).
+            if (CommandExists("pactl"))
+            {
+                string pactlOut = NudgeCoreLogic.RunCommand("pactl", "list source-outputs", timeoutMs: 3000);
+                bool micActive = PulseAudioParser.HasActiveCaptureStream(pactlOut);
+                return new PresenceState(micActive, false, false, PresenceSource.PulseAudio);
+            }
+
+            return PresenceState.Unavailable;
+        }
+
         private static string DetectActiveProcessKDE()
         {
             try
@@ -1043,6 +1065,64 @@ sealed class Nudge
             return 0;
         }
 
+        public PresenceState GetPresenceState()
+        {
+#if WINDOWS
+            bool mic = IsCapabilityActive("microphone");
+            bool cam = IsCapabilityActive("webcam");
+            return new PresenceState(mic, cam, false, PresenceSource.WindowsRegistry);
+#else
+            return PresenceState.Unavailable;
+#endif
+        }
+
+#if WINDOWS
+        private static bool IsCapabilityActive(string capability)
+        {
+            const string storePath =
+                @"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore";
+            try
+            {
+                using var root = Microsoft.Win32.Registry.CurrentUser.OpenSubKey($@"{storePath}\{capability}");
+                return root != null && AnySubkeyActive(root);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool AnySubkeyActive(Microsoft.Win32.RegistryKey root)
+        {
+            foreach (string name in root.GetSubKeyNames())
+            {
+                using var sub = root.OpenSubKey(name);
+                if (sub == null) continue;
+
+                // LastUsedTimeStop == 0 means the capability is currently in use.
+                if (IsLastUsedTimeZero(sub)) return true;
+
+                // UWP apps nest their entries under a "NonPackaged" subkey.
+                using var nonPkg = sub.OpenSubKey("NonPackaged");
+                if (nonPkg != null)
+                {
+                    foreach (string appName in nonPkg.GetSubKeyNames())
+                    {
+                        using var app = nonPkg.OpenSubKey(appName);
+                        if (app != null && IsLastUsedTimeZero(app)) return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private static bool IsLastUsedTimeZero(Microsoft.Win32.RegistryKey key)
+        {
+            object? val = key.GetValue("LastUsedTimeStop");
+            return val is long l && l == 0;
+        }
+#endif
+
         public void Dispose() { }
 
         [DllImport("user32.dll")]
@@ -1073,6 +1153,7 @@ sealed class Nudge
     static StreamWriter? _csvFile;
     static StreamWriter? _activityLogFile;
     static readonly ActivityFeatureTracker FeatureTracker = new();
+    static bool _meetingSuppression = true;
 
     // Activity tracking
     static string _currentApp = "";
@@ -1154,6 +1235,7 @@ sealed class Nudge
         }
         _mlEnabled = parsed.MlEnabled;
         _forceTrainedModel = parsed.ForceTrainedModel;
+        _meetingSuppression = parsed.MeetingSuppression;
         if (!string.IsNullOrWhiteSpace(parsed.CsvPath))
         {
             _csvPath = parsed.CsvPath;
@@ -1505,18 +1587,37 @@ sealed class Nudge
                         Console.WriteLine($"MLDATA:{JsonSerializer.Serialize(intEvt, NudgeJsonContext.Default.MLLiveEvent)}");
                     }
 
-                    TakeSnapshot(app, title, idle, _attentionSpanMs, tick);
-                    _mlLowConfidence = false;
-                    elapsed = 0;
-                    mlElapsed = 0;
-                    SetRandomInterval();  // Set new random interval for next snapshot
-                    lastMinute = -1; // Reset progress indicator
-
-                    // Show ML stats every 10 snapshots
-                    if (_mlEnabled && (_totalSnapshots - lastStatsSnapshot) >= 10)
+                    // Unified suppression gate: AFK, poor signal, meeting, screen sharing.
+                    // Pass Unavailable when meeting suppression is disabled so gate fails open.
+                    var presence = _meetingSuppression
+                        ? (_platformService?.GetPresenceState() ?? PresenceState.Unavailable)
+                        : PresenceState.Unavailable;
+                    var gate = SnapshotGate.Evaluate(tick, presence);
+                    if (gate.Suppress)
                     {
-                        ShowMLStats();
-                        lastStatsSnapshot = _totalSnapshots;
+                        Dim($"  ⏸ Snapshot suppressed: {gate.Reason}");
+                        Console.WriteLine($"SUPPRESS:{gate.Reason}");
+                        // Undo interval counter increment so stats stay accurate.
+                        if (!mlTriggered) _intervalTriggeredSnapshots--;
+                        elapsed = 0;
+                        SetRandomInterval();
+                        lastMinute = -1;
+                    }
+                    else
+                    {
+                        TakeSnapshot(app, title, idle, _attentionSpanMs, tick);
+                        _mlLowConfidence = false;
+                        elapsed = 0;
+                        mlElapsed = 0;
+                        SetRandomInterval();  // Set new random interval for next snapshot
+                        lastMinute = -1; // Reset progress indicator
+
+                        // Show ML stats every 10 snapshots
+                        if (_mlEnabled && (_totalSnapshots - lastStatsSnapshot) >= 10)
+                        {
+                            ShowMLStats();
+                            lastStatsSnapshot = _totalSnapshots;
+                        }
                     }
                 }
             }

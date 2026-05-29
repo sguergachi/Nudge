@@ -29,6 +29,7 @@ internal sealed class NudgeParsedArgs
     public bool MlEnabled { get; init; }
     public bool ForceTrainedModel { get; init; }
     public string? CsvPath { get; init; }
+    public bool MeetingSuppression { get; init; } = true;
 }
 
 internal enum NudgeNotifyAction
@@ -1239,6 +1240,7 @@ internal static class NudgeCoreLogic
         bool mlEnabled = false;
         bool forceModel = false;
         string? csvPath = null;
+        bool meetingSuppression = true;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -1282,6 +1284,11 @@ internal static class NudgeCoreLogic
                 forceModel = true;
                 continue;
             }
+            if (arg == "--no-meeting-suppression")
+            {
+                meetingSuppression = false;
+                continue;
+            }
             if (!arg.StartsWith("--", StringComparison.Ordinal) && !arg.StartsWith('-'))
             {
                 csvPath = arg;
@@ -1295,7 +1302,8 @@ internal static class NudgeCoreLogic
             MlCheckIntervalSeconds = mlIntervalSeconds,
             MlEnabled = mlEnabled,
             ForceTrainedModel = forceModel,
-            CsvPath = csvPath
+            CsvPath = csvPath,
+            MeetingSuppression = meetingSuppression
         };
     }
 
@@ -1737,4 +1745,143 @@ internal static class NudgeCoreLogic
     {
         public static readonly SwayFocusSnapshot Empty = new("unknown", "", "", "", false);
     }
+}
+
+// ── Presence Detection ────────────────────────────────────────────────────────
+
+internal enum PresenceSource
+{
+    None,             // Detection not available on this platform — gate fails open
+    PipeWire,
+    PulseAudio,
+    WindowsRegistry
+}
+
+internal readonly record struct PresenceState(
+    bool IsMicActive,
+    bool IsCameraActive,
+    bool IsScreenSharing,
+    PresenceSource Source)
+{
+    public static readonly PresenceState Unavailable = new(false, false, false, PresenceSource.None);
+    public bool InMeeting => IsMicActive || IsCameraActive;
+}
+
+internal enum SuppressionReason { None, PoorSignal, Afk, InMeeting, ScreenSharing }
+
+internal readonly record struct GateDecision(bool Suppress, SuppressionReason Reason)
+{
+    public static readonly GateDecision Allow = new(false, SuppressionReason.None);
+    public static GateDecision Because(SuppressionReason reason) => new(true, reason);
+}
+
+internal static class SnapshotGate
+{
+    // Authoritative suppression check applied before every snapshot, both ML and interval paths.
+    // Always gates on AFK/poor-signal (fixes the latent interval-path bypass).
+    // Gates on presence only when Source != None (fail-open: unknown → never suppress).
+    public static GateDecision Evaluate(ActivityTickResult? tick, PresenceState presence)
+    {
+        if (tick is ActivityTickResult t)
+        {
+            if (t.Context.SignalQuality == SignalQuality.Poor)
+                return GateDecision.Because(SuppressionReason.PoorSignal);
+            if (t.Features.AfkFlag == 1)
+                return GateDecision.Because(SuppressionReason.Afk);
+        }
+
+        if (presence.Source != PresenceSource.None)
+        {
+            if (presence.IsScreenSharing)
+                return GateDecision.Because(SuppressionReason.ScreenSharing);
+            if (presence.InMeeting)
+                return GateDecision.Because(SuppressionReason.InMeeting);
+        }
+
+        return GateDecision.Allow;
+    }
+}
+
+internal static class PulseAudioParser
+{
+    // Returns true if `pactl list source-outputs` output has any RUNNING stream.
+    // Works on PulseAudio and PipeWire-pulse (pipewire-alsa compatibility layer).
+    public static bool HasActiveCaptureStream(string pactlOutput)
+    {
+        if (string.IsNullOrEmpty(pactlOutput)) return false;
+        return pactlOutput.Contains("State: RUNNING", StringComparison.OrdinalIgnoreCase);
+    }
+}
+
+internal static class PipeWireParser
+{
+    // Parses `pw-dump` JSON to determine mic, camera, and screen-sharing state.
+    // Nodes with state "running" and the matching media.class are considered active.
+    // Screen sharing is detected via Stream/Output/Video nodes owned by the XDG portal.
+    public static PresenceState Parse(string pwDumpJson)
+    {
+        if (string.IsNullOrWhiteSpace(pwDumpJson)) return PresenceState.Unavailable;
+
+        bool micActive = false;
+        bool camActive = false;
+        bool screenSharing = false;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(pwDumpJson);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return PresenceState.Unavailable;
+
+            foreach (var node in doc.RootElement.EnumerateArray())
+            {
+                if (!node.TryGetProperty("type", out var typeEl) ||
+                    typeEl.GetString() != "PipeWire:Interface:Node") continue;
+
+                if (!node.TryGetProperty("info", out var info)) continue;
+
+                if (!info.TryGetProperty("state", out var stateEl) ||
+                    !string.Equals(stateEl.GetString(), "running", StringComparison.OrdinalIgnoreCase)) continue;
+
+                if (!info.TryGetProperty("props", out var props)) continue;
+                if (!props.TryGetProperty("media.class", out var classEl)) continue;
+
+                string? mediaClass = classEl.GetString();
+                switch (mediaClass)
+                {
+                    case "Stream/Input/Audio":
+                        micActive = true;
+                        break;
+                    case "Stream/Input/Video":
+                        camActive = true;
+                        break;
+                    case "Stream/Output/Video":
+                        if (IsScreenCastPortalNode(props))
+                            screenSharing = true;
+                        break;
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            return PresenceState.Unavailable;
+        }
+
+        return new PresenceState(micActive, camActive, screenSharing, PresenceSource.PipeWire);
+    }
+
+    // XDG desktop portal screen-cast nodes are identifiable by their node/application name.
+    internal static bool IsScreenCastPortalNode(JsonElement props)
+    {
+        foreach (string propName in PortalNodeProps)
+        {
+            if (props.TryGetProperty(propName, out var val) && val.GetString() is string s &&
+                (s.Contains("portal", StringComparison.OrdinalIgnoreCase) ||
+                 s.Contains("xdp", StringComparison.OrdinalIgnoreCase) ||
+                 s.Contains("screencast", StringComparison.OrdinalIgnoreCase)))
+                return true;
+        }
+        return false;
+    }
+
+    private static readonly string[] PortalNodeProps =
+        ["node.name", "application.name", "pipewire.access.portal.app_id"];
 }
