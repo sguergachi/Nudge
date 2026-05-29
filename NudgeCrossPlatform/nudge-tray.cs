@@ -48,7 +48,7 @@ namespace NudgeTray
     sealed class Program
     {
         const int UDP_PORT = 45001;
-        const string VERSION = "1.6.10";
+        const string VERSION = "1.7.0";
         const string NudgeExeName = "nudge";
         const string NudgeDllName = "nudge.dll";
         static Process? _nudgeProcess;
@@ -1702,6 +1702,24 @@ namespace NudgeTray
                                 }
                             }
                             catch { /* non-critical */ }
+                        }
+                        // Snapshot suppressed (meeting, screen-share, AFK, poor signal)
+                        else if (e.Data.StartsWith("SUPPRESS:", StringComparison.Ordinal))
+                        {
+                            string reason = e.Data.AsSpan(9).ToString();
+                            var evt = new MLLiveEvent
+                            {
+                                T             = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                                App           = LiveAIState.CurrentApp,
+                                TriggerSource = "sup",
+                                SuppressReason = reason,
+                                Score         = 0,
+                                Confidence    = 0,
+                                Productive    = true,
+                                Triggered     = false
+                            };
+                            LiveAIState.Add(evt);
+                            _analyticsWindow?.RequestTrainingViewRefresh();
                         }
                     }
                 };
