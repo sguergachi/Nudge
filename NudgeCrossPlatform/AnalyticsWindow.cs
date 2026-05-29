@@ -95,6 +95,7 @@ namespace NudgeTray
         private static readonly Color AIStatusActive = Color.FromRgb(76, 175, 80);
         private static readonly Color AIStatusLearning = Color.FromRgb(255, 193, 7);
         private static readonly Color AIStatusInactive = Color.FromRgb(150, 150, 160);
+        private static readonly Color SuppressedColor = Color.FromRgb(100, 149, 237); // cornflower blue — distinct from AI/INT
 
         // ── String constants (DRY) ───────────────────────────────────────────
         private const string StrWaitingFirstCheck = "Waiting for first check…";
@@ -2361,13 +2362,22 @@ namespace NudgeTray
         /// <summary>Build tooltip content Grid for a given event.</summary>
         private static Grid CreateTooltipContent(MLLiveEvent evt)
         {
-            Color dotColor = evt.Confidence < 0.5
-                ? AIStatusLearning
-                : (evt.Productive ? ProductiveGreen : UnproductiveRed);
+            bool isSuppressed = evt.TriggerSource == "sup";
+
+            Color dotColor = isSuppressed
+                ? SuppressedColor
+                : evt.Confidence < 0.5
+                    ? AIStatusLearning
+                    : (evt.Productive ? ProductiveGreen : UnproductiveRed);
 
             string actionLabel;
             Color actionColor;
-            if (evt.Triggered)
+            if (isSuppressed)
+            {
+                actionLabel = SuppressReasonToLabel(evt.SuppressReason);
+                actionColor = SuppressedColor;
+            }
+            else if (evt.Triggered)
             {
                 actionLabel = StrNudgedAction;
                 actionColor = UnproductiveRed;
@@ -2379,12 +2389,15 @@ namespace NudgeTray
             }
 
             string statusLabel = "";
-            if (evt.AiCorrect == true)
-                statusLabel = " · ✓ confirmed";
-            else if (evt.AiCorrect == false)
-                statusLabel = " · ✗ rejected";
-            else if (evt.Triggered)
-                statusLabel = " · ⏸ skipped";
+            if (!isSuppressed)
+            {
+                if (evt.AiCorrect == true)
+                    statusLabel = " · ✓ confirmed";
+                else if (evt.AiCorrect == false)
+                    statusLabel = " · ✗ rejected";
+                else if (evt.Triggered)
+                    statusLabel = " · ⏸ skipped";
+            }
 
             var tipGrid = new Grid
             {
@@ -2404,9 +2417,13 @@ namespace NudgeTray
 
             var triggerTb = new TextBlock
             {
-                Text = evt.TriggerSource == "int" ? "Interval-based check" : "AI-predicted check",
+                Text = isSuppressed
+                    ? "Snapshot suppressed"
+                    : evt.TriggerSource == "int" ? "Interval-based check" : "AI-predicted check",
                 FontSize = 10,
-                Foreground = new SolidColorBrush(evt.TriggerSource == "int" ? AIStatusLearning : ProductiveGreen)
+                Foreground = new SolidColorBrush(isSuppressed
+                    ? SuppressedColor
+                    : evt.TriggerSource == "int" ? AIStatusLearning : ProductiveGreen)
             };
             Grid.SetColumn(triggerTb, 1);
             Grid.SetRow(triggerTb, 1);
@@ -2423,9 +2440,12 @@ namespace NudgeTray
             Grid.SetColumnSpan(appTb, 2);
             tipGrid.Children.Add(appTb);
 
+            // Suppressed events show the reason instead of a score.
             var scoreTb = new TextBlock
             {
-                Text = $"{(evt.Confidence > 0 ? evt.Confidence : evt.Score) * 100:F0}% · {(evt.Productive ? StrProductive : StrNotProductive)}",
+                Text = isSuppressed
+                    ? SuppressReasonToDetail(evt.SuppressReason)
+                    : $"{(evt.Confidence > 0 ? evt.Confidence : evt.Score) * 100:F0}% · {(evt.Productive ? StrProductive : StrNotProductive)}",
                 FontSize = 11,
                 Foreground = new SolidColorBrush(dotColor)
             };
@@ -2445,6 +2465,24 @@ namespace NudgeTray
 
             return tipGrid;
         }
+
+        private static string SuppressReasonToLabel(string? reason) => reason switch
+        {
+            "InMeeting"    => "⏸ meeting",
+            "ScreenSharing" => "⏸ presenting",
+            "Afk"          => "⏸ away",
+            "PoorSignal"   => "⏸ no signal",
+            _              => "⏸ suppressed"
+        };
+
+        private static string SuppressReasonToDetail(string? reason) => reason switch
+        {
+            "InMeeting"    => "mic/camera active — in a meeting",
+            "ScreenSharing" => "screen sharing active — presenting",
+            "Afk"          => "away from keyboard",
+            "PoorSignal"   => "focus signal too unreliable",
+            _              => "snapshot suppressed"
+        };
 
         /// <summary>Build a hover tooltip Border (same style as the gradient chart tooltip).</summary>
         private static Border CreateEventTooltip(MLLiveEvent evt)
@@ -2505,11 +2543,15 @@ namespace NudgeTray
                 // Trigger source
                 var sourceText = new TextBlock
                 {
-                    Text = evt.TriggerSource == "int" ? "INT" : "AI",
+                    Text = evt.TriggerSource switch { "int" => "INT", "sup" => "SUP", _ => "AI" },
                     FontSize = 10,
                     FontWeight = FontWeight.Medium,
-                    Foreground = new SolidColorBrush(
-                        evt.TriggerSource == "int" ? AIStatusLearning : ProductiveGreen),
+                    Foreground = new SolidColorBrush(evt.TriggerSource switch
+                    {
+                        "int" => AIStatusLearning,
+                        "sup" => SuppressedColor,
+                        _     => ProductiveGreen
+                    }),
                     VerticalAlignment = VerticalAlignment.Center,
                     HorizontalAlignment = HorizontalAlignment.Center
                 };
@@ -2526,10 +2568,12 @@ namespace NudgeTray
                 };
                 Grid.SetColumn(appText, 2);
 
-                // Score with colored dot
-                Color dotColor = evt.Confidence < 0.5
-                    ? AIStatusLearning
-                    : (evt.Productive ? ProductiveGreen : UnproductiveRed);
+                // Score with colored dot (suppressed events show "—" — no ML score)
+                Color dotColor = evt.TriggerSource == "sup"
+                    ? SuppressedColor
+                    : evt.Confidence < 0.5
+                        ? AIStatusLearning
+                        : (evt.Productive ? ProductiveGreen : UnproductiveRed);
                 var scoreRow = new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
@@ -2537,18 +2581,23 @@ namespace NudgeTray
                     VerticalAlignment = VerticalAlignment.Center,
                     HorizontalAlignment = HorizontalAlignment.Right
                 };
-                scoreRow.Children.Add(new Border
+                if (evt.TriggerSource != "sup")
                 {
-                    Width = 5, Height = 5,
-                    CornerRadius = new CornerRadius(2.5),
-                    Background = new SolidColorBrush(dotColor),
-                    VerticalAlignment = VerticalAlignment.Center
-                });
+                    scoreRow.Children.Add(new Border
+                    {
+                        Width = 5, Height = 5,
+                        CornerRadius = new CornerRadius(2.5),
+                        Background = new SolidColorBrush(dotColor),
+                        VerticalAlignment = VerticalAlignment.Center
+                    });
+                }
                 scoreRow.Children.Add(new TextBlock
                 {
-                    Text = $"{(evt.Confidence > 0 ? evt.Confidence : evt.Score) * 100:F0}%",
+                    Text = evt.TriggerSource == "sup"
+                        ? "—"
+                        : $"{(evt.Confidence > 0 ? evt.Confidence : evt.Score) * 100:F0}%",
                     FontSize = 10,
-                    Foreground = new SolidColorBrush(TextSecondary),
+                    Foreground = new SolidColorBrush(evt.TriggerSource == "sup" ? SuppressedColor : TextSecondary),
                     VerticalAlignment = VerticalAlignment.Center
                 });
                 Grid.SetColumn(scoreRow, 3);
@@ -2556,7 +2605,12 @@ namespace NudgeTray
                 // Action label
                 string actionLabel;
                 Color actionColor;
-                if (evt.Triggered)
+                if (evt.TriggerSource == "sup")
+                {
+                    actionLabel = SuppressReasonToLabel(evt.SuppressReason);
+                    actionColor = SuppressedColor;
+                }
+                else if (evt.Triggered)
                 {
                     actionLabel = StrNudgedAction;
                     actionColor = UnproductiveRed;

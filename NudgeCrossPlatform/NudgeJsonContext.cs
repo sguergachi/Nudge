@@ -44,8 +44,12 @@ internal sealed class MLLiveEvent
     public bool? UserResponse { get; set; }
     /// <summary>Whether the AI prediction matched the user's response</summary>
     public bool? AiCorrect { get; set; }
-    /// <summary>Trigger source: "ai" (ML prediction) or "int" (interval-based)</summary>
+    /// <summary>Trigger source: "ai" (ML prediction), "int" (interval-based), or "sup" (suppressed)</summary>
     public string TriggerSource { get; set; } = "ai";
+    /// <summary>
+    /// Set only when TriggerSource == "sup". One of: InMeeting, ScreenSharing, Afk, PoorSignal.
+    /// </summary>
+    public string? SuppressReason { get; set; }
 }
 
 /// <summary>
