@@ -356,16 +356,16 @@ public sealed class NudgeMeetingGateTests
     private static string BuildPwDump(string mediaClass, string state, string nodeName = "test-node") =>
         $"[{BuildPwNode(mediaClass, state, nodeName)}]";
 
-    private static string BuildPwNode(string mediaClass, string state, string nodeName) => $"""
-        {{
+    private static string BuildPwNode(string mediaClass, string state, string nodeName) => $$"""
+        {
           "type": "PipeWire:Interface:Node",
-          "info": {{
-            "state": "{state}",
-            "props": {{
-              "media.class": "{mediaClass}",
-              "node.name": "{nodeName}"
-            }}
-          }}
-        }}
+          "info": {
+            "state": "{{state}}",
+            "props": {
+              "media.class": "{{mediaClass}}",
+              "node.name": "{{nodeName}}"
+            }
+          }
+        }
         """;
 }
