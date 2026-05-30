@@ -1996,19 +1996,11 @@ namespace NudgeTray
             string reason = payload.ToString();
             long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-            // If the daemon emitted MLDATA just before this (gate suppression),
-            // update the existing event rather than creating a duplicate entry.
-            var latest = LiveAIState.Latest;
-            if (latest != null && now - latest.T <= 5)
-            {
-                latest.SuppressReason = reason;
-                latest.Triggered = false;
-            }
-            else
+            if (!SuppressionDeduplication.TryMutateLatest(LiveAIState.Latest, reason, now))
             {
                 // Standalone suppression (e.g. meeting detected before ML check ran).
                 // No MLDATA was emitted, so create a new placeholder event.
-                var evt = new MLLiveEvent
+                LiveAIState.Add(new MLLiveEvent
                 {
                     T              = now,
                     App            = LiveAIState.CurrentApp,
@@ -2018,8 +2010,7 @@ namespace NudgeTray
                     Productive     = true,
                     Triggered      = false,
                     TriggerSource  = "sup"
-                };
-                LiveAIState.Add(evt);
+                });
             }
             _analyticsWindow?.RequestTrainingViewRefresh();
         }
