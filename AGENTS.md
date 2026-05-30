@@ -150,6 +150,8 @@ The update check fires once on startup (`Task.Run(CheckForUpdateAsync)` in `Afte
 
 ### Philosophy
 
+We treat code like art, like a craft. We care deeply about doing it well. Every line must earn its place — no cruft, no half-measures, no "good enough." The codebase is a reflection of our standards; anyone who touches it inherits that obligation.
+
 Write code with **parsimony** — the fewest elements needed to express the solution. Every line
 must justify its existence. Prefer simple constructs over clever abstractions. Delete before
 adding. A smaller codebase is a faster, more maintainable codebase.
