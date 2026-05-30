@@ -273,16 +273,20 @@ internal sealed class ActivityFeatureTracker
         string fd = context.FocusedDomain;
         bool hd = !string.IsNullOrEmpty(fd);
         DateTime c60 = now.AddSeconds(-60);
+
         int sc60 = 0, sc300 = 0, ws = 0, ca = 0, cd = 0, dd = 0;
+
         _freqDict.Clear();
         string[] db = System.Buffers.ArrayPool<string>.Shared.Rent(32);
         int dc = 0;
         string? pf = null, pw = null, p60 = null;
         bool f60 = true;
+
         int o = (_head - n + BufferSize) % BufferSize;
         for (int i = 0; i < n; i++)
         {
             ActivitySample s = _buf[(o + i) % BufferSize];
+
             if (s.Timestamp >= c60)
             {
                 if (f60) { p60 = s.FocusKey; f60 = false; }
@@ -305,8 +309,10 @@ internal sealed class ActivityFeatureTracker
             CollectionsMarshal.GetValueRefOrAddDefault(_freqDict, s.AppId, out _)++;
         }
         System.Buffers.ArrayPool<string>.Shared.Return(db);
+
+        _freqDict.Remove("unknown");
         int da = _freqDict.Count;
-        if (da > 0 && _freqDict.ContainsKey("unknown")) da--;
+
         string aa = ""; bool ra = false;
         if (_freqDict.Count > 0)
         {
@@ -325,6 +331,7 @@ internal sealed class ActivityFeatureTracker
                 ra = sc && so;
             }
         }
+
         int tt = Math.Max(1, n);
         var ac2 = (!string.IsNullOrEmpty(aa) && !string.Equals(aa, fa, StringComparison.Ordinal))
             ? AppCategoryClassifier.Classify(aa, "").Category : AppCategory.Unknown;
@@ -352,13 +359,6 @@ internal sealed class ActivityFeatureTracker
             EntAppFlag: apc == AppCategory.Entertainment ? 1 : 0);
         return (fv, apc, co);
     }
-    private ActivitySample BufAt(int n)
-    {
-        int idx = (_head - 1 - n) % BufferSize;
-        if (idx < 0) idx += BufferSize;
-        return _buf[idx];
-    }
-
     private void TrimOld(DateTime now)
     {
         DateTime cutoff = now.AddSeconds(-WindowSeconds);

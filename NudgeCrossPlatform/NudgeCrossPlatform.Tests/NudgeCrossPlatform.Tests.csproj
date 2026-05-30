@@ -19,4 +19,8 @@
     <Compile Include="../BrowserDetector.cs" Link="BrowserDetector.cs" />
     <Compile Include="../KWinScripts.cs" Link="KWinScripts.cs" />
   </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\nudge-tray.csproj" />
+  </ItemGroup>
 </Project>
