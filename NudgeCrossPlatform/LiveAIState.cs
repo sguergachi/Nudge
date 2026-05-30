@@ -10,10 +10,23 @@ internal static class LiveAIState
     private static readonly List<MLLiveEvent> _events = new(capacity: 210);
     private static readonly string _historyFile;
 
+    // Disk persistence is debounced off the hot path: mutations mark the state dirty
+    // and (re)arm a timer instead of serializing + writing the whole file inline.
+    // Bursts of Add/UpdateResponse calls collapse into a single write. FlushToDisk()
+    // forces a synchronous write and is invoked on shutdown so nothing is lost on a
+    // clean exit; the only loss window is a crash within the debounce interval.
+    private static readonly object _writeLock = new();
+    private static readonly System.Threading.Timer _flushTimer;
+    private static int _dirty;
+    private const int FlushDebounceMs = 500;
+
     static LiveAIState()
     {
         _historyFile = System.IO.Path.Combine(PlatformConfig.DataDirectory, "prediction_history.json");
         LoadFromDisk();
+        _flushTimer = new System.Threading.Timer(
+            static _ => FlushPending(), null,
+            System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
     }
 
     /// <summary>
@@ -55,12 +68,14 @@ internal static class LiveAIState
                 _events.RemoveAt(0);
         }
         System.Threading.Interlocked.Increment(ref UpdateVersion);
-        SaveToDisk();
+        ScheduleFlush();
     }
 
+    /// <summary>Forces a synchronous write of pending changes (call on shutdown).</summary>
     public static void FlushToDisk()
     {
-        SaveToDisk();
+        System.Threading.Interlocked.Exchange(ref _dirty, 0);
+        WriteSnapshot();
     }
 
     /// <summary>Updates the matching event with the user's response and correctness.</summary>
@@ -78,7 +93,7 @@ internal static class LiveAIState
                 }
             }
         }
-        SaveToDisk();
+        ScheduleFlush();
     }
 
     /// <summary>Returns a snapshot of recent events, oldest first.</summary>
@@ -120,15 +135,36 @@ internal static class LiveAIState
         catch { }
     }
 
-    private static void SaveToDisk()
+    /// <summary>Marks state dirty and (re)arms the debounce timer. Cheap; no I/O.</summary>
+    private static void ScheduleFlush()
     {
-        try
+        System.Threading.Interlocked.Exchange(ref _dirty, 1);
+        try { _flushTimer.Change(FlushDebounceMs, System.Threading.Timeout.Infinite); }
+        catch (ObjectDisposedException) { }
+    }
+
+    /// <summary>Timer callback: writes only if there are unsaved changes.</summary>
+    private static void FlushPending()
+    {
+        if (System.Threading.Interlocked.Exchange(ref _dirty, 0) == 0)
+            return;
+        WriteSnapshot();
+    }
+
+    private static void WriteSnapshot()
+    {
+        // _writeLock serializes file writes so the debounce timer and a shutdown
+        // flush can never interleave on the same file.
+        lock (_writeLock)
         {
-            List<MLLiveEvent> snapshot;
-            lock (_lock) { snapshot = new List<MLLiveEvent>(_events); }
-            var json = System.Text.Json.JsonSerializer.Serialize(snapshot, NudgeJsonContext.Default.ListMLLiveEvent);
-            System.IO.File.WriteAllText(_historyFile, json);
+            try
+            {
+                List<MLLiveEvent> snapshot;
+                lock (_lock) { snapshot = new List<MLLiveEvent>(_events); }
+                var json = System.Text.Json.JsonSerializer.Serialize(snapshot, NudgeJsonContext.Default.ListMLLiveEvent);
+                System.IO.File.WriteAllText(_historyFile, json);
+            }
+            catch { }
         }
-        catch { }
     }
 }
