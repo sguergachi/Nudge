@@ -22,7 +22,7 @@ _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if _SCRIPT_DIR not in sys.path:
     sys.path.insert(0, _SCRIPT_DIR)
 
-DEFAULT_MIN_SAMPLES = 10
+DEFAULT_MIN_SAMPLES = 20
 DEFAULT_CHECK_INTERVAL = 300  # 5 minutes
 _RETRAIN_NEW_DATA_RATIO = 0.10  # retrain when 10% more data exists
 

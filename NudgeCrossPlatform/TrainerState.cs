@@ -18,7 +18,7 @@ internal static class TrainerState
     private static int _cachedModelVersion;
 
     public static int  SampleCount;
-    public static int  MinSamples   = 100;
+    public static int  MinSamples   = 20;
     public static int  LastTrainedCount;
     public static int  ModelVersion;
     public static bool IsTraining;

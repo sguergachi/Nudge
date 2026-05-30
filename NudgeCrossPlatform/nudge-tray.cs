@@ -1469,6 +1469,40 @@ namespace NudgeTray
             return proc.ExitCode == 0;
         }
 
+        /// <summary>
+        /// Copies the bundled V1 pre-trained model (productivity_model.joblib,
+        /// scaler.json, trainer_meta.json) from the app directory into the user
+        /// data directory so the background trainer and inference server find it.
+        /// </summary>
+        static void DeployBundledModel()
+        {
+            try
+            {
+                string userModelPath = Path.Combine(_modelDirPath, "productivity_model.joblib");
+                if (File.Exists(userModelPath)) return; // Already deployed
+
+                string bundledDir = Path.Combine(_baseDir, "model");
+                string bundledModel = Path.Combine(bundledDir, "productivity_model.joblib");
+                if (!File.Exists(bundledModel)) return; // No bundled model to deploy
+
+                Console.WriteLine("[INFO] Deploying bundled V1 model to user data directory…");
+                Directory.CreateDirectory(_modelDirPath);
+                File.Copy(bundledModel, userModelPath, overwrite: false);
+                foreach (var auxFile in new[] { "scaler.json", "trainer_meta.json" })
+                {
+                    string src = Path.Combine(bundledDir, auxFile);
+                    string dst = Path.Combine(_modelDirPath, auxFile);
+                    if (File.Exists(src) && !File.Exists(dst))
+                        File.Copy(src, dst, overwrite: false);
+                }
+                Console.WriteLine("  ✓ Bundled model deployed");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[WARN] Could not deploy bundled model: {ex.Message}");
+            }
+        }
+
         static void StartMLServices()
         {
             try
@@ -1484,6 +1518,9 @@ namespace NudgeTray
                     _mlEnabled = false;
                     return;
                 }
+
+                // Deploy bundled V1 model to user data dir so the trainer finds it
+                DeployBundledModel();
 
                 string csvPath = PlatformConfig.CsvPath;
 

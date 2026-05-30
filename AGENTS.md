@@ -146,3 +146,4 @@ Zero warning policy on builds. Key suppressible patterns:
 - Do not run `dotnet publish` manually — build script handles platform publishing.
 - Do not touch `*.dll`, `*.exe`, `*.pdb`, or `*.runtimeconfig.json` in `NudgeCrossPlatform/` — they are build outputs and gitignored.
 - Do not add moq or other mocking frameworks — tests use xunit only, testable code via `NudgeCoreLogic` static methods.
+- If you see changes in the working tree that you did not make, leave them alone — they belong to another agent working in parallel.
