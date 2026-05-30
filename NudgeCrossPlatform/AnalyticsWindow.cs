@@ -111,7 +111,7 @@ namespace NudgeTray
         private const string StrSensorSignalsClosed = "▸ Sensor Signals";
         private const string StrChevronOpen = "▾";
         private const string StrChevronClosed = "▸";
-        private const string StrPinIcon = "⊙";
+        private const string StrPinIcon = "📌";
         private const string StrProductive = "productive";
         private const string StrNotProductive = "not productive";
         private const string StrNudgedAction = "nudged";
@@ -2843,7 +2843,7 @@ namespace NudgeTray
             int h2 = ((s * 214013 + 2531011) ^ (s <<  7)) & 0x7FFFFFFF;
             int h3 = ((s * 1664525 + 1013904223) ^ (s >> 17)) & 0x7FFFFFFF;
             const double div = 0x7FFFFFFF;
-            _spawnIntervalMs  = 500 + (long)(600  * (h1 / div));
+            _spawnIntervalMs  = 750 + (long)(900  * (h1 / div));
             _baseLifespanMs   = 1200 + (long)(600  * (h2 / div));
             _radiusBase       = 14 + 4.0    * (h3 / div);
             _peakOpacityBase  = 0.60 + 0.20 * (h3 / div);
@@ -2931,3 +2931,5 @@ namespace NudgeTray
     }
 }
 
+
+}
