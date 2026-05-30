@@ -170,7 +170,7 @@ namespace NudgeTray
 
             var closeIcon = new TextBlock
             {
-                Text = "✕",
+                Text = "✖",
                 FontSize = 16,
                 FontWeight = FontWeight.Normal,
                 Foreground = new SolidColorBrush(TextSecondary),
@@ -204,6 +204,12 @@ namespace NudgeTray
             // ── AI Brain live tab ─────────────────────────────────────────────────
             if (_aiTabActive)
             {
+                // Skip no-op rebuilds: only rebuild when data actually changed
+                long version = LiveAIState.UpdateVersion;
+                if (version == _lastAiUpdateVersion) return;
+                _lastAiUpdateVersion = version;
+                _lastAiEventCount = LiveAIState.GetCount();
+
                 // Stop all live timers from the previous content build before replacing
                 StopLiveTimers();
                 _contentPanel.Children.Clear();
