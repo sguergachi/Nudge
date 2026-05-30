@@ -2069,7 +2069,16 @@ namespace NudgeTray
             Canvas.SetTop(midline, yTop + yRange * 0.5);
             canvas.Children.Add(midline);
 
-            if (events.Count == 0)
+            // Only show AI predictions — filter out interval fallbacks and
+            // standalone meeting-suppression placeholders (no real score).
+            var aiEvents = new List<MLLiveEvent>(events.Count);
+            for (int i = 0; i < events.Count; i++)
+            {
+                if (events[i].TriggerSource == "ai")
+                    aiEvents.Add(events[i]);
+            }
+
+            if (aiEvents.Count == 0)
             {
                 var tb = new TextBlock
                 {
@@ -2085,14 +2094,14 @@ namespace NudgeTray
                 return canvas;
             }
 
-            int n = events.Count;
+            int n = aiEvents.Count;
             var pts = new List<(double x, double y, MLLiveEvent ev)>(n);
             for (int i = 0; i < n; i++)
             {
                 double xFrac = n == 1 ? 0.5 : (double)i / (n - 1);
                 double x = dotR + xFrac * (W - dotR * 2);
-                double y = yTop + (1.0 - events[i].Score) * yRange;
-                pts.Add((x, y, events[i]));
+                double y = yTop + (1.0 - aiEvents[i].Score) * yRange;
+                pts.Add((x, y, aiEvents[i]));
             }
 
             // Filled area under the line (gradient fill)
@@ -2330,10 +2339,10 @@ namespace NudgeTray
             }
 
             // ── Time axis ───────────────────────────────────────────────────
-            if (events.Count >= 2)
+            if (aiEvents.Count >= 2)
             {
-                var firstDt = DateTimeOffset.FromUnixTimeSeconds(events[0].T).LocalDateTime;
-                var lastDt  = DateTimeOffset.FromUnixTimeSeconds(events[^1].T).LocalDateTime;
+                var firstDt = DateTimeOffset.FromUnixTimeSeconds(aiEvents[0].T).LocalDateTime;
+                var lastDt  = DateTimeOffset.FromUnixTimeSeconds(aiEvents[^1].T).LocalDateTime;
                 double spanHours = (lastDt - firstDt).TotalHours;
                 int stepHours = spanHours <= 3 ? 1 : spanHours <= 8 ? 2 : spanHours <= 16 ? 3 : 6;
 

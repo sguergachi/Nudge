@@ -1994,17 +1994,33 @@ namespace NudgeTray
         static void HandleSuppress(ReadOnlySpan<char> payload)
         {
             string reason = payload.ToString();
-            var evt = new MLLiveEvent
+            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+            // If the daemon emitted MLDATA just before this (gate suppression),
+            // update the existing event rather than creating a duplicate entry.
+            var latest = LiveAIState.Latest;
+            if (latest != null && now - latest.T <= 5)
             {
-                T             = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                App           = LiveAIState.CurrentApp,
-                SuppressReason = reason,
-                Score         = 0,
-                Confidence    = 0,
-                Productive    = true,
-                Triggered     = false
-            };
-            LiveAIState.Add(evt);
+                latest.SuppressReason = reason;
+                latest.Triggered = false;
+            }
+            else
+            {
+                // Standalone suppression (e.g. meeting detected before ML check ran).
+                // No MLDATA was emitted, so create a new placeholder event.
+                var evt = new MLLiveEvent
+                {
+                    T              = now,
+                    App            = LiveAIState.CurrentApp,
+                    SuppressReason = reason,
+                    Score          = 0,
+                    Confidence     = 0,
+                    Productive     = true,
+                    Triggered      = false,
+                    TriggerSource  = "sup"
+                };
+                LiveAIState.Add(evt);
+            }
             _analyticsWindow?.RequestTrainingViewRefresh();
         }
 

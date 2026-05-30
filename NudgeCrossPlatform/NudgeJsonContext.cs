@@ -47,7 +47,8 @@ internal sealed class MLLiveEvent
     /// <summary>Trigger source: "ai" (ML prediction), "int" (interval-based), or "sup" (suppressed)</summary>
     public string TriggerSource { get; set; } = "ai";
     /// <summary>
-    /// Set only when TriggerSource == "sup". One of: InMeeting, ScreenSharing, Afk, PoorSignal.
+    /// Set when the snapshot was suppressed (gate or meeting detection).
+    /// One of: InMeeting, ScreenSharing, Afk, PoorSignal.
     /// </summary>
     public string? SuppressReason { get; set; }
 }
