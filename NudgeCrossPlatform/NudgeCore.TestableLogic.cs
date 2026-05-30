@@ -193,9 +193,12 @@ internal sealed class ActivityFeatureTracker
 {
     private const int IdleNowThresholdMs = 1000;
     private const int AfkThresholdMs = 60 * 1000;
+    private const int BufferSize = 300;
     private const int WindowSeconds = 300;
 
-    private readonly Queue<ActivitySample> _samples = new();
+    private readonly ActivitySample[] _buf = new ActivitySample[BufferSize];
+    private int _head;
+    private int _count;
     private string _lastFocusKey = "";
     private string _lastTitle = "";
         private DateTime _focusedSince;
@@ -238,10 +241,13 @@ internal sealed class ActivityFeatureTracker
             SignalQuality: signalQuality,
             FullscreenFlag: window.Fullscreen ? 1 : 0);
 
-        _samples.Enqueue(new ActivitySample(now, focusKey, appId, domain, workspaceId));
-        TrimSamples(now);
+        var sample = new ActivitySample(now, focusKey, appId, domain, workspaceId);
+        _buf[_head] = sample;
+        _head = (_head + 1) % BufferSize;
+        if (_count < BufferSize) _count++;
+        TrimOld(now);
 
-        var (featureVector, appCategory, appConf) = BuildFeatureVector(now, context);
+        var (featureVector, appCategory, appConf) = ComputeFeatures(now, context);
         string legacyAppName = BuildLegacyAppName(appId, title);
         string displayAppName = BuildDisplayAppName(appId, title, domain);
 
@@ -259,40 +265,86 @@ internal sealed class ActivityFeatureTracker
             TimeLastRequestMs: context.FocusedSinceMs);
     }
 
-    private (FeatureVector Features, AppCategory Category, CategoryConfidence Confidence) BuildFeatureVector(DateTime now, ActivityContext context)
+    private (FeatureVector Features, AppCategory Category, CategoryConfidence Confidence) ComputeFeatures(DateTime now, ActivityContext context)
     {
-        ActivitySample[] last300 = GetSamplesSince(now.AddSeconds(-299));
-        ActivitySample[] last60 = GetSamplesSince(now.AddSeconds(-59));
+        int n = _count;
+        int switchCount60 = CountFocusSwitchesTimeWindow(now, 60);
+        int switchCount300 = CountSwitchKeys(n, s => s.FocusKey);
 
-        int total300 = Math.Max(1, last300.Length);
-        int currentAppCount = last300.Count(sample => string.Equals(sample.AppId, context.FocusedAppId, StringComparison.Ordinal));
-        int currentDomainCount = string.IsNullOrEmpty(context.FocusedDomain)
-            ? 0
-            : last300.Count(sample => string.Equals(sample.Domain, context.FocusedDomain, StringComparison.Ordinal));
+        int currentAppCount = 0;
+        int currentDomainCount = 0;
+        int distinctApps = 0;
+        int distinctDomains = 0;
+        string anchorApp = "";
+        bool returnedToAnchor = false;
+        bool seenCurrent = false;
+        bool seenOther = false;
 
-        string anchorApp = GetMostCommonApp(last300, context.FocusedAppId);
-        bool returnedToAnchorApp = !string.IsNullOrEmpty(anchorApp) &&
-                                   string.Equals(anchorApp, context.FocusedAppId, StringComparison.Ordinal) &&
-                                   HasInterveningSwitch(last300, context.FocusedAppId);
+        string[] seenAppBuf = System.Buffers.ArrayPool<string>.Shared.Rent(32);
+        string[] seenDomBuf = System.Buffers.ArrayPool<string>.Shared.Rent(32);
+        var freqDict = new Dictionary<string, int>(16, StringComparer.Ordinal);
+        try
+        {
+            int seenAppCount = 0;
+            int seenDomCount = 0;
 
-        // Classify the anchor app for browser-anchor temporal fusion (confidence not needed for anchor)
+            for (int i = 0; i < n; i++)
+            {
+                ActivitySample s = BufAt(i);
+
+                if (string.Equals(s.AppId, context.FocusedAppId, StringComparison.Ordinal))
+                    currentAppCount++;
+
+                if (!string.IsNullOrEmpty(context.FocusedDomain) && string.Equals(s.Domain, context.FocusedDomain, StringComparison.Ordinal))
+                    currentDomainCount++;
+
+                if (AddDistinct(seenAppBuf, ref seenAppCount, s.AppId))
+                    distinctApps++;
+
+                if (!string.IsNullOrEmpty(s.Domain) && AddDistinct(seenDomBuf, ref seenDomCount, s.Domain))
+                    distinctDomains++;
+
+                CollectionsMarshal.GetValueRefOrAddDefault(freqDict, s.AppId, out _)++;
+            }
+
+            int anchorCount = 0;
+            foreach (var (app, freq) in freqDict)
+            {
+                if (freq > anchorCount || (freq == anchorCount && string.Equals(app, context.FocusedAppId, StringComparison.Ordinal)))
+                { anchorCount = freq; anchorApp = app; }
+            }
+
+            if (!string.IsNullOrEmpty(anchorApp) && string.Equals(anchorApp, context.FocusedAppId, StringComparison.Ordinal))
+            {
+                for (int i = n - 1; i >= 0; i--)
+                {
+                    ActivitySample s = BufAt(i);
+                    if (!seenCurrent)
+                        seenCurrent = string.Equals(s.AppId, context.FocusedAppId, StringComparison.Ordinal);
+                    else if (!seenOther && !string.Equals(s.AppId, context.FocusedAppId, StringComparison.Ordinal))
+                        seenOther = true;
+                }
+                returnedToAnchor = seenCurrent && seenOther;
+            }
+        }
+        finally { System.Buffers.ArrayPool<string>.Shared.Return(seenAppBuf); System.Buffers.ArrayPool<string>.Shared.Return(seenDomBuf); }
+
+        int total300 = Math.Max(1, n);
+        int workspaceSwitches = CountWorkspaceSwitches(n);
+
         AppCategory anchorCategory = (!string.IsNullOrEmpty(anchorApp) &&
                                       !string.Equals(anchorApp, context.FocusedAppId, StringComparison.Ordinal))
             ? AppCategoryClassifier.Classify(anchorApp, "").Category
             : AppCategory.Unknown;
 
-        // For browsers, the current domain is a stronger signal than the anchor app context.
-        // Classify directly from known domain sets so e.g. youtube.com is always Entertainment
-        // regardless of what the anchor app is. Fall through to Classify() only for unknown domains.
         AppCategory appCategory;
         CategoryConfidence appConf;
         if (BrowserDetector.IsBrowser(context.FocusedAppId) && !string.IsNullOrEmpty(context.FocusedDomain))
         {
             AppCategory domainCat = ClassifyBrowserDomain(context.FocusedDomain);
-            if (domainCat != AppCategory.Unknown)
-                (appCategory, appConf) = (domainCat, CategoryConfidence.Semantic);
-            else
-                (appCategory, appConf) = AppCategoryClassifier.Classify(context.FocusedAppId, context.FocusedTitle, anchorCategory);
+            (appCategory, appConf) = domainCat != AppCategory.Unknown
+                ? (domainCat, CategoryConfidence.Semantic)
+                : AppCategoryClassifier.Classify(context.FocusedAppId, context.FocusedTitle, anchorCategory);
         }
         else
         {
@@ -307,20 +359,20 @@ internal sealed class ActivityFeatureTracker
             IdleMs: context.IdleMs,
             FocusedSinceMs: context.FocusedSinceMs,
             TitleStabilityMs: context.TitleUnchangedForMs,
-            SwitchCount60s: CountFocusSwitches(last60),
-            SwitchCount300s: CountFocusSwitches(last300),
-            DistinctApps300s: CountDistinct(last300.Select(sample => sample.AppId)),
-            DistinctDomains300s: CountDistinct(last300.Select(sample => sample.Domain)),
-            ReturnedToAnchorApp300s: returnedToAnchorApp ? 1 : 0,
+            SwitchCount60s: switchCount60,
+            SwitchCount300s: switchCount300,
+            DistinctApps300s: distinctApps,
+            DistinctDomains300s: distinctDomains,
+            ReturnedToAnchorApp300s: returnedToAnchor ? 1 : 0,
             CurrentAppShare300s: currentAppCount / (double)total300,
             CurrentDomainShare300s: currentDomainCount / (double)total300,
             BrowserWindowFlag: BrowserDetector.IsBrowser(context.FocusedAppId) ? 1 : 0,
             CommunicationAppFlag: IsCommunicationContext(context) ? 1 : 0,
-            EntertainmentDomainFlag: IsEntertainmentDomain(context.FocusedDomain) ? 1 : 0,
-            WorkDomainFlag: IsWorkDomain(context.FocusedDomain) ? 1 : 0,
+            EntertainmentDomainFlag: !string.IsNullOrEmpty(context.FocusedDomain) && EntertainmentDomains.Contains(context.FocusedDomain) ? 1 : 0,
+            WorkDomainFlag: !string.IsNullOrEmpty(context.FocusedDomain) && (WorkDomains.Contains(context.FocusedDomain) || context.FocusedDomain.EndsWith(".internal", StringComparison.OrdinalIgnoreCase)) ? 1 : 0,
             AfkFlag: context.IdleMs >= AfkThresholdMs ? 1 : 0,
             FullscreenFlag: context.FullscreenFlag,
-            WorkspaceSwitchCount300s: CountWorkspaceSwitches(last300),
+            WorkspaceSwitchCount300s: workspaceSwitches,
             DevAppFlag: appCategory == AppCategory.Development ? 1 : 0,
             CreativeAppFlag: appCategory == AppCategory.Creative ? 1 : 0,
             OfficeAppFlag: appCategory == AppCategory.Office ? 1 : 0,
@@ -330,20 +382,87 @@ internal sealed class ActivityFeatureTracker
         return (features, appCategory, appConf);
     }
 
-    private ActivitySample[] GetSamplesSince(DateTime threshold)
+    private ActivitySample BufAt(int n)
     {
-        var list = new List<ActivitySample>(_samples.Count);
-        foreach (var sample in _samples)
-            if (sample.Timestamp >= threshold)
-                list.Add(sample);
-        return list.ToArray();
+        int idx = (_head - 1 - n) % BufferSize;
+        if (idx < 0) idx += BufferSize;
+        return _buf[idx];
     }
 
-    private void TrimSamples(DateTime now)
+    private void TrimOld(DateTime now)
     {
-        var cutoff = now.AddSeconds(-WindowSeconds);
-        while (_samples.Count > 0 && _samples.Peek().Timestamp < cutoff)
-            _samples.Dequeue();
+        // Walk from oldest to newest, dropping entries older than WindowSeconds
+        DateTime cutoff = now.AddSeconds(-WindowSeconds);
+        int oldest = (_head - _count + BufferSize) % BufferSize;
+        int dropped = 0;
+        for (int i = 0; i < _count; i++)
+        {
+            int idx = (oldest + i) % BufferSize;
+            if (_buf[idx].Timestamp >= cutoff) break;
+            dropped++;
+        }
+        if (dropped > 0)
+        {
+            _count -= dropped;
+            // Shift head backwards by dropped count (logical — memory stays, _count shrinks)
+        }
+    }
+
+    private int CountFocusSwitchesTimeWindow(DateTime now, int seconds)
+    {
+        DateTime cutoff = now.AddSeconds(-seconds);
+        int end = _count;
+        int count = 0;
+        string prev = "";
+        for (int i = 0; i < end; i++)
+        {
+            ActivitySample s = BufAt(i);
+            if (s.Timestamp < cutoff) break;
+            count++;
+            if (count == 1) prev = s.FocusKey;
+        }
+        if (count <= 1) return 0;
+        // Count switches within the time window, iterating from oldest to newest
+        int switches = 0;
+        for (int i = count - 1; i >= 0; i--)
+        {
+            string cur = BufAt(i).FocusKey;
+            if (!string.Equals(prev, cur, StringComparison.Ordinal)) { switches++; prev = cur; }
+        }
+        return switches;
+    }
+
+    private int CountFocusSwitches(int n) => CountSwitchKeys(n, s => s.FocusKey);
+    private int CountWorkspaceSwitches(int n) => CountSwitchKeys(n, s => s.WorkspaceId, skipEmpty: true);
+
+    private int CountSwitchKeys(int n, Func<ActivitySample, string> keySelector, bool skipEmpty = false)
+    {
+        if (n <= 1) return 0;
+        int switches = 0;
+        string prev = keySelector(BufAt(0));
+        for (int i = 1; i < n; i++)
+        {
+            string cur = keySelector(BufAt(i));
+            if (skipEmpty && string.IsNullOrEmpty(cur))
+                continue;
+            if (!string.Equals(prev, cur, StringComparison.Ordinal))
+            {
+                switches++;
+                prev = cur;
+            }
+        }
+        return switches;
+    }
+
+    private static bool AddDistinct(string[] buf, ref int count, string value)
+    {
+        if (string.IsNullOrEmpty(value) || string.Equals(value, "unknown", StringComparison.OrdinalIgnoreCase))
+            return false;
+        for (int i = 0; i < count; i++)
+            if (string.Equals(buf[i], value, StringComparison.Ordinal))
+                return false;
+        if (count < buf.Length) buf[count++] = value;
+        return true;
     }
 
     private static SignalQuality DetermineSignalQuality(WindowObservation window, string appId, string title)
@@ -360,7 +479,7 @@ internal sealed class ActivityFeatureTracker
         return SignalQuality.Trusted;
     }
 
-    private static int ClampMilliseconds(TimeSpan duration)
+    internal static int ClampMilliseconds(TimeSpan duration)
     {
         if (duration <= TimeSpan.Zero)
             return 0;
@@ -369,7 +488,7 @@ internal sealed class ActivityFeatureTracker
         return totalMs >= int.MaxValue ? int.MaxValue : (int)totalMs;
     }
 
-    private static string NormalizeRawValue(string? value, string fallback)
+    internal static string NormalizeRawValue(string? value, string fallback)
     {
         if (string.IsNullOrWhiteSpace(value))
             return fallback;
@@ -378,7 +497,7 @@ internal sealed class ActivityFeatureTracker
         return string.IsNullOrWhiteSpace(trimmed) ? fallback : trimmed;
     }
 
-    private static string BuildLegacyAppName(string appId, string title)
+    internal static string BuildLegacyAppName(string appId, string title)
     {
         if (BrowserDetector.IsBrowser(appId))
             return BrowserDetector.GetAppAndSite(appId, title);
@@ -397,80 +516,7 @@ internal sealed class ActivityFeatureTracker
         return !string.IsNullOrWhiteSpace(title) ? $"{appId} [{title}]" : appId;
     }
 
-    private static int CountFocusSwitches(IReadOnlyList<ActivitySample> samples)
-    {
-        if (samples.Count <= 1)
-            return 0;
-
-        int switches = 0;
-        string previousKey = samples[0].FocusKey;
-        for (int i = 1; i < samples.Count; i++)
-        {
-            if (!string.Equals(previousKey, samples[i].FocusKey, StringComparison.Ordinal))
-            {
-                switches++;
-                previousKey = samples[i].FocusKey;
-            }
-        }
-
-        return switches;
-    }
-
-    private static int CountWorkspaceSwitches(IReadOnlyList<ActivitySample> samples)
-    {
-        if (samples.Count <= 1)
-            return 0;
-
-        int switches = 0;
-        string previousWorkspace = samples[0].WorkspaceId;
-        for (int i = 1; i < samples.Count; i++)
-        {
-            string workspace = samples[i].WorkspaceId;
-            if (!string.IsNullOrEmpty(workspace) &&
-                !string.Equals(previousWorkspace, workspace, StringComparison.Ordinal))
-            {
-                switches++;
-            }
-
-            if (!string.IsNullOrEmpty(workspace))
-                previousWorkspace = workspace;
-        }
-
-        return switches;
-    }
-
-    private static int CountDistinct(IEnumerable<string> values) =>
-        values.Where(value => !string.IsNullOrWhiteSpace(value) && !string.Equals(value, "unknown", StringComparison.OrdinalIgnoreCase))
-              .Distinct(StringComparer.Ordinal)
-              .Count();
-
-    private static string GetMostCommonApp(IEnumerable<ActivitySample> samples, string currentApp)
-    {
-        return samples.Where(sample => !string.IsNullOrWhiteSpace(sample.AppId))
-                      .GroupBy(sample => sample.AppId, StringComparer.Ordinal)
-                      .OrderByDescending(group => group.Count())
-                      .ThenByDescending(group => string.Equals(group.Key, currentApp, StringComparison.Ordinal))
-                      .Select(group => group.Key)
-                      .FirstOrDefault() ?? "";
-    }
-
-    private static bool HasInterveningSwitch(IReadOnlyList<ActivitySample> samples, string currentApp)
-    {
-        if (samples.Count <= 1 || string.IsNullOrWhiteSpace(currentApp))
-            return false;
-
-        int currentSegmentStart = samples.Count - 1;
-        while (currentSegmentStart > 0 &&
-               string.Equals(samples[currentSegmentStart - 1].AppId, currentApp, StringComparison.Ordinal))
-        {
-            currentSegmentStart--;
-        }
-
-        return samples.Take(currentSegmentStart)
-                      .Any(sample => !string.Equals(sample.AppId, currentApp, StringComparison.Ordinal));
-    }
-
-    private static AppCategory ClassifyBrowserDomain(string domain)
+    internal static AppCategory ClassifyBrowserDomain(string domain)
     {
         if (EntertainmentDomains.Contains(domain)) return AppCategory.Entertainment;
         if (CommunicationDomains.Contains(domain)) return AppCategory.Communication;
@@ -478,20 +524,13 @@ internal sealed class ActivityFeatureTracker
         return AppCategory.Unknown;
     }
 
-    private static bool IsCommunicationContext(ActivityContext context)
+    internal static bool IsCommunicationContext(ActivityContext context)
     {
         if (CommunicationAppIds.Contains(context.FocusedAppId))
             return true;
 
         return !string.IsNullOrEmpty(context.FocusedDomain) && CommunicationDomains.Contains(context.FocusedDomain);
     }
-
-    private static bool IsEntertainmentDomain(string domain) =>
-        !string.IsNullOrEmpty(domain) && EntertainmentDomains.Contains(domain);
-
-    private static bool IsWorkDomain(string domain) =>
-        !string.IsNullOrEmpty(domain) &&
-        (WorkDomains.Contains(domain) || domain.EndsWith(".internal", StringComparison.OrdinalIgnoreCase));
 
     private readonly record struct ActivitySample(
         DateTime Timestamp,
@@ -1243,7 +1282,7 @@ internal static class AppCategoryClassifier
         }
     }
 
-    private static bool TryParseCategory(string value, out AppCategory category)
+    internal static bool TryParseCategory(string value, out AppCategory category)
     {
         category = value.ToLowerInvariant() switch
         {

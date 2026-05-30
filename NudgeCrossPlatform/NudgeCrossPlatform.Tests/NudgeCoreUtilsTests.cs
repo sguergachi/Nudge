@@ -142,3 +142,175 @@ public sealed class GetSignalQualityNameTests
     public void UnknownValue_ReturnsPoor() =>
         Assert.Equal("poor", NudgeCoreLogic.GetSignalQualityName((SignalQuality)999));
 }
+
+public sealed class ClampMillisecondsTests
+{
+    [Fact]
+    public void Zero_ReturnsZero() =>
+        Assert.Equal(0, ActivityFeatureTracker.ClampMilliseconds(TimeSpan.Zero));
+
+    [Fact]
+    public void Negative_ReturnsZero() =>
+        Assert.Equal(0, ActivityFeatureTracker.ClampMilliseconds(TimeSpan.FromMilliseconds(-100)));
+
+    [Fact]
+    public void NormalDuration_ReturnsMilliseconds() =>
+        Assert.Equal(5000, ActivityFeatureTracker.ClampMilliseconds(TimeSpan.FromSeconds(5)));
+
+    [Fact]
+    public void EnormousDuration_ClampsToIntMax() =>
+        Assert.Equal(int.MaxValue, ActivityFeatureTracker.ClampMilliseconds(TimeSpan.MaxValue));
+}
+
+public sealed class NormalizeRawValueTests
+{
+    [Fact]
+    public void Null_ReturnsFallback() =>
+        Assert.Equal("fallback", ActivityFeatureTracker.NormalizeRawValue(null, "fallback"));
+
+    [Fact]
+    public void Whitespace_ReturnsFallback() =>
+        Assert.Equal("fallback", ActivityFeatureTracker.NormalizeRawValue("   ", "fallback"));
+
+    [Fact]
+    public void Normal_ReturnsUnchanged() =>
+        Assert.Equal("hello", ActivityFeatureTracker.NormalizeRawValue("hello", "fallback"));
+
+    [Fact]
+    public void CrLf_ReplacedWithSpace() =>
+        Assert.Equal("a b", ActivityFeatureTracker.NormalizeRawValue("a\rb", "fallback"));
+
+    [Fact]
+    public void Newline_ReplacedWithSpace() =>
+        Assert.Equal("a b", ActivityFeatureTracker.NormalizeRawValue("a\nb", "fallback"));
+
+    [Fact]
+    public void SurroundingWhitespace_Trimmed() =>
+        Assert.Equal("val", ActivityFeatureTracker.NormalizeRawValue("  val  ", "fallback"));
+}
+
+public sealed class BuildLegacyAppNameTests
+{
+    [Fact]
+    public void NonBrowser_WithTitle_ReturnsTitle()
+    {
+        Assert.Equal("main.py", ActivityFeatureTracker.BuildLegacyAppName("code", "main.py"));
+    }
+
+    [Fact]
+    public void NonBrowser_NoTitle_ReturnsAppId()
+    {
+        Assert.Equal("terminal", ActivityFeatureTracker.BuildLegacyAppName("terminal", ""));
+    }
+}
+
+public sealed class ClassifyBrowserDomainTests
+{
+    [Fact]
+    public void YouTube_ReturnsEntertainment() =>
+        Assert.Equal(AppCategory.Entertainment, ActivityFeatureTracker.ClassifyBrowserDomain("youtube.com"));
+
+    [Fact]
+    public void GitHub_ReturnsDevelopment() =>
+        Assert.Equal(AppCategory.Development, ActivityFeatureTracker.ClassifyBrowserDomain("github.com"));
+
+    [Fact]
+    public void Slack_ReturnsCommunication() =>
+        Assert.Equal(AppCategory.Communication, ActivityFeatureTracker.ClassifyBrowserDomain("slack.com"));
+
+    [Fact]
+    public void UnknownDomain_ReturnsUnknown() =>
+        Assert.Equal(AppCategory.Unknown, ActivityFeatureTracker.ClassifyBrowserDomain("randomsite.xyz"));
+}
+
+public sealed class IsCommunicationContextTests
+{
+    [Fact]
+    public void AppIdInCommunicationApps_ReturnsTrue()
+    {
+        var ctx = new ActivityContext(
+            FocusedAppId: "slack", FocusedTitle: "", FocusedDomain: "",
+            FocusedWindowId: "", IdleMs: 0, IsIdleNow: 0,
+            FocusedSinceMs: 0, TitleUnchangedForMs: 0,
+            MappedToplevelCount: 1, ActiveWorkspaceId: "",
+            FocusSource: FocusSource.Unknown, SignalQuality: SignalQuality.Trusted,
+            FullscreenFlag: 0);
+        Assert.True(ActivityFeatureTracker.IsCommunicationContext(ctx));
+    }
+
+    [Fact]
+    public void DomainInCommunicationDomains_ReturnsTrue()
+    {
+        var ctx = new ActivityContext(
+            FocusedAppId: "firefox", FocusedTitle: "", FocusedDomain: "slack.com",
+            FocusedWindowId: "", IdleMs: 0, IsIdleNow: 0,
+            FocusedSinceMs: 0, TitleUnchangedForMs: 0,
+            MappedToplevelCount: 1, ActiveWorkspaceId: "",
+            FocusSource: FocusSource.Unknown, SignalQuality: SignalQuality.Trusted,
+            FullscreenFlag: 0);
+        Assert.True(ActivityFeatureTracker.IsCommunicationContext(ctx));
+    }
+
+    [Fact]
+    public void NonCommunicationApp_ReturnsFalse()
+    {
+        var ctx = new ActivityContext(
+            FocusedAppId: "code", FocusedTitle: "", FocusedDomain: "github.com",
+            FocusedWindowId: "", IdleMs: 0, IsIdleNow: 0,
+            FocusedSinceMs: 0, TitleUnchangedForMs: 0,
+            MappedToplevelCount: 1, ActiveWorkspaceId: "",
+            FocusSource: FocusSource.Unknown, SignalQuality: SignalQuality.Trusted,
+            FullscreenFlag: 0);
+        Assert.False(ActivityFeatureTracker.IsCommunicationContext(ctx));
+    }
+}
+
+public sealed class GetCategoryNameTests
+{
+    [Fact]
+    public void Development_ReturnsCorrectLabel() =>
+        Assert.Equal("Development", AppCategoryClassifier.GetCategoryName(AppCategory.Development));
+
+    [Fact]
+    public void Entertainment_ReturnsCorrectLabel() =>
+        Assert.Equal("Entertainment", AppCategoryClassifier.GetCategoryName(AppCategory.Entertainment));
+
+    [Fact]
+    public void Communication_ReturnsCorrectLabel() =>
+        Assert.Equal("Communication", AppCategoryClassifier.GetCategoryName(AppCategory.Communication));
+}
+
+public sealed class TryParseCategoryTests
+{
+    [Theory]
+    [InlineData("development", AppCategory.Development)]
+    [InlineData("creative", AppCategory.Creative)]
+    [InlineData("creative & design", AppCategory.Creative)]
+    [InlineData("office", AppCategory.Office)]
+    [InlineData("office & writing", AppCategory.Office)]
+    [InlineData("communication", AppCategory.Communication)]
+    [InlineData("entertainment", AppCategory.Entertainment)]
+    [InlineData("utility", AppCategory.Utility)]
+    [InlineData("DeVeLoPmEnT", AppCategory.Development)]
+    public void KnownCategory_ReturnsTrue(string input, AppCategory expected)
+    {
+        Assert.True(AppCategoryClassifier.TryParseCategory(input, out var category));
+        Assert.Equal(expected, category);
+    }
+
+    [Theory]
+    [InlineData("unknown")]
+    [InlineData("")]
+    public void UnknownOrEmpty_ReturnsFalse(string input)
+    {
+        Assert.False(AppCategoryClassifier.TryParseCategory(input, out var category));
+        Assert.Equal(AppCategory.Unknown, category);
+    }
+
+    [Fact]
+    public void MixedCase_ReturnsCorrectCategory()
+    {
+        Assert.True(AppCategoryClassifier.TryParseCategory("DEVELOPMENT", out var cat));
+        Assert.Equal(AppCategory.Development, cat);
+    }
+}

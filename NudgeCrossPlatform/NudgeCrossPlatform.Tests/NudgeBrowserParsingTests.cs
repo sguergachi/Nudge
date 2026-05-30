@@ -186,3 +186,92 @@ public sealed class NudgeBrowserParsingTests
         Assert.Null(BrowserDetector.GetBrowserDisplayName(processName));
     }
 }
+
+public sealed class NudgeDomainPipelineTests
+{
+    [Theory]
+    [InlineData("github.com", true)]
+    [InlineData("sub.example.com", true)]
+    [InlineData("www.example.co.uk", true)]
+    [InlineData("a.b", false)]
+    [InlineData("", false)]
+    [InlineData("a..b", false)]
+    [InlineData(".com", false)]
+    [InlineData("site.", false)]
+    [InlineData("report.pdf", false)]
+    [InlineData("localhost", false)]
+    [InlineData("no-dot", false)]
+    [InlineData("site", false)]
+    public void IsLikelyDomain(string value, bool expected)
+    {
+        Assert.Equal(expected, BrowserDetector.IsLikelyDomain(value));
+    }
+
+    [Theory]
+    [InlineData("https://github.com/path", true, "github.com")]
+    [InlineData("http://example.com/page", true, "example.com")]
+    [InlineData("www.example.com", true, "example.com")]
+    [InlineData("site.com:8080", true, "site.com")]
+    [InlineData("GITHUB.COM/path", true, "github.com")]
+    [InlineData("bad", false, null)]
+    [InlineData("no dots here", false, null)]
+    public void TryNormalizeDomain(string input, bool expectedResult, string? expectedDomain)
+    {
+        bool result = BrowserDetector.TryNormalizeDomain(input, out string? domain);
+        Assert.Equal(expectedResult, result);
+        if (expectedResult)
+            Assert.Equal(expectedDomain, domain);
+        else
+            Assert.Null(domain);
+    }
+
+    [Theory]
+    [InlineData("GitHub", "github.com")]
+    [InlineData("YouTube", "youtube.com")]
+    [InlineData("Stack Overflow", "stackoverflow.com")]
+    [InlineData("Notion", "notion.so")]
+    [InlineData("Figma", "figma.com")]
+    [InlineData("Linear", "linear.app")]
+    [InlineData("Jira", "jira.atlassian.com")]
+    [InlineData("NonsenseSite", null)]
+    public void TryMatchKnownSiteAlias(string input, string? expectedDomain)
+    {
+        bool result = BrowserDetector.TryMatchKnownSiteAlias(input, out string? domain);
+        if (expectedDomain != null)
+        {
+            Assert.True(result);
+            Assert.Equal(expectedDomain, domain);
+        }
+        else
+        {
+            Assert.False(result);
+        }
+    }
+
+    [Fact]
+    public void TryMatchKnownSiteAlias_EmptyInput_ReturnsFalse()
+    {
+        Assert.False(BrowserDetector.TryMatchKnownSiteAlias("", out _));
+    }
+
+    [Fact]
+    public void TryExtractShortestMeaningfulToken_PicksShortest()
+    {
+        Assert.True(BrowserDetector.TryExtractShortestMeaningfulToken(
+            "the quick brown fox", out var token));
+        Assert.Equal("fox", token.ToString());
+    }
+
+    [Fact]
+    public void TryExtractShortestMeaningfulToken_AllCommonWords_ReturnsFalse()
+    {
+        Assert.False(BrowserDetector.TryExtractShortestMeaningfulToken(
+            "the and for but", out _));
+    }
+
+    [Fact]
+    public void TryExtractShortestMeaningfulToken_ShortTokensFiltered()
+    {
+        Assert.False(BrowserDetector.TryExtractShortestMeaningfulToken("a b c", out _));
+    }
+}

@@ -290,7 +290,7 @@ internal static class BrowserDetector
         return false;
     }
 
-    private static bool TryMatchKnownSiteAlias(ReadOnlySpan<char> value, out string? domain)
+    internal static bool TryMatchKnownSiteAlias(ReadOnlySpan<char> value, out string? domain)
     {
         value = TrimToken(value);
         if (value.IsEmpty)
@@ -312,7 +312,7 @@ internal static class BrowserDetector
         return false;
     }
 
-    private static bool TryExtractShortestMeaningfulToken(ReadOnlySpan<char> title, out ReadOnlySpan<char> token)
+    internal static bool TryExtractShortestMeaningfulToken(ReadOnlySpan<char> title, out ReadOnlySpan<char> token)
     {
         token = default;
         int bestLength = int.MaxValue;
@@ -343,7 +343,7 @@ internal static class BrowserDetector
         return bestLength != int.MaxValue;
     }
 
-    private static bool TryNormalizeDomain(ReadOnlySpan<char> value, out string? normalizedDomain)
+    internal static bool TryNormalizeDomain(ReadOnlySpan<char> value, out string? normalizedDomain)
     {
         value = TrimToken(value);
         if (value.Length < 4 || value.Length > 100)
@@ -379,7 +379,7 @@ internal static class BrowserDetector
         return true;
     }
 
-    private static bool IsLikelyDomain(ReadOnlySpan<char> value)
+    internal static bool IsLikelyDomain(ReadOnlySpan<char> value)
     {
         // localhost is explicitly excluded - not a valid productivity domain
         if (value.Equals("localhost", StringComparison.OrdinalIgnoreCase))
