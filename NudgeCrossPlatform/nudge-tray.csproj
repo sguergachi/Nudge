@@ -21,6 +21,7 @@
     <Compile Include="AnalyticsWindow.cs" />
     <Compile Include="SettingsWindow.cs" />
     <Compile Include="NudgeCore.TestableLogic.cs" />
+    <Compile Include="Logger.cs" />
     <Compile Include="NudgeJsonContext.cs" />
     <Compile Include="NativeTray.cs" />
     <Compile Include="BrowserDetector.cs" />

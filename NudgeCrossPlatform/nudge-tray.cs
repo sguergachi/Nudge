@@ -194,6 +194,11 @@ namespace NudgeTray
             AttachConsole(ATTACH_PARENT_PROCESS);
 #endif
 
+            // Mirror all console output to ~/.nudge/nudge.log so the Send Feedback
+            // flow can attach recent logs. Done after AttachConsole so the parent
+            // terminal still receives output on Windows.
+            FileLogger.Initialize("tray");
+
             int interval = 5; // default 5 minutes
             int mlInterval = 1; // default 1 minute
 
@@ -796,12 +801,8 @@ namespace NudgeTray
             };
             NativeTray.FeedbackClicked += () =>
             {
-                try
-                {
-                    Process.Start(new ProcessStartInfo(
-                        "https://github.com/sguergachi/Nudge/issues/new") { UseShellExecute = true });
-                }
-                catch (Exception ex) { Console.WriteLine($"[ERROR] Could not open feedback URL: {ex.Message}"); }
+                try { OpenFeedback(); }
+                catch (Exception ex) { Console.WriteLine($"[ERROR] Feedback handler failed: {ex.Message}"); }
             };
             NativeTray.UpdatesClicked += () =>
             {
@@ -869,6 +870,72 @@ namespace NudgeTray
             }
         }
 #endif
+
+        const string FeedbackBaseUrl = "https://github.com/sguergachi/Nudge/issues/new";
+
+        // Opens a pre-filled GitHub issue containing the most recent log lines.
+        // Falls back to a blank issue page if anything goes wrong.
+        internal static void OpenFeedback()
+        {
+            string url = BuildFeedbackUrl();
+            try
+            {
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] Could not open feedback URL: {ex.Message}");
+                try
+                {
+                    Process.Start(new ProcessStartInfo(FeedbackBaseUrl) { UseShellExecute = true });
+                }
+                catch (Exception ex2)
+                {
+                    Console.WriteLine($"[ERROR] Could not open fallback feedback URL: {ex2.Message}");
+                }
+            }
+        }
+
+        // Builds a GitHub "new issue" URL with the last 100 log lines attached in
+        // the body. The log block is capped so the resulting URL stays within the
+        // length browsers and GitHub reliably accept.
+        static string BuildFeedbackUrl()
+        {
+            try
+            {
+                var lines = FileLogger.ReadLastLines(100);
+                string logText = string.Join("\n", lines);
+
+                const int maxLogChars = 5000;
+                if (logText.Length > maxLogChars)
+                    logText = "…(older lines truncated)…\n" +
+                              logText.Substring(logText.Length - maxLogChars);
+
+                var body = new StringBuilder();
+                body.AppendLine("<!-- Describe the problem or feedback here. Recent logs are attached below. -->");
+                body.AppendLine();
+                body.AppendLine("### What happened?");
+                body.AppendLine();
+                body.AppendLine();
+                body.AppendLine("---");
+                body.AppendLine($"**Version:** {VERSION}");
+                body.AppendLine($"**OS:** {RuntimeInformation.OSDescription}");
+                body.AppendLine();
+                body.AppendLine("<details><summary>Recent logs (last 100 lines)</summary>");
+                body.AppendLine();
+                body.AppendLine("```");
+                body.AppendLine(logText.Length == 0 ? "(no logs captured yet)" : logText);
+                body.AppendLine("```");
+                body.AppendLine("</details>");
+
+                return $"{FeedbackBaseUrl}?body={Uri.EscapeDataString(body.ToString())}";
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[WARN] Failed to build feedback URL with logs: {ex.Message}");
+                return FeedbackBaseUrl;
+            }
+        }
 
         static NativeMenu CreateAvaloniaMenu()
         {
@@ -963,12 +1030,11 @@ namespace NudgeTray
                 {
                     try
                     {
-                        Process.Start(new ProcessStartInfo(
-                            "https://github.com/sguergachi/Nudge/issues/new") { UseShellExecute = true });
+                        OpenFeedback();
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[ERROR] Could not open feedback URL: {ex.Message}");
+                        Console.WriteLine($"[ERROR] Feedback handler failed: {ex.Message}");
                     }
                 };
                 menu.Add(feedbackItem);
