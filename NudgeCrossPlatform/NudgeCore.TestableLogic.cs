@@ -9,6 +9,9 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Runtime.CompilerServices;
+#if !NUDGE_NOTIFY
+using NudgeTray;
+#endif
 
 [assembly: InternalsVisibleTo("NudgeCrossPlatform.Tests")]
 
@@ -1931,3 +1934,29 @@ internal static class MeetingTitleDetector
         return false;
     }
 }
+
+#if !NUDGE_NOTIFY
+internal static class SuppressionDeduplication
+{
+    private const int RecentWindowSeconds = 5;
+
+    internal static bool TryMutateLatest(MLLiveEvent? latest, string reason, long nowEpochSec)
+    {
+        if (latest == null || nowEpochSec - latest.T > RecentWindowSeconds) return false;
+        latest.SuppressReason = reason;
+        latest.Triggered = false;
+        return true;
+    }
+}
+
+internal static class PredictionChartHelper
+{
+    internal static List<MLLiveEvent> FilterToAiOnly(IReadOnlyList<MLLiveEvent> events)
+    {
+        var result = new List<MLLiveEvent>(events.Count);
+        foreach (var e in events)
+            if (e.TriggerSource == "ai") result.Add(e);
+        return result;
+    }
+}
+#endif

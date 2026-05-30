@@ -28,7 +28,6 @@
     <Compile Include="KWinScripts.cs" />
     <Compile Include="TrainerState.cs" />
     <Compile Include="LiveAIState.cs" />
-    <Compile Include="NudgeTrayHelpers.cs" />
     <Compile Include="AnalyticsWindow.Views.cs" />
   </ItemGroup>
 

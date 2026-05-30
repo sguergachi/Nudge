@@ -6,6 +6,7 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <ShebangSource>nudge-notify.cs</ShebangSource>
     <ShebangBuildSource>nudge-notify_build.cs</ShebangBuildSource>
+    <DefineConstants>$(DefineConstants);NUDGE_NOTIFY</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
