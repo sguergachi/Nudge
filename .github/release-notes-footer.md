@@ -3,9 +3,6 @@
 ### Windows — Setup (recommended)
 Download **Nudge-win-Setup.exe** and run it. Installs to your user folder — no admin or UAC prompt required. Adds a Start Menu shortcut.
 
-### Windows — MSI (system-wide / enterprise)
-Download **Nudge-Setup.msi** for a system-wide install (requires admin).
-
 ### Windows — Portable
 Download **nudge-win-x64.zip**, extract, and run **nudge-tray.exe**.
 
