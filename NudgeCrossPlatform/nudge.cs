@@ -1161,21 +1161,7 @@ sealed class Nudge
         //   L2: Running process scan (Teams, Zoom, Discord, etc.)
         //   L3: Foreground window title keywords + process name
 
-        private static readonly FrozenSet<string> MeetingProcessNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "teams", "zoom", "skype", "webex", "slack", "discord",
-            "gotomeeting", "bluejeans", "ringcentral", "whereby",
-            "ms-teams", "cisco webex meeting", "lark", "dingtalk",
-            "tencent meeting", "wemeet", "voov meeting",
-        }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
-
-        private static readonly FrozenSet<string> MeetingTitleKeywords = new[]
-        {
-            "zoom meeting", "zoom video", "google meet", "microsoft teams",
-            "skype for business", "webex meeting", "gotomeeting", "bluejeans",
-            "slack call", "slack huddle", "discord voice", "ringcentral meeting",
-            "whereby", "lark meeting", "dingtalk meeting",
-        }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+        private static readonly FrozenSet<string> MeetingProcessNames = MeetingTitleDetector.ProcessNames;
 
         private static bool IsMeetingAppRunning()
         {
@@ -1208,16 +1194,7 @@ sealed class Nudge
             }
         }
 
-        private static bool IsMeetingTitle(string title)
-        {
-            if (string.IsNullOrWhiteSpace(title)) return false;
-            foreach (string kw in MeetingTitleKeywords)
-            {
-                if (title.Contains(kw, StringComparison.OrdinalIgnoreCase))
-                    return true;
-            }
-            return false;
-        }
+        private static bool IsMeetingTitle(string title) => MeetingTitleDetector.IsMeetingTitle(title);
 
         // Layer 0: IAudioSessionManager2 — enumerates active audio sessions
         // on the default capture device. Returns true if any non-system-sounds
