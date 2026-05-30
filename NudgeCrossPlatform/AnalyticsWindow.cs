@@ -1629,6 +1629,9 @@ namespace NudgeTray
 
             if (effectiveQuality == "poor")
             {
+                if (harvest.Afk == 1)
+                    return "idle";
+
                 return harvest.FocusSrc switch
                 {
                     "HeuristicProcessScan" => "process scan only",
@@ -2709,41 +2712,61 @@ namespace NudgeTray
                 Margin = new Thickness(0, 44, 0, 8)
             };
 
+            bool hasError = !string.IsNullOrWhiteSpace(Program.MlSetupError);
+
             panel.Children.Add(new TextBlock
             {
-                Text = "◎",
-                FontSize = 44,
+                Text = hasError ? "⚠" : "◎",
+                FontSize = hasError ? 36 : 44,
                 FontWeight = FontWeight.Light,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Foreground = new SolidColorBrush(TextTertiary),
-                Opacity = 0.55
+                Foreground = new SolidColorBrush(hasError ? AIStatusLearning : TextTertiary),
+                Opacity = hasError ? 1.0 : 0.55
             });
 
             var titleText = new TextBlock
             {
-                Text = "Enable AI Predictions",
+                Text = hasError ? "AI Setup Failed" : "Enable AI Predictions",
                 FontSize = 14,
                 FontWeight = FontWeight.SemiBold,
-                Foreground = new SolidColorBrush(TextPrimary),
+                Foreground = new SolidColorBrush(hasError ? AIStatusLearning : TextPrimary),
                 HorizontalAlignment = HorizontalAlignment.Center
             };
             panel.Children.Add(titleText);
 
             var descText = new TextBlock
             {
-                Text = "AI learns from your Yes/No responses to predict\nwhen you're productive vs distracted.",
+                Text = hasError
+                    ? Program.MlSetupError
+                    : "AI learns from your Yes/No responses to predict\nwhen you're productive vs distracted.",
                 FontSize = 11,
-                Foreground = new SolidColorBrush(TextSecondary),
+                Foreground = new SolidColorBrush(hasError ? AIStatusLearning : TextSecondary),
                 TextWrapping = TextWrapping.Wrap,
                 TextAlignment = TextAlignment.Center,
-                MaxWidth = 240,
+                MaxWidth = 320,
                 HorizontalAlignment = HorizontalAlignment.Center
             };
             panel.Children.Add(descText);
 
+            TextBlock? hintTextRef = null;
+            if (hasError)
+            {
+                hintTextRef = new TextBlock
+                {
+                    Text = "Check that Python 3.8+ is installed and try again.\nOpen Analytics → Send Feedback to include logs.",
+                    FontSize = 10,
+                    Foreground = new SolidColorBrush(TextTertiary),
+                    TextWrapping = TextWrapping.Wrap,
+                    TextAlignment = TextAlignment.Center,
+                    MaxWidth = 320,
+                    HorizontalAlignment = HorizontalAlignment.Center
+                };
+                panel.Children.Add(hintTextRef);
+            }
+
             var enableBtn = new Button
             {
-                Content = StrEnableAI,
+                Content = hasError ? "Retry" : StrEnableAI,
                 Background = new SolidColorBrush(PrimaryBlue),
                 Foreground = Brushes.White,
                 BorderThickness = new Thickness(0),
@@ -2758,7 +2781,10 @@ namespace NudgeTray
             {
                 enableBtn.IsEnabled = false;
                 enableBtn.Content = "Starting AI…";
+                descText.IsVisible = true;
+                descText.Foreground = new SolidColorBrush(TextSecondary);
                 descText.Text = "Installing Python dependencies and starting ML services…";
+                if (hintTextRef != null) hintTextRef.IsVisible = false;
                 bool success = await Task.Run(() => Program.RestartWithML());
                 if (!success)
                 {
@@ -2767,7 +2793,13 @@ namespace NudgeTray
                     var detail = !string.IsNullOrWhiteSpace(Program.MlSetupError)
                         ? Program.MlSetupError
                         : "Setup failed. Check the logs for details.";
-                    descText.Text = $"{detail}\n\nAI learns from your Yes/No responses to predict\nwhen you're productive vs distracted.";
+                    descText.Foreground = new SolidColorBrush(AIStatusLearning);
+                    descText.Text = detail;
+                    if (hintTextRef != null)
+                    {
+                        hintTextRef.Text = "Check that Python 3.8+ is installed and try again.\nOpen Analytics → Send Feedback to include logs.";
+                        hintTextRef.IsVisible = true;
+                    }
                 }
             };
             panel.Children.Add(enableBtn);
