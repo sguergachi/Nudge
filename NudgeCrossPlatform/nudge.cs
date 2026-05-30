@@ -1115,7 +1115,7 @@ sealed class Nudge
             //
             // Threshold: 0.25 — two weak signals or one strong signal needed
 
-            const double threshold = 0.25;
+            const double threshold = 0.40;
             double score = 0;
             var signals = new System.Text.StringBuilder();
 
