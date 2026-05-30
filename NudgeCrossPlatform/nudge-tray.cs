@@ -49,7 +49,7 @@ namespace NudgeTray
     sealed class Program
     {
         const int UDP_PORT = 45001;
-        const string VERSION = "1.8.0";
+        const string VERSION = "1.8.1";
         const string NudgeExeName = "nudge";
         const string NudgeDllName = "nudge.dll";
         const int TRAINER_CHECK_INTERVAL_SEC = 15;
@@ -1961,6 +1961,7 @@ namespace NudgeTray
                 if (sig != null)
                 {
                     LiveAIState.LastHarvest = sig;
+                    System.Threading.Interlocked.Increment(ref LiveAIState.UpdateVersion);
                     var now = DateTime.UtcNow;
                     if ((now - _lastHarvestRefresh).TotalSeconds >= 1)
                     {
@@ -1985,6 +1986,7 @@ namespace NudgeTray
                     LiveAIState.InMeeting |= cam;
                 if (bool.TryParse(span.Slice(pipe1 + pipe2 + 2), out bool sharing))
                     LiveAIState.ScreenSharing = sharing;
+                System.Threading.Interlocked.Increment(ref LiveAIState.UpdateVersion);
                 _analyticsWindow?.RequestTrainingViewRefresh();
             }
         }
@@ -2201,6 +2203,9 @@ namespace NudgeTray
         public static void Quit()
         {
             Console.WriteLine("[INFO] Quit() called - shutting down Nudge...");
+
+            // Flush prediction history to disk
+            LiveAIState.FlushToDisk();
 
             // Stop menu countdown timer
             _menuCountdownTimer?.Stop();
