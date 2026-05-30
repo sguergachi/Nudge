@@ -97,7 +97,7 @@ namespace NudgeTray
         private static readonly Color AIStatusActive = Color.FromRgb(76, 175, 80);
         private static readonly Color AIStatusLearning = Color.FromRgb(255, 193, 7);
         private static readonly Color AIStatusInactive = Color.FromRgb(150, 150, 160);
-        private static readonly Color SuppressedColor = Color.FromRgb(100, 149, 237); // cornflower blue — distinct from AI/INT
+        private static readonly Color SuppressedColor = Color.FromRgb(70, 120, 220);
 
         // ── String constants (DRY) ───────────────────────────────────────────
         private const string StrWaitingFirstCheck = "Waiting for first check…";
