@@ -126,7 +126,7 @@ namespace NudgeTray
             {
                 Text = StrPinIcon,
                 FontSize = 16,
-                FontFamily = new FontFamily("Segoe UI"),
+                FontFamily = new FontFamily("Segoe MDL2 Assets"),
                 Foreground = new SolidColorBrush(TextSecondary),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -174,7 +174,7 @@ namespace NudgeTray
                 Text = "✖",
                 FontSize = 16,
                 FontWeight = FontWeight.Normal,
-                FontFamily = new FontFamily("Segoe UI"),
+                FontFamily = new FontFamily("Segoe MDL2 Assets"),
                 Foreground = new SolidColorBrush(TextSecondary),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,

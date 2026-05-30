@@ -168,7 +168,7 @@ namespace NudgeTray
             {
                 Text = symbol,
                 FontSize = fontSize,
-                FontFamily = new FontFamily("Segoe UI"),
+                FontFamily = new FontFamily("Segoe MDL2 Assets"),
                 Foreground = new SolidColorBrush(TextSecondary),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
