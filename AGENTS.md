@@ -152,6 +152,10 @@ The update check fires once on startup (`Task.Run(CheckForUpdateAsync)` in `Afte
 
 We treat code like art, like a craft. We care deeply about doing it well. Every line must earn its place — no cruft, no half-measures, no "good enough." The codebase is a reflection of our standards; anyone who touches it inherits that obligation.
 
+We care deeply about **performance** — it is inseparable from quality. Hot paths must be lean. Cold paths must be intentional. A fast app is a respected app, and performance is earned in the details: avoiding allocations, choosing the right data structure, measuring before optimizing.
+
+We care deeply about **stability and robustness**. The app must never crash. We test until it's rock solid. Edge cases are not optional — they are the difference between something that works in the demo and something that works in the real world. Every code path must be exercised, every error handled gracefully, every platform quirk accounted for.
+
 Write code with **parsimony** — the fewest elements needed to express the solution. Every line
 must justify its existence. Prefer simple constructs over clever abstractions. Delete before
 adding. A smaller codebase is a faster, more maintainable codebase.
