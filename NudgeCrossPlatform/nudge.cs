@@ -1241,7 +1241,8 @@ sealed class Nudge
                         mmde.GetDefaultAudioEndpoint(dataFlow, role, out var device);
                         if (device == null) continue;
 
-                        device.Activate(ref IID_IAudioSessionManager2, 0, IntPtr.Zero, out var obj);
+                        Guid iid = IID_IAudioSessionManager2;
+                        device.Activate(ref iid, 0, IntPtr.Zero, out var obj);
                         if (obj is not IAudioSessionManager2 mgr) continue;
 
                         mgr.GetSessionEnumerator(out var enumerator);
