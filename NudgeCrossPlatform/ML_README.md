@@ -136,7 +136,7 @@ Options:
   --model-dir PATH        Model directory (default: ~/.nudge/model)
   --min-new-samples N     Min new samples before retrain (default: 50)
   --min-total-samples N   Min total for first training (default: 100)
-  --check-interval N      Check interval in seconds (default: 300)
+   --check-interval N      Check interval in seconds (default: 15)
   --architecture TYPE     Model type: lightweight/standard
 ```
 

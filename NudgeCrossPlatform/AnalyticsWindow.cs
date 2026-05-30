@@ -831,6 +831,12 @@ namespace NudgeTray
             var panel = new StackPanel { Spacing = 8 };
 
             // ── Status row ──────────────────────────────────────────────────────
+            bool hasModel = lastTrained != DateTime.MinValue;
+            int newSinceTrain = hasModel ? Math.Max(0, sampleCount - lastTrainedCount) : sampleCount;
+            int retrainThreshold = hasModel
+                ? lastTrainedCount + Math.Max(20, (int)(lastTrainedCount * 0.10))
+                : minSamples;
+
             Color statusColor;
             string statusText;
             if (isTraining)
@@ -843,15 +849,20 @@ namespace NudgeTray
                 statusColor = UnproductiveRed;
                 statusText  = "Error";
             }
-            else if (lastTrained != DateTime.MinValue && sampleCount - lastTrainedCount <= 5)
+            else if (hasModel && newSinceTrain >= retrainThreshold)
+            {
+                statusColor = AIStatusLearning;
+                statusText  = "Ready to retrain";
+            }
+            else if (hasModel && newSinceTrain == 0)
             {
                 statusColor = ProductiveGreen;
                 statusText  = "Up to date";
             }
-            else if (sampleCount >= minSamples && lastTrained != DateTime.MinValue)
+            else if (sampleCount >= minSamples && hasModel)
             {
                 statusColor = AIStatusLearning;
-                statusText  = "Waiting to retrain…";
+                statusText  = $"{retrainThreshold - newSinceTrain} more responses until retrain";
             }
             else if (sampleCount >= minSamples)
             {
@@ -1002,15 +1013,8 @@ namespace NudgeTray
             }
             else
             {
-                bool   hasModel = lastTrained != DateTime.MinValue;
-                int    retrainThreshold = hasModel
-                    ? lastTrainedCount + Math.Max(10, (int)(lastTrainedCount * 0.10))
-                    : minSamples;
-                int    newSamples = hasModel ? Math.Max(0, sampleCount - lastTrainedCount) : sampleCount;
-                int    neededTotal = hasModel ? retrainThreshold : minSamples;
-
                 string progressLabel = hasModel
-                    ? $"{newSamples} new samples since last training"
+                    ? $"{newSinceTrain} new samples since last training"
                     : $"{sampleCount} / {minSamples} samples needed for first model";
 
                 panel.Children.Add(new TextBlock
@@ -1020,11 +1024,14 @@ namespace NudgeTray
                     Foreground = new SolidColorBrush(TextSecondary)
                 });
 
-                // ── Animated countdown bar to next trainer check ───────────────────
-                if (lastChecked != DateTime.MinValue)
+                // ── New-samples progress bar toward retrain threshold ──────────────
+                if (hasModel || sampleCount > 0)
                 {
-                    var anchor = lastChecked;
-                    const double checkIntervalSec = 300;
+                    int barNumerator = hasModel ? newSinceTrain : sampleCount;
+                    int barDenominator = hasModel ? retrainThreshold : minSamples;
+                    double barFill = barDenominator > 0
+                        ? Math.Min(1.0, (double)barNumerator / barDenominator)
+                        : 0;
 
                     var barBg = new Border
                     {
@@ -1035,45 +1042,36 @@ namespace NudgeTray
                         ClipToBounds = true
                     };
 
-                    var fill = new Border
+                    var fillGrid = new Grid();
+                    if (barFill >= 0.995)
                     {
-                        Background = new SolidColorBrush(PrimaryBlue),
-                        CornerRadius = new CornerRadius(2),
+                        fillGrid.ColumnDefinitions = new ColumnDefinitions("*");
+                    }
+                    else
+                    {
+                        double rem = 1.0 - barFill;
+                        fillGrid.ColumnDefinitions = new ColumnDefinitions($"{barFill * 100:F1}*,{rem * 100:F1}*");
+                    }
+                    fillGrid.Children.Add(new Border
+                    {
+                        Background = new SolidColorBrush(
+                            barFill >= 1.0 ? ProductiveGreen : PrimaryBlue),
+                        CornerRadius = new CornerRadius(2, 0, 0, 2),
                         HorizontalAlignment = HorizontalAlignment.Stretch
-                    };
-                    var fillScale = new ScaleTransform { ScaleX = 0 };
-                    fill.RenderTransform = fillScale;
-                    fill.RenderTransformOrigin = new RelativePoint(0, 0.5, RelativeUnit.Relative);
-                    barBg.Child = fill;
+                    });
+                    barBg.Child = fillGrid;
+                    panel.Children.Add(barBg);
 
-                    var countdownLabel = new TextBlock
+                    string thresholdLabel = hasModel
+                        ? $"{newSinceTrain} / {retrainThreshold} new samples needed for retraining"
+                        : $"{sampleCount} / {minSamples} samples needed for first model";
+                    panel.Children.Add(new TextBlock
                     {
+                        Text = thresholdLabel,
                         FontSize = 10,
                         Foreground = new SolidColorBrush(TextTertiary),
                         Margin = new Thickness(0, 2, 0, 0)
-                    };
-
-                    panel.Children.Add(barBg);
-                    panel.Children.Add(countdownLabel);
-
-                    // Update once on creation, then every second
-                    Action update = () =>
-                    {
-                        double elapsed = (DateTime.Now - anchor).TotalSeconds;
-                        double p = Math.Min(1.0, Math.Max(0.0, elapsed / checkIntervalSec));
-                        fillScale.ScaleX = p;
-
-                        double rem = Math.Max(0, checkIntervalSec - elapsed);
-                        countdownLabel.Text = rem > 1
-                            ? $"Next check: in {(int)rem / 60}m {(int)rem % 60}s"
-                            : "Next check: any moment";
-                    };
-                    update();
-
-                    var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-                    timer.Tick += (_, _) => update();
-                    timer.Start();
-                    _liveTimers.Add(timer);
+                    });
                 }
             }
 

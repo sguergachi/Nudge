@@ -52,6 +52,7 @@ namespace NudgeTray
         const string VERSION = "1.7.6";
         const string NudgeExeName = "nudge";
         const string NudgeDllName = "nudge.dll";
+        const int TRAINER_CHECK_INTERVAL_SEC = 15;
         static Process? _nudgeProcess;
         static Process? _mlInferenceProcess;
         static Process? _mlTrainerProcess;
@@ -201,7 +202,7 @@ namespace NudgeTray
             FileLogger.Initialize("tray");
 
             int interval = 5; // default 5 minutes
-            int mlInterval = 1; // default 1 minute
+            int mlInterval = 60; // default 1 minute
 
             // Parse arguments
             for (int i = 0; i < args.Length; i++)
@@ -1575,7 +1576,7 @@ namespace NudgeTray
 
                 // Start background trainer
                 SetMlStatus("🧠 Starting background trainer…");
-                string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --seed --csv \"{csvPath}\" --model-dir \"{_modelDirPath}\" --check-interval 300";
+                string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --seed --csv \"{csvPath}\" --model-dir \"{_modelDirPath}\" --check-interval {TRAINER_CHECK_INTERVAL_SEC}";
                 if (_forceTrainedModel)
                 {
                     trainerArgs += " --min-total-samples 1";
@@ -1651,7 +1652,7 @@ namespace NudgeTray
                 }
 
                 string csvPath = PlatformConfig.CsvPath;
-                string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --seed --csv \"{csvPath}\" --model-dir \"{_modelDirPath}\" --check-interval 300 --min-total-samples 1 --force --once";
+                string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --seed --csv \"{csvPath}\" --model-dir \"{_modelDirPath}\" --check-interval {TRAINER_CHECK_INTERVAL_SEC} --min-total-samples 1 --force --once";
 
                 _mlTrainerProcess = new Process
                 {
@@ -1699,11 +1700,76 @@ namespace NudgeTray
                 _analyticsWindow?.RequestTrainingViewRefresh();
 
                 Console.WriteLine("  ✓ Manual training started");
+
+                // Restart the continuous background trainer once this one-shot exits
+                var capturedProcess = _mlTrainerProcess;
+                _ = Task.Run(() =>
+                {
+                    try
+                    {
+                        capturedProcess.WaitForExit();
+                        Thread.Sleep(500);
+                        if (_mlTrainerProcess == capturedProcess)
+                            StartContinuousTrainer();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"⚠ Failed to restart background trainer: {ex.Message}");
+                    }
+                });
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"⚠ Failed to start manual training: {ex.Message}");
             }
+        }
+
+        static void StartContinuousTrainer()
+        {
+            string csvPath = PlatformConfig.CsvPath;
+            string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --seed --csv \"{csvPath}\" --model-dir \"{_modelDirPath}\" --check-interval {TRAINER_CHECK_INTERVAL_SEC}";
+            if (_forceTrainedModel)
+                trainerArgs += " --min-total-samples 1";
+
+            Console.WriteLine("[ML Trainer] Restarting continuous background trainer…");
+
+            _mlTrainerProcess = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = FindPython(),
+                    Arguments = trainerArgs,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                }
+            };
+
+            _mlTrainerProcess.OutputDataReceived += (s, e) =>
+            {
+                if (!string.IsNullOrEmpty(e.Data))
+                {
+                    TrainerState.ParseLine(e.Data);
+                    Console.WriteLine($"[ML Trainer] {e.Data}");
+                }
+            };
+
+            _mlTrainerProcess.ErrorDataReceived += (s, e) =>
+            {
+                if (!string.IsNullOrEmpty(e.Data))
+                {
+                    TrainerState.ParseLine(e.Data);
+                    Console.WriteLine($"[ML Trainer] {e.Data}");
+                }
+            };
+
+            _mlTrainerProcess.Start();
+            _mlTrainerProcess.BeginOutputReadLine();
+            _mlTrainerProcess.BeginErrorReadLine();
+
+            TrainerState.RefreshFromCsv();
+            _analyticsWindow?.RequestTrainingViewRefresh();
         }
 
         static void StartNudge(int interval)
@@ -1784,111 +1850,20 @@ namespace NudgeTray
                     {
                         Console.WriteLine($"[Nudge Harvest] {e.Data}");
 
-                        // Detect snapshot requests (exact match only)
                         if (e.Data.Trim() == "SNAPSHOT")
-                        {
-                            ShowSnapshotNotification();
-                        }
-                        // Live ML prediction data → feed AI Brain tab
+                            HandleSnapshot();
                         else if (e.Data.StartsWith("MLDATA:", StringComparison.Ordinal))
-                        {
-                            try
-                            {
-                                var evt = JsonSerializer.Deserialize(
-                                    e.Data.AsSpan(7),
-                                    NudgeJsonContext.Default.MLLiveEvent);
-                                if (evt != null)
-                                    LiveAIState.Add(evt);
-                            }
-                            catch { /* non-critical, silently ignore parse errors */ }
-
-                            // ML check just completed — run training so the model
-                            // is ready for the next countdown cycle
-                            _ = Task.Run(() => TriggerTrainingNow());
-                        }
-                        // ML user response → update the corresponding event
+                            HandleMLData(e.Data.AsSpan(7));
                         else if (e.Data.StartsWith("MLRESPONSE:", StringComparison.Ordinal))
-                        {
-                            try
-                            {
-                                var resp = JsonSerializer.Deserialize(
-                                    e.Data.AsSpan(11),
-                                    NudgeJsonContext.Default.MLResponseEvent);
-                                if (resp != null)
-                                {
-                                    LiveAIState.UpdateResponse(resp.T, resp.Response);
-                                    // CSV was just written — refresh sample count in AI Brain tab
-                                    TrainerState.RefreshFromCsv();
-                                    _analyticsWindow?.RequestTrainingViewRefresh();
-                                }
-                            }
-                            catch { /* non-critical, silently ignore parse errors */ }
-                        }
-                        // Next scheduled ML check update
+                            HandleMLResponse(e.Data.AsSpan(11));
                         else if (e.Data.StartsWith("MLNEXT:", StringComparison.Ordinal))
-                        {
-                            if (long.TryParse(e.Data.AsSpan(7), out long ts))
-                            {
-                                LiveAIState.NextCheckAt = ts;
-                                LiveAIState.LastMlNextTick = Environment.TickCount64;
-                            }
-                        }
-                        // Real-time foreground app tracking (format: APPFOCUS:app\ttitle)
+                            HandleMLNext(e.Data.AsSpan(7));
                         else if (e.Data.StartsWith("APPFOCUS:", StringComparison.Ordinal))
-                        {
-                            var payload = e.Data.AsSpan(9);
-                            int tab = payload.IndexOf('\t');
-                            if (tab >= 0)
-                            {
-                                LiveAIState.CurrentApp    = payload.Slice(0, tab).ToString();
-                                LiveAIState.CurrentDetail = payload.Slice(tab + 1).ToString();
-                            }
-                            else
-                            {
-                                LiveAIState.CurrentApp    = payload.ToString();
-                                LiveAIState.CurrentDetail = "";
-                            }
-                        }
+                            HandleAppFocus(e.Data.AsSpan(9));
                         else if (e.Data.StartsWith("HARVEST:", StringComparison.Ordinal))
-                        {
-                            try
-                            {
-                                var sig = JsonSerializer.Deserialize(
-                                    e.Data.AsSpan(8),
-                                    NudgeJsonContext.Default.HarvestSignal);
-                                if (sig != null)
-                                {
-                                    LiveAIState.LastHarvest = sig;
-                                    // Throttle UI refresh to at most once per second
-                                    // so we don't flood the UI thread on every 2s tick
-                                    var now = DateTime.UtcNow;
-                                    if ((now - _lastHarvestRefresh).TotalSeconds >= 1)
-                                    {
-                                        _lastHarvestRefresh = now;
-                                        _analyticsWindow?.RequestTrainingViewRefresh();
-                                    }
-                                }
-                            }
-                            catch { /* non-critical */ }
-                        }
-                        // Snapshot suppressed (meeting, screen-share, AFK, poor signal)
+                            HandleHarvest(e.Data.AsSpan(8));
                         else if (e.Data.StartsWith("SUPPRESS:", StringComparison.Ordinal))
-                        {
-                            string reason = e.Data.AsSpan(9).ToString();
-                            var evt = new MLLiveEvent
-                            {
-                                T             = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                                App           = LiveAIState.CurrentApp,
-                                TriggerSource = "sup",
-                                SuppressReason = reason,
-                                Score         = 0,
-                                Confidence    = 0,
-                                Productive    = true,
-                                Triggered     = false
-                            };
-                            LiveAIState.Add(evt);
-                            _analyticsWindow?.RequestTrainingViewRefresh();
-                        }
+                            HandleSuppress(e.Data.AsSpan(9));
                     }
                 };
 
@@ -1915,6 +1890,98 @@ namespace NudgeTray
                 Console.WriteLine($"✗ Failed to start Nudge Harvest: {ex.Message}");
                 throw;
             }
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // IPC message handlers — dispatched from nudge daemon stdout
+
+        static void HandleSnapshot() => ShowSnapshotNotification();
+
+        static void HandleMLData(ReadOnlySpan<char> payload)
+        {
+            try
+            {
+                var evt = JsonSerializer.Deserialize(payload, NudgeJsonContext.Default.MLLiveEvent);
+                if (evt != null)
+                    LiveAIState.Add(evt);
+            }
+            catch { /* non-critical, silently ignore parse errors */ }
+        }
+
+        static void HandleMLResponse(ReadOnlySpan<char> payload)
+        {
+            try
+            {
+                var resp = JsonSerializer.Deserialize(payload, NudgeJsonContext.Default.MLResponseEvent);
+                if (resp != null)
+                {
+                    LiveAIState.UpdateResponse(resp.T, resp.Response);
+                    TrainerState.RefreshFromCsv();
+                    _analyticsWindow?.RequestTrainingViewRefresh();
+                }
+            }
+            catch { /* non-critical, silently ignore parse errors */ }
+        }
+
+        static void HandleMLNext(ReadOnlySpan<char> payload)
+        {
+            if (long.TryParse(payload, out long ts))
+            {
+                LiveAIState.NextCheckAt = ts;
+                LiveAIState.LastMlNextTick = Environment.TickCount64;
+            }
+        }
+
+        static void HandleAppFocus(ReadOnlySpan<char> payload)
+        {
+            int tab = payload.IndexOf('\t');
+            if (tab >= 0)
+            {
+                LiveAIState.CurrentApp    = payload.Slice(0, tab).ToString();
+                LiveAIState.CurrentDetail = payload.Slice(tab + 1).ToString();
+            }
+            else
+            {
+                LiveAIState.CurrentApp    = payload.ToString();
+                LiveAIState.CurrentDetail = "";
+            }
+        }
+
+        static void HandleHarvest(ReadOnlySpan<char> payload)
+        {
+            try
+            {
+                var sig = JsonSerializer.Deserialize(payload, NudgeJsonContext.Default.HarvestSignal);
+                if (sig != null)
+                {
+                    LiveAIState.LastHarvest = sig;
+                    var now = DateTime.UtcNow;
+                    if ((now - _lastHarvestRefresh).TotalSeconds >= 1)
+                    {
+                        _lastHarvestRefresh = now;
+                        _analyticsWindow?.RequestTrainingViewRefresh();
+                    }
+                }
+            }
+            catch { /* non-critical */ }
+        }
+
+        static void HandleSuppress(ReadOnlySpan<char> payload)
+        {
+            string reason = payload.ToString();
+            var evt = new MLLiveEvent
+            {
+                T             = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                App           = LiveAIState.CurrentApp,
+                TriggerSource = "sup",
+                SuppressReason = reason,
+                Score         = 0,
+                Confidence    = 0,
+                Productive    = true,
+                Triggered     = false
+            };
+            LiveAIState.Add(evt);
+            _analyticsWindow?.RequestTrainingViewRefresh();
         }
 
         public static void ShowSnapshotNotification()
