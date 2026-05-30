@@ -1464,7 +1464,6 @@ namespace NudgeTray
                 });
             }
             // Fusion quality + "In Focus Now" on the same line
-            string qualityReason = harvest != null ? ComputeQualityReason(harvest, effectiveQuality) : "";
             var qualityRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
             qualityRow.Children.Add(new Border
             {
@@ -1480,15 +1479,6 @@ namespace NudgeTray
                 FontWeight = FontWeight.Medium,
                 Foreground = new SolidColorBrush(fusionColor)
             });
-            if (!string.IsNullOrEmpty(qualityReason))
-            {
-                qualityRow.Children.Add(new TextBlock
-                {
-                    Text       = $"({qualityReason})",
-                    FontSize   = 9,
-                    Foreground = new SolidColorBrush(Color.FromArgb(180, fusionColor.R, fusionColor.G, fusionColor.B))
-                });
-            }
             qualityRow.Children.Add(new TextBlock
             {
                 Text       = "· In Focus Now",
@@ -1513,7 +1503,9 @@ namespace NudgeTray
             var signalPanel = new StackPanel { Spacing = 5, IsVisible = _sensorSignalsOpen, Margin = new Thickness(0, 6, 0, 2) };
             if (harvest != null)
             {
-                AddFusionRow(signalPanel, "Signal Quality", qualityLabel, fusionColor);
+                string qualityReason = ComputeQualityReason(harvest, effectiveQuality);
+                string qualityText = !string.IsNullOrEmpty(qualityReason) ? $"{qualityLabel} ({qualityReason})" : qualityLabel;
+                AddFusionRow(signalPanel, "Signal Quality", qualityText, fusionColor);
                 AddFusionRow(signalPanel, "Win Tracking",  FormatKWinStatus(harvest.FocusSrc),
                     harvest.FocusSrc == "KWinScript" ? ProductiveGreen : AIStatusLearning);
                 AddFusionRow(signalPanel, "Idle",           FormatMs(harvest.IdleMs),      TextSecondary);

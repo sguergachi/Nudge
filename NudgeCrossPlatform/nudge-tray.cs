@@ -908,7 +908,7 @@ namespace NudgeTray
                 var lines = FileLogger.ReadLastLines(100);
                 string logText = string.Join("\n", lines);
 
-                const int maxLogChars = 5000;
+                const int maxLogChars = 1500;
                 if (logText.Length > maxLogChars)
                     logText = string.Concat("…(older lines truncated)…\n",
                               logText.AsSpan(logText.Length - maxLogChars));
@@ -1298,13 +1298,24 @@ namespace NudgeTray
                         }
                     };
                     testProc.Start();
-                    pythonWorks = testProc.WaitForExit(5000) && testProc.ExitCode == 0;
+                    // Read output streams to prevent deadlock on Windows
+                    testProc.BeginOutputReadLine();
+                    testProc.BeginErrorReadLine();
+                    if (!testProc.WaitForExit(5000))
+                    {
+                        try { testProc.Kill(entireProcessTree: true); } catch { }
+                        MlSetupError = "Python process timed out.\nAntivirus or security software may be blocking Python.\nTry adding an exclusion for the Nudge folder.";
+                        Console.WriteLine("  ✗ Python process timed out after 5s");
+                        return false;
+                    }
+                    pythonWorks = testProc.ExitCode == 0;
                 }
                 catch { }
 
                 if (!pythonWorks)
                 {
-                    MlSetupError = "Python 3 is not installed.\nPlease install Python 3.8+ from python.org and try again.";
+                    if (string.IsNullOrEmpty(MlSetupError))
+                        MlSetupError = "Python 3 is not installed.\nPlease install Python 3.8+ from python.org and try again.";
                     Console.WriteLine("  ✗ Python not found or not working");
                     return false;
                 }
@@ -1345,7 +1356,15 @@ namespace NudgeTray
                     };
 
                     checkProcess.Start();
-                    checkProcess.WaitForExit(5000);
+                    // Read output streams to prevent deadlock on Windows
+                    checkProcess.BeginOutputReadLine();
+                    checkProcess.BeginErrorReadLine();
+                    if (!checkProcess.WaitForExit(5000))
+                    {
+                        try { checkProcess.Kill(entireProcessTree: true); checkProcess.WaitForExit(1000); } catch { }
+                        allInstalled = false;
+                        break;
+                    }
 
                     if (checkProcess.ExitCode != 0)
                     {

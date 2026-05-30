@@ -502,12 +502,12 @@ internal sealed class ActivityFeatureTracker
 
     private static readonly FrozenSet<string> CommunicationAppIds = new[]
     {
-        "discord", "microsoft teams", "outlook", "signal", "slack", "teams", "thunderbird", "zoom"
+        "discord", "microsoft teams", "outlook", "signal", "slack", "teams", "thunderbird", "whatsapp", "zoom"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenSet<string> CommunicationDomains = new[]
     {
-        "calendar.google.com", "discord.com", "mail.google.com", "meet.google.com", "outlook.office.com", "slack.com", "zoom.us"
+        "calendar.google.com", "discord.com", "mail.google.com", "meet.google.com", "outlook.office.com", "slack.com", "web.whatsapp.com", "zoom.us"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenSet<string> EntertainmentDomains = new[]
@@ -746,7 +746,15 @@ internal static class PlatformConfig
                     }
                 };
                 p.Start();
-                if (p.WaitForExit(3000) && p.ExitCode == 0)
+                // Read output streams to prevent deadlock on Windows
+                p.BeginOutputReadLine();
+                p.BeginErrorReadLine();
+                if (!p.WaitForExit(3000))
+                {
+                    try { p.Kill(entireProcessTree: true); } catch { }
+                    continue;
+                }
+                if (p.ExitCode == 0)
                     return cmd;
             }
             catch { }
@@ -781,11 +789,18 @@ internal static class PlatformConfig
                 }
             };
             proc.Start();
-            proc.WaitForExit(30000);
+            // Read streams asynchronously to prevent deadlock on Windows
+            proc.BeginOutputReadLine();
+            proc.BeginErrorReadLine();
+            if (!proc.WaitForExit(30000))
+            {
+                try { proc.Kill(entireProcessTree: true); } catch { }
+                Console.WriteLine($"[WARN] Failed to create venv: timed out after 30s");
+                return false;
+            }
             if (proc.ExitCode != 0)
             {
-                string err = proc.StandardError.ReadToEnd();
-                Console.WriteLine($"[WARN] Failed to create venv: {err.Trim()}");
+                Console.WriteLine($"[WARN] Failed to create venv (exit code {proc.ExitCode})");
                 return false;
             }
             return true;
@@ -872,7 +887,7 @@ internal static class AppCategoryClassifier
           "paint", "draw", "sketch", "design", "cad", "render", "synth", "studio"], AppCategory.Creative),
         (["libreoffice", "writer", "calc", "impress", "okular", "evince", "mupdf", "zathura",
           "sheet", "xls", "pdf", "present", "note", "organizer"], AppCategory.Office),
-        (["discord", "slack", "teams", "zoom", "signal", "telegram", "thunderbird", "evolution",
+        (["discord", "slack", "teams", "zoom", "signal", "telegram", "thunderbird", "evolution", "whatsapp",
           "chat", "mail", "message", "meet", "call", "collab"], AppCategory.Communication),
         (["spotify", "vlc", "mpv", "mplayer", "totem", "rhythmbox", "clementine", "amarok",
           "steam", "lutris", "heroic",
