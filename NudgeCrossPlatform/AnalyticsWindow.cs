@@ -2402,15 +2402,14 @@ namespace NudgeTray
             }
 
             string statusLabel = "";
-            if (!isSuppressed)
-            {
-                if (evt.AiCorrect == true)
-                    statusLabel = " · ✓ confirmed";
-                else if (evt.AiCorrect == false)
-                    statusLabel = " · ✗ rejected";
-                else if (evt.Triggered)
-                    statusLabel = " · ⏸ skipped";
-            }
+            if (isSuppressed)
+                statusLabel = " · ⏸ suppressed";
+            else if (evt.AiCorrect == true)
+                statusLabel = " · ✓ confirmed";
+            else if (evt.AiCorrect == false)
+                statusLabel = " · ✗ rejected";
+            else if (evt.Triggered)
+                statusLabel = " · ⏸ skipped";
 
             var tipGrid = new Grid
             {
@@ -2488,11 +2487,11 @@ namespace NudgeTray
 
         private static string SuppressReasonToLabel(string? reason) => reason switch
         {
-            "InMeeting"    => "⏸ meeting",
-            "ScreenSharing" => "⏸ presenting",
-            "Afk"          => "⏸ away",
-            "PoorSignal"   => "⏸ no signal",
-            _              => "⏸ suppressed"
+            "InMeeting"    => "meeting",
+            "ScreenSharing" => "presenting",
+            "Afk"          => "away",
+            "PoorSignal"   => "no signal",
+            _              => "suppressed"
         };
 
         /// <summary>Compact log of most-recent ML checks, newest first.</summary>
@@ -2628,11 +2627,12 @@ namespace NudgeTray
                 };
                 Grid.SetColumn(actionText, 4);
 
-                // Response icon (✓ = AI correct, ✗ = AI wrong, ⏸ = skipped)
+                // Response icon (✓ = AI correct, ✗ = AI wrong, ⏸ = skipped/suppressed)
                 var respText = new TextBlock
                 {
                     Text = evt.AiCorrect == true ? "✓"
                          : evt.AiCorrect == false ? "✗"
+                         : evt.TriggerSource == "sup" ? "⏸"
                          : evt.Triggered ? "⏸"
                          : "",
                     FontSize = 11,
