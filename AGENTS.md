@@ -69,7 +69,38 @@ YES/NO responses flow back via UDP `127.0.0.1:45001`.
 - Log patterns: `ML TRIGGER`, `ML SKIP`, `ML DEFER`, `INTERVAL SNAPSHOT`.
 - Requires 100 (`MIN_SAMPLES_THRESHOLD`) training samples before ML activates.
 
+### SnapshotGate — suppression rules
+
+Every snapshot (ML or interval) passes through `SnapshotGate.Evaluate()` before firing. A suppressed snapshot skips the notification, logs `SUPPRESS:{reason}`, and resets the interval timer without counting toward stats.
+
+| Reason | Condition |
+|--------|-----------|
+| `Afk` | `AfkFlag == 1` (idle > 60s) |
+| `PoorSignal` | `SignalQuality == Poor` (unknown app, process scan, etc.) |
+| `InMeeting` | Mic/camera active (Core Audio API, PipeWire, PulseAudio, Windows Registry, or app scan) |
+| `ScreenSharing` | PipeWire screen-cast stream active |
+
+Presence detection (`GetPresenceState()`) uses graceful degradation across 3 layers on each platform. Linux: PipeWire (`pw-dump`) → PulseAudio (`pactl`). Windows uses a 4-layer approach:
+
+0. **IAudioSessionManager2 Core Audio API** — directly queries the audio subsystem for active capture sessions. Catches ALL mic usage including WASAPI exclusive mode, virtual devices, and apps that bypass the consent store. Most reliable layer.
+1. **CapabilityAccessManager registry** (`ConsentStore\microphone`, `ConsentStore\webcam`) — hardware-level mic/camera detection. Handles both `REG_QWORD` and `REG_DWORD` value types. Stale entries (process not running) are filtered out.
+2. **Process scan** — checks if known meeting apps are running (Teams, Zoom, Skype, Webex, Slack, Discord, GoToMeeting, BlueJeans, RingCentral, Whereby, Lark, DingTalk, Tencent Meeting, Voov).
+3. **Window title heuristic** — checks the foreground window title for meeting keywords (e.g. "Zoom Meeting", "Google Meet", "Microsoft Teams").
+
+Gated by `--no-meeting-suppression` flag — passes `PresenceState.Unavailable` so gate fails open (never suppresses).
+
 ## ML system
+
+### V1 Seed Model (bundled)
+
+A pretrained V1 model is bundled in `NudgeCrossPlatform/model/` and shipped in releases:
+- `productivity_model.joblib` — GradientBoosting classifier, 26 V3 features, trained on synthetic seed data
+- `scaler.json` — feature scaler parameters
+- `trainer_meta.json` — training metadata (model_version, accuracy, sample count)
+
+On first ML startup, `DeployBundledModel()` in `nudge-tray.cs` copies these files from the app directory to `~/.nudge/model/` so the AI works immediately without the user needing 100 labeled snapshots first. The background trainer continues refining/replacing the seed model once real labels accumulate.
+
+### Training
 
 ```bash
 # Train model
@@ -80,7 +111,9 @@ python3 train_model.py ~/.nudge/HARVEST.CSV --architecture standard
 ```
 
 - Python scikit-learn served over TCP `127.0.0.1:45002`.
-- Background trainer (`background_trainer.py`) retrains at 50+ new samples, 300s check interval.
+- Background trainer (`background_trainer.py`) retrains at 20+ new samples, 300s check interval.
+- Seed data generation: `python3 generate_sample_data.py` creates synthetic labeled data from HARVEST.CSV schema.
+- Train model supports V1→V2 schema migration and applies sample weighting (class balance + recency 60d halflife + V1 penalty 0.1x).
 - Data all local in `~/.nudge/`.
 
 ## Release pipeline

@@ -1024,6 +1024,10 @@ sealed class Nudge
         public string PlatformName => "Windows";
         public IdleSource LastIdleSource => IdleSource.Win32LastInput;
 
+        private DateTime _appCacheExpiry = DateTime.MinValue;
+        private string _cachedApp = "";
+        private string _cachedTitle = "";
+
         public bool Initialize() => true;
 
         public string GetForegroundApp()
@@ -1034,9 +1038,15 @@ sealed class Nudge
 
         public (string app, string title) GetForegroundAppWithTitle()
         {
+            if (DateTime.Now < _appCacheExpiry)
+                return (_cachedApp, _cachedTitle);
+
             var hwnd = GetForegroundWindow();
             if (hwnd == IntPtr.Zero || !IsWindow(hwnd))
-                return ("unknown", "");
+            {
+                _appCacheExpiry = DateTime.Now.AddMilliseconds(500);
+                return (_cachedApp, _cachedTitle);
+            }
 
             var buf = new char[512];
             var len = GetWindowText(hwnd, buf, buf.Length);
@@ -1044,18 +1054,39 @@ sealed class Nudge
 
             uint tid = GetWindowThreadProcessId(hwnd, out uint pid);
             if (tid == 0)
-                return ("unknown", title);
+            {
+                _appCacheExpiry = DateTime.Now.AddMilliseconds(500);
+                return (_cachedApp, _cachedTitle);
+            }
 
             try
             {
                 using var proc = Process.GetProcessById((int)pid);
                 if (proc.HasExited)
-                    return ("unknown", title);
-                return (proc.ProcessName.ToLowerInvariant(), title);
+                {
+                    _appCacheExpiry = DateTime.Now.AddMilliseconds(500);
+                    return (_cachedApp, _cachedTitle);
+                }
+
+                var procName = proc.ProcessName.ToLowerInvariant();
+                // If foreground is our own tray/notification/analytics window, keep
+                // the last-known real app so snapshots don't record "nudge-tray".
+                if (NudgeCoreLogic.MatchesNudgeWindowMarker(procName) ||
+                    NudgeCoreLogic.MatchesNudgeWindowMarker(title))
+                {
+                    _appCacheExpiry = DateTime.Now.AddMilliseconds(500);
+                    return (_cachedApp, _cachedTitle);
+                }
+
+                _cachedApp = procName;
+                _cachedTitle = title;
+                _appCacheExpiry = DateTime.Now.AddMilliseconds(500);
+                return (_cachedApp, _cachedTitle);
             }
             catch
             {
-                return ("unknown", title);
+                _appCacheExpiry = DateTime.Now.AddMilliseconds(500);
+                return (_cachedApp, _cachedTitle);
             }
         }
 
@@ -1071,21 +1102,281 @@ sealed class Nudge
         public PresenceState GetPresenceState()
         {
 #if WINDOWS
+            // Layer 0: Core Audio API — directly queries the audio subsystem via
+            // IAudioSessionManager2. Catches ALL mic usage including WASAPI exclusive
+            // mode, virtual devices, and apps that bypass the Windows consent store.
+            // This is the most reliable layer.
+            if (HasActiveAudioSession())
+            {
+                Console.WriteLine("  ⓘ Presence (audio): active capture session detected");
+                return new PresenceState(true, false, false, PresenceSource.WindowsRegistry);
+            }
+
+            // Layer 1: Hardware detection via CapabilityAccessManager registry.
+            // Works for apps that go through Windows mic/camera consent (Teams,
+            // Zoom, Chrome, etc.).  Correctly handles both REG_QWORD and REG_DWORD
+            // value types.
             int micAppCount = TestCapability("microphone");
             int camAppCount = TestCapability("webcam");
             bool mic = micAppCount > 0;
             bool cam = camAppCount > 0;
-            return new PresenceState(mic, cam, false, PresenceSource.WindowsRegistry);
+            if (mic || cam)
+            {
+                Console.WriteLine($"  ⓘ Presence (registry): mic={mic}, cam={cam}  ({micAppCount}+{camAppCount} apps)");
+                return new PresenceState(mic, cam, false, PresenceSource.WindowsRegistry);
+            }
+
+            // Layer 2: App-based detection — meeting apps often use audio without
+            // updating the consent store (e.g. virtual audio devices, WASAPI exclusive
+            // mode, or browser-based calls where Windows doesn't track the tab).
+            if (IsMeetingAppRunning())
+            {
+                Console.WriteLine("  ⓘ Presence (app): meeting app running");
+                return new PresenceState(true, false, false, PresenceSource.WindowsRegistry);
+            }
+
+            // Layer 3: Foreground window title heuristic.
+            var (app, title) = GetForegroundAppWithTitle();
+            if (IsMeetingTitle(title) || IsMeetingAppName(app))
+            {
+                Console.WriteLine($"  ⓘ Presence (title): meeting window — {app}: {Truncate(title, 80)}");
+                return new PresenceState(true, false, false, PresenceSource.WindowsRegistry);
+            }
+
+            return new PresenceState(false, false, false, PresenceSource.WindowsRegistry);
 #else
             return PresenceState.Unavailable;
 #endif
         }
 
 #if WINDOWS
-        // Track previously-active apps so we can detect when a stale registry key
-        // reports "active" but the process isn't actually running.
-        private static readonly HashSet<string> _knownActiveApps = new(StringComparer.OrdinalIgnoreCase);
-        private static DateTime _lastPresenceLog = DateTime.MinValue;
+        // Meeting detection — graceful degradation across 4 layers:
+        //   L0: IAudioSessionManager2 Core Audio API (capture session enumeration)
+        //   L1: CapabilityAccessManager registry (hardware-level mic/camera consent)
+        //   L2: Running process scan (Teams, Zoom, Discord, etc.)
+        //   L3: Foreground window title keywords + process name
+
+        private static readonly FrozenSet<string> MeetingProcessNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "teams", "zoom", "skype", "webex", "slack", "discord",
+            "gotomeeting", "bluejeans", "ringcentral", "whereby",
+            "ms-teams", "cisco webex meeting", "lark", "dingtalk",
+            "tencent meeting", "wemeet", "voov meeting",
+        }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+        private static readonly FrozenSet<string> MeetingTitleKeywords = new[]
+        {
+            "zoom meeting", "zoom video", "google meet", "microsoft teams",
+            "skype for business", "webex meeting", "gotomeeting", "bluejeans",
+            "slack call", "slack huddle", "discord voice", "ringcentral meeting",
+            "whereby", "lark meeting", "dingtalk meeting",
+        }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+        private static bool IsMeetingAppRunning()
+        {
+            try
+            {
+                var procs = Process.GetProcesses();
+                foreach (var p in procs)
+                {
+                    try
+                    {
+                        if (MeetingProcessNames.Contains(p.ProcessName))
+                        {
+                            p.Dispose();
+                            // Dispose remaining procs to avoid leak before returning
+                            foreach (var r in procs) r.Dispose();
+                            return true;
+                        }
+                    }
+                    catch { }
+                    p.Dispose();
+                }
+            }
+            catch { }
+            return false;
+        }
+
+        private static bool IsMeetingTitle(string title)
+        {
+            if (string.IsNullOrWhiteSpace(title)) return false;
+            foreach (string kw in MeetingTitleKeywords)
+            {
+                if (title.Contains(kw, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
+
+        private static bool IsMeetingAppName(string appName)
+        {
+            return !string.IsNullOrEmpty(appName) &&
+                   MeetingProcessNames.Contains(appName);
+        }
+
+        private static string Truncate(string s, int maxLen)
+        {
+            if (string.IsNullOrEmpty(s) || s.Length <= maxLen) return s;
+            return s[..(maxLen - 3)] + "...";
+        }
+
+        // Layer 0: IAudioSessionManager2 — enumerates active audio sessions
+        // on the default capture device. Returns true if any non-system-sounds
+        // capture session is in the Active state (microphone in use by an app).
+
+        private static bool HasActiveAudioSession()
+        {
+            try
+            {
+                var mmdeType = Type.GetTypeFromCLSID(new Guid("BCDE0395-E52F-467C-8E3D-C4579291692E"));
+                if (mmdeType == null) return false;
+                var mmde = (IMMDeviceEnumerator)Activator.CreateInstance(mmdeType)!;
+
+                // Check both the console capture device (default mic) and the
+                // communications capture device (e.g. USB headset set as comm device).
+                foreach (var (dataFlow, role) in new[] { (1, 0), (1, 2) }) // eCapture + eConsole, eCapture + eCommunications
+                {
+                    try
+                    {
+                        mmde.GetDefaultAudioEndpoint(dataFlow, role, out var device);
+                        if (device == null) continue;
+
+                        device.Activate(ref IID_IAudioSessionManager2, 0, IntPtr.Zero, out var obj);
+                        if (obj is not IAudioSessionManager2 mgr) continue;
+
+                        mgr.GetSessionEnumerator(out var enumerator);
+                        if (enumerator == null) continue;
+
+                        enumerator.GetCount(out int count);
+                        for (int i = 0; i < count; i++)
+                        {
+                            enumerator.GetSession(i, out var session);
+                            if (session == null) continue;
+                            session.GetState(out int state);
+                            if (state != 1) continue; // AudioSessionStateActive
+
+                            // Exclude system sounds (notification dings, etc.)
+                            if (session is IAudioSessionControl2 session2)
+                            {
+                                session2.IsSystemSoundsSession(out bool isSystem);
+                                if (isSystem) continue;
+                            }
+
+                            return true;
+                        }
+                    }
+                    catch { }
+                }
+
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static readonly Guid IID_IAudioSessionManager2 = new("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F");
+
+        // ── Core Audio COM interfaces (vtable order matters) ──────────────────
+
+        [ComImport, Guid("A95664D2-9614-4F35-A746-DE8DB63617E6")]
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IMMDeviceEnumerator
+        {
+            // IUnknown
+            void _VtblGap0_3();
+            int EnumAudioEndpoints(int dataFlow, int dwStateMask, out IntPtr ppDevices);
+            int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice? ppEndpoint);
+            int GetDevice([MarshalAs(UnmanagedType.LPWStr)] string pwstrId, out IMMDevice ppDevice);
+            int RegisterEndpointNotificationCallback(IntPtr pClient);
+            int UnregisterEndpointNotificationCallback(IntPtr pClient);
+        }
+
+        [ComImport, Guid("D666063F-1587-4E43-81F1-B948E807363F")]
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IMMDevice
+        {
+            void _VtblGap0_3();
+            int Activate(ref Guid iid, uint dwClsCtx, IntPtr pActivationParams,
+                [MarshalAs(UnmanagedType.IUnknown)] out object ppInterface);
+            int OpenPropertyStore(uint stgmAccess, out IntPtr ppProperties);
+            [return: MarshalAs(UnmanagedType.LPWStr)]
+            string GetId();
+            int GetState(out uint pdwState);
+        }
+
+        [ComImport, Guid("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F")]
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IAudioSessionManager2
+        {
+            // IAudioSessionManager
+            void _VtblGap0_3();
+            int GetAudioSessionControl(ref Guid AudioSessionGuid, uint StreamFlags,
+                out IntPtr SessionControl);
+            int GetSimpleAudioVolume(ref Guid AudioSessionGuid, uint StreamFlags,
+                out IntPtr AudioVolume);
+            // IAudioSessionManager2
+            int GetSessionEnumerator(out IAudioSessionEnumerator? SessionEnum);
+            int RegisterSessionNotification(IntPtr SessionNotification);
+            int UnregisterSessionNotification(IntPtr SessionNotification);
+            int RegisterDuckNotification([MarshalAs(UnmanagedType.LPWStr)] string sessionId,
+                IntPtr duckNotification);
+            int UnregisterDuckNotification(IntPtr duckNotification);
+        }
+
+        [ComImport, Guid("E2F5BB11-0570-40CA-ACDD-3AA01277DEE8")]
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IAudioSessionEnumerator
+        {
+            void _VtblGap0_3();
+            int GetCount(out int SessionCount);
+            int GetSession(int SessionCount,
+                [MarshalAs(UnmanagedType.IUnknown)] out IAudioSessionControl? Session);
+        }
+
+        [ComImport, Guid("F4B1A599-7266-4319-A8CA-E70ACB11E8CD")]
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IAudioSessionControl
+        {
+            void _VtblGap0_3();
+            int GetState(out int pRetVal);  // AudioSessionState: 0=Inactive, 1=Active, 2=Expired
+            [return: MarshalAs(UnmanagedType.LPWStr)]
+            string GetDisplayName();
+            int SetDisplayName([MarshalAs(UnmanagedType.LPWStr)] string Value, ref Guid EventContext);
+            [return: MarshalAs(UnmanagedType.LPWStr)]
+            string GetIconPath();
+            int SetIconPath([MarshalAs(UnmanagedType.LPWStr)] string Value, ref Guid EventContext);
+            int GetGroupingParam(out Guid pRetVal);
+            int SetGroupingParam(ref Guid Override, ref Guid EventContext);
+            int RegisterAudioSessionNotification(IntPtr NewNotifications);
+            int UnregisterAudioSessionNotification(IntPtr NewNotifications);
+        }
+
+        [ComImport, Guid("BFB7FF88-7239-4FC9-8FA2-07C950BE9C6D")]
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IAudioSessionControl2
+        {
+            // IAudioSessionControl vtable
+            void _VtblGap0_3();
+            int _GetStatePlaceholder(out int pRetVal);
+            [return: MarshalAs(UnmanagedType.LPWStr)]
+            string _GetDisplayNamePlaceholder();
+            int _SetDisplayNamePlaceholder([MarshalAs(UnmanagedType.LPWStr)] string Value, ref Guid EventContext);
+            [return: MarshalAs(UnmanagedType.LPWStr)]
+            string _GetIconPathPlaceholder();
+            int _SetIconPathPlaceholder([MarshalAs(UnmanagedType.LPWStr)] string Value, ref Guid EventContext);
+            int _GetGroupingParamPlaceholder(out Guid pRetVal);
+            int _SetGroupingParamPlaceholder(ref Guid Override, ref Guid EventContext);
+            int _RegisterNotificationPlaceholder(IntPtr NewNotifications);
+            int _UnregisterNotificationPlaceholder(IntPtr NewNotifications);
+            // IAudioSessionControl2
+            int GetSessionIdentifier([MarshalAs(UnmanagedType.LPWStr)] out string pRetVal);
+            int GetSessionInstanceIdentifier([MarshalAs(UnmanagedType.LPWStr)] out string pRetVal);
+            int GetProcessId(out uint pRetVal);
+            int IsSystemSoundsSession(out bool pRetVal);
+            int SetDuckingPreference(bool optOut);
+        }
 
         /// <summary>Counts how many apps have an active mic/camera session,
         /// filtering out stale registry entries whose process isn't running.</summary>
@@ -1133,12 +1424,12 @@ sealed class Nudge
 
         private static bool IsCurrentlyActive(Microsoft.Win32.RegistryKey key, string appName, string capability)
         {
-            object? startVal = key.GetValue("LastUsedTimeStart");
-            if (startVal is not long start || start == 0) return false;
-            object? stopVal = key.GetValue("LastUsedTimeStop");
-            bool stopIsZero = stopVal is not long stop || stop == 0;
-            if (!stopIsZero)
-                return false;
+            // Handle both REG_QWORD (long) and REG_DWORD (int) — Windows
+            // occasionally stores these as 32-bit on some builds/configurations.
+            long start = ReadLastUsedTime(key, "LastUsedTimeStart");
+            if (start == 0) return false;
+            long stop = ReadLastUsedTime(key, "LastUsedTimeStop");
+            if (stop != 0) return false;
 
             // Session appears active. Check for staleness: if the app process
             // isn't running, the registry entry is stale (e.g. the app crashed
@@ -1167,6 +1458,16 @@ sealed class Nudge
             // Log periodic presence summary for diagnostics
             LogActiveApp(appName, capability);
             return true;
+        }
+
+        private static long ReadLastUsedTime(Microsoft.Win32.RegistryKey key, string valueName)
+        {
+            object? val = key.GetValue(valueName);
+            if (val is long l) return l;
+            if (val is int i) return i;       // REG_DWORD on some builds
+            if (val is uint ui) return ui;     // REG_DWORD unsigned
+            if (val is ulong ul) return (long)ul; // REG_QWORD unsigned
+            return 0;
         }
 
         private static readonly HashSet<string> _loggedApps = new(StringComparer.OrdinalIgnoreCase);
