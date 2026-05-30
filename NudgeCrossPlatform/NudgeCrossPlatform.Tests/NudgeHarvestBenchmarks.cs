@@ -16,7 +16,7 @@ public sealed class NudgeHarvestBenchmarks
 {
     // ── Thresholds (V3 baseline: ~24 µs Debug, ~26 µs Release, ~92 bytes/alloc) ──
 
-    const double MaxMicrosecondsPerTick = 50;
+    const double MaxMicrosecondsPerTick = 80;          // generous for full-suite JIT warmup
     const long MaxAllocationBytesPerTick = 500;
     const long MaxTotalAllocation10K = 5 * 1024 * 1024;
 

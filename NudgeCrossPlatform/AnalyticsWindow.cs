@@ -86,7 +86,7 @@ namespace NudgeTray
         private static readonly Color PrimaryBlue = Color.FromRgb(88, 166, 255);
         private static readonly Color PrimaryBlueHover = Color.FromRgb(108, 186, 255);
         private static readonly Color TextPrimary = Color.FromRgb(240, 240, 245);
-        private static readonly Color TextSecondary = Color.FromRgb(150, 150, 160);
+        private static readonly Color TextSecondary = Color.FromRgb(160, 160, 160);
         private static readonly Color TextTertiary = Color.FromRgb(120, 120, 130);
         private static readonly Color BorderColor = Color.FromArgb(40, 255, 255, 255);
         private static readonly Color ProgressBarBg = Color.FromRgb(35, 35, 40);
