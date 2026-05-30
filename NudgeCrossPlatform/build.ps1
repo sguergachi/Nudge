@@ -371,7 +371,15 @@ if ($Platform) {
         Get-ChildItem "$Dir/_.tray" | Where-Object { $_.Name -notlike "nudge-tray*" } | Copy-Item -Destination $Dir -Force
 
         # Copy Python support files
-        Copy-Item "model_inference.py", "train_model.py", "background_trainer.py", "requirements-cpu.txt", "requirements.txt" -Destination $Dir -Force
+        Copy-Item "model_inference.py", "train_model.py", "background_trainer.py", "generate_sample_data.py", "requirements-cpu.txt", "requirements.txt" -Destination $Dir -Force
+
+        # Bundle the pretrained V1 model so AI predictions work from first launch.
+        # The trainer refines/replaces it once real labels accumulate.
+        if (Test-Path "model") {
+            $modelDest = Join-Path $Dir "model"
+            New-Item -ItemType Directory -Force -Path $modelDest | Out-Null
+            Copy-Item "model\productivity_model.joblib", "model\scaler.json", "model\trainer_meta.json" -Destination $modelDest -Force -ErrorAction SilentlyContinue
+        }
 
         Remove-Item "$Dir/_.nudge", "$Dir/_.notify", "$Dir/_.tray" -Recurse -Force
         Write-Success "  [OK] $Rid → $Dir"

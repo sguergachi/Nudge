@@ -15,9 +15,17 @@
             <File Id="ModelInferencePy" Name="model_inference.py" Source="..\..\..\dist\win-x64\model_inference.py" />
             <File Id="TrainModelPy" Name="train_model.py" Source="..\..\..\dist\win-x64\train_model.py" />
             <File Id="BackgroundTrainerPy" Name="background_trainer.py" Source="..\..\..\dist\win-x64\background_trainer.py" />
+            <File Id="GenerateSampleDataPy" Name="generate_sample_data.py" Source="..\..\..\dist\win-x64\generate_sample_data.py" />
             <File Id="RequirementsCpuTxt" Name="requirements-cpu.txt" Source="..\..\..\dist\win-x64\requirements-cpu.txt" />
             <File Id="RequirementsTxt" Name="requirements.txt" Source="..\..\..\dist\win-x64\requirements.txt" />
           </Component>
+          <Directory Id="ModelFolder" Name="model">
+            <Component Id="ModelComponent" Guid="D4E5F6A7-B8C9-0123-DEF4-56789ABCDEF0" Win64="yes">
+              <File Id="ProductivityModelJoblib" Name="productivity_model.joblib" Source="..\..\..\dist\win-x64\model\productivity_model.joblib" KeyPath="yes" />
+              <File Id="ScalerJson" Name="scaler.json" Source="..\..\..\dist\win-x64\model\scaler.json" />
+              <File Id="TrainerMetaJson" Name="trainer_meta.json" Source="..\..\..\dist\win-x64\model\trainer_meta.json" />
+            </Component>
+          </Directory>
           <Component Id="ShortcutComponent" Guid="B2C3D4E5-F6A7-8901-BCDE-F12345678901" Win64="yes">
             <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="Nudge" Target="[INSTALLFOLDER]nudge-tray.exe" WorkingDirectory="INSTALLFOLDER" />
             <Shortcut Id="DesktopShortcut" Directory="DesktopFolder" Name="Nudge" Target="[INSTALLFOLDER]nudge-tray.exe" WorkingDirectory="INSTALLFOLDER" />
@@ -31,6 +39,7 @@
     </Directory>
     <Feature Id="ProductFeature" Title="Nudge" Level="1">
       <ComponentRef Id="ProductComponent" />
+      <ComponentRef Id="ModelComponent" />
       <ComponentRef Id="ShortcutComponent" />
     </Feature>
 

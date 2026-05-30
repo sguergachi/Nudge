@@ -63,9 +63,16 @@ jobs:
           Copy-Item "NudgeCrossPlatform/model_inference.py"       $dist
           Copy-Item "NudgeCrossPlatform/train_model.py"           $dist
           Copy-Item "NudgeCrossPlatform/background_trainer.py"    $dist
+          Copy-Item "NudgeCrossPlatform/generate_sample_data.py"  $dist
           Copy-Item "NudgeCrossPlatform/requirements-cpu.txt"     $dist
           Copy-Item "NudgeCrossPlatform/requirements.txt"         $dist
           Copy-Item "NudgeCrossPlatform/assets/windows/nudge.ico" $dist
+          # Bundle the pretrained V1 model so AI works on first launch
+          $modelDest = Join-Path $dist "model"
+          New-Item -ItemType Directory -Force -Path $modelDest | Out-Null
+          Copy-Item "NudgeCrossPlatform/model/productivity_model.joblib" $modelDest
+          Copy-Item "NudgeCrossPlatform/model/scaler.json"              $modelDest
+          Copy-Item "NudgeCrossPlatform/model/trainer_meta.json"        $modelDest
           Compress-Archive -Path "$dist/*" -DestinationPath "nudge-win-x64.zip" -Force
 
       - name: Upload Windows zip
@@ -235,10 +242,17 @@ jobs:
           cp model_inference.py       "$dist/"
           cp train_model.py           "$dist/"
           cp background_trainer.py    "$dist/"
+          cp generate_sample_data.py  "$dist/"
           cp requirements-cpu.txt     "$dist/"
           cp requirements.txt         "$dist/"
           cp install-linux-app.sh     "$dist/"
           cp assets/linux/nudge.svg   "$dist/nudge.svg" || true
+
+          # Bundle the pretrained V1 model so AI works on first launch
+          mkdir -p "$dist/model"
+          cp model/productivity_model.joblib "$dist/model/"
+          cp model/scaler.json               "$dist/model/"
+          cp model/trainer_meta.json         "$dist/model/"
           
           # Set execute permissions
           chmod +x "$dist/nudge" "$dist/nudge-notify" "$dist/nudge-tray" "$dist/install-linux-app.sh"

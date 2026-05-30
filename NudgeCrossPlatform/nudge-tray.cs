@@ -1599,7 +1599,7 @@ namespace NudgeTray
                 }
 
                 string csvPath = PlatformConfig.CsvPath;
-                string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --csv \"{csvPath}\" --model-dir \"{_modelDirPath}\" --check-interval 300 --min-total-samples 1 --force --once";
+                string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --seed --csv \"{csvPath}\" --model-dir \"{_modelDirPath}\" --check-interval 300 --min-total-samples 1 --force --once";
 
                 _mlTrainerProcess = new Process
                 {
