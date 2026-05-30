@@ -1101,48 +1101,46 @@ sealed class Nudge
         public PresenceState GetPresenceState()
         {
 #if WINDOWS
-            // Layer 0: Core Audio API — directly queries the audio subsystem via
-            // IAudioSessionManager2. Catches ALL mic usage including WASAPI exclusive
-            // mode, virtual devices, and apps that bypass the Windows consent store.
-            // This is the most reliable layer.
-            if (HasActiveAudioSession())
-            {
-                Console.WriteLine("  ⓘ Presence (audio): active capture session detected");
-                return new PresenceState(true, false, false, PresenceSource.WindowsRegistry);
-            }
+            // ── Sensor Fusion: weighted scoring from all signal sources ─────────
+            // There is no single Windows API for "is the user in a meeting."
+            // Instead we fuse signals: audio session, registry state, process
+            // scan, and window title — each weighted by reliability.
+            //
+            // Weight  Signal          Rationale
+            // 0.40    audioActive     Real-time audio — most reliable when present
+            // 0.30    camApps         Camera consent — rarely false-positive
+            // 0.20    micApps         Mic consent — can be stale, needs corroboration
+            // 0.10    titleMatches    Window title — contextual but can mislead
+            // 0.10    appRunning      Known meeting app process — weak alone
+            //
+            // Threshold: 0.25 — two weak signals or one strong signal needed
 
-            // Layer 1: Hardware detection via CapabilityAccessManager registry.
-            // Works for apps that go through Windows mic/camera consent (Teams,
-            // Zoom, Chrome, etc.).  Correctly handles both REG_QWORD and REG_DWORD
-            // value types.
-            int micAppCount = TestCapability("microphone");
-            int camAppCount = TestCapability("webcam");
-            bool mic = micAppCount > 0;
-            bool cam = camAppCount > 0;
-            if (mic || cam)
-            {
-                Console.WriteLine($"  ⓘ Presence (registry): mic={mic}, cam={cam}  ({micAppCount}+{camAppCount} apps)");
-                return new PresenceState(mic, cam, false, PresenceSource.WindowsRegistry);
-            }
+            const double threshold = 0.25;
+            double score = 0;
+            var signals = new System.Text.StringBuilder();
 
-            // Layer 2: App-based detection — meeting apps often use audio without
-            // updating the consent store (e.g. virtual audio devices, WASAPI exclusive
-            // mode, or browser-based calls where Windows doesn't track the tab).
-            if (IsMeetingAppRunning())
-            {
-                Console.WriteLine("  ⓘ Presence (app): meeting app running");
-                return new PresenceState(true, false, false, PresenceSource.WindowsRegistry);
-            }
+            bool audioActive = false;
+            try { audioActive = HasActiveAudioSession(); } catch { }
+            if (audioActive) { score += 0.40; signals.Append(" audio"); }
 
-            // Layer 3: Foreground window title heuristic.
+            int camApps = 0;
+            try { camApps = TestCapability("webcam"); } catch { }
+            if (camApps > 0) { score += 0.30; signals.Append($" cam({camApps})"); }
+
+            int micApps = 0;
+            try { micApps = TestCapability("microphone"); } catch { }
+            if (micApps > 0) { score += 0.20; signals.Append($" mic({micApps})"); }
+
             var (app, title) = GetForegroundAppWithTitle();
-            if (IsMeetingTitle(title) || (!string.IsNullOrEmpty(app) && MeetingProcessNames.Contains(app)))
-            {
-                Console.WriteLine($"  ⓘ Presence (title): meeting window — {app}: {(title.Length <= 80 ? title : title[..77] + "...")}");
-                return new PresenceState(true, false, false, PresenceSource.WindowsRegistry);
-            }
+            bool titleMatch = IsMeetingTitle(title) || (!string.IsNullOrEmpty(app) && MeetingProcessNames.Contains(app));
+            if (titleMatch) { score += 0.10; signals.Append(" title"); }
 
-            return new PresenceState(false, false, false, PresenceSource.WindowsRegistry);
+            bool appRunning = IsMeetingAppRunning();
+            if (appRunning) { score += 0.10; signals.Append(" app"); }
+
+            bool inMeeting = score >= threshold;
+            Console.WriteLine($"  Presence fusion: score={score:F2}/{threshold} → {(inMeeting ? "IN MEETING" : "clear")}{signals}");
+            return new PresenceState(inMeeting, false, false, PresenceSource.WindowsRegistry);
 #else
             return PresenceState.Unavailable;
 #endif
