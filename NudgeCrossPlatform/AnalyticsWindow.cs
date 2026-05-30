@@ -67,9 +67,9 @@ namespace NudgeTray
         private TextBlock? _pinIcon;
 
         // AI Brain tab collapse state — survives refreshes
-        private bool _sensorSignalsOpen;
+        private static bool _sensorSignalsOpen;
 
-        private bool _trainingDetailsOpen;
+        private static bool _trainingDetailsOpen;
         // Track live timers created by AI tab content so they can be stopped on rebuild
         private static readonly List<DispatcherTimer> _liveTimers = new();
 
@@ -744,7 +744,7 @@ namespace NudgeTray
         }
 
         /// <summary>Builds the entire AI Brain tab content panel.</summary>
-        private StackPanel CreateAILiveView()
+        private static StackPanel CreateAILiveView()
         {
             var panel = new StackPanel { Spacing = 10 };
 
@@ -783,7 +783,7 @@ namespace NudgeTray
             return panel;
         }
 
-        private StackPanel CreateTrainingView()
+        private static StackPanel CreateTrainingView()
         {
             var (sampleCount, minSamples, lastTrainedCount, isTraining,
                  lastAccuracy, prevAccuracy, architecture, lastError,
@@ -1381,7 +1381,7 @@ namespace NudgeTray
         }
 
         /// <summary>Live card: current app in focus + latest prediction verdict.</summary>
-        private Border CreateLiveFocusCard(MLLiveEvent? latest)
+        private static Border CreateLiveFocusCard(MLLiveEvent? latest)
         {
             var currentApp  = LiveAIState.CurrentApp;
             var currentDetail = LiveAIState.CurrentDetail;
@@ -1411,15 +1411,18 @@ namespace NudgeTray
             // ── Main row ──────────────────────────────────────────────────────
             var mainGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
 
-            var dot = new Border
+            var pulseDot = new PulseDot
             {
-                Width = 10, Height = 10,
-                CornerRadius = new CornerRadius(5),
-                Background = new SolidColorBrush(fusionColor),
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 10, 0)
+                Color = fusionColor,
+                Seed  = ComputePulseSeed(harvest),
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 3, 10, 0)
             };
-            Grid.SetColumn(dot, 0);
+            _liveTimers.Add(pulseDot._timer);
+            pulseDot.Start();
+
+            mainGrid.Children.Add(pulseDot);
+            Grid.SetColumn(pulseDot, 0);
 
             bool showDetail = !string.IsNullOrWhiteSpace(currentDetail)
                 && !currentDetail.Equals(currentApp, StringComparison.OrdinalIgnoreCase)
@@ -1476,7 +1479,6 @@ namespace NudgeTray
             textStack.Children.Add(qualityRow);
             Grid.SetColumn(textStack, 1);
 
-            mainGrid.Children.Add(dot);
             mainGrid.Children.Add(textStack);
 
             // ── Separator ────────────────────────────────────────────────────
@@ -2806,6 +2808,100 @@ namespace NudgeTray
                 return (displayName, string.Empty);
             return (appName, string.Empty);
         }
+
+        /// <summary>Pulse dot that renders sonar rings + breathing center via raw DrawingContext.
+    /// Avoids Avalonia visual-tree conflicts by painting everything in a single Render pass.</summary>
+    internal sealed class PulseDot : Control
+    {
+        private double _phase;
+        private double _step;
+        private double _radius;
+        private double _peakOpacity;
+        private double _stagger;
+        internal readonly DispatcherTimer _timer;
+
+        public Color Color { get; set; }
+        public int Seed { get; set; }
+
+        public PulseDot()
+        {
+            Width = 10;
+            Height = 10;
+            ClipToBounds = false;
+            IsHitTestVisible = false;
+            _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(24) };
+            _timer.Tick += (_, _) =>
+            {
+                _phase += _step;
+                if (_phase > 1.0) _phase -= 1.0;
+                InvalidateVisual();
+            };
+        }
+
+        // Must be called before Start() — Seed setter initialises derived params
+         private void InitFromSeed()
+        {
+            int s = Seed;
+            int h1 = ((s * 1103515245 + 12345) ^ (s >> 13)) & 0x7FFFFFFF;
+            int h2 = ((s * 214013 + 2531011) ^ (s <<  7)) & 0x7FFFFFFF;
+            int h3 = ((s * 1664525 + 1013904223) ^ (s >> 17)) & 0x7FFFFFFF;
+            const double div = 0x7FFFFFFF;
+            _step        = 0.016 + 0.006 * (h1 / div);
+            _radius      = 10.0  + 2.0  * (h2 / div);
+            _peakOpacity = 0.42  + 0.12  * (h3 / div);
+            _stagger     = h2 % 2 == 0 ? 0.48 : 0.52;
+        }
+
+        public void Start()
+        {
+            InitFromSeed();
+            _timer.Start();
+        }
+
+        public override void Render(DrawingContext context)
+        {
+            var center = new Point(5, 5);
+            var color = Color;
+
+            // Ring 1 — one-way emission from center, exponential decay
+            double r1 = _phase;
+            double ring1R = _radius * r1;
+            double ringAlpha1 = _peakOpacity * Math.Min(1.0, 2.0 * r1) * Math.Exp(-r1 * 3.5);
+            if (ringAlpha1 > 0.002)
+            {
+                var ringPen = new Pen(new SolidColorBrush(color, ringAlpha1), 0.7);
+                context.DrawEllipse(null, ringPen, center, ring1R, ring1R);
+            }
+
+            // Ring 2 — staggered
+            double r2 = _phase + _stagger;
+            if (r2 > 1.0) r2 -= 1.0;
+            double ring2R = _radius * r2;
+            double ringAlpha2 = _peakOpacity * Math.Min(1.0, 2.0 * r2) * Math.Exp(-r2 * 3.5);
+            if (ringAlpha2 > 0.002)
+            {
+                var ringPen = new Pen(new SolidColorBrush(color, ringAlpha2), 0.7);
+                context.DrawEllipse(null, ringPen, center, ring2R, ring2R);
+            }
+
+            // Solid center dot — steady, tiny breath
+            double ds = 0.92 + 0.08 * ((Math.Sin(Environment.TickCount64 * 0.000003) + 1.0) / 2.0);
+            double dotR = 4.6 * ds;
+            context.DrawEllipse(new SolidColorBrush(color), null, center, dotR, dotR);
+        }
     }
-}
+
+    private static int ComputePulseSeed(HarvestSignal? harvest)
+    {
+        if (harvest == null) return 0;
+        var code = new HashCode();
+        code.Add(harvest.Quality);
+        code.Add(harvest.Category);
+        code.Add(harvest.Sw300);
+        code.Add(harvest.Apps300);
+        code.Add((int)(harvest.Share * 100));
+        code.Add(harvest.Domain ?? "");
+        return code.ToHashCode();
+    }
+}}
 

@@ -34,6 +34,10 @@ internal static class LiveAIState
     public static volatile string CurrentDetail = "";
     /// <summary>Latest sensor fusion snapshot (HARVEST: lines), updated every 2s.</summary>
     public static volatile HarvestSignal? LastHarvest;
+    /// <summary>Whether the user is currently in a meeting (mic/camera active).</summary>
+    public static volatile bool InMeeting;
+    /// <summary>Whether the user is currently screen sharing.</summary>
+    public static volatile bool ScreenSharing;
 
     public static void Add(MLLiveEvent evt)
     {

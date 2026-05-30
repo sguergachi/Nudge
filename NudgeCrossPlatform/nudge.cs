@@ -1,4 +1,3 @@
-#!/usr/bin/env dotnet run
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Nudge - ML-Powered Productivity Tracker
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -58,7 +57,7 @@ sealed class Nudge
     // VERSION & CONSTANTS
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    const string ProgramVersion = "2.0.4";
+    const string ProgramVersion = "2.1.0";
     const string VersionSuffix = "dev";
     static readonly string VERSION = $"{ProgramVersion}-{VersionSuffix}";
 
@@ -1137,9 +1136,9 @@ sealed class Nudge
 
             // Layer 3: Foreground window title heuristic.
             var (app, title) = GetForegroundAppWithTitle();
-            if (IsMeetingTitle(title) || IsMeetingAppName(app))
+            if (IsMeetingTitle(title) || (!string.IsNullOrEmpty(app) && MeetingProcessNames.Contains(app)))
             {
-                Console.WriteLine($"  ⓘ Presence (title): meeting window — {app}: {Truncate(title, 80)}");
+                Console.WriteLine($"  ⓘ Presence (title): meeting window — {app}: {(title.Length <= 80 ? title : title[..77] + "...")}");
                 return new PresenceState(true, false, false, PresenceSource.WindowsRegistry);
             }
 
@@ -1174,27 +1173,33 @@ sealed class Nudge
 
         private static bool IsMeetingAppRunning()
         {
+            Process[]? procs = null;
             try
             {
-                var procs = Process.GetProcesses();
+                procs = Process.GetProcesses();
                 foreach (var p in procs)
                 {
                     try
                     {
                         if (MeetingProcessNames.Contains(p.ProcessName))
-                        {
-                            p.Dispose();
-                            // Dispose remaining procs to avoid leak before returning
-                            foreach (var r in procs) r.Dispose();
                             return true;
-                        }
                     }
                     catch { }
-                    p.Dispose();
+                }
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+            finally
+            {
+                if (procs != null)
+                {
+                    foreach (var p in procs)
+                        p.Dispose();
                 }
             }
-            catch { }
-            return false;
         }
 
         private static bool IsMeetingTitle(string title)
@@ -1206,18 +1211,6 @@ sealed class Nudge
                     return true;
             }
             return false;
-        }
-
-        private static bool IsMeetingAppName(string appName)
-        {
-            return !string.IsNullOrEmpty(appName) &&
-                   MeetingProcessNames.Contains(appName);
-        }
-
-        private static string Truncate(string s, int maxLen)
-        {
-            if (string.IsNullOrEmpty(s) || s.Length <= maxLen) return s;
-            return s[..(maxLen - 3)] + "...";
         }
 
         // Layer 0: IAudioSessionManager2 — enumerates active audio sessions
@@ -1536,6 +1529,8 @@ sealed class Nudge
     static StreamWriter? _activityLogFile;
     static readonly ActivityFeatureTracker FeatureTracker = new();
     static bool _meetingSuppression = true;
+    static PresenceState _cachedPresenceState = PresenceState.Unavailable;
+    static int _presenceCheckElapsed;
 
     // Activity tracking
     static string _currentApp = "";
@@ -1816,7 +1811,7 @@ sealed class Nudge
             long startTs = Stopwatch.GetTimestamp();
 
             // Get current activity
-            var now = DateTime.Now;
+            var now = DateTime.UtcNow;
             var (app, title) = _platformService?.GetForegroundAppWithTitle() ?? ("unknown", "");
             int idle = _platformService?.GetIdleTime() ?? 0;
 
@@ -1892,6 +1887,15 @@ sealed class Nudge
                 }
             }
 
+            // Broadcast meeting/presence state every 5s for live display in Analytics
+            _presenceCheckElapsed += CYCLE_MS;
+            if (_presenceCheckElapsed >= 5000)
+            {
+                _presenceCheckElapsed = 0;
+                _cachedPresenceState = _platformService?.GetPresenceState() ?? PresenceState.Unavailable;
+                Console.WriteLine($"MEETING:{_cachedPresenceState.IsMicActive}|{_cachedPresenceState.IsCameraActive}|{_cachedPresenceState.IsScreenSharing}");
+            }
+
             // Check for snapshot triggers
             elapsed += CYCLE_MS;
             mlElapsed += CYCLE_MS;
@@ -1919,7 +1923,17 @@ sealed class Nudge
             {
                 if (mlCheckDue)
                 {
-                    if (ShouldTriggerSnapshot(app, idle, _attentionSpanMs, tick))
+                    // Meeting detection trumps AI — check meeting before consulting ML
+                    if (_meetingSuppression && (_cachedPresenceState.InMeeting || _cachedPresenceState.IsScreenSharing))
+                    {
+                        string reason = _cachedPresenceState.IsScreenSharing ? "ScreenSharing" : "InMeeting";
+                        Dim($"  ⏸ Meeting suppression: {reason}");
+                        Console.WriteLine($"SUPPRESS:{reason}");
+                        elapsed = 0;
+                        SetRandomInterval();
+                        lastMinute = -1;
+                    }
+                    else if (ShouldTriggerSnapshot(app, idle, _attentionSpanMs, tick))
                         mlTriggered = true;
                     else if (_productivityConfirmed)
                     {
@@ -1962,9 +1976,10 @@ sealed class Nudge
                     }
 
                     // Unified suppression gate: AFK, poor signal, meeting, screen sharing.
+                    // Uses cached presence (refreshed every 5s) instead of re-querying platform.
                     // Pass Unavailable when meeting suppression is disabled so gate fails open.
                     var presence = _meetingSuppression
-                        ? (_platformService?.GetPresenceState() ?? PresenceState.Unavailable)
+                        ? _cachedPresenceState
                         : PresenceState.Unavailable;
                     var gate = SnapshotGate.Evaluate(tick, presence);
                     if (gate.Suppress)
@@ -2158,7 +2173,7 @@ sealed class Nudge
     {
         try
         {
-            var now = DateTime.Now;
+            var now = DateTime.UtcNow;
             int appHash = GetHash(app);
             int hourOfDay = now.Hour;  // 0-23
             int dayOfWeek = (int)now.DayOfWeek;  // 0-6 (Sunday=0)
@@ -2203,7 +2218,7 @@ sealed class Nudge
         int appHash = GetHash(app);
         bool wroteRow = false;
 
-        var now = DateTime.Now;
+        var now = DateTime.UtcNow;
         int hourOfDay = now.Hour;  // 0-23
         int dayOfWeek = (int)now.DayOfWeek;  // 0-6 (Sunday=0)
         string timestamp = now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
