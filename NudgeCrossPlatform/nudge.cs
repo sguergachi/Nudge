@@ -1099,30 +1099,37 @@ sealed class Nudge
         {
             foreach (string name in root.GetSubKeyNames())
             {
-                using var sub = root.OpenSubKey(name);
-                if (sub == null) continue;
-
-                // LastUsedTimeStop == 0 means the capability is currently in use.
-                if (IsLastUsedTimeZero(sub)) return true;
-
-                // UWP apps nest their entries under a "NonPackaged" subkey.
-                using var nonPkg = sub.OpenSubKey("NonPackaged");
-                if (nonPkg != null)
+                if (string.Equals(name, "NonPackaged", StringComparison.OrdinalIgnoreCase))
                 {
-                    foreach (string appName in nonPkg.GetSubKeyNames())
+                    // Win32 apps are nested one level deeper under NonPackaged.
+                    using var nonPkg = root.OpenSubKey(name);
+                    if (nonPkg == null) continue;
+                    foreach (string appPath in nonPkg.GetSubKeyNames())
                     {
-                        using var app = nonPkg.OpenSubKey(appName);
-                        if (app != null && IsLastUsedTimeZero(app)) return true;
+                        using var app = nonPkg.OpenSubKey(appPath);
+                        if (app != null && IsCurrentlyActive(app)) return true;
                     }
+                }
+                else
+                {
+                    // UWP package subkey — LastUsedTime* sits directly on it.
+                    using var sub = root.OpenSubKey(name);
+                    if (sub != null && IsCurrentlyActive(sub)) return true;
                 }
             }
             return false;
         }
 
-        private static bool IsLastUsedTimeZero(Microsoft.Win32.RegistryKey key)
+        // Returns true only when the app has an active session:
+        // LastUsedTimeStart is non-zero (mic/cam was actually opened) AND
+        // LastUsedTimeStop is zero or absent (it hasn't closed yet).
+        // A zero stop-time with no start-time is just a permission grant with no usage.
+        private static bool IsCurrentlyActive(Microsoft.Win32.RegistryKey key)
         {
-            object? val = key.GetValue("LastUsedTimeStop");
-            return val is long l && l == 0;
+            object? startVal = key.GetValue("LastUsedTimeStart");
+            if (startVal is not long start || start == 0) return false;
+            object? stopVal = key.GetValue("LastUsedTimeStop");
+            return stopVal is not long stop || stop == 0;
         }
 #endif
 
