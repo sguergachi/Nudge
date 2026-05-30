@@ -47,10 +47,7 @@ namespace NudgeTray
 
             _pauseToggleBadge.Child = _pauseToggleText;
 
-            ToolTip.SetTip(_pauseToggleBadge, new ToolTip
-            {
-                Content = StrNotificationsActive
-            });
+            ToolTip.SetTip(_pauseToggleBadge, StrNotificationsActive);
 
             _pauseToggleBadge.PointerEntered += (s, e) => ApplyHover(true);
             _pauseToggleBadge.PointerExited  += (s, e) => ApplyHover(false);
@@ -103,10 +100,7 @@ namespace NudgeTray
                 _pauseToggleText.Foreground = new SolidColorBrush(AIStatusInactive);
                 _pauseToggleBadge.Background = new SolidColorBrush(Color.FromArgb(20, 150, 150, 160));
                 _pauseToggleBadge.BorderBrush = new SolidColorBrush(Color.FromArgb(40, 150, 150, 160));
-                ToolTip.SetTip(_pauseToggleBadge, new ToolTip
-                {
-                    Content = "Notifications are paused. Snapshots are marked as skipped."
-                });
+                ToolTip.SetTip(_pauseToggleBadge, "Notifications are paused. Snapshots are marked as skipped.");
             }
             else
             {
@@ -114,10 +108,7 @@ namespace NudgeTray
                 _pauseToggleText.Foreground = new SolidColorBrush(AIStatusActive);
                 _pauseToggleBadge.Background = new SolidColorBrush(Color.FromArgb(25, 76, 175, 80));
                 _pauseToggleBadge.BorderBrush = new SolidColorBrush(Color.FromArgb(55, 76, 175, 80));
-                ToolTip.SetTip(_pauseToggleBadge, new ToolTip
-                {
-                    Content = StrNotificationsActive
-                });
+                ToolTip.SetTip(_pauseToggleBadge, StrNotificationsActive);
             }
         }
 
