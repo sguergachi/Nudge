@@ -394,20 +394,19 @@ namespace NudgeTray
                 border.RenderTransform = new ScaleTransform(1.0, 1.0);
             };
 
-            // Pressed state — visual
+            // Pressed — visual feedback + trigger action
             border.PointerPressed += (s, e) =>
             {
                 border.Background = new SolidColorBrush(pressedColor);
                 border.RenderTransform = new ScaleTransform(0.98, 0.98);
+                onClick();
             };
 
-            // Released — trigger action + restore hover
+            // Released — restore hover
             border.PointerReleased += (s, e) =>
             {
-                if (e.GetCurrentPoint(border).Properties.IsLeftButtonPressed) return;
                 border.Background = new SolidColorBrush(hoverColor);
                 border.RenderTransform = new ScaleTransform(1.02, 1.02);
-                onClick();
             };
 
             return new StackPanel { Children = { border } };
