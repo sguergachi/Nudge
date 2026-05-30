@@ -61,7 +61,6 @@ namespace NudgeTray
         private Border? _aiLiveTab;
         private DispatcherTimer? _aiLiveRefreshTimer;
         private int _lastAiEventCount;
-        private long _lastAiUpdateVersion;
 
         // Pin (always-on-top) state
         private bool _isPinned;
@@ -86,7 +85,7 @@ namespace NudgeTray
         private static readonly Color PrimaryBlue = Color.FromRgb(88, 166, 255);
         private static readonly Color PrimaryBlueHover = Color.FromRgb(108, 186, 255);
         private static readonly Color TextPrimary = Color.FromRgb(240, 240, 245);
-        private static readonly Color TextSecondary = Color.FromRgb(160, 160, 160);
+        private static readonly Color TextSecondary = Color.FromRgb(150, 150, 160);
         private static readonly Color TextTertiary = Color.FromRgb(120, 120, 130);
         private static readonly Color BorderColor = Color.FromArgb(40, 255, 255, 255);
         private static readonly Color ProgressBarBg = Color.FromRgb(35, 35, 40);
@@ -111,7 +110,7 @@ namespace NudgeTray
         private const string StrSensorSignalsClosed = "▸ Sensor Signals";
         private const string StrChevronOpen = "▾";
         private const string StrChevronClosed = "▸";
-        private const string StrPinIcon = "\uE718";   // Segoe MDL2 Pin
+        private const string StrPinIcon = "⊙";
         private const string StrProductive = "productive";
         private const string StrNotProductive = "not productive";
         private const string StrNudgedAction = "nudged";
@@ -169,7 +168,7 @@ namespace NudgeTray
             {
                 if (_aiTabActive)
                 {
-                    int eventCount = LiveAIState.GetCount();
+                    int eventCount = LiveAIState.GetRecent().Count;
                     if (eventCount != _lastAiEventCount)
                     {
                         _lastAiEventCount = eventCount;
@@ -321,7 +320,6 @@ namespace NudgeTray
         {
             _aiLiveRefreshTimer?.Stop();
             _countdownTimer?.Stop();
-            _seedUpdateTimer?.Stop();
             StopLiveTimers();
             base.OnClosed(e);
         }
@@ -670,7 +668,6 @@ namespace NudgeTray
                     // Time-filter tabs are active only when AI tab is NOT active and filter matches
                     bool isActive = !_aiTabActive && _currentFilter == filter;
                     tab.BorderBrush = isActive ? new SolidColorBrush(PrimaryBlue) : Brushes.Transparent;
-                    tab.Background = Brushes.Transparent;
                     if (tab.Child is TextBlock tb)
                     {
                         tb.FontWeight = isActive ? FontWeight.SemiBold : FontWeight.Medium;
@@ -685,9 +682,6 @@ namespace NudgeTray
                 bool isActive = _aiTabActive;
                 _aiLiveTab.BorderBrush = isActive
                     ? new SolidColorBrush(AIStatusActive)
-                    : Brushes.Transparent;
-                _aiLiveTab.Background = isActive
-                    ? new SolidColorBrush(Color.FromArgb(15, 255, 255, 255))
                     : Brushes.Transparent;
                 if (_aiLiveTab.Child is TextBlock tb)
                 {
@@ -1417,11 +1411,10 @@ namespace NudgeTray
             // ── Main row ──────────────────────────────────────────────────────
             var mainGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
 
-            EnsureSeedTimerRunning();
             var pulseDot = new PulseDot
             {
                 Color = fusionColor,
-                Seed  = _cachedPulseSeed,
+                Seed  = ComputePulseSeed(harvest),
                 VerticalAlignment = VerticalAlignment.Top,
                 Margin = new Thickness(0, 3, 10, 0)
             };
@@ -1462,6 +1455,13 @@ namespace NudgeTray
 
             // Fusion quality + meeting status on the same line
             var qualityRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+            qualityRow.Children.Add(new Border
+            {
+                Width = 6, Height = 6,
+                CornerRadius = new CornerRadius(3),
+                Background = new SolidColorBrush(fusionColor),
+                VerticalAlignment = VerticalAlignment.Center
+            });
             qualityRow.Children.Add(new TextBlock
             {
                 Text       = qualityLabel,
@@ -2402,14 +2402,15 @@ namespace NudgeTray
             }
 
             string statusLabel = "";
-            if (isSuppressed)
-                statusLabel = " · ⏸ suppressed";
-            else if (evt.AiCorrect == true)
-                statusLabel = " · ✓ confirmed";
-            else if (evt.AiCorrect == false)
-                statusLabel = " · ✗ rejected";
-            else if (evt.Triggered)
-                statusLabel = " · ⏸ skipped";
+            if (!isSuppressed)
+            {
+                if (evt.AiCorrect == true)
+                    statusLabel = " · ✓ confirmed";
+                else if (evt.AiCorrect == false)
+                    statusLabel = " · ✗ rejected";
+                else if (evt.Triggered)
+                    statusLabel = " · ⏸ skipped";
+            }
 
             var tipGrid = new Grid
             {
@@ -2487,11 +2488,11 @@ namespace NudgeTray
 
         private static string SuppressReasonToLabel(string? reason) => reason switch
         {
-            "InMeeting"    => "meeting",
-            "ScreenSharing" => "presenting",
-            "Afk"          => "away",
-            "PoorSignal"   => "no signal",
-            _              => "suppressed"
+            "InMeeting"    => "⏸ meeting",
+            "ScreenSharing" => "⏸ presenting",
+            "Afk"          => "⏸ away",
+            "PoorSignal"   => "⏸ no signal",
+            _              => "⏸ suppressed"
         };
 
         /// <summary>Compact log of most-recent ML checks, newest first.</summary>
@@ -2627,12 +2628,11 @@ namespace NudgeTray
                 };
                 Grid.SetColumn(actionText, 4);
 
-                // Response icon (✓ = AI correct, ✗ = AI wrong, ⏸ = skipped/suppressed)
+                // Response icon (✓ = AI correct, ✗ = AI wrong, ⏸ = skipped)
                 var respText = new TextBlock
                 {
                     Text = evt.AiCorrect == true ? "✓"
                          : evt.AiCorrect == false ? "✗"
-                         : evt.TriggerSource == "sup" ? "⏸"
                          : evt.Triggered ? "⏸"
                          : "",
                     FontSize = 11,
@@ -2813,13 +2813,12 @@ namespace NudgeTray
     /// Avoids Avalonia visual-tree conflicts by painting everything in a single Render pass.</summary>
     internal sealed class PulseDot : Control
     {
-        private long _spawnIntervalMs = 700;
-        private long _baseLifespanMs  = 1500;
-        private double _radiusBase    = 16;
-        private double _peakOpacityBase = 0.75;
+        private double _phase;
+        private double _step;
+        private double _radius;
+        private double _peakOpacity;
+        private double _stagger;
         internal readonly DispatcherTimer _timer;
-        private readonly SolidColorBrush _dotBrush;
-        private readonly SolidColorBrush _waveBrush;
 
         public Color Color { get; set; }
         public int Seed { get; set; }
@@ -2830,23 +2829,27 @@ namespace NudgeTray
             Height = 10;
             ClipToBounds = false;
             IsHitTestVisible = false;
-            _dotBrush  = new SolidColorBrush();
-            _waveBrush = new SolidColorBrush();
             _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(24) };
-            _timer.Tick += (_, _) => InvalidateVisual();
+            _timer.Tick += (_, _) =>
+            {
+                _phase += _step;
+                if (_phase > 1.0) _phase -= 1.0;
+                InvalidateVisual();
+            };
         }
 
-        private void InitFromSeed()
+        // Must be called before Start() — Seed setter initialises derived params
+         private void InitFromSeed()
         {
             int s = Seed;
             int h1 = ((s * 1103515245 + 12345) ^ (s >> 13)) & 0x7FFFFFFF;
             int h2 = ((s * 214013 + 2531011) ^ (s <<  7)) & 0x7FFFFFFF;
             int h3 = ((s * 1664525 + 1013904223) ^ (s >> 17)) & 0x7FFFFFFF;
             const double div = 0x7FFFFFFF;
-            _spawnIntervalMs  = 750 + (long)(900  * (h1 / div));
-            _baseLifespanMs   = 1200 + (long)(600  * (h2 / div));
-            _radiusBase       = 14 + 4.0    * (h3 / div);
-            _peakOpacityBase  = 0.60 + 0.20 * (h3 / div);
+            _step        = 0.016 + 0.006 * (h1 / div);
+            _radius      = 10.0  + 2.0  * (h2 / div);
+            _peakOpacity = 0.42  + 0.12  * (h3 / div);
+            _stagger     = h2 % 2 == 0 ? 0.48 : 0.52;
         }
 
         public void Start()
@@ -2855,47 +2858,36 @@ namespace NudgeTray
             _timer.Start();
         }
 
-        private static long SeededHash(long x)
-        {
-            return ((x * 1103515245 + 12345) ^ (x >> 13)) & 0x7FFFFFFF;
-        }
-
         public override void Render(DrawingContext context)
         {
-            base.Render(context);
             var center = new Point(5, 5);
             var color = Color;
-            long now = Environment.TickCount64;
 
-            double ds = 0.92 + 0.08 * ((Math.Sin(now * 0.001 * 3.0) + 1.0) / 2.0);
-            double dotR = 4.7 * ds;
-            _dotBrush.Color = color;
-            context.DrawEllipse(_dotBrush, null, center, dotR, dotR);
-
-            long maxLife = _baseLifespanMs + 800;
-            long startN = Math.Max(0, (now - maxLife) / _spawnIntervalMs);
-            long endN = now / _spawnIntervalMs;
-
-            for (long n = startN; n <= endN; n++)
+            // Ring 1 — one-way emission from center, exponential decay
+            double r1 = _phase;
+            double ring1R = _radius * r1;
+            double ringAlpha1 = _peakOpacity * Math.Min(1.0, 2.0 * r1) * Math.Exp(-r1 * 3.5);
+            if (ringAlpha1 > 0.002)
             {
-                long birthMs = n * _spawnIntervalMs;
-                long age = now - birthMs;
-                if (age < 0 || age >= maxLife) continue;
-
-                long hash = SeededHash(birthMs);
-                long lifeMs = _baseLifespanMs + (hash % 800);
-                if (age >= lifeMs) continue;
-
-                double phase = (double)age / lifeMs;
-                double r = dotR + 22.0 * phase;
-                double a = _peakOpacityBase * Math.Exp(-phase * 4.6);
-                if (a <= 0.005) continue;
-
-                double jitter = (hash % 5) * 0.4;
-                _waveBrush.Color = color;
-                using (context.PushOpacity(a))
-                    context.DrawEllipse(_waveBrush, null, center, r + jitter, r + jitter);
+                var ringPen = new Pen(new SolidColorBrush(color, ringAlpha1), 0.7);
+                context.DrawEllipse(null, ringPen, center, ring1R, ring1R);
             }
+
+            // Ring 2 — staggered
+            double r2 = _phase + _stagger;
+            if (r2 > 1.0) r2 -= 1.0;
+            double ring2R = _radius * r2;
+            double ringAlpha2 = _peakOpacity * Math.Min(1.0, 2.0 * r2) * Math.Exp(-r2 * 3.5);
+            if (ringAlpha2 > 0.002)
+            {
+                var ringPen = new Pen(new SolidColorBrush(color, ringAlpha2), 0.7);
+                context.DrawEllipse(null, ringPen, center, ring2R, ring2R);
+            }
+
+            // Solid center dot — steady, tiny breath
+            double ds = 0.92 + 0.08 * ((Math.Sin(Environment.TickCount64 * 0.000003) + 1.0) / 2.0);
+            double dotR = 4.6 * ds;
+            context.DrawEllipse(new SolidColorBrush(color), null, center, dotR, dotR);
         }
     }
 
@@ -2908,28 +2900,8 @@ namespace NudgeTray
         code.Add(harvest.Sw300);
         code.Add(harvest.Apps300);
         code.Add((int)(harvest.Share * 100));
-        code.Add(harvest.Browser);
-        code.Add(harvest.Fullscreen);
+        code.Add(harvest.Domain ?? "");
         return code.ToHashCode();
     }
+}}
 
-    // Seed updated asynchronously by a background timer — decoupled from render cycle
-    private static int _cachedPulseSeed;
-    private static DispatcherTimer? _seedUpdateTimer;
-
-    private static void EnsureSeedTimerRunning()
-    {
-        if (_seedUpdateTimer != null) return;
-        _seedUpdateTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-        _seedUpdateTimer.Tick += (_, _) =>
-        {
-            _cachedPulseSeed = ComputePulseSeed(LiveAIState.LastHarvest);
-        };
-        _seedUpdateTimer.Start();
-        // Compute seed immediately on first run
-        _cachedPulseSeed = ComputePulseSeed(LiveAIState.LastHarvest);
-    }
-}
-
-
-}

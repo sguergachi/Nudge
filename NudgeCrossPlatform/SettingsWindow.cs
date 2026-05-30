@@ -33,6 +33,7 @@ namespace NudgeTray
 
         private Border?    _harvestConfirmPanel;
         private Border?    _modelConfirmPanel;
+        private StackPanel? _modelBody;
         private TextBlock? _harvestStatus;
         private TextBlock? _modelStatus;
         private Button?    _harvestDeleteBtn;
@@ -537,6 +538,7 @@ namespace NudgeTray
             inner.Children.Add(BuildSectionHeader("ML Model", "◉", AccentModel));
 
             var body = new StackPanel { Spacing = 2, Margin = new Thickness(14, 10, 14, 14) };
+            _modelBody = body;
 
             string statusText = TrainerState.LastTrained != DateTime.MinValue ? "Trained" : "Not trained";
             body.Children.Add(MakeStatRow("Status", statusText));
@@ -776,15 +778,73 @@ namespace NudgeTray
                 TrainerState.ModelVersion     = 0;
                 TrainerState.Architecture     = "";
 
+                // Deploy bundled V1 model immediately
+                Program.DeployBundledModel();
+                TrainerState.RefreshFromCsv();
+
                 _modelConfirmPanel!.IsVisible = false;
                 _modelDeleteBtn!.IsEnabled = false;
-                ShowStatus(_modelStatus!, $"Deleted ({FormatFileSize(deletedSize)})", SuccessGreen);
+                RefreshModelCardBody();
+                ShowStatus(_modelStatus!, $"Model reset to V1 ({FormatFileSize(deletedSize)} deleted)", SuccessGreen);
             }
             catch (Exception ex)
             {
                 _modelConfirmPanel!.IsVisible = false;
                 ShowStatus(_modelStatus!, $"Failed: {ex.Message}", DangerRed);
             }
+        }
+
+        private void RefreshModelCardBody()
+        {
+            if (_modelBody == null) return;
+            _modelBody.Children.Clear();
+
+            string modelDir  = System.IO.Path.Combine(PlatformConfig.DataDirectory, "model");
+            string modelPath = System.IO.Path.Combine(modelDir, "productivity_model.joblib");
+            bool modelExists = File.Exists(modelPath);
+
+            long dirSize = 0;
+            if (Directory.Exists(modelDir))
+                foreach (var f in Directory.GetFiles(modelDir))
+                    dirSize += new FileInfo(f).Length;
+
+            string statusText = TrainerState.LastTrained != DateTime.MinValue ? "Trained" : "Not trained";
+            _modelBody.Children.Add(MakeStatRow("Status", statusText));
+
+            if (TrainerState.LastTrained != DateTime.MinValue)
+            {
+                _modelBody.Children.Add(MakeStatRow("Trained on",
+                    TrainerState.LastTrained.ToString("MMM dd yyyy, HH:mm", CultureInfo.InvariantCulture)));
+                _modelBody.Children.Add(MakeStatRow("Training samples",
+                    TrainerState.LastTrainedCount.ToString("N0", CultureInfo.InvariantCulture)));
+                if (TrainerState.LastAccuracy >= 0)
+                    _modelBody.Children.Add(MakeStatRow("Accuracy", $"{TrainerState.LastAccuracy:P1}"));
+                if (TrainerState.ModelVersion > 0)
+                    _modelBody.Children.Add(MakeStatRow("Version",
+                        TrainerState.ModelVersion.ToString(CultureInfo.InvariantCulture)));
+                if (TrainerState.Architecture.Length > 0)
+                {
+                    var archDisplay = TrainerState.Architecture == "pending" ? "Training..." : TrainerState.Architecture;
+                    _modelBody.Children.Add(MakeStatRow("Architecture", archDisplay));
+                }
+            }
+            _modelBody.Children.Add(MakeStatRow("Size", FormatFileSize(dirSize)));
+
+            _modelBody.Children.Add(new Border { Height = 10 });
+
+            _modelDeleteBtn = MakeDangerButton("Delete Model", modelExists || dirSize > 0);
+            _modelDeleteBtn.Click += OnModelDeleteClicked;
+            _modelBody.Children.Add(_modelDeleteBtn);
+
+            _modelConfirmPanel = MakeConfirmPanel(
+                "Permanently delete the trained model? You'll need to retrain.",
+                DeleteModel,
+                () => { if (_modelConfirmPanel != null) _modelConfirmPanel.IsVisible = false; });
+            _modelConfirmPanel.IsVisible = false;
+            _modelBody.Children.Add(_modelConfirmPanel);
+
+            _modelStatus = new TextBlock { FontSize = 12, Foreground = new SolidColorBrush(TextMuted), IsVisible = false };
+            _modelBody.Children.Add(_modelStatus);
         }
 
         private static void ShowStatus(TextBlock tb, string text, Color color)
