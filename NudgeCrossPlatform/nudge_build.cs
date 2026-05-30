@@ -1070,8 +1070,10 @@ sealed class Nudge
         public PresenceState GetPresenceState()
         {
 #if WINDOWS
-            bool mic = IsCapabilityActive("microphone");
-            bool cam = IsCapabilityActive("webcam");
+            int micAppCount = TestCapability("microphone");
+            int camAppCount = TestCapability("webcam");
+            bool mic = micAppCount > 0;
+            bool cam = camAppCount > 0;
             return new PresenceState(mic, cam, false, PresenceSource.WindowsRegistry);
 #else
             return PresenceState.Unavailable;
@@ -1079,56 +1081,121 @@ sealed class Nudge
         }
 
 #if WINDOWS
-        private static bool IsCapabilityActive(string capability)
+        // Track previously-active apps so we can detect when a stale registry key
+        // reports "active" but the process isn't actually running.
+        private static readonly HashSet<string> _knownActiveApps = new(StringComparer.OrdinalIgnoreCase);
+        private static DateTime _lastPresenceLog = DateTime.MinValue;
+
+        /// <summary>Counts how many apps have an active mic/camera session,
+        /// filtering out stale registry entries whose process isn't running.</summary>
+        private static int TestCapability(string capability)
         {
             const string storePath =
                 @"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore";
             try
             {
                 using var root = Microsoft.Win32.Registry.CurrentUser.OpenSubKey($@"{storePath}\{capability}");
-                return root != null && AnySubkeyActive(root);
+                if (root == null) return 0;
+                return CountActiveApps(root, capability);
             }
             catch
             {
-                return false;
+                return 0;
             }
         }
 
-        private static bool AnySubkeyActive(Microsoft.Win32.RegistryKey root)
+        private static int CountActiveApps(Microsoft.Win32.RegistryKey root, string capability)
         {
+            int active = 0;
             foreach (string name in root.GetSubKeyNames())
             {
                 if (string.Equals(name, "NonPackaged", StringComparison.OrdinalIgnoreCase))
                 {
-                    // Win32 apps are nested one level deeper under NonPackaged.
                     using var nonPkg = root.OpenSubKey(name);
                     if (nonPkg == null) continue;
                     foreach (string appPath in nonPkg.GetSubKeyNames())
                     {
                         using var app = nonPkg.OpenSubKey(appPath);
-                        if (app != null && IsCurrentlyActive(app)) return true;
+                        if (app != null && IsCurrentlyActive(app, appPath, capability))
+                            active++;
                     }
                 }
                 else
                 {
-                    // UWP package subkey — LastUsedTime* sits directly on it.
                     using var sub = root.OpenSubKey(name);
-                    if (sub != null && IsCurrentlyActive(sub)) return true;
+                    if (sub != null && IsCurrentlyActive(sub, name, capability))
+                        active++;
                 }
             }
-            return false;
+            return active;
         }
 
-        // Returns true only when the app has an active session:
-        // LastUsedTimeStart is non-zero (mic/cam was actually opened) AND
-        // LastUsedTimeStop is zero or absent (it hasn't closed yet).
-        // A zero stop-time with no start-time is just a permission grant with no usage.
-        private static bool IsCurrentlyActive(Microsoft.Win32.RegistryKey key)
+        private static bool IsCurrentlyActive(Microsoft.Win32.RegistryKey key, string appName, string capability)
         {
             object? startVal = key.GetValue("LastUsedTimeStart");
             if (startVal is not long start || start == 0) return false;
             object? stopVal = key.GetValue("LastUsedTimeStop");
-            return stopVal is not long stop || stop == 0;
+            bool stopIsZero = stopVal is not long stop || stop == 0;
+            if (!stopIsZero)
+                return false;
+
+            // Session appears active. Check for staleness: if the app process
+            // isn't running, the registry entry is stale (e.g. the app crashed
+            // or was killed without Windows cleaning up the key).
+            string? exeName = Path.GetFileName(appName);
+            if (!string.IsNullOrEmpty(exeName) && exeName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    var procs = System.Diagnostics.Process.GetProcessesByName(
+                        exeName[..^4]); // strip .exe
+                    if (procs.Length == 0)
+                    {
+                        // Process not running — stale registry entry
+                        LogStaleEntry(appName, capability, start);
+                        return false;
+                    }
+                    foreach (var p in procs) p.Dispose();
+                }
+                catch
+                {
+                    // Can't verify — allow the detection to stand (safe default)
+                }
+            }
+
+            // Log periodic presence summary for diagnostics
+            LogActiveApp(appName, capability);
+            return true;
+        }
+
+        private static readonly HashSet<string> _loggedApps = new(StringComparer.OrdinalIgnoreCase);
+        private static long _lastPresenceLogTick;
+
+        private static void LogActiveApp(string appName, string capability)
+        {
+            long now = Environment.TickCount64;
+            string key = $"{capability}:{appName}";
+            // Log each app no more than once every 60s
+            if (!_loggedApps.Contains(key) && (now - _lastPresenceLogTick) > 60_000)
+            {
+                Console.WriteLine($"  ⓘ Presence: {capability} active — {appName}");
+                _loggedApps.Add(key);
+                _lastPresenceLogTick = now;
+            }
+            else if (_loggedApps.Count > 0 && (now - _lastPresenceLogTick) > 300_000)
+            {
+                _loggedApps.Clear();
+            }
+        }
+
+        private static void LogStaleEntry(string appName, string capability, long startFileTime)
+        {
+            try
+            {
+                var age = DateTime.UtcNow - DateTime.FromFileTimeUtc(startFileTime);
+                Console.WriteLine($"  ⚠ Stale {capability} entry (process not running): {appName} — active since {age.TotalMinutes:F0} min ago, ignoring");
+            }
+            catch { }
         }
 #endif
 
