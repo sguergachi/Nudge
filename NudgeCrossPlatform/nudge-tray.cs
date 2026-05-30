@@ -83,7 +83,6 @@ namespace NudgeTray
             var srcDir = Path.GetFullPath(Path.Combine(_baseDir, "..", "..", ".."));
             return Path.Combine(srcDir, name);
         }
-        static readonly string[] _dbusNotificationActions = new[] { "yes", "Yes - Productive", "no", "No - Not Productive" };
         static bool _showAnalyticsOnStartup;
         static bool _verifyAnalyticsScrollOnStartup;
         static int _analyticsScrollVerificationAttempts;
@@ -1269,11 +1268,6 @@ namespace NudgeTray
             }
         }
 
-        static bool CheckPythonVersion()
-        {
-            return true;
-        }
-
         static bool EnsurePythonDependencies()
         {
             try
@@ -2006,168 +2000,6 @@ namespace NudgeTray
                 Console.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
             }
         }
-
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // LEGACY NOTIFICATIONS (Kept for reference, not used)
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-#if WINDOWS
-        private static void ShowWindowsNotification()
-        {
-            try
-            {
-
-                _waitingForResponse = true;
-
-                // Build native Windows toast notification with action buttons
-                new ToastContentBuilder()
-                    .AddText("Nudge - Productivity Check")
-                    .AddText("Were you productive during the last interval?")
-                    .AddButton(new ToastButton()
-                        .SetContent("Yes - Productive")
-                        .AddArgument("action", "yes")
-                        .SetBackgroundActivation())
-                    .AddButton(new ToastButton()
-                        .SetContent("No - Not Productive")
-                        .AddArgument("action", "no")
-                        .SetBackgroundActivation())
-                    .Show();
-
-                Console.WriteLine("✓ Native Windows toast notification shown with Yes/No buttons");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[ERROR] Failed to show Windows notification: {ex.Message}");
-            }
-        }
-#endif
-
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // LINUX NOTIFICATIONS (Native Tmds.DBus.Protocol with resident:true hint)
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-#if !WINDOWS
-        private static async void ShowDbusNotification()
-        {
-
-            // Run DBus operations without capturing Avalonia synchronization context
-            // This prevents DBus from trying to use Avalonia dispatcher during cleanup
-            await Task.Run(async () =>
-            {
-                // Clear synchronization context to prevent DBus from capturing it
-                var oldContext = SynchronizationContext.Current;
-                SynchronizationContext.SetSynchronizationContext(null);
-
-                try
-                {
-                    using var connection = new DBusConnection(DBusAddress.Session!);
-                    await connection.ConnectAsync().ConfigureAwait(false);
-
-                    // Create and send Notify method call
-                    MessageBuffer message;
-                    {
-                        static void WriteNotify(DBusConnection conn, out MessageBuffer msg)
-                        {
-                            using var writer = conn.GetMessageWriter();
-                            writer.WriteMethodCallHeader(
-                                destination: "org.freedesktop.Notifications",
-                                path: "/org/freedesktop/Notifications",
-                                @interface: "org.freedesktop.Notifications",
-                                signature: "susssasa{sv}i",
-                                member: "Notify");
-
-                            writer.WriteString("Nudge");
-                            writer.WriteUInt32(0);
-                            writer.WriteString("");
-                            writer.WriteString("Nudge - Productivity Check");
-                            writer.WriteString("Were you productive during the last interval?");
-                            writer.WriteArray(_dbusNotificationActions);
-                            var arrayStart = writer.WriteDictionaryStart();
-                            writer.WriteDictionaryEntryStart(); writer.WriteString("urgency"); writer.WriteVariant(VariantValue.Byte(2));
-                            writer.WriteDictionaryEntryStart(); writer.WriteString("resident"); writer.WriteVariant(VariantValue.Bool(true));
-                            writer.WriteDictionaryEntryStart(); writer.WriteString("x-kde-appname"); writer.WriteVariant(VariantValue.String("Nudge"));
-                            writer.WriteDictionaryEntryStart(); writer.WriteString("x-kde-eventId"); writer.WriteVariant(VariantValue.String("productivity-check"));
-                            writer.WriteDictionaryEnd(arrayStart);
-                            writer.WriteInt32(0);
-                            msg = writer.CreateMessage();
-                        }
-                        WriteNotify(connection, out message);
-                    }
-
-                    var notificationId = await connection.CallMethodAsync(
-                        message,
-                        (Tmds.DBus.Protocol.Message m, object? s) => m.GetBodyReader().ReadUInt32(),
-                        null);
-
-
-                    // Listen for ActionInvoked signal
-                    var actionMatchRule = new MatchRule
-                    {
-                        Type = MessageType.Signal,
-                        Interface = "org.freedesktop.Notifications",
-                        Member = "ActionInvoked"
-                    };
-
-                    var cancellationSource = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(60));
-
-                    await connection.AddMatchAsync(
-                        actionMatchRule,
-                        (Tmds.DBus.Protocol.Message m, object? s) =>
-                        {
-                            var reader = m.GetBodyReader();
-                            return (reader.ReadUInt32(), reader.ReadString());
-                        },
-                        (Exception? ex, (uint id, string actionKey) signal, object? readerState, object? handlerState) =>
-                        {
-                            if (ex != null)
-                            {
-                                Console.WriteLine($"[WARN] Action listener error: {ex.Message}");
-                                return;
-                            }
-
-                            if (signal.id == notificationId)
-                            {
-
-                                if (signal.actionKey == "yes")
-                                {
-                                    Console.WriteLine("User responded: YES (productive)");
-                                    SendResponse(true);
-                                }
-                                else if (signal.actionKey == "no")
-                                {
-                                    Console.WriteLine("User responded: NO (not productive)");
-                                    SendResponse(false);
-                                }
-
-                                cancellationSource.Cancel();
-                            }
-                        },
-                        ObserverFlags.None,
-                        null,
-                        null,
-                        true
-                    );
-
-                    // Keep connection alive until cancelled
-                    await Task.Delay(-1, cancellationSource.Token).ContinueWith(_ => { });
-                }
-                catch (TaskCanceledException)
-                {
-                    // Swallow cancellation exceptions - these are expected
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[WARN] Native DBus notification failed: {ex.Message}");
-                    // Don't rethrow - just log and continue
-                }
-                finally
-                {
-                    // Restore original synchronization context
-                    SynchronizationContext.SetSynchronizationContext(oldContext);
-                }
-            }).ConfigureAwait(false);
-        }
-#endif
 
         private static void ShowFallbackNotification()
         {

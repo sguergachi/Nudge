@@ -15,7 +15,6 @@ internal static class TrainerState
     private static DateTime _cachedTrained;
     private static int _cachedTrainedCount;
     private static float _cachedAccuracy = -1f;
-    private static int _cachedModelVersion;
 
     public static int  SampleCount;
     public static int  MinSamples   = 20;
@@ -182,7 +181,6 @@ internal static class TrainerState
                             _cachedTrained = trained;
                             _cachedTrainedCount = trainedCount;
                             _cachedAccuracy = accuracy;
-                            _cachedModelVersion = ModelVersion;
                         }
                     }
                     catch { }
