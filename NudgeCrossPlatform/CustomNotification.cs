@@ -333,25 +333,13 @@ namespace NudgeTray
                 RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative)
             };
 
-            var button = new Button
-            {
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                HorizontalContentAlignment = HorizontalAlignment.Center,
-                VerticalContentAlignment = VerticalAlignment.Center,
-                Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                Cursor = new Cursor(StandardCursorType.Hand),
-                Padding = new Thickness(0),
-                Focusable = true,
-                TabIndex = tabIndex
-            };
-
             var buttonContent = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
                 Spacing = 8,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Center,
+                IsHitTestVisible = false
             };
 
             var mainTextBlock = new TextBlock
@@ -362,7 +350,8 @@ namespace NudgeTray
                 Foreground = isPrimary
                     ? Brushes.White
                     : new SolidColorBrush(NoBtnText),
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Center,
+                IsHitTestVisible = false
             };
 
             var keyBadge = new Border
@@ -384,13 +373,13 @@ namespace NudgeTray
                 FontWeight = FontWeight.Medium,
                 Foreground = new SolidColorBrush(
                     isPrimary ? Color.FromArgb(230, 255, 255, 255) : Color.FromArgb(160, 180, 180, 195)),
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Center,
+                IsHitTestVisible = false
             };
 
             buttonContent.Children.Add(mainTextBlock);
             buttonContent.Children.Add(keyBadge);
-            button.Content = buttonContent;
-            border.Child = button;
+            border.Child = buttonContent;
 
             // Hover effects
             border.PointerEntered += (s, e) =>
@@ -405,20 +394,21 @@ namespace NudgeTray
                 border.RenderTransform = new ScaleTransform(1.0, 1.0);
             };
 
-            // Pressed state
+            // Pressed state — visual
             border.PointerPressed += (s, e) =>
             {
                 border.Background = new SolidColorBrush(pressedColor);
                 border.RenderTransform = new ScaleTransform(0.98, 0.98);
             };
 
+            // Released — trigger action + restore hover
             border.PointerReleased += (s, e) =>
             {
+                if (e.GetCurrentPoint(border).Properties.IsLeftButtonPressed) return;
                 border.Background = new SolidColorBrush(hoverColor);
                 border.RenderTransform = new ScaleTransform(1.02, 1.02);
+                onClick();
             };
-
-            button.Click += (s, e) => onClick();
 
             return new StackPanel { Children = { border } };
         }
