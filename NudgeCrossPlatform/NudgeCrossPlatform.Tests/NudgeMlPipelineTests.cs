@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
@@ -571,4 +572,76 @@ public sealed class NudgeMlSerializationTests
         AiCorrect = null,
         TriggerSource = "ai"
     };
+}
+
+public sealed class FeatureSchemaValidationTests
+{
+    [Fact]
+    public void SchemaVersion_IsThree() =>
+        Assert.Equal(3, FeatureSchema.SchemaVersion);
+
+    [Fact]
+    public void ActivityLogHeaders_HasCorrectCount() =>
+        Assert.Equal(18, FeatureSchema.ActivityLogHeaders.Length);
+
+    [Fact]
+    public void HarvestHeaders_HasCorrectCount() =>
+        Assert.Equal(29, FeatureSchema.HarvestHeaders.Length);
+
+    [Fact]
+    public void HarvestHeaders_ContainsAllOrderedFeatureNames()
+    {
+        foreach (var name in FeatureSchema.OrderedFeatureNames)
+            Assert.Contains(name, FeatureSchema.HarvestHeaders);
+    }
+
+    [Fact]
+    public void ActivityLogHeaders_StartsWithTimestamp() =>
+        Assert.StartsWith("timestamp", FeatureSchema.ActivityLogHeaders[0]);
+}
+
+public sealed class AppCategoryConfidenceTests
+{
+    [Fact]
+    public void GetConfidenceScore_Descending_Correct()
+    {
+        double ov = AppCategoryClassifier.GetConfidenceScore(CategoryConfidence.Override);
+        double dt = AppCategoryClassifier.GetConfidenceScore(CategoryConfidence.Desktop);
+        double se = AppCategoryClassifier.GetConfidenceScore(CategoryConfidence.Semantic);
+        double inf = AppCategoryClassifier.GetConfidenceScore(CategoryConfidence.Inferred);
+        double fb = AppCategoryClassifier.GetConfidenceScore(CategoryConfidence.Fallback);
+        double unk = AppCategoryClassifier.GetConfidenceScore(CategoryConfidence.Unknown);
+
+        Assert.True(ov > dt && dt > se && se > inf && inf > fb && fb > unk,
+            "Confidence scores must be in strict descending order");
+    }
+
+    [Fact]
+    public void GetConfidenceScore_Override_IsOne() =>
+        Assert.Equal(1.0, AppCategoryClassifier.GetConfidenceScore(CategoryConfidence.Override));
+
+    [Fact]
+    public void GetConfidenceScore_Unknown_IsZero() =>
+        Assert.Equal(0.0, AppCategoryClassifier.GetConfidenceScore(CategoryConfidence.Unknown));
+
+    [Fact]
+    public void GetConfidenceLabel_AllKnown_ReturnsNonEmpty()
+    {
+        foreach (CategoryConfidence c in Enum.GetValues<CategoryConfidence>())
+        {
+            string label = AppCategoryClassifier.GetConfidenceLabel(c);
+            Assert.False(string.IsNullOrWhiteSpace(label), $"Confidence {c} should have a non-empty label");
+        }
+    }
+
+    [Fact]
+    public void GetCategoryName_AllKnown_ReturnsNonEmpty()
+    {
+        foreach (AppCategory cat in Enum.GetValues<AppCategory>())
+        {
+            if (cat == AppCategory.Unknown) continue;
+            string name = AppCategoryClassifier.GetCategoryName(cat);
+            Assert.False(string.IsNullOrWhiteSpace(name), $"Category {cat} should have a non-empty name");
+        }
+    }
 }
