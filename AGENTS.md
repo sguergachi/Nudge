@@ -8,9 +8,7 @@ cd NudgeCrossPlatform
 .\build.ps1             # Windows (param: -SkipTests, -Clean)
 ```
 
-The `.csproj` files have `EnableDefaultCompileItems=false` — all sources are explicit. Build scripts strip the shebang line from `nudge.cs → nudge_build.cs` and `nudge-notify.cs → nudge-notify_build.cs` before compilation.
-
-**When editing `nudge.cs` or `nudge-notify.cs`**, you must also edit the corresponding `*_build.cs` file with the same changes — the build script regenerates it but agents should keep both in sync. Edit both files.
+The `.csproj` files have `EnableDefaultCompileItems=false` — all sources are explicit.
 
 ## .NET 10
 
@@ -20,8 +18,8 @@ Pinned via `global.json` at repo root (`"version": "10.0.100", "rollForward": "l
 
 | Binary | Role | Key sources |
 |---|---|---|
-| `nudge` | Harvest daemon | `nudge_build.cs`, `NudgeCore.TestableLogic.cs`, `NudgeJsonContext.cs` |
-| `nudge-notify` | Send YES/NO responses | `nudge-notify_build.cs` |
+| `nudge` | Harvest daemon | `nudge.cs`, `NudgeCore.TestableLogic.cs`, `NudgeJsonContext.cs` |
+| `nudge-notify` | Send YES/NO responses | `nudge-notify.cs` |
 | `nudge-tray` | GUI tray + Analytics | `nudge-tray.cs`, `AnalyticsWindow.cs`, `CustomNotification.cs`, `SettingsWindow.cs` |
 
 Standalone `dotnet build` works per-project. Shared code lives in `NudgeCore.TestableLogic.cs` (namespace `NudgeCore`) — compiled into both `nudge` and `nudge-tray`.
@@ -52,6 +50,8 @@ Or let the build script run them: `build.sh` always runs tests; `build.ps1 -Skip
 | `MLNEXT:{unixts}` | Next ML check timestamp |
 | `APPFOCUS:{app}\t{title}` | Foreground app changed |
 | `HARVEST:{json}` | Sensor fusion signal (2s) |
+| `MEETING:{mic}\|{cam}\|{sharing}` | Live meeting/presence state (5s) |
+| `SUPPRESS:{reason}` | Snapshot suppressed (InMeeting/ScreenSharing/Afk/PoorSignal) |
 
 YES/NO responses flow back via UDP `127.0.0.1:45001`.
 
@@ -61,8 +61,9 @@ YES/NO responses flow back via UDP `127.0.0.1:45001`.
 
 ## Alert logic
 
-- ML check runs every 60s (`ML_CHECK_INTERVAL_MS`).
-- **Not productive** + confidence ≥ **98%** (`ML_CONFIDENCE_THRESHOLD`) → ML-triggered snapshot.
+- Meeting detection runs **first** every ML check (60s) — if in meeting or screen sharing, snapshot is suppressed with `SUPPRESS:{reason}` and ML is never consulted. Meeting trumps AI.
+- ML check runs every 60s (`ML_CHECK_INTERVAL_MS`), only if NOT in a meeting.
+- **Not productive** + confidence ≥ **85%** (`ML_CONFIDENCE_THRESHOLD`) → ML-triggered snapshot.
 - **Not productive** + confidence < 98% → defers to interval (`_mlLowConfidence = true`), interval timer NOT reset.
 - **Productive** → skip snapshot, reset interval timer (`_productivityConfirmed = true`).
 - Interval fallback: random 5–10 min (or `--interval N`).
@@ -145,9 +146,49 @@ The system tray context menu (built in `CreateAvaloniaMenu()` in `nudge-tray.cs`
 
 The update check fires once on startup (`Task.Run(CheckForUpdateAsync)` in `AfterSetup`). It calls the GitHub Releases API and compares `tag_name` against `VERSION`.
 
-## Code quality rules
+## Code quality
 
-Zero warning policy on builds. Key suppressible patterns:
+### Philosophy
+
+Write code with **parsimony** — the fewest elements needed to express the solution. Every line
+must justify its existence. Prefer simple constructs over clever abstractions. Delete before
+adding. A smaller codebase is a faster, more maintainable codebase.
+
+Seek **performance through simplicity**. Hot paths must minimize allocations, avoid virtual
+dispatch, prefer stack over heap, and use spans over string copies. Measure before
+optimizing; don't guess. The 100ms harvest cycle, 60s ML check, and IPC hot loop are the
+critical paths — everything else is cold.
+
+Elegance is objective: can a new contributor understand the data flow in one pass? Does a
+change in one concern require touching unrelated code? Are state transitions explicit?
+
+### Mandates
+
+- **Zero warning policy on builds.** Every warning is a bug waiting to happen.
+
+- **Prefer linear code** over indirection. A 200-line method that reads top-to-bottom is
+  often clearer than 5 methods jumping through abstractions. Extract only when the
+  extraction *reduces* total cognitive load.
+
+- **No class hierarchy for <10 variants.** An if/else chain with 7 branches is simpler
+  than an interface with 7 implementations. Introduce polymorphism only when the
+  dispatch table exceeds your working memory (~10 entries).
+
+- **One concern per method** when extraction is the simpler choice. The IPC message
+  dispatch should be a flat chain calling focused handler methods — dispatch in one
+  place, logic in named methods.
+
+- **Minimize state.** Every mutable field is a liability. Prefer locals over fields,
+  parameters over statics. When multiple fields form a logical group, consider a struct.
+
+- **Avoid allocations in cycles <1s.** The harvest loop runs every 100ms — use spans,
+  pooled buffers, and `static readonly` format strings. Every heap allocation there
+  costs ~100x more than a stack allocation.
+
+- **Test pure logic.** Side-effect-free computations must be `internal static` and
+  covered by xunit tests. Stateful integration logic is tested by running the app.
+
+### Suppressible warning patterns
 
 - **CA1852**: `sealed` internal types not inherited from.
 - **CA1805**: Remove explicit `= 0`/`= false`/`= null` default init.
@@ -172,6 +213,8 @@ Zero warning policy on builds. Key suppressible patterns:
 - **Don't replace working polished code** with native alternatives without asking. The custom notification window is intentionally cross-platform and preferred over native notifications.
 - **Custom notification** uses Avalonia window with keyboard shortcuts (`Ctrl+Shift+Y` = YES, `Ctrl+Shift+N` = NO), drag-to-reposition, auto-dismiss 30s, position persistence.
 - **Prefer simple over clever.** The repo has a history of over-engineering (3 training scripts, thread-safe CSV locking, hash collision detection). Delete before adding.
+- **Never modify tests to make them pass if the code is wrong.** A failing test means the *code* needs fixing, not the test. If a test was correct before your change and now fails, your change broke something — don't weaken the assertion or remove the test to hide the failure. Fix the bug.
+- **Work until the job is done.** Don't stop at the first obstacle. If the build fails, fix it. If tests fail, fix them. If CI fails, investigate and resolve. We don't tolerate lazy half-measures — see a task through to completion.
 
 ## What not to do
 
@@ -179,4 +222,12 @@ Zero warning policy on builds. Key suppressible patterns:
 - Do not run `dotnet publish` manually — build script handles platform publishing.
 - Do not touch `*.dll`, `*.exe`, `*.pdb`, or `*.runtimeconfig.json` in `NudgeCrossPlatform/` — they are build outputs and gitignored.
 - Do not add moq or other mocking frameworks — tests use xunit only, testable code via `NudgeCoreLogic` static methods.
+- **Do not modify a test to make it pass when the code is wrong.** Fix the bug, not the assertion.
+- Do not give up at first failure. Work the problem until resolved — build break, test failure, CI red — fix it.
 - If you see changes in the working tree that you did not make, leave them alone — they belong to another agent working in parallel.
+- **If the build fails and `git diff --name-only` shows a file changed that you did not touch, STOP IMMEDIATELY.** Do not pass go, do not collect $200. Another agent has in-progress work.
+  - Do NOT `git checkout`, `git restore`, `git reset`, or `rm` their files — even if the user says "go" or "proceed."
+  - Do NOT edit their files to "help finish" them. Their changes are incomplete for a reason — you don't have their full plan.
+  - Do NOT speculate that "the file just needs a quick fix." Any change to their file creates data loss for the agent and potential merge conflicts.
+  - What you SHOULD do: report the error to the user, list which file(s) belong to the other agent, and wait. If you must proceed, isolate your build to your project only (e.g. `dotnet build NudgeCrossPlatform/nudge-tray.csproj` if the broken file isn't compiled into that project).
+- **Before you run the build script for the first time in a session**, run `git diff --stat` and note any files you did not touch. Expect the build may fail because of them. If it does — see above.
