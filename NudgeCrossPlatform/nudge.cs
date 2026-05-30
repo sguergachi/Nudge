@@ -1444,7 +1444,7 @@ sealed class Nudge
 
         while (true)
         {
-            var sw = Stopwatch.StartNew();
+            long startTs = Stopwatch.GetTimestamp();
 
             // Get current activity
             var now = DateTime.Now;
@@ -1637,10 +1637,10 @@ sealed class Nudge
                 Dim($"  {remaining} min until next snapshot{mlStatus}  ({Color.CYAN}{app}{Color.RESET}, idle: {idle}ms)");
             }
 
-            sw.Stop();
-            if (sw.ElapsedMilliseconds > 10)
+            long elapsedMs = (Stopwatch.GetTimestamp() - startTs) * 1000 / Stopwatch.Frequency;
+            if (elapsedMs > 10)
             {
-                Dim($"  PERF: Monitoring cycle took {sw.ElapsedMilliseconds}ms");
+                Dim($"  PERF: Monitoring cycle took {elapsedMs}ms");
             }
 
             Thread.Sleep(CYCLE_MS);

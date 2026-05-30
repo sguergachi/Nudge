@@ -231,6 +231,8 @@ namespace NudgeTray
             // ── AI Brain live tab ─────────────────────────────────────────────────
             if (_aiTabActive)
             {
+                // Stop all live timers from the previous content build before replacing
+                StopLiveTimers();
                 _contentPanel.Children.Clear();
                 _contentPanel.Children.Add(CreateAILiveView());
                 Dispatcher.UIThread.Post(ClampContentScrollOffset, DispatcherPriority.Background);
@@ -238,6 +240,8 @@ namespace NudgeTray
             }
 
             if (_data == null) return;
+            // Stop AI live timers if switching away from the AI tab
+            StopLiveTimers();
             _contentPanel.Children.Clear();
 
             Console.WriteLine($"[Analytics] Refreshing content - AppUsage: {_data.AppUsage.Count} apps, HourlyProductivity: {_data.HourlyProductivity.Count} hours");

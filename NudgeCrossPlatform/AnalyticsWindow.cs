@@ -72,6 +72,9 @@ namespace NudgeTray
         private static bool _sensorSignalsOpen;
         private static bool _trainingDetailsOpen;
 
+        // Track live timers created by AI tab content so they can be stopped on rebuild
+        private static readonly List<DispatcherTimer> _liveTimers = new();
+
         // Countdown / progress bar (kept for timer lifetime across rebuilds)
         private DispatcherTimer? _countdownTimer;
         private Border? _progressTrack;
@@ -194,6 +197,13 @@ namespace NudgeTray
             _countdownTimer.Start();
         }
 
+        private static void StopLiveTimers()
+        {
+            foreach (var t in _liveTimers)
+                t.Stop();
+            _liveTimers.Clear();
+        }
+
         private void UpdateCountdown()
         {
             if (_cdLabel == null || _progressTrack == null) return;
@@ -305,6 +315,7 @@ namespace NudgeTray
         {
             _aiLiveRefreshTimer?.Stop();
             _countdownTimer?.Stop();
+            StopLiveTimers();
             base.OnClosed(e);
         }
 
@@ -1042,7 +1053,7 @@ namespace NudgeTray
                     var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
                     timer.Tick += (_, _) => update();
                     timer.Start();
-                    barBg.Unloaded += (_, _) => timer.Stop();
+                    _liveTimers.Add(timer);
                 }
             }
 
@@ -1790,8 +1801,8 @@ namespace NudgeTray
                 bubble.Margin = new Thickness(pos, 0, 0, 0);
             };
             timer.Start();
+            _liveTimers.Add(timer);
 
-            track.Unloaded += (_, _) => timer.Stop();
             return track;
         }
 
@@ -1948,7 +1959,7 @@ namespace NudgeTray
             var countdownTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             countdownTimer.Tick += (_, _) => tick();
             countdownTimer.Start();
-            barContainer.Unloaded += (_, _) => countdownTimer.Stop();
+            _liveTimers.Add(countdownTimer);
 
             // ── Latest score row ──────────────────────────────────────────────
             if (latest != null)

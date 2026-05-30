@@ -54,6 +54,7 @@ namespace NudgeTray
         static Process? _nudgeProcess;
         static Process? _mlInferenceProcess;
         static Process? _mlTrainerProcess;
+        static DispatcherTimer? _menuCountdownTimer;
         internal static bool _mlEnabled;
         internal static bool _notificationsPaused;
         internal static volatile string MlLoadingStep = "";
@@ -962,8 +963,8 @@ namespace NudgeTray
                 menu.Add(_statusItem);
 
                 // Tick every second to keep the countdown live
-                var countdownTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-                countdownTimer.Tick += (_, _) =>
+                _menuCountdownTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+                _menuCountdownTimer.Tick += (_, _) =>
                 {
                     if (_statusItem != null)
                         _statusItem.Header = GetMenuStatusText();
@@ -972,7 +973,7 @@ namespace NudgeTray
                         NativeTray.SetStatusText(GetMenuStatusText());
 #endif
                 };
-                countdownTimer.Start();
+                _menuCountdownTimer.Start();
 
                 // Separator before quit option
                 menu.Add(new NativeMenuItemSeparator());
@@ -2242,6 +2243,9 @@ namespace NudgeTray
         public static void Quit()
         {
             Console.WriteLine("[INFO] Quit() called - shutting down Nudge...");
+
+            // Stop menu countdown timer
+            _menuCountdownTimer?.Stop();
 
             // Stop ML services
             if (_mlInferenceProcess != null && !_mlInferenceProcess.HasExited)

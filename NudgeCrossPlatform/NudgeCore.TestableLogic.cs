@@ -330,8 +330,14 @@ internal sealed class ActivityFeatureTracker
         return (features, appCategory, appConf);
     }
 
-    private ActivitySample[] GetSamplesSince(DateTime threshold) =>
-        _samples.Where(sample => sample.Timestamp >= threshold).ToArray();
+    private ActivitySample[] GetSamplesSince(DateTime threshold)
+    {
+        var list = new List<ActivitySample>(_samples.Count);
+        foreach (var sample in _samples)
+            if (sample.Timestamp >= threshold)
+                list.Add(sample);
+        return list.ToArray();
+    }
 
     private void TrimSamples(DateTime now)
     {
@@ -806,6 +812,8 @@ internal static class PlatformConfig
 
 internal static class AppCategoryClassifier
 {
+    private const int MaxCacheSize = 1000;
+
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (AppCategory Category, CategoryConfidence Confidence)> _cache
         = new(StringComparer.OrdinalIgnoreCase);
 
@@ -1117,7 +1125,11 @@ internal static class AppCategoryClassifier
     private static (AppCategory, CategoryConfidence) Store(string appId, AppCategory category, CategoryConfidence confidence, bool persist)
     {
         if (!BrowserDetector.IsBrowser(appId))
+        {
+            if (_cache.Count >= MaxCacheSize)
+                _cache.Clear();
             _cache[appId] = (category, confidence);
+        }
         if (persist && !BrowserDetector.IsBrowser(appId) && _inferredCachePath != null)
             PersistAsync(appId, category, confidence);
         return (category, confidence);
