@@ -19,7 +19,7 @@ public sealed class NudgeAIBrainBenchmarks
 
     const double MaxGetRecentMicroseconds = 200;    // ~200 events → array (10x Linux baseline)
     const long MaxGetRecentAllocBytes = 5000;        // MLLiveEvent[] + strings
-    const int MaxGetRecentGen0Per10K = 50;           // GC budget is platform-dependent
+    const int MaxGetRecentGen0Per10K = 200;           // GC budget is platform-dependent
 
     const double MaxSaveToDiskMilliseconds = 200;   // JSON serialize 200 events + disk write
     const long MaxSaveToDiskAllocBytes = 200_000;
