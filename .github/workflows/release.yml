@@ -81,82 +81,6 @@ jobs:
           name: nudge-win-x64
           path: nudge-win-x64.zip
 
-      - name: Install WiX and build MSI
-        shell: pwsh
-        run: |
-          choco install wixtoolset -y --no-progress
-          refreshenv
-          $candle = where.exe candle 2>$null
-          if (-not $candle) { $candle = where.exe candle.exe 2>$null }
-          if (-not $candle) { $candle = Get-ChildItem "C:\Program Files (x86)\WiX*\bin\candle.exe" | Select-Object -First 1 -ExpandProperty FullName }
-          if (-not $candle) { Write-Host "candle not found"; Get-ChildItem "C:\Program Files (x86)\WiX*" -Recurse -Filter "candle.exe" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" }; throw "candle.exe not found" }
-          Write-Host "candle: $candle"
-          $light = $candle -replace 'candle\.exe$', 'light.exe'
-          $m = Select-String -Path "NudgeCrossPlatform\nudge-tray.cs" -Pattern 'const string VERSION = "([.\d]+)"'
-          $version = if ($m) { $m.Matches[0].Groups[1].Value } else { "1.5.3" }
-          Write-Host "version: $version"
-          $outDir = Join-Path $PWD "dist"
-
-          Write-Host "Generating installer bitmaps..."
-          Add-Type -AssemblyName System.Drawing
-          $banner = New-Object System.Drawing.Bitmap 493, 58
-          $g = [System.Drawing.Graphics]::FromImage($banner)
-          $g.SmoothingMode = 'HighQuality'
-          $g.TextRenderingHint = 'AntiAliasGridFit'
-          $rect = New-Object System.Drawing.Rectangle 0, 0, 493, 58
-          $brushBg = New-Object System.Drawing.Drawing2D.LinearGradientBrush $rect, ([System.Drawing.Color]::FromArgb(30,30,46)), ([System.Drawing.Color]::FromArgb(15,15,25)), 0
-          $g.FillRectangle($brushBg, $rect)
-           $font = [System.Drawing.Font]::new("Segoe UI", [System.Single]18, [System.Drawing.FontStyle]::Bold)
-          $g.DrawString("Nudge", $font, [System.Drawing.Brushes]::White, 18, 10)
-          $font2 = [System.Drawing.Font]::new("Segoe UI", [System.Single]8)
-          $g.DrawString("Stay focused. Stay productive.", $font2, [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(160,160,180)), 18, 36)
-          $pen = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(180,140,255)), 2
-          $g.DrawLine($pen, 18, 32, 140, 32)
-          $banner.Save("$outDir\banner.bmp")
-          $g.Dispose(); $banner.Dispose()
-
-          $dialog = New-Object System.Drawing.Bitmap 493, 312
-          $g = [System.Drawing.Graphics]::FromImage($dialog)
-          $g.SmoothingMode = 'HighQuality'
-          $rect = New-Object System.Drawing.Rectangle 0, 0, 493, 312
-          $brushBg = New-Object System.Drawing.Drawing2D.LinearGradientBrush $rect, ([System.Drawing.Color]::FromArgb(25,25,40)), ([System.Drawing.Color]::FromArgb(10,10,18)), 90
-          $g.FillRectangle($brushBg, $rect)
-          $g.DrawString("Nudge", $font, [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(200,200,220,80)), 30, 120)
-          $font3 = [System.Drawing.Font]::new("Segoe UI", [System.Single]11)
-          $g.DrawString("Stay focused. Stay productive.", $font3, [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(200,200,220,40)), 32, 155)
-          $dialog.Save("$outDir\dialog.bmp")
-          $g.Dispose(); $dialog.Dispose()
-          Write-Host "Bitmaps generated."
-
-          $wxs = Resolve-Path "NudgeCrossPlatform\assets\windows\installer.wxs"
-          $wxsDir = (Get-Item $wxs).Directory.FullName
-          $msi = Join-Path $outDir "Nudge-Setup-$version.msi"
-          Write-Host "Compiling..."
-          Push-Location $wxsDir
-          & $candle -out "$outDir\installer.wixobj" "installer.wxs" 2>&1
-          if ($LASTEXITCODE -ne 0) { Pop-Location; throw "candle failed (exit $LASTEXITCODE)" }
-          Write-Host "Linking..."
-          & $light -out $msi "$outDir\installer.wixobj" -ext WixUIExtension -sw 2>&1
-          Pop-Location
-          if ($LASTEXITCODE -ne 0) { throw "light failed (exit $LASTEXITCODE)" }
-          if (Test-Path $msi) { Write-Host "MSI: $((Get-Item $msi).Length/1KB) KB" }
-          else { throw "MSI not produced" }
-          Copy-Item $msi (Join-Path $outDir "Nudge-Setup.msi")
-
-          Write-Host "Generating logo PNG for bootstrapper..."
-          $logo = New-Object System.Drawing.Bitmap 256, 256
-          $g = [System.Drawing.Graphics]::FromImage($logo)
-          $g.SmoothingMode = 'HighQuality'
-          $g.TextRenderingHint = 'AntiAliasGridFit'
-          $g.Clear([System.Drawing.Color]::FromArgb(0,0,0,0))
-          $circleBrush = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(40,40,60))
-          $g.FillEllipse($circleBrush, 28, 28, 200, 200)
-          $fontLogo = [System.Drawing.Font]::new("Segoe UI", [System.Single]80, [System.Drawing.FontStyle]::Bold)
-          $g.DrawString("N", $fontLogo, [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(180,140,255)), 78, 62)
-          $logo.Save("$outDir\nudge.png", [System.Drawing.Imaging.ImageFormat]::Png)
-          $g.Dispose(); $logo.Dispose()
-          Write-Host "Logo generated."
-
       - name: Build Velopack installer
         shell: pwsh
         run: |
@@ -181,7 +105,6 @@ jobs:
         if: success() || failure()
         shell: pwsh
         run: |
-          Copy-Item dist/Nudge-Setup*.msi . -ErrorAction SilentlyContinue
           Copy-Item dist/velopack/Nudge-win-Setup.exe . -ErrorAction SilentlyContinue
 
       - name: Upload Windows installers
@@ -189,9 +112,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: nudge-win-installer
-          path: |
-            Nudge-Setup*.msi
-            Nudge-win-Setup.exe
+          path: Nudge-win-Setup.exe
           if-no-files-found: warn
 
   build-linux:
@@ -314,7 +235,7 @@ jobs:
       - name: Tag and publish release
         run: |
           ASSETS=()
-          for f in Nudge-win-Setup.exe Nudge-Setup*.msi nudge-win-x64.zip nudge-linux-installer.run nudge-linux-x64.tar.gz; do
+          for f in Nudge-win-Setup.exe nudge-win-x64.zip nudge-linux-installer.run nudge-linux-x64.tar.gz; do
             [ -f "$f" ] && ASSETS+=("$f")
           done
           echo "Release assets: ${ASSETS[*]}"
