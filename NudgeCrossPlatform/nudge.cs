@@ -1132,13 +1132,21 @@ sealed class Nudge
             if (micApps > 0) { score += 0.20; signals.Append($" mic({micApps})"); }
 
             var (app, title) = GetForegroundAppWithTitle();
-            bool titleMatch = IsMeetingTitle(title) || (!string.IsNullOrEmpty(app) && MeetingProcessNames.Contains(app));
+            bool titleMatch = IsMeetingTitle(title);
             if (titleMatch) { score += 0.10; signals.Append(" title"); }
 
             bool appRunning = IsMeetingAppRunning();
             if (appRunning) { score += 0.10; signals.Append(" app"); }
 
             bool inMeeting = score >= threshold;
+
+            // Cooldown: hold IN MEETING for 3s after signals drop to prevent flicker
+            // on brief signal gaps (e.g. muting, window focus loss)
+            if (inMeeting)
+                _lastMeetingHit = Environment.TickCount64;
+            else if (Environment.TickCount64 - _lastMeetingHit < 3000)
+                inMeeting = true;
+
             Console.WriteLine($"  Presence fusion: score={score:F2}/{threshold} → {(inMeeting ? "IN MEETING" : "clear")}{signals}");
             return new PresenceState(inMeeting, false, false, PresenceSource.WindowsRegistry);
 #else
@@ -1529,6 +1537,7 @@ sealed class Nudge
     static bool _meetingSuppression = true;
     static PresenceState _cachedPresenceState = PresenceState.Unavailable;
     static int _presenceCheckElapsed;
+    static long _lastMeetingHit;
 
     // Activity tracking
     static string _currentApp = "";
