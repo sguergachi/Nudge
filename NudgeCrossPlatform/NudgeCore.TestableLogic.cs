@@ -1895,3 +1895,39 @@ internal static class PipeWireParser
     private static readonly string[] PortalNodeProps =
         ["node.name", "application.name", "pipewire.access.portal.app_id"];
 }
+
+/// <summary>
+/// Title-keyword detection used by the Windows meeting presence sensor.
+/// Kept here (in NudgeCore, no NudgeTray dependency) so tests can verify that
+/// process names are NOT included in the title check — that was the double-counting
+/// bug fixed in commit 3dec73d.
+/// </summary>
+internal static class MeetingTitleDetector
+{
+    internal static readonly FrozenSet<string> TitleKeywords = new[]
+    {
+        "zoom meeting", "zoom video", "google meet", "microsoft teams",
+        "skype for business", "webex meeting", "gotomeeting", "bluejeans",
+        "slack call", "slack huddle", "discord voice", "ringcentral meeting",
+        "whereby", "lark meeting", "dingtalk meeting",
+    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    internal static readonly FrozenSet<string> ProcessNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "teams", "zoom", "skype", "webex", "slack", "discord",
+        "gotomeeting", "bluejeans", "ringcentral", "whereby",
+        "ms-teams", "cisco webex meeting", "lark", "dingtalk",
+        "tencent meeting", "wemeet", "voov meeting",
+    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    internal static bool IsMeetingTitle(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title)) return false;
+        foreach (string kw in TitleKeywords)
+        {
+            if (title.Contains(kw, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+}

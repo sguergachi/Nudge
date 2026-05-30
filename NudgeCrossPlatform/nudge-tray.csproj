@@ -28,6 +28,7 @@
     <Compile Include="KWinScripts.cs" />
     <Compile Include="TrainerState.cs" />
     <Compile Include="LiveAIState.cs" />
+    <Compile Include="NudgeTrayHelpers.cs" />
     <Compile Include="AnalyticsWindow.Views.cs" />
   </ItemGroup>
 
@@ -61,7 +62,7 @@
   <!-- Copy pre-built nudge.dll (harvest daemon) to tray output -->
   <!-- nudge.csproj is built separately; this just copies the already-compiled binary -->
   <Target Name="BuildNudgeDaemon" AfterTargets="Build" Condition="'$(TargetFramework)' == 'net10.0' And '$(SkipBuildNudgeDaemon)' != 'true'">
-    <Copy SourceFiles="$(MSBuildProjectDirectory)/bin/$(Configuration)/net10.0/nudge.dll" DestinationFolder="$(OutputPath)" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)/bin/$(Configuration)/net10.0/nudge.dll" DestinationFolder="$(OutputPath)" Condition="Exists('$(MSBuildProjectDirectory)/bin/$(Configuration)/net10.0/nudge.dll')" />
     <Copy SourceFiles="$(MSBuildProjectDirectory)/bin/$(Configuration)/net10.0/nudge.pdb" DestinationFolder="$(OutputPath)" Condition="Exists('$(MSBuildProjectDirectory)/bin/$(Configuration)/net10.0/nudge.pdb')" />
   </Target>
 </Project>

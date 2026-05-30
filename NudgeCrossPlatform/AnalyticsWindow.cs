@@ -2071,12 +2071,7 @@ namespace NudgeTray
 
             // Only show AI predictions — filter out interval fallbacks and
             // standalone meeting-suppression placeholders (no real score).
-            var aiEvents = new List<MLLiveEvent>(events.Count);
-            for (int i = 0; i < events.Count; i++)
-            {
-                if (events[i].TriggerSource == "ai")
-                    aiEvents.Add(events[i]);
-            }
+            var aiEvents = PredictionChartHelper.FilterToAiOnly(events);
 
             if (aiEvents.Count == 0)
             {
