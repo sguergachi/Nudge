@@ -1417,7 +1417,7 @@ namespace NudgeTray
                 Color = fusionColor,
                 Seed  = ComputePulseSeed(harvest),
                 VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(0, 3, 10, 0)
+                Margin = new Thickness(0, 3, 1, 0)
             };
             _liveTimers.Add(pulseDot._timer);
             pulseDot.Start();
@@ -2379,7 +2379,7 @@ namespace NudgeTray
         /// <summary>Build tooltip content Grid for a given event.</summary>
         private static Grid CreateTooltipContent(MLLiveEvent evt)
         {
-            bool isSuppressed = evt.TriggerSource == "sup";
+            bool isSuppressed = evt.SuppressReason != null;
 
             Color dotColor = isSuppressed
                 ? SuppressedColor
@@ -2540,18 +2540,16 @@ namespace NudgeTray
                 };
                 Grid.SetColumn(timeText, 0);
 
-                // Trigger source
+                // Trigger source (⏸ = suppressed, INT = interval, AI = ML)
                 var sourceText = new TextBlock
                 {
-                    Text = evt.TriggerSource switch { "int" => "INT", "sup" => "⏸", _ => "AI" },
+                    Text = evt.SuppressReason != null ? "⏸"
+                         : evt.TriggerSource == "int" ? "INT" : "AI",
                     FontSize = 10,
                     FontWeight = FontWeight.Medium,
-                    Foreground = new SolidColorBrush(evt.TriggerSource switch
-                    {
-                        "int" => AIStatusLearning,
-                        "sup" => SuppressedColor,
-                        _     => ProductiveGreen
-                    }),
+                    Foreground = new SolidColorBrush(evt.SuppressReason != null
+                        ? SuppressedColor
+                        : evt.TriggerSource == "int" ? AIStatusLearning : ProductiveGreen),
                     VerticalAlignment = VerticalAlignment.Center,
                     HorizontalAlignment = HorizontalAlignment.Center
                 };
@@ -2569,7 +2567,7 @@ namespace NudgeTray
                 Grid.SetColumn(appText, 2);
 
                 // Score with colored dot (suppressed events show "—" — no ML score)
-                Color dotColor = evt.TriggerSource == "sup"
+                Color dotColor = evt.SuppressReason != null
                     ? SuppressedColor
                     : evt.Confidence < 0.5
                         ? AIStatusLearning
@@ -2581,7 +2579,7 @@ namespace NudgeTray
                     VerticalAlignment = VerticalAlignment.Center,
                     HorizontalAlignment = HorizontalAlignment.Right
                 };
-                if (evt.TriggerSource != "sup")
+                if (evt.SuppressReason == null)
                 {
                     scoreRow.Children.Add(new Border
                     {
@@ -2593,11 +2591,11 @@ namespace NudgeTray
                 }
                 scoreRow.Children.Add(new TextBlock
                 {
-                    Text = evt.TriggerSource == "sup"
+                    Text = evt.SuppressReason != null
                         ? "—"
                         : $"{(evt.Confidence > 0 ? evt.Confidence : evt.Score) * 100:F0}%",
                     FontSize = 10,
-                    Foreground = new SolidColorBrush(evt.TriggerSource == "sup" ? SuppressedColor : TextSecondary),
+                    Foreground = new SolidColorBrush(evt.SuppressReason != null ? SuppressedColor : TextSecondary),
                     VerticalAlignment = VerticalAlignment.Center
                 });
                 Grid.SetColumn(scoreRow, 3);
@@ -2605,7 +2603,7 @@ namespace NudgeTray
                 // Action label
                 string actionLabel;
                 Color actionColor;
-                if (evt.TriggerSource == "sup")
+                if (evt.SuppressReason != null)
                 {
                     actionLabel = SuppressReasonToLabel(evt.SuppressReason);
                     actionColor = SuppressedColor;
@@ -2828,8 +2826,8 @@ namespace NudgeTray
 
         public PulseDot()
         {
-            Width = 28;
-            Height = 28;
+            Width = 30;
+            Height = 30;
             IsHitTestVisible = false;
             _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(24) };
             _timer.Tick += (_, _) =>
@@ -2849,7 +2847,7 @@ namespace NudgeTray
             int h3 = ((s * 1664525 + 1013904223) ^ (s >> 17)) & 0x7FFFFFFF;
             const double div = 0x7FFFFFFF;
             _step        = 0.016 + 0.006 * (h1 / div);
-            _radius      = 10.0  + 2.0  * (h2 / div);
+            _radius      = 12.0  + 2.0  * (h2 / div);
             _peakOpacity = 0.42  + 0.12  * (h3 / div);
             _stagger     = h2 % 2 == 0 ? 0.48 : 0.52;
         }
@@ -2862,7 +2860,7 @@ namespace NudgeTray
 
         public override void Render(DrawingContext context)
         {
-            var center = new Point(5, 5);
+            var center = new Point(14, 14);
             var color = Color;
 
             // Ring 1 — one-way emission from center, exponential decay

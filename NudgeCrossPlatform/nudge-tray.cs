@@ -1998,7 +1998,6 @@ namespace NudgeTray
             {
                 T             = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                 App           = LiveAIState.CurrentApp,
-                TriggerSource = "sup",
                 SuppressReason = reason,
                 Score         = 0,
                 Confidence    = 0,
