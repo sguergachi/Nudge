@@ -791,6 +791,14 @@ internal static class AppCategoryClassifier
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (AppCategory Category, CategoryConfidence Confidence)> _cache
         = new(StringComparer.OrdinalIgnoreCase);
 
+    // Desktop-file lookups are a pure function of appId + filesystem (stable for the
+    // session), but the result is NOT folded into _cache for browsers (their final
+    // category is domain-dependent). Memoize the raw lookup separately so browser ticks
+    // don't re-scan the filesystem every Capture — otherwise each browser tick on Linux
+    // walks DesktopSearchPaths, allocating heavily and stalling the harvest loop.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (bool Found, AppCategory Category)> _desktopFileCache
+        = new(StringComparer.OrdinalIgnoreCase);
+
     private static readonly object _loadLock = new();
     private static bool _loaded;
     private static readonly string? _inferredCachePath;
@@ -981,6 +989,19 @@ internal static class AppCategoryClassifier
     }
 
     private static bool TryClassifyFromDesktopFile(string appId, out AppCategory category)
+    {
+        if (_desktopFileCache.TryGetValue(appId, out var cached))
+        {
+            category = cached.Category;
+            return cached.Found;
+        }
+
+        bool found = TryClassifyFromDesktopFileUncached(appId, out category);
+        _desktopFileCache[appId] = (found, category);
+        return found;
+    }
+
+    private static bool TryClassifyFromDesktopFileUncached(string appId, out AppCategory category)
     {
         // Build candidate filenames: try exact, lowercase, and cleaned variants
         string lower = appId.ToLowerInvariant();
