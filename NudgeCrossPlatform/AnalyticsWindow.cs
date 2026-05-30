@@ -67,9 +67,9 @@ namespace NudgeTray
         private TextBlock? _pinIcon;
 
         // AI Brain tab collapse state — survives refreshes
-        private static bool _sensorSignalsOpen;
-        private static bool _trainingDetailsOpen;
+        private bool _sensorSignalsOpen;
 
+        private bool _trainingDetailsOpen;
         // Track live timers created by AI tab content so they can be stopped on rebuild
         private static readonly List<DispatcherTimer> _liveTimers = new();
 
@@ -606,15 +606,9 @@ namespace NudgeTray
                 IsHitTestVisible = false
             };
 
-            var button = new Button
-            {
-                Content = textBlock,
-                Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                Padding = new Thickness(0)
-            };
+            border.Child = textBlock;
 
-            button.Click += (s, e) =>
+            border.PointerPressed += (s, e) =>
             {
                 bool wasAiTab = _aiTabActive;
                 _aiTabActive = false;
@@ -638,8 +632,6 @@ namespace NudgeTray
                 }
             };
 
-            border.Child = button;
-
             ToolTip.SetTip(border, label switch
             {
                 StrTabToday => "Show today's activity",
@@ -652,15 +644,9 @@ namespace NudgeTray
             if (!isActive)
             {
                 border.PointerEntered += (s, e) =>
-                {
                     border.Background = new SolidColorBrush(Color.FromArgb(15, 255, 255, 255));
-                    textBlock.Foreground = new SolidColorBrush(TextPrimary);
-                };
                 border.PointerExited += (s, e) =>
-                {
                     border.Background = Brushes.Transparent;
-                    textBlock.Foreground = new SolidColorBrush(TextSecondary);
-                };
             }
 
             return border;
@@ -682,7 +668,7 @@ namespace NudgeTray
                     // Time-filter tabs are active only when AI tab is NOT active and filter matches
                     bool isActive = !_aiTabActive && _currentFilter == filter;
                     tab.BorderBrush = isActive ? new SolidColorBrush(PrimaryBlue) : Brushes.Transparent;
-                    if (tab.Child is Button btn && btn.Content is TextBlock tb)
+                    if (tab.Child is TextBlock tb)
                     {
                         tb.FontWeight = isActive ? FontWeight.SemiBold : FontWeight.Medium;
                         tb.Foreground = new SolidColorBrush(isActive ? PrimaryBlue : TextSecondary);
@@ -697,7 +683,7 @@ namespace NudgeTray
                 _aiLiveTab.BorderBrush = isActive
                     ? new SolidColorBrush(AIStatusActive)
                     : Brushes.Transparent;
-                if (_aiLiveTab.Child is Button btn && btn.Content is TextBlock tb)
+                if (_aiLiveTab.Child is TextBlock tb)
                 {
                     tb.FontWeight = isActive ? FontWeight.SemiBold : FontWeight.Medium;
                     tb.Foreground = new SolidColorBrush(isActive ? AIStatusActive : TextSecondary);
@@ -729,19 +715,11 @@ namespace NudgeTray
                 IsHitTestVisible = false
             };
 
-            var button = new Button
-            {
-                Content = textBlock,
-                Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                Padding = new Thickness(0)
-            };
-
-            border.Child = button;
+            border.Child = textBlock;
 
             ToolTip.SetTip(border, "Live AI predictions, confidence scores, and ML training status");
 
-            button.Click += (s, e) =>
+            border.PointerPressed += (s, e) =>
             {
                 _aiTabActive = true;
                 _activeDetailView = DetailViewType.None;
@@ -754,25 +732,19 @@ namespace NudgeTray
             border.PointerEntered += (s, e) =>
             {
                 if (!_aiTabActive)
-                {
                     border.Background = new SolidColorBrush(Color.FromArgb(15, 255, 255, 255));
-                    textBlock.Foreground = new SolidColorBrush(TextPrimary);
-                }
             };
             border.PointerExited += (s, e) =>
             {
                 if (!_aiTabActive)
-                {
                     border.Background = Brushes.Transparent;
-                    textBlock.Foreground = new SolidColorBrush(TextSecondary);
-                }
             };
 
             return border;
         }
 
         /// <summary>Builds the entire AI Brain tab content panel.</summary>
-        private static StackPanel CreateAILiveView()
+        private StackPanel CreateAILiveView()
         {
             var panel = new StackPanel { Spacing = 10 };
 
@@ -811,7 +783,7 @@ namespace NudgeTray
             return panel;
         }
 
-        private static StackPanel CreateTrainingView()
+        private StackPanel CreateTrainingView()
         {
             var (sampleCount, minSamples, lastTrainedCount, isTraining,
                  lastAccuracy, prevAccuracy, architecture, lastError,
@@ -1409,7 +1381,7 @@ namespace NudgeTray
         }
 
         /// <summary>Live card: current app in focus + latest prediction verdict.</summary>
-        private static Border CreateLiveFocusCard(MLLiveEvent? latest)
+        private Border CreateLiveFocusCard(MLLiveEvent? latest)
         {
             var currentApp  = LiveAIState.CurrentApp;
             var currentDetail = LiveAIState.CurrentDetail;

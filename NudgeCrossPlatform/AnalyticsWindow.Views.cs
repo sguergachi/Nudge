@@ -132,19 +132,9 @@ namespace NudgeTray
                 IsHitTestVisible = false
             };
 
-            var button = new Button
-            {
-                Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                Padding = new Thickness(0),
-                HorizontalContentAlignment = HorizontalAlignment.Center,
-                VerticalContentAlignment = VerticalAlignment.Center,
-                Width = 32,
-                Height = 32,
-                Content = _pinIcon
-            };
+            border.Child = _pinIcon;
 
-            button.Click += (s, e) =>
+            border.PointerPressed += (s, e) =>
             {
                 _isPinned = !_isPinned;
                 Topmost = _isPinned;
@@ -157,7 +147,6 @@ namespace NudgeTray
                 }
             };
 
-            border.Child = button;
             ToolTip.SetTip(border, "Pin window on top");
 
             border.PointerEntered += (s, e) =>
@@ -190,27 +179,14 @@ namespace NudgeTray
                 IsHitTestVisible = false
             };
 
-            var button = new Button
-            {
-                Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                Padding = new Thickness(0),
-                HorizontalContentAlignment = HorizontalAlignment.Center,
-                VerticalContentAlignment = VerticalAlignment.Center,
-                Width = 32,
-                Height = 32,
-                Content = closeIcon
-            };
+            border.Child = closeIcon;
 
-            button.Click += (s, e) => Hide();
-            border.Child = button;
+            border.PointerPressed += (s, e) => Hide();
+
             ToolTip.SetTip(border, "Close");
 
             border.PointerEntered += (s, e) =>
-            {
                 border.Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255));
-                closeIcon.Foreground = new SolidColorBrush(TextPrimary);
-            };
             border.PointerExited += (s, e) =>
             {
                 border.Background = Brushes.Transparent;
