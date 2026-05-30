@@ -2543,7 +2543,7 @@ namespace NudgeTray
                 // Trigger source
                 var sourceText = new TextBlock
                 {
-                    Text = evt.TriggerSource switch { "int" => "INT", "sup" => "SUP", _ => "AI" },
+                    Text = evt.TriggerSource switch { "int" => "INT", "sup" => "⏸", _ => "AI" },
                     FontSize = 10,
                     FontWeight = FontWeight.Medium,
                     Foreground = new SolidColorBrush(evt.TriggerSource switch
@@ -2631,12 +2631,11 @@ namespace NudgeTray
                 };
                 Grid.SetColumn(actionText, 4);
 
-                // Response icon (✓ = correct, ✗ = wrong, ⏸ = skipped/suppressed)
+                // Response icon (✓ = correct, ✗ = wrong, ⏸ = skipped, empty for suppressed)
                 var respText = new TextBlock
                 {
                     Text = evt.AiCorrect == true ? "✓"
                          : evt.AiCorrect == false ? "✗"
-                         : evt.TriggerSource == "sup" ? "⏸"
                          : evt.Triggered ? "⏸"
                          : "",
                     FontSize = 11,
@@ -2644,7 +2643,6 @@ namespace NudgeTray
                     Foreground = new SolidColorBrush(
                         evt.AiCorrect == true ? ProductiveGreen
                         : evt.AiCorrect == false ? UnproductiveRed
-                        : evt.TriggerSource == "sup" ? SuppressedColor
                         : evt.Triggered ? AIStatusInactive
                         : Colors.Transparent),
                     HorizontalAlignment = HorizontalAlignment.Center,
@@ -2830,9 +2828,8 @@ namespace NudgeTray
 
         public PulseDot()
         {
-            Width = 10;
-            Height = 10;
-            ClipToBounds = false;
+            Width = 28;
+            Height = 28;
             IsHitTestVisible = false;
             _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(24) };
             _timer.Tick += (_, _) =>
