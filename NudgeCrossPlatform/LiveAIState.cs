@@ -22,6 +22,12 @@ internal static class LiveAIState
     /// 0 = not yet received.
     /// </summary>
     public static long NextCheckAt;
+    /// <summary>
+    /// Environment.TickCount64 snapshot of when <see cref="NextCheckAt"/> was last
+    /// updated to a timestamp in the future. Used by the countdown UI to detect
+    /// staleness (daemon stopped emitting MLNEXT or crashed).
+    /// </summary>
+    public static long LastMlNextTick;
     /// <summary>Most-recent foreground app name; updated in real time via APPFOCUS: lines.</summary>
     public static volatile string CurrentApp = "";
     /// <summary>Window title / domain detail for the current app (tab-separated second field of APPFOCUS).</summary>

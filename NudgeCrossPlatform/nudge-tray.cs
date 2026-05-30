@@ -49,7 +49,7 @@ namespace NudgeTray
     sealed class Program
     {
         const int UDP_PORT = 45001;
-        const string VERSION = "1.7.3";
+        const string VERSION = "1.7.4";
         const string NudgeExeName = "nudge";
         const string NudgeDllName = "nudge.dll";
         static Process? _nudgeProcess;
@@ -1834,7 +1834,10 @@ namespace NudgeTray
                         else if (e.Data.StartsWith("MLNEXT:", StringComparison.Ordinal))
                         {
                             if (long.TryParse(e.Data.AsSpan(7), out long ts))
+                            {
                                 LiveAIState.NextCheckAt = ts;
+                                LiveAIState.LastMlNextTick = Environment.TickCount64;
+                            }
                         }
                         // Real-time foreground app tracking (format: APPFOCUS:app\ttitle)
                         else if (e.Data.StartsWith("APPFOCUS:", StringComparison.Ordinal))
@@ -2472,6 +2475,7 @@ namespace NudgeTray
                     LiveAIState.NextCheckAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + mlInterval.Value;
                 else if (_mlCheckIntervalSeconds > 0)
                     LiveAIState.NextCheckAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + _mlCheckIntervalSeconds;
+                LiveAIState.LastMlNextTick = Environment.TickCount64;
 
                 SaveSettings();
                 RestartHarvestProcess();
@@ -2577,7 +2581,11 @@ namespace NudgeTray
                     Width = 0,
                     Height = 0,
                     Topmost = false,
-                    WindowDecorations = Avalonia.Controls.WindowDecorations.None
+                    WindowDecorations = Avalonia.Controls.WindowDecorations.None,
+                    Background = Brushes.Transparent,
+                    TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent },
+                    Position = new PixelPoint(-32000, -32000),
+                    Opacity = 0
                 };
 
 #if WINDOWS

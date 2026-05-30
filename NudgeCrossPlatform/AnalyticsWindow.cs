@@ -251,6 +251,16 @@ namespace NudgeTray
         show:
             if (secLeft <= 0)
             {
+                // If NextCheckAt hasn't been refreshed recently, the daemon may be
+                // stuck or crashed.  Show an error instead of "checking now" forever.
+                long staleMs = Environment.TickCount64 - LiveAIState.LastMlNextTick;
+                long maxStaleMs = Math.Max(30_000, Program.MlCheckIntervalSeconds * 3_000L);
+                if (LiveAIState.LastMlNextTick == 0 || staleMs > maxStaleMs)
+                {
+                    SetCountdownText("● ML check stalled", AIStatusLearning, false);
+                    SetProgressBar(1.0);
+                    return;
+                }
                 SetCountdownText("● checking now", PrimaryBlue, false);
                 SetProgressBar(1.0);
                 return;
@@ -1910,9 +1920,21 @@ namespace NudgeTray
                 double prog = nextAt > 0
                     ? Math.Min(1.0, Math.Max(0.0, (double)(total - secLeft) / total))
                     : 0;
+                bool stalled = nextAt > 0 && secLeft <= 0 &&
+                    (LiveAIState.LastMlNextTick == 0 ||
+                     (Environment.TickCount64 - LiveAIState.LastMlNextTick) > Math.Max(30_000, Program.MlCheckIntervalSeconds * 3_000L));
 
-                if (nextAt > 0 && secLeft == 0)
+                if (nextAt > 0 && secLeft == 0 && !stalled)
                     barContainer.Child = CreateIndeterminateBar();
+                else if (stalled)
+                {
+                    barContainer.Child = new Border
+                    {
+                        Background = new SolidColorBrush(AIStatusLearning),
+                        CornerRadius = new CornerRadius(2),
+                        HorizontalAlignment = HorizontalAlignment.Stretch
+                    };
+                }
                 else
                 {
                     var barGrid = new Grid();
@@ -1943,6 +1965,9 @@ namespace NudgeTray
                 }
 
                 cdLabel.Text = nextAt == 0 ? StrWaitingFirstCheck
+                    : secLeft <= 0 && (LiveAIState.LastMlNextTick == 0 ||
+                        (Environment.TickCount64 - LiveAIState.LastMlNextTick) > Math.Max(30_000, Program.MlCheckIntervalSeconds * 3_000L))
+                        ? "ML check stalled"
                     : secLeft == 0 ? "next check pending…"
                     : $"{secLeft / 60}:{secLeft % 60:D2} until next check";
                 cdLabel.HorizontalAlignment = nextAt == 0
