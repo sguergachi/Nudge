@@ -141,7 +141,7 @@ namespace NudgeTray
                 Topmost = _isPinned;
                 if (_pinIcon != null)
                 {
-                    _pinIcon.Text = _isPinned ? "◉" : StrPinIcon;
+                    _pinIcon.Text = _isPinned ? "\uE77A" : StrPinIcon;
                     _pinIcon.Foreground = _isPinned
                         ? new SolidColorBrush(PrimaryBlue)
                         : new SolidColorBrush(TextSecondary);
@@ -171,7 +171,7 @@ namespace NudgeTray
 
             var closeIcon = new TextBlock
             {
-                Text = "✖",
+                Text = "\uE10A",
                 FontSize = 16,
                 FontWeight = FontWeight.Normal,
                 FontFamily = new FontFamily("Segoe MDL2 Assets"),

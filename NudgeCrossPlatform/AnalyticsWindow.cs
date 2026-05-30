@@ -111,7 +111,7 @@ namespace NudgeTray
         private const string StrSensorSignalsClosed = "▸ Sensor Signals";
         private const string StrChevronOpen = "▾";
         private const string StrChevronClosed = "▸";
-        private const string StrPinIcon = "📌";
+        private const string StrPinIcon = "\uE718";   // Segoe MDL2 Pin
         private const string StrProductive = "productive";
         private const string StrNotProductive = "not productive";
         private const string StrNudgedAction = "nudged";
