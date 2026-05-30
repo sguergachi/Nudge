@@ -13,6 +13,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -909,8 +910,8 @@ namespace NudgeTray
 
                 const int maxLogChars = 5000;
                 if (logText.Length > maxLogChars)
-                    logText = "…(older lines truncated)…\n" +
-                              logText.Substring(logText.Length - maxLogChars);
+                    logText = string.Concat("…(older lines truncated)…\n",
+                              logText.AsSpan(logText.Length - maxLogChars));
 
                 var body = new StringBuilder();
                 body.AppendLine("<!-- Describe the problem or feedback here. Recent logs are attached below. -->");
@@ -919,8 +920,8 @@ namespace NudgeTray
                 body.AppendLine();
                 body.AppendLine();
                 body.AppendLine("---");
-                body.AppendLine($"**Version:** {VERSION}");
-                body.AppendLine($"**OS:** {RuntimeInformation.OSDescription}");
+                body.AppendLine(CultureInfo.InvariantCulture, $"**Version:** {VERSION}");
+                body.AppendLine(CultureInfo.InvariantCulture, $"**OS:** {RuntimeInformation.OSDescription}");
                 body.AppendLine();
                 body.AppendLine("<details><summary>Recent logs (last 100 lines)</summary>");
                 body.AppendLine();
