@@ -667,6 +667,9 @@ internal static class PlatformConfig
 
     public static string ActivityLogPath => Path.Combine(DataDirectory, "ACTIVITY_LOG.CSV");
 
+    /// <summary>Rolling diagnostic log file (mirrors console output) used by the Send Feedback flow.</summary>
+    public static string LogFilePath => Path.Combine(DataDirectory, "nudge.log");
+
     public static string WhichCommand => IsWindows ? "where" : "which";
 
     public static string PythonCommand => IsWindows ? "python" : "python3";
