@@ -153,8 +153,8 @@ def load_and_prepare_data(csv_file):
     df = df.replace([np.inf, -np.inf], np.nan).dropna(subset=required)
     print(f'   Rows after cleaning: {len(df)}')
 
-    if len(df) < 20:
-        raise ValueError('Need at least 20 labeled examples')
+    if len(df) < 10:
+        raise ValueError('Need at least 10 labeled examples')
 
     timestamps = None
     if 'timestamp' in df.columns:
@@ -231,9 +231,14 @@ def train_modern(csv_file, model_dir='./model', architecture='auto',
     X_scaled = scaler.fit_transform(X)
 
     # Train/evaluate split
-    X_train, X_test, y_train, y_test, sw_train, sw_test = train_test_split(
-        X_scaled, y, sample_weight, test_size=0.2, random_state=42, stratify=y
-    )
+    try:
+        X_train, X_test, y_train, y_test, sw_train, sw_test = train_test_split(
+            X_scaled, y, sample_weight, test_size=0.2, random_state=42, stratify=y
+        )
+    except ValueError:
+        X_train, X_test, y_train, y_test, sw_train, sw_test = train_test_split(
+            X_scaled, y, sample_weight, test_size=0.2, random_state=42
+        )
     print(f'Training: {len(X_train)}  Test: {len(X_test)}')
 
     # Train GTB on training split for evaluation
