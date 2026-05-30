@@ -1693,7 +1693,7 @@ internal static class NudgeCoreLogic
         return true;
     }
 
-    private static bool MatchesNudgeWindowMarker(string value)
+    internal static bool MatchesNudgeWindowMarker(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
             return false;

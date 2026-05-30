@@ -142,7 +142,8 @@ namespace NudgeTray
                 FontSize = 16,
                 Foreground = new SolidColorBrush(TextSecondary),
                 HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Center,
+                Background = Brushes.Transparent
             };
 
             button.Content = _pinIcon;
@@ -200,7 +201,8 @@ namespace NudgeTray
                 FontWeight = FontWeight.Normal,
                 Foreground = new SolidColorBrush(TextSecondary),
                 HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Center,
+                Background = Brushes.Transparent
             };
 
             button.Content = closeIcon;

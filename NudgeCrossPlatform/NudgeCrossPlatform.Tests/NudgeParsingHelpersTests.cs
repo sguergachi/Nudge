@@ -235,4 +235,48 @@ public sealed class NudgeParsingHelpersTests
         Assert.True(NudgeCoreLogic.IsNudgeForegroundWindow("Nudge Analytics", ""));
         Assert.False(NudgeCoreLogic.IsNudgeForegroundWindow("Chrome (github.com)", "openai/nudge repo"));
     }
+
+    [Fact]
+    public void MatchesNudgeWindowMarker_MatchesAllKnownSelfNames()
+    {
+        Assert.True(NudgeCoreLogic.MatchesNudgeWindowMarker("nudge-tray"));
+        Assert.True(NudgeCoreLogic.MatchesNudgeWindowMarker("nudge-tray.exe"));
+        Assert.True(NudgeCoreLogic.MatchesNudgeWindowMarker("Window"));
+        Assert.True(NudgeCoreLogic.MatchesNudgeWindowMarker("Nudge Analytics"));
+        Assert.True(NudgeCoreLogic.MatchesNudgeWindowMarker("Productivity Check"));
+        // Case-insensitive
+        Assert.True(NudgeCoreLogic.MatchesNudgeWindowMarker("NUDGE-TRAY"));
+        Assert.True(NudgeCoreLogic.MatchesNudgeWindowMarker("CustomNotification"));
+        Assert.True(NudgeCoreLogic.MatchesNudgeWindowMarker("CUSTOMNOTIFICATION"));
+    }
+
+    [Fact]
+    public void MatchesNudgeWindowMarker_DoesNotMatchNormalApps()
+    {
+        Assert.False(NudgeCoreLogic.MatchesNudgeWindowMarker("chrome"));
+        Assert.False(NudgeCoreLogic.MatchesNudgeWindowMarker("firefox"));
+        Assert.False(NudgeCoreLogic.MatchesNudgeWindowMarker("code"));
+        Assert.False(NudgeCoreLogic.MatchesNudgeWindowMarker("zoom"));
+        Assert.False(NudgeCoreLogic.MatchesNudgeWindowMarker(""));
+        Assert.False(NudgeCoreLogic.MatchesNudgeWindowMarker(null!));
+    }
+
+    [Fact]
+    public void IsNudgeForegroundWindow_MatchesByTitle()
+    {
+        // Notification window title match
+        Assert.True(NudgeCoreLogic.IsNudgeForegroundWindow("dotnet", "Were you productive? [Nudge]"));
+        Assert.True(NudgeCoreLogic.IsNudgeForegroundWindow("some-app", "Were you productive? Nudge checks in..."));
+
+        // Title match but app name also in denylist — still true
+        Assert.True(NudgeCoreLogic.IsNudgeForegroundWindow("nudge-tray", "Were you productive?"));
+    }
+
+    [Fact]
+    public void IsNudgeForegroundWindow_AppNameMatchIncludesVariants()
+    {
+        Assert.True(NudgeCoreLogic.IsNudgeForegroundWindow("CustomNotification", ""));
+        Assert.True(NudgeCoreLogic.IsNudgeForegroundWindow("nudge-tray.dll", ""));
+        Assert.True(NudgeCoreLogic.IsNudgeForegroundWindow("NudgeTray", ""));
+    }
 }

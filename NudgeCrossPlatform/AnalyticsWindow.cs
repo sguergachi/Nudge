@@ -612,7 +612,8 @@ namespace NudgeTray
                     Text = label,
                     FontSize = 11,
                     FontWeight = isActive ? FontWeight.SemiBold : FontWeight.Medium,
-                    Foreground = new SolidColorBrush(isActive ? PrimaryBlue : TextSecondary)
+                    Foreground = new SolidColorBrush(isActive ? PrimaryBlue : TextSecondary),
+                    Background = Brushes.Transparent
                 }
             };
 
@@ -659,6 +660,7 @@ namespace NudgeTray
             {
                 border.PointerEntered += (s, e) =>
                 {
+                    border.Background = new SolidColorBrush(Color.FromArgb(15, 255, 255, 255));
                     if (border.Child is Button btn && btn.Content is TextBlock tb)
                     {
                         tb.Foreground = new SolidColorBrush(TextPrimary);
@@ -666,6 +668,7 @@ namespace NudgeTray
                 };
                 border.PointerExited += (s, e) =>
                 {
+                    border.Background = Brushes.Transparent;
                     if (border.Child is Button btn && btn.Content is TextBlock tb)
                     {
                         tb.Foreground = new SolidColorBrush(TextSecondary);
@@ -740,7 +743,8 @@ namespace NudgeTray
                     Text = "AI Brain",
                     FontSize = 11,
                     FontWeight = FontWeight.Medium,
-                    Foreground = new SolidColorBrush(TextSecondary)
+                    Foreground = new SolidColorBrush(TextSecondary),
+                    Background = Brushes.Transparent
                 }
             };
 
@@ -758,13 +762,21 @@ namespace NudgeTray
 
             border.PointerEntered += (s, e) =>
             {
-                if (!_aiTabActive && border.Child is Button btn && btn.Content is TextBlock tb)
-                    tb.Foreground = new SolidColorBrush(TextPrimary);
+                if (!_aiTabActive)
+                {
+                    border.Background = new SolidColorBrush(Color.FromArgb(15, 255, 255, 255));
+                    if (border.Child is Button btn && btn.Content is TextBlock tb)
+                        tb.Foreground = new SolidColorBrush(TextPrimary);
+                }
             };
             border.PointerExited += (s, e) =>
             {
-                if (!_aiTabActive && border.Child is Button btn && btn.Content is TextBlock tb)
-                    tb.Foreground = new SolidColorBrush(TextSecondary);
+                if (!_aiTabActive)
+                {
+                    border.Background = Brushes.Transparent;
+                    if (border.Child is Button btn && btn.Content is TextBlock tb)
+                        tb.Foreground = new SolidColorBrush(TextSecondary);
+                }
             };
 
             border.Child = button;

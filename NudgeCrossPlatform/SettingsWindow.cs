@@ -170,7 +170,8 @@ namespace NudgeTray
                 FontSize = fontSize,
                 Foreground = new SolidColorBrush(TextSecondary),
                 HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Center,
+                Background = Brushes.Transparent
             };
 
             var btn = new Button
