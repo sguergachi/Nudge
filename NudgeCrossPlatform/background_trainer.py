@@ -142,7 +142,7 @@ def _should_train(model_dir: str, current_count: int, min_samples: int,
     if force:
         return True
     last_count = _load_meta(model_dir).get('sample_count', 0)
-    threshold = last_count + max(10, int(last_count * _RETRAIN_NEW_DATA_RATIO))
+    threshold = last_count + max(20, int(last_count * _RETRAIN_NEW_DATA_RATIO))
     return current_count >= threshold
 
 
