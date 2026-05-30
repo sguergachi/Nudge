@@ -39,6 +39,13 @@ internal static class LiveAIState
     /// <summary>Whether the user is currently screen sharing.</summary>
     public static volatile bool ScreenSharing;
 
+    public static long UpdateVersion;
+
+    public static int GetCount()
+    {
+        lock (_lock) return _events.Count;
+    }
+
     public static void Add(MLLiveEvent evt)
     {
         lock (_lock)
@@ -47,6 +54,12 @@ internal static class LiveAIState
             if (_events.Count > 200)
                 _events.RemoveAt(0);
         }
+        System.Threading.Interlocked.Increment(ref UpdateVersion);
+        SaveToDisk();
+    }
+
+    public static void FlushToDisk()
+    {
         SaveToDisk();
     }
 

@@ -61,6 +61,7 @@ namespace NudgeTray
         private Border? _aiLiveTab;
         private DispatcherTimer? _aiLiveRefreshTimer;
         private int _lastAiEventCount;
+        private long _lastAiUpdateVersion;
 
         // Pin (always-on-top) state
         private bool _isPinned;
@@ -1446,12 +1447,15 @@ namespace NudgeTray
                     TextTrimming  = TextTrimming.CharacterEllipsis
                 });
             }
+            bool away = harvest?.Afk == 1;
             bool inMeeting = LiveAIState.InMeeting;
             bool screenSharing = LiveAIState.ScreenSharing;
-            string focusStatusText = screenSharing ? "· Presenting"
+            string focusStatusText = away ? "· Away From Keyboard"
+                : screenSharing ? "· Presenting"
                 : inMeeting ? "· In a Meeting"
                 : "· In Focus Now";
-            Color focusStatusColor = screenSharing || inMeeting ? ProductiveGreen : TextTertiary;
+            Color focusStatusColor = away ? AIStatusLearning
+                : screenSharing || inMeeting ? ProductiveGreen : TextTertiary;
 
             // Fusion quality + meeting status on the same line
             var qualityRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };

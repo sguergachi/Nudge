@@ -56,7 +56,7 @@ sealed class Nudge
     // VERSION & CONSTANTS
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    const string ProgramVersion = "3.0.0";
+    const string ProgramVersion = "2.1.0";
     const string VersionSuffix = "dev";
     static readonly string VERSION = $"{ProgramVersion}-{VersionSuffix}";
 
@@ -1100,50 +1100,45 @@ sealed class Nudge
         public PresenceState GetPresenceState()
         {
 #if WINDOWS
-            // ── Sensor Fusion: collect all signals, weight, score ──────────────
+            // ── Sensor Fusion: weighted scoring from all signal sources ─────────
+            // There is no single Windows API for "is the user in a meeting."
+            // Instead we fuse signals: audio session, registry state, process
+            // scan, and window title — each weighted by reliability.
             //
-            // Signal         Source                      Weight  Rationale
-            // ──────         ──────                      ──────  ─────────
-            // audioActive    IAudioSessionManager2       0.60    Real-time, authoritative
-            // camApps        ConsentStore\webcam         0.30    Camera rarely false-positives
-            // micApps        ConsentStore\microphone     0.10    Registry can be stale
-            // titleMatches   Window title keywords       0.15    Title heuristics
-            // appRunning     Process scan                0.05    App running ≠ meeting
+            // Weight  Signal          Rationale
+            // 0.40    audioActive     Real-time audio — most reliable when present
+            // 0.30    camApps         Camera consent — rarely false-positive
+            // 0.20    micApps         Mic consent — can be stale, needs corroboration
+            // 0.10    titleMatches    Window title — contextual but can mislead
+            // 0.10    appRunning      Known meeting app process — weak alone
             //
-            // Threshold: ≥ 0.60 → InMeeting
+            // Threshold: 0.25 — two weak signals or one strong signal needed
 
-            const double threshold = 0.60;
+            const double threshold = 0.25;
             double score = 0;
             var signals = new System.Text.StringBuilder();
 
-            // Layer 0: Core Audio API (real-time audio session detection)
             bool audioActive = false;
-            try { audioActive = HasActiveAudioSession(); }
-            catch { /* COM unavailable — skip this signal */ }
+            try { audioActive = HasActiveAudioSession(); } catch { }
+            if (audioActive) { score += 0.40; signals.Append(" audio"); }
 
-            if (audioActive) { score += 0.60; signals.Append(" audio"); }
-
-            // Registry: camera (high signal quality)
             int camApps = 0;
             try { camApps = TestCapability("webcam"); } catch { }
             if (camApps > 0) { score += 0.30; signals.Append($" cam({camApps})"); }
 
-            // Registry: microphone (can be stale)
             int micApps = 0;
             try { micApps = TestCapability("microphone"); } catch { }
-            if (micApps > 0) { score += 0.10; signals.Append($" mic({micApps})"); }
+            if (micApps > 0) { score += 0.20; signals.Append($" mic({micApps})"); }
 
-            // Window title heuristics
             var (app, title) = GetForegroundAppWithTitle();
             bool titleMatch = IsMeetingTitle(title) || (!string.IsNullOrEmpty(app) && MeetingProcessNames.Contains(app));
-            if (titleMatch) { score += 0.15; signals.Append(" title"); }
+            if (titleMatch) { score += 0.10; signals.Append(" title"); }
 
-            // Process scan
             bool appRunning = IsMeetingAppRunning();
-            if (appRunning) { score += 0.05; signals.Append(" app"); }
+            if (appRunning) { score += 0.10; signals.Append(" app"); }
 
             bool inMeeting = score >= threshold;
-            Console.WriteLine($"  ⓘ Presence (fusion): score={score:F2} threshold={threshold} → {(inMeeting ? "IN MEETING" : "not in meeting")}{signals}");
+            Console.WriteLine($"  Presence fusion: score={score:F2}/{threshold} → {(inMeeting ? "IN MEETING" : "clear")}{signals}");
             return new PresenceState(inMeeting, false, false, PresenceSource.WindowsRegistry);
 #else
             return PresenceState.Unavailable;
@@ -1427,20 +1422,6 @@ sealed class Nudge
             long stop = ReadLastUsedTime(key, "LastUsedTimeStop");
             if (stop != 0) return false;
 
-            // Filter stale entries: if LastUsedTimeStart is older than 24 hours,
-            // treat as inactive. Windows sometimes leaves registry entries for
-            // system services with start time from days ago and no stop time.
-            try
-            {
-                var startTime = DateTime.FromFileTimeUtc(start);
-                if ((DateTime.UtcNow - startTime).TotalHours > 24)
-                {
-                    Console.WriteLine($"  ⚠ Stale {capability} entry (started >24h ago): {appName} — since {startTime:yyyy-MM-dd HH:mm}, ignoring");
-                    return false;
-                }
-            }
-            catch { }
-
             // Session appears active. Check for staleness: if the app process
             // isn't running, the registry entry is stale (e.g. the app crashed
             // or was killed without Windows cleaning up the key).
@@ -1485,10 +1466,10 @@ sealed class Nudge
 
         private static void LogActiveApp(string appName, string capability)
         {
-            // Always log the first detection, then throttle to once per 60s per app
             long now = Environment.TickCount64;
             string key = $"{capability}:{appName}";
-            if (!_loggedApps.Contains(key) || (now - _lastPresenceLogTick) > 60_000)
+            // Log each app no more than once every 60s
+            if (!_loggedApps.Contains(key) && (now - _lastPresenceLogTick) > 60_000)
             {
                 Console.WriteLine($"  ⓘ Presence: {capability} active — {appName}");
                 _loggedApps.Add(key);
