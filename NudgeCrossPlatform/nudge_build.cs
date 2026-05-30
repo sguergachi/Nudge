@@ -1100,48 +1100,51 @@ sealed class Nudge
         public PresenceState GetPresenceState()
         {
 #if WINDOWS
-            // Layer 0: Core Audio API — directly queries the audio subsystem via
-            // IAudioSessionManager2. Catches ALL mic usage including WASAPI exclusive
-            // mode, virtual devices, and apps that bypass the Windows consent store.
-            // This is the most reliable layer.
-            if (HasActiveAudioSession())
-            {
-                Console.WriteLine("  ⓘ Presence (audio): active capture session detected");
-                return new PresenceState(true, false, false, PresenceSource.WindowsRegistry);
-            }
+            // ── Sensor Fusion: collect all signals, weight, score ──────────────
+            //
+            // Signal         Source                      Weight  Rationale
+            // ──────         ──────                      ──────  ─────────
+            // audioActive    IAudioSessionManager2       0.60    Real-time, authoritative
+            // camApps        ConsentStore\webcam         0.30    Camera rarely false-positives
+            // micApps        ConsentStore\microphone     0.10    Registry can be stale
+            // titleMatches   Window title keywords       0.15    Title heuristics
+            // appRunning     Process scan                0.05    App running ≠ meeting
+            //
+            // Threshold: ≥ 0.60 → InMeeting
 
-            // Layer 1: Hardware detection via CapabilityAccessManager registry.
-            // Works for apps that go through Windows mic/camera consent (Teams,
-            // Zoom, Chrome, etc.).  Correctly handles both REG_QWORD and REG_DWORD
-            // value types.
-            int micAppCount = TestCapability("microphone");
-            int camAppCount = TestCapability("webcam");
-            bool mic = micAppCount > 0;
-            bool cam = camAppCount > 0;
-            if (mic || cam)
-            {
-                Console.WriteLine($"  ⓘ Presence (registry): mic={mic}, cam={cam}  ({micAppCount}+{camAppCount} apps)");
-                return new PresenceState(mic, cam, false, PresenceSource.WindowsRegistry);
-            }
+            const double threshold = 0.60;
+            double score = 0;
+            var signals = new System.Text.StringBuilder();
 
-            // Layer 2: App-based detection — meeting apps often use audio without
-            // updating the consent store (e.g. virtual audio devices, WASAPI exclusive
-            // mode, or browser-based calls where Windows doesn't track the tab).
-            if (IsMeetingAppRunning())
-            {
-                Console.WriteLine("  ⓘ Presence (app): meeting app running");
-                return new PresenceState(true, false, false, PresenceSource.WindowsRegistry);
-            }
+            // Layer 0: Core Audio API (real-time audio session detection)
+            bool audioActive = false;
+            try { audioActive = HasActiveAudioSession(); }
+            catch { /* COM unavailable — skip this signal */ }
 
-            // Layer 3: Foreground window title heuristic.
+            if (audioActive) { score += 0.60; signals.Append(" audio"); }
+
+            // Registry: camera (high signal quality)
+            int camApps = 0;
+            try { camApps = TestCapability("webcam"); } catch { }
+            if (camApps > 0) { score += 0.30; signals.Append($" cam({camApps})"); }
+
+            // Registry: microphone (can be stale)
+            int micApps = 0;
+            try { micApps = TestCapability("microphone"); } catch { }
+            if (micApps > 0) { score += 0.10; signals.Append($" mic({micApps})"); }
+
+            // Window title heuristics
             var (app, title) = GetForegroundAppWithTitle();
-            if (IsMeetingTitle(title) || (!string.IsNullOrEmpty(app) && MeetingProcessNames.Contains(app)))
-            {
-                Console.WriteLine($"  ⓘ Presence (title): meeting window — {app}: {(title.Length <= 80 ? title : title[..77] + "...")}");
-                return new PresenceState(true, false, false, PresenceSource.WindowsRegistry);
-            }
+            bool titleMatch = IsMeetingTitle(title) || (!string.IsNullOrEmpty(app) && MeetingProcessNames.Contains(app));
+            if (titleMatch) { score += 0.15; signals.Append(" title"); }
 
-            return new PresenceState(false, false, false, PresenceSource.WindowsRegistry);
+            // Process scan
+            bool appRunning = IsMeetingAppRunning();
+            if (appRunning) { score += 0.05; signals.Append(" app"); }
+
+            bool inMeeting = score >= threshold;
+            Console.WriteLine($"  ⓘ Presence (fusion): score={score:F2} threshold={threshold} → {(inMeeting ? "IN MEETING" : "not in meeting")}{signals}");
+            return new PresenceState(inMeeting, false, false, PresenceSource.WindowsRegistry);
 #else
             return PresenceState.Unavailable;
 #endif
@@ -1424,6 +1427,20 @@ sealed class Nudge
             long stop = ReadLastUsedTime(key, "LastUsedTimeStop");
             if (stop != 0) return false;
 
+            // Filter stale entries: if LastUsedTimeStart is older than 24 hours,
+            // treat as inactive. Windows sometimes leaves registry entries for
+            // system services with start time from days ago and no stop time.
+            try
+            {
+                var startTime = DateTime.FromFileTimeUtc(start);
+                if ((DateTime.UtcNow - startTime).TotalHours > 24)
+                {
+                    Console.WriteLine($"  ⚠ Stale {capability} entry (started >24h ago): {appName} — since {startTime:yyyy-MM-dd HH:mm}, ignoring");
+                    return false;
+                }
+            }
+            catch { }
+
             // Session appears active. Check for staleness: if the app process
             // isn't running, the registry entry is stale (e.g. the app crashed
             // or was killed without Windows cleaning up the key).
@@ -1468,10 +1485,10 @@ sealed class Nudge
 
         private static void LogActiveApp(string appName, string capability)
         {
+            // Always log the first detection, then throttle to once per 60s per app
             long now = Environment.TickCount64;
             string key = $"{capability}:{appName}";
-            // Log each app no more than once every 60s
-            if (!_loggedApps.Contains(key) && (now - _lastPresenceLogTick) > 60_000)
+            if (!_loggedApps.Contains(key) || (now - _lastPresenceLogTick) > 60_000)
             {
                 Console.WriteLine($"  ⓘ Presence: {capability} active — {appName}");
                 _loggedApps.Add(key);
