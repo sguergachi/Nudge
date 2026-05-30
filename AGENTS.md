@@ -10,6 +10,8 @@ cd NudgeCrossPlatform
 
 The `.csproj` files have `EnableDefaultCompileItems=false` — all sources are explicit.
 
+**`nudge_build.cs` is auto-generated** from `nudge.cs` by the build script (strips the `#!/usr/bin/env dotnet run` shebang). Never edit `nudge_build.cs` directly — edit `nudge.cs` and the build script handles the rest. Same for `nudge-notify_build.cs`.
+
 ## .NET 10
 
 Pinned via `global.json` at repo root (`"version": "10.0.100", "rollForward": "latestFeature"`). Same SDK requirement on all platforms.
