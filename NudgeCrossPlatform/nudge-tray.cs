@@ -49,7 +49,7 @@ namespace NudgeTray
     sealed class Program
     {
         const int UDP_PORT = 45001;
-        const string VERSION = "1.7.6";
+        const string VERSION = "1.7.7";
         const string NudgeExeName = "nudge";
         const string NudgeDllName = "nudge.dll";
         const int TRAINER_CHECK_INTERVAL_SEC = 15;
@@ -251,27 +251,33 @@ namespace NudgeTray
 
             // ── Load persisted settings (CLI args take precedence) ────────────────
             var savedSettings = LoadSettings();
+            bool settingsChanged = false;
             if (savedSettings != null)
             {
                 // Restore ML preference unless the user explicitly passed --ml already
                 if (!_mlEnabled && savedSettings.MlEnabled)
                 {
                     _mlEnabled = true;
+                    settingsChanged = true;
                     Console.WriteLine("[INFO] ML re-enabled from saved settings");
                 }
-                
+
                 // If intervals weren't passed on CLI, use saved values
                 if (interval == 5 && savedSettings.IntervalMinutes != 5 && savedSettings.IntervalMinutes > 0)
                     interval = savedSettings.IntervalMinutes;
-                
+
                 if (mlInterval == 1 && savedSettings.MlCheckIntervalSeconds > 0)
                     mlInterval = savedSettings.MlCheckIntervalSeconds;
             }
 
-            // Persist whatever state we ended up with
-            _intervalMinutes = interval; // ensure field is set before SaveSettings
+            // Persist whatever state we ended up with (only if changed)
+            _intervalMinutes = interval;
             _mlCheckIntervalSeconds = mlInterval;
-            SaveSettings();
+            if (savedSettings is null || settingsChanged ||
+                savedSettings.IntervalMinutes != interval ||
+                savedSettings.MlCheckIntervalSeconds != mlInterval ||
+                savedSettings.MlEnabled != _mlEnabled)
+                SaveSettings();
 
             // Print banner
             Console.WriteLine("╔═══════════════════════════════════════════════════════╗");
@@ -284,12 +290,7 @@ namespace NudgeTray
             Console.WriteLine("╚═══════════════════════════════════════════════════════╝");
             Console.WriteLine();
 
-            // Start ML services if enabled
-            if (_mlEnabled)
-            {
-                StartMLServices();
-            }
-
+            // ML services started asynchronously in AfterSetup so UI appears immediately
             // Use Avalonia for cross-platform tray icon on all platforms
             BuildAvaloniaApp(interval).StartWithClassicDesktopLifetime(args);
         }
@@ -332,6 +333,9 @@ namespace NudgeTray
                     }
                     CreateTrayIcon();
                     Task.Run(CheckForUpdateAsync);
+
+                    if (_mlEnabled)
+                        Task.Run(StartMLServices);
 
                     if (_uiAuditMode)
                     {
@@ -1800,7 +1804,7 @@ namespace NudgeTray
                                 }
                             };
                             killOld.Start();
-                            killOld.WaitForExit(1000);
+                            // Fire-and-forget — don't block startup waiting for old process to die
                         }
                     }
                     catch { /* no previous process to kill */ }
@@ -1862,6 +1866,8 @@ namespace NudgeTray
                             HandleAppFocus(e.Data.AsSpan(9));
                         else if (e.Data.StartsWith("HARVEST:", StringComparison.Ordinal))
                             HandleHarvest(e.Data.AsSpan(8));
+                        else if (e.Data.StartsWith("MEETING:", StringComparison.Ordinal))
+                            HandleMeeting(e.Data.AsSpan(8));
                         else if (e.Data.StartsWith("SUPPRESS:", StringComparison.Ordinal))
                             HandleSuppress(e.Data.AsSpan(9));
                     }
@@ -1966,6 +1972,23 @@ namespace NudgeTray
             catch { /* non-critical */ }
         }
 
+        static void HandleMeeting(ReadOnlySpan<char> payload)
+        {
+            var span = payload;
+            int pipe1 = span.IndexOf('|');
+            int pipe2 = pipe1 >= 0 ? span.Slice(pipe1 + 1).IndexOf('|') : -1;
+            if (pipe1 >= 0 && pipe2 >= 0)
+            {
+                if (bool.TryParse(span.Slice(0, pipe1), out bool mic))
+                    LiveAIState.InMeeting = mic;
+                if (bool.TryParse(span.Slice(pipe1 + 1, pipe2), out bool cam))
+                    LiveAIState.InMeeting |= cam;
+                if (bool.TryParse(span.Slice(pipe1 + pipe2 + 2), out bool sharing))
+                    LiveAIState.ScreenSharing = sharing;
+                _analyticsWindow?.RequestTrainingViewRefresh();
+            }
+        }
+
         static void HandleSuppress(ReadOnlySpan<char> payload)
         {
             string reason = payload.ToString();
@@ -2065,30 +2088,6 @@ namespace NudgeTray
                 _waitingForResponse = false;
                 Console.WriteLine($"[ERROR] Failed to show custom notification: {ex.Message}");
                 Console.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
-            }
-        }
-
-        private static void ShowFallbackNotification()
-        {
-            // Fallback to notify-send on Linux (without buttons)
-            try
-            {
-                var process = new Process
-                {
-                    StartInfo = new ProcessStartInfo
-                    {
-                        FileName = "notify-send",
-                        Arguments = "-u critical -t 60000 \"Nudge - Productivity Check\" \"Were you productive? Use the tray menu to respond\"",
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    }
-                };
-                process.Start();
-                Console.WriteLine("✓ Sent notification via fallback method (use tray menu to respond)");
-            }
-            catch
-            {
-                Console.WriteLine("✗ All notification methods failed - use tray menu");
             }
         }
 
