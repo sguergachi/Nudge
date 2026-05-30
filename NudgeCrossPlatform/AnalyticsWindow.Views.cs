@@ -122,18 +122,6 @@ namespace NudgeTray
                 Cursor = new Cursor(StandardCursorType.Hand)
             };
 
-            var button = new Button
-            {
-                Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                Cursor = new Cursor(StandardCursorType.Hand),
-                Padding = new Thickness(0),
-                HorizontalContentAlignment = HorizontalAlignment.Center,
-                VerticalContentAlignment = VerticalAlignment.Center,
-                Width = 32,
-                Height = 32
-            };
-
             _pinIcon = new TextBlock
             {
                 Text = StrPinIcon,
@@ -141,12 +129,15 @@ namespace NudgeTray
                 Foreground = new SolidColorBrush(TextSecondary),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                Background = Brushes.Transparent
+                Background = Brushes.Transparent,
+                IsHitTestVisible = false
             };
 
-            button.Content = _pinIcon;
-            button.Click += (s, e) =>
+            border.Child = _pinIcon;
+
+            border.PointerPressed += (s, e) =>
             {
+                if (!e.GetCurrentPoint(border).Properties.IsLeftButtonPressed) return;
                 _isPinned = !_isPinned;
                 Topmost = _isPinned;
                 if (_pinIcon != null)
@@ -158,8 +149,7 @@ namespace NudgeTray
                 }
             };
 
-            ToolTip.SetTip(button, "Pin window on top");
-            border.Child = button;
+            ToolTip.SetTip(border, "Pin window on top");
 
             border.PointerEntered += (s, e) =>
                 border.Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255));
@@ -180,18 +170,6 @@ namespace NudgeTray
                 Cursor = new Cursor(StandardCursorType.Hand)
             };
 
-            var button = new Button
-            {
-                Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                Cursor = new Cursor(StandardCursorType.Hand),
-                Padding = new Thickness(0),
-                HorizontalContentAlignment = HorizontalAlignment.Center,
-                VerticalContentAlignment = VerticalAlignment.Center,
-                Width = 32,
-                Height = 32
-            };
-
             var closeIcon = new TextBlock
             {
                 Text = "✕",
@@ -200,12 +178,18 @@ namespace NudgeTray
                 Foreground = new SolidColorBrush(TextSecondary),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                Background = Brushes.Transparent
+                Background = Brushes.Transparent,
+                IsHitTestVisible = false
             };
 
-            button.Content = closeIcon;
-            button.Click += (s, e) => Hide();
-            border.Child = button;
+            border.Child = closeIcon;
+
+            border.PointerPressed += (s, e) =>
+            {
+                if (e.GetCurrentPoint(border).Properties.IsLeftButtonPressed)
+                    Hide();
+            };
+
             ToolTip.SetTip(border, "Close");
 
             // Hover effects

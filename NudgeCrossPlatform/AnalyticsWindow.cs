@@ -599,25 +599,22 @@ namespace NudgeTray
                 BorderBrush = isActive ? new SolidColorBrush(PrimaryBlue) : Brushes.Transparent
             };
 
-            var button = new Button
+            var textBlock = new TextBlock
             {
+                Text = label,
+                FontSize = 11,
+                FontWeight = isActive ? FontWeight.SemiBold : FontWeight.Medium,
+                Foreground = new SolidColorBrush(isActive ? PrimaryBlue : TextSecondary),
                 Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                Cursor = new Cursor(StandardCursorType.Hand),
-                Padding = new Thickness(0),
-                Content = new TextBlock
-                {
-                    Text = label,
-                    FontSize = 11,
-                    FontWeight = isActive ? FontWeight.SemiBold : FontWeight.Medium,
-                    Foreground = new SolidColorBrush(isActive ? PrimaryBlue : TextSecondary),
-                    Background = Brushes.Transparent
-                }
+                IsHitTestVisible = false
             };
 
-            button.Click += (s, e) =>
+            border.Child = textBlock;
+
+            border.PointerPressed += (s, e) =>
             {
-                // Snapshot whether AI tab was active before switching away
+                if (!e.GetCurrentPoint(border).Properties.IsLeftButtonPressed) return;
+
                 bool wasAiTab = _aiTabActive;
                 _aiTabActive = false;
                 _aiLiveRefreshTimer?.Stop();
@@ -631,18 +628,14 @@ namespace NudgeTray
                     _ => TimeFilter.Today
                 };
 
-                // Reload if the filter changed OR if we're switching away from AI tab
                 if (newFilter != _currentFilter || wasAiTab)
                 {
                     _currentFilter = newFilter;
                     UpdateTabStyles();
-                    // Reload data and refresh content only (don't rebuild entire UI)
                     _data = AnalyticsData.LoadFromCSV(_currentFilter);
                     RefreshContent();
                 }
             };
-
-            border.Child = button;
 
             ToolTip.SetTip(border, label switch
             {
@@ -659,18 +652,12 @@ namespace NudgeTray
                 border.PointerEntered += (s, e) =>
                 {
                     border.Background = new SolidColorBrush(Color.FromArgb(15, 255, 255, 255));
-                    if (border.Child is Button btn && btn.Content is TextBlock tb)
-                    {
-                        tb.Foreground = new SolidColorBrush(TextPrimary);
-                    }
+                    textBlock.Foreground = new SolidColorBrush(TextPrimary);
                 };
                 border.PointerExited += (s, e) =>
                 {
                     border.Background = Brushes.Transparent;
-                    if (border.Child is Button btn && btn.Content is TextBlock tb)
-                    {
-                        tb.Foreground = new SolidColorBrush(TextSecondary);
-                    }
+                    textBlock.Foreground = new SolidColorBrush(TextSecondary);
                 };
             }
 
@@ -693,7 +680,7 @@ namespace NudgeTray
                     // Time-filter tabs are active only when AI tab is NOT active and filter matches
                     bool isActive = !_aiTabActive && _currentFilter == filter;
                     tab.BorderBrush = isActive ? new SolidColorBrush(PrimaryBlue) : Brushes.Transparent;
-                    if (tab.Child is Button btn && btn.Content is TextBlock tb)
+                    if (tab.Child is TextBlock tb)
                     {
                         tb.FontWeight = isActive ? FontWeight.SemiBold : FontWeight.Medium;
                         tb.Foreground = new SolidColorBrush(isActive ? PrimaryBlue : TextSecondary);
@@ -708,7 +695,7 @@ namespace NudgeTray
                 _aiLiveTab.BorderBrush = isActive
                     ? new SolidColorBrush(AIStatusActive)
                     : Brushes.Transparent;
-                if (_aiLiveTab.Child is Button btn && btn.Content is TextBlock tb)
+                if (_aiLiveTab.Child is TextBlock tb)
                 {
                     tb.FontWeight = isActive ? FontWeight.SemiBold : FontWeight.Medium;
                     tb.Foreground = new SolidColorBrush(isActive ? AIStatusActive : TextSecondary);
@@ -730,26 +717,23 @@ namespace NudgeTray
                 BorderBrush = Brushes.Transparent
             };
 
-            var button = new Button
+            var textBlock = new TextBlock
             {
+                Text = "AI Brain",
+                FontSize = 11,
+                FontWeight = FontWeight.Medium,
+                Foreground = new SolidColorBrush(TextSecondary),
                 Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                Cursor = new Cursor(StandardCursorType.Hand),
-                Padding = new Thickness(0),
-                Content = new TextBlock
-                {
-                    Text = "AI Brain",
-                    FontSize = 11,
-                    FontWeight = FontWeight.Medium,
-                    Foreground = new SolidColorBrush(TextSecondary),
-                    Background = Brushes.Transparent
-                }
+                IsHitTestVisible = false
             };
+
+            border.Child = textBlock;
 
             ToolTip.SetTip(border, "Live AI predictions, confidence scores, and ML training status");
 
-            button.Click += (s, e) =>
+            border.PointerPressed += (s, e) =>
             {
+                if (!e.GetCurrentPoint(border).Properties.IsLeftButtonPressed) return;
                 _aiTabActive = true;
                 _activeDetailView = DetailViewType.None;
                 _contentScrollOffset = 0;
@@ -763,8 +747,7 @@ namespace NudgeTray
                 if (!_aiTabActive)
                 {
                     border.Background = new SolidColorBrush(Color.FromArgb(15, 255, 255, 255));
-                    if (border.Child is Button btn && btn.Content is TextBlock tb)
-                        tb.Foreground = new SolidColorBrush(TextPrimary);
+                    textBlock.Foreground = new SolidColorBrush(TextPrimary);
                 }
             };
             border.PointerExited += (s, e) =>
@@ -772,12 +755,10 @@ namespace NudgeTray
                 if (!_aiTabActive)
                 {
                     border.Background = Brushes.Transparent;
-                    if (border.Child is Button btn && btn.Content is TextBlock tb)
-                        tb.Foreground = new SolidColorBrush(TextSecondary);
+                    textBlock.Foreground = new SolidColorBrush(TextSecondary);
                 }
             };
 
-            border.Child = button;
             return border;
         }
 
@@ -1481,7 +1462,14 @@ namespace NudgeTray
                     TextTrimming  = TextTrimming.CharacterEllipsis
                 });
             }
-            // Fusion quality + "In Focus Now" on the same line
+            bool inMeeting = LiveAIState.InMeeting;
+            bool screenSharing = LiveAIState.ScreenSharing;
+            string focusStatusText = screenSharing ? "· Presenting"
+                : inMeeting ? "· In a Meeting"
+                : "· In Focus Now";
+            Color focusStatusColor = screenSharing || inMeeting ? ProductiveGreen : TextTertiary;
+
+            // Fusion quality + meeting status on the same line
             var qualityRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
             qualityRow.Children.Add(new Border
             {
@@ -1499,9 +1487,10 @@ namespace NudgeTray
             });
             qualityRow.Children.Add(new TextBlock
             {
-                Text       = "· In Focus Now",
+                Text       = focusStatusText,
                 FontSize   = 9,
-                Foreground = new SolidColorBrush(TextTertiary)
+                FontWeight = FontWeight.Medium,
+                Foreground = new SolidColorBrush(focusStatusColor)
             });
             textStack.Children.Add(qualityRow);
             Grid.SetColumn(textStack, 1);
@@ -1675,18 +1664,6 @@ namespace NudgeTray
             "WindowsApi"              => "Windows API",
             "HeuristicProcessScan"    => "Process Scan (fallback)",
             _                         => "detecting…"
-        };
-
-        private static string FormatFocusSource(string src) => src switch
-        {
-            "KWinScript"              => "KWin Script",
-            "X11Ewmh"                 => "X11 EWMH",
-            "WaylandActivatedProtocol"=> "Wayland Protocol",
-            "SwayIpc"                 => "Sway IPC",
-            "GnomeShell"              => "GNOME Shell",
-            "WindowsApi"              => "Windows API",
-            "HeuristicProcessScan"    => "Process Scan (heuristic)",
-            _                         => src
         };
 
         private static string FormatMs(int ms)
