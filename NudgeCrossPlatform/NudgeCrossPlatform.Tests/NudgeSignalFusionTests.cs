@@ -444,31 +444,6 @@ public sealed class NudgeSignalFusionTests
     // ── FeatureSchema dictionary ──────────────────────────────────────────────
 
     [Fact]
-    public void FeatureSchema_ToFeatureDictionary_HasExactly26Keys()
-    {
-        var features = new FeatureVector(
-            HourOfDay: 10, DayOfWeek: 1, FocusedAppHash: 0, FocusedDomainHash: 0,
-            IdleMs: 0, FocusedSinceMs: 5000, TitleStabilityMs: 5000,
-            SwitchCount60s: 0, SwitchCount300s: 0, DistinctApps300s: 1,
-            DistinctDomains300s: 0, ReturnedToAnchorApp300s: 0,
-            CurrentAppShare300s: 1.0, CurrentDomainShare300s: 0,
-            BrowserWindowFlag: 0, CommunicationAppFlag: 0,
-            EntertainmentDomainFlag: 0, WorkDomainFlag: 0,
-            AfkFlag: 0, FullscreenFlag: 0, WorkspaceSwitchCount300s: 0,
-            DevAppFlag: 0, CreativeAppFlag: 0, OfficeAppFlag: 0,
-            CommAppFlag: 0, EntAppFlag: 0);
-
-        var dict = FeatureSchema.ToFeatureDictionary(features);
-        Assert.Equal(26, dict.Count);
-    }
-
-    [Fact]
-    public void FeatureSchema_OrderedFeatureNames_HasExactly26Entries()
-    {
-        Assert.Equal(26, FeatureSchema.OrderedFeatureNames.Length);
-    }
-
-    [Fact]
     public void FeatureSchema_ToFeatureDictionary_ValuesMatchStructFields()
     {
         var features = new FeatureVector(

@@ -162,4 +162,27 @@ public sealed class NudgeBrowserParsingTests
     {
         Assert.Equal(expected, BrowserDetector.GetAppAndSite("zen-browser", title));
     }
+
+    [Theory]
+    [InlineData("firefox", "Firefox")]
+    [InlineData("msedge", "Edge")]
+    [InlineData("google-chrome", "Chrome")]
+    [InlineData("chromium", "Chromium")]
+    [InlineData("brave-browser", "Brave")]
+    [InlineData("opera", "Opera")]
+    [InlineData("zen-browser", "Zen")]
+    public void GetBrowserDisplayName_KnownBrowser_ReturnsDisplayName(string processName, string expected)
+    {
+        Assert.Equal(expected, BrowserDetector.GetBrowserDisplayName(processName));
+    }
+
+    [Theory]
+    [InlineData("code")]
+    [InlineData("terminal")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void GetBrowserDisplayName_NonBrowser_ReturnsNull(string? processName)
+    {
+        Assert.Null(BrowserDetector.GetBrowserDisplayName(processName));
+    }
 }

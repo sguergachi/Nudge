@@ -298,6 +298,40 @@ public sealed class NudgeMeetingGateTests
         Assert.True(args.MeetingSuppression);
     }
 
+    [Fact]
+    public void Evaluate_NullTick_ActivePresence_Suppresses()
+    {
+        // When tick is null but presence shows InMeeting, should still suppress.
+        var presence = new PresenceState(IsMicActive: true, false, false, Source: PresenceSource.PipeWire);
+        var decision = SnapshotGate.Evaluate(null, presence);
+        Assert.True(decision.Suppress);
+        Assert.Equal(SuppressionReason.InMeeting, decision.Reason);
+    }
+
+    [Fact]
+    public void Evaluate_NullTick_PresenceScreenSharing_Suppresses()
+    {
+        var presence = new PresenceState(false, false, IsScreenSharing: true, Source: PresenceSource.PipeWire);
+        var decision = SnapshotGate.Evaluate(null, presence);
+        Assert.True(decision.Suppress);
+        Assert.Equal(SuppressionReason.ScreenSharing, decision.Reason);
+    }
+
+    [Fact]
+    public void Evaluate_NullTick_NoPresence_Allows()
+    {
+        var decision = SnapshotGate.Evaluate(null, PresenceState.Unavailable);
+        Assert.False(decision.Suppress);
+    }
+
+    [Fact]
+    public void Evaluate_UsableSignal_DoesNotSuppress()
+    {
+        var tick = MakeTick(SignalQuality.Usable, afk: false);
+        var decision = SnapshotGate.Evaluate(tick, PresenceState.Unavailable);
+        Assert.False(decision.Suppress);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static ActivityTickResult MakeTick(SignalQuality quality, bool afk)

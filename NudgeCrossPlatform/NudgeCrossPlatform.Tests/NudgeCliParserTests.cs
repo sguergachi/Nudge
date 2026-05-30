@@ -192,4 +192,57 @@ public sealed class NudgeCliParserTests
         Assert.Equal(NudgeNotifyAction.SendResponse, parsed.Action);
         Assert.Equal("YES", parsed.Response);
     }
+
+    // ── ParseNudgeArgs edge cases ──────────────────────────────────────────────
+
+    [Fact]
+    public void ParseNudgeArgs_CsvPathWithTrailingFlags()
+    {
+        // CSV path as first arg, flags after — should parse both
+        var parsed = NudgeCoreLogic.ParseNudgeArgs(["/tmp/data.csv", "--ml"]);
+        Assert.Equal("/tmp/data.csv", parsed.CsvPath);
+        Assert.True(parsed.MlEnabled);
+    }
+
+    [Fact]
+    public void ParseNudgeArgs_DuplicateMlFlag_DoesNotThrow()
+    {
+        var parsed = NudgeCoreLogic.ParseNudgeArgs(["--ml", "--ml"]);
+        Assert.True(parsed.MlEnabled);
+    }
+
+    [Fact]
+    public void ParseNudgeArgs_DuplicateForceModel_DoesNotThrow()
+    {
+        var parsed = NudgeCoreLogic.ParseNudgeArgs(["--force-model", "--force-model"]);
+        Assert.True(parsed.ForceTrainedModel);
+    }
+
+    [Theory]
+    [InlineData("-5", -5)]
+    [InlineData("0", 0)]
+    public void ParseNudgeArgs_NonPositiveInterval_SetsInterval(string arg, int value)
+    {
+        // int.TryParse succeeds for negative/zero — behaviour is documented by this test.
+        // Callers should validate the value before use.
+        var parsed = NudgeCoreLogic.ParseNudgeArgs(["--interval", arg]);
+        Assert.Equal(value, parsed.IntervalMinutes);
+    }
+
+    [Theory]
+    [InlineData("-5")]
+    [InlineData("0")]
+    public void ParseNudgeArgs_NonPositiveMlInterval_SetsInterval(string arg)
+    {
+        var parsed = NudgeCoreLogic.ParseNudgeArgs(["--ml-interval", arg]);
+        Assert.NotNull(parsed.MlCheckIntervalSeconds);
+        Assert.True(parsed.MlCheckIntervalSeconds.Value <= 0);
+    }
+
+    [Fact]
+    public void ParseNudgeNotifyArgs_HelpTakesPrecedenceOverResponse()
+    {
+        var parsed = NudgeCoreLogic.ParseNudgeNotifyArgs(["--help", "YES"]);
+        Assert.Equal(NudgeNotifyAction.ShowHelp, parsed.Action);
+    }
 }

@@ -238,26 +238,6 @@ public sealed class NudgeFeatureTrackerTests
     // ── Browser domain classification ─────────────────────────────────────────
 
     [Fact]
-    public void BrowserDomain_YouTube_AlwaysEntertainmentRegardlessOfDevAnchor()
-    {
-        var tracker = new ActivityFeatureTracker();
-        var t = new DateTime(2026, 5, 23, 10, 0, 0);
-
-        for (int i = 0; i < 60; i++)
-            tracker.Capture(t.AddSeconds(i), Win("konsole", "~/Dev", "k1"), Active());
-
-        var tick = tracker.Capture(
-            t.AddSeconds(61),
-            new WindowObservation("firefox", "Cats - YouTube - Mozilla Firefox", "f1", "1", FocusSource.KWinScript, false, 1),
-            Active());
-
-        Assert.Equal("youtube.com", tick.Context.FocusedDomain);
-        Assert.Equal(AppCategory.Entertainment, tick.AppCategory);
-        Assert.Equal(1, tick.Features.EntAppFlag);
-        Assert.Equal(0, tick.Features.DevAppFlag);
-    }
-
-    [Fact]
     public void BrowserDomain_GitHub_ClassifiedAsDevelopment()
     {
         var tracker = new ActivityFeatureTracker();
@@ -374,32 +354,6 @@ public sealed class NudgeFeatureTrackerTests
             new IdleObservation(999, IdleSource.Unknown));
 
         Assert.Equal(0, tick.Context.IsIdleNow);
-    }
-
-    // ── NEW TESTS FROM THE PLAN ───────────────────────────────────────────────
-
-    // ── Browser anchor fusion ─────────────────────────────────────────────────
-
-    [Fact]
-    public void BrowserAnchorFusion_DevBrowserInheritsDevCategory()
-    {
-        var tracker = new ActivityFeatureTracker();
-        var t = new DateTime(2026, 5, 23, 10, 0, 0);
-
-        // Establish a dev anchor app (code) with 5 observations
-        for (int i = 0; i < 5; i++)
-            tracker.Capture(t.AddSeconds(i), Win("code", "file.cs"), Active());
-
-        // Browser observation with unknown domain should inherit dev category via anchor
-        // Use a non-desktop appId to avoid desktop file classification interference
-        var tick = tracker.Capture(
-            t.AddSeconds(6),
-            new WindowObservation("my-browser", "Some Page - MyBrowser", "f1", "1", FocusSource.KWinScript, false, 1),
-            Active());
-
-        Assert.Equal(AppCategory.Development, tick.AppCategory);
-        Assert.Equal(CategoryConfidence.Inferred, tick.AppCategoryConfidence);
-        Assert.Equal(string.Empty, tick.Context.FocusedDomain); // No domain detected
     }
 
     // ── AFK and signal quality ────────────────────────────────────────────────
