@@ -241,3 +241,6 @@ venv/bin/
 venv/
 TrayIconTest/
 TrayIconTest/
+
+NudgeCrossPlatform/nudge_build.cs
+NudgeCrossPlatform/nudge-notify_build.cs
