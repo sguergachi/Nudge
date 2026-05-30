@@ -1473,7 +1473,7 @@ namespace NudgeTray
         /// scaler.json, trainer_meta.json) from the app directory into the user
         /// data directory so the background trainer and inference server find it.
         /// </summary>
-        internal         internal static void DeployBundledModel()
+        internal static void DeployBundledModel()
         {
             try
             {
