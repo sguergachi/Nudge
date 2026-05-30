@@ -9,6 +9,9 @@ internal static class LiveAIState
     private static readonly object _lock = new();
     private static readonly List<MLLiveEvent> _events = new(capacity: 210);
     private static readonly string _historyFile;
+    private static System.Threading.Timer? _saveTimer;
+    private const int SaveDebounceMs = 3_000;
+    private static bool _dirty;
 
     static LiveAIState()
     {
@@ -38,6 +41,14 @@ internal static class LiveAIState
     public static volatile bool InMeeting;
     /// <summary>Whether the user is currently screen sharing.</summary>
     public static volatile bool ScreenSharing;
+    /// <summary>Monotonic update counter incremented on every Add, UpdateResponse, or harvest change.</summary>
+    public static long UpdateVersion;
+
+    /// <summary>Returns the number of recorded events without allocation.</summary>
+    public static int GetCount()
+    {
+        lock (_lock) { return _events.Count; }
+    }
 
     public static void Add(MLLiveEvent evt)
     {
@@ -46,8 +57,10 @@ internal static class LiveAIState
             _events.Add(evt);
             if (_events.Count > 200)
                 _events.RemoveAt(0);
+            _dirty = true;
         }
-        SaveToDisk();
+        System.Threading.Interlocked.Increment(ref UpdateVersion);
+        ScheduleSave();
     }
 
     /// <summary>Updates the matching event with the user's response and correctness.</summary>
@@ -64,7 +77,16 @@ internal static class LiveAIState
                     break;
                 }
             }
+            _dirty = true;
         }
+        ScheduleSave();
+    }
+
+    /// <summary>Forces an immediate save (e.g., on shutdown).</summary>
+    public static void FlushToDisk()
+    {
+        _saveTimer?.Dispose();
+        _saveTimer = null;
         SaveToDisk();
     }
 
@@ -112,10 +134,20 @@ internal static class LiveAIState
         try
         {
             List<MLLiveEvent> snapshot;
-            lock (_lock) { snapshot = new List<MLLiveEvent>(_events); }
+            lock (_lock) { snapshot = new List<MLLiveEvent>(_events); _dirty = false; }
             var json = System.Text.Json.JsonSerializer.Serialize(snapshot, NudgeJsonContext.Default.ListMLLiveEvent);
             System.IO.File.WriteAllText(_historyFile, json);
         }
         catch { }
+    }
+
+    private static void ScheduleSave()
+    {
+        if (_saveTimer == null)
+        {
+            _saveTimer = new System.Threading.Timer(
+                _ => { if (_dirty) SaveToDisk(); },
+                null, SaveDebounceMs, SaveDebounceMs);
+        }
     }
 }
