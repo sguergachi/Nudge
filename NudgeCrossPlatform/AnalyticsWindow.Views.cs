@@ -129,15 +129,23 @@ namespace NudgeTray
                 Foreground = new SolidColorBrush(TextSecondary),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                Background = Brushes.Transparent,
                 IsHitTestVisible = false
             };
 
-            border.Child = _pinIcon;
-
-            border.PointerPressed += (s, e) =>
+            var button = new Button
             {
-                if (!e.GetCurrentPoint(border).Properties.IsLeftButtonPressed) return;
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(0),
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Width = 32,
+                Height = 32,
+                Content = _pinIcon
+            };
+
+            button.Click += (s, e) =>
+            {
                 _isPinned = !_isPinned;
                 Topmost = _isPinned;
                 if (_pinIcon != null)
@@ -149,6 +157,7 @@ namespace NudgeTray
                 }
             };
 
+            border.Child = button;
             ToolTip.SetTip(border, "Pin window on top");
 
             border.PointerEntered += (s, e) =>
@@ -178,21 +187,25 @@ namespace NudgeTray
                 Foreground = new SolidColorBrush(TextSecondary),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                Background = Brushes.Transparent,
                 IsHitTestVisible = false
             };
 
-            border.Child = closeIcon;
-
-            border.PointerPressed += (s, e) =>
+            var button = new Button
             {
-                if (e.GetCurrentPoint(border).Properties.IsLeftButtonPressed)
-                    Hide();
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(0),
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Width = 32,
+                Height = 32,
+                Content = closeIcon
             };
 
+            button.Click += (s, e) => Hide();
+            border.Child = button;
             ToolTip.SetTip(border, "Close");
 
-            // Hover effects
             border.PointerEntered += (s, e) =>
             {
                 border.Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255));

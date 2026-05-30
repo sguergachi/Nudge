@@ -171,9 +171,23 @@ namespace NudgeTray
                 Foreground = new SolidColorBrush(TextSecondary),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                Background = Brushes.Transparent,
                 IsHitTestVisible = false
             };
+
+            var btn = new Button
+            {
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(0),
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Width = 30,
+                Height = 30,
+                Cursor = new Cursor(StandardCursorType.Hand),
+                Content = icon
+            };
+            btn.Click += (_, _) => action();
+            ToolTip.SetTip(btn, tooltip);
 
             var border = new Border
             {
@@ -181,16 +195,8 @@ namespace NudgeTray
                 Width = 30,
                 Height = 30,
                 Background = Brushes.Transparent,
-                Cursor = new Cursor(StandardCursorType.Hand),
-                Child = icon
+                Child = btn
             };
-
-            border.PointerPressed += (s, e) =>
-            {
-                if (e.GetCurrentPoint(border).Properties.IsLeftButtonPressed)
-                    action();
-            };
-            ToolTip.SetTip(border, tooltip);
 
             var hoverBg = danger
                 ? new SolidColorBrush(Color.FromArgb(50, 220, 50, 50))

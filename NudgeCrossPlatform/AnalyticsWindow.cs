@@ -267,7 +267,7 @@ namespace NudgeTray
             double prog = (double)(totalSec - secLeft) / totalSec;
             SetProgressBar(Math.Clamp(prog, 0, 1));
             string prefix = isAi ? "AI check in " : "Snapshot in ";
-            SetCountdownText(prefix + FormatSec(secLeft), PrimaryBlue, true);
+            SetCountdownText(prefix + (secLeft < 60 ? $"{secLeft}s" : $"{secLeft / 60}m {secLeft % 60:D2}s"), PrimaryBlue, true);
         }
 
         private void SetCountdownText(string text, Color color, bool medium)
@@ -304,9 +304,6 @@ namespace NudgeTray
             }
             _progressTrack.Child = barGrid;
         }
-
-        private static string FormatSec(long s) =>
-            s < 60 ? $"{s}s" : $"{s / 60}m {s % 60:D2}s";
 
         private void PositionNearBottomRight()
         {
@@ -596,7 +593,8 @@ namespace NudgeTray
                 Padding = new Thickness(12, 10, 12, 10),
                 Cursor = new Cursor(StandardCursorType.Hand),
                 BorderThickness = new Thickness(0, 0, 0, 2),
-                BorderBrush = isActive ? new SolidColorBrush(PrimaryBlue) : Brushes.Transparent
+                BorderBrush = isActive ? new SolidColorBrush(PrimaryBlue) : Brushes.Transparent,
+                Background = Brushes.Transparent
             };
 
             var textBlock = new TextBlock
@@ -605,16 +603,19 @@ namespace NudgeTray
                 FontSize = 11,
                 FontWeight = isActive ? FontWeight.SemiBold : FontWeight.Medium,
                 Foreground = new SolidColorBrush(isActive ? PrimaryBlue : TextSecondary),
-                Background = Brushes.Transparent,
                 IsHitTestVisible = false
             };
 
-            border.Child = textBlock;
-
-            border.PointerPressed += (s, e) =>
+            var button = new Button
             {
-                if (!e.GetCurrentPoint(border).Properties.IsLeftButtonPressed) return;
+                Content = textBlock,
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(0)
+            };
 
+            button.Click += (s, e) =>
+            {
                 bool wasAiTab = _aiTabActive;
                 _aiTabActive = false;
                 _aiLiveRefreshTimer?.Stop();
@@ -637,6 +638,8 @@ namespace NudgeTray
                 }
             };
 
+            border.Child = button;
+
             ToolTip.SetTip(border, label switch
             {
                 StrTabToday => "Show today's activity",
@@ -646,7 +649,6 @@ namespace NudgeTray
                 _ => label
             });
 
-            // Hover effect for inactive tabs
             if (!isActive)
             {
                 border.PointerEntered += (s, e) =>
@@ -680,7 +682,7 @@ namespace NudgeTray
                     // Time-filter tabs are active only when AI tab is NOT active and filter matches
                     bool isActive = !_aiTabActive && _currentFilter == filter;
                     tab.BorderBrush = isActive ? new SolidColorBrush(PrimaryBlue) : Brushes.Transparent;
-                    if (tab.Child is TextBlock tb)
+                    if (tab.Child is Button btn && btn.Content is TextBlock tb)
                     {
                         tb.FontWeight = isActive ? FontWeight.SemiBold : FontWeight.Medium;
                         tb.Foreground = new SolidColorBrush(isActive ? PrimaryBlue : TextSecondary);
@@ -695,7 +697,7 @@ namespace NudgeTray
                 _aiLiveTab.BorderBrush = isActive
                     ? new SolidColorBrush(AIStatusActive)
                     : Brushes.Transparent;
-                if (_aiLiveTab.Child is TextBlock tb)
+                if (_aiLiveTab.Child is Button btn && btn.Content is TextBlock tb)
                 {
                     tb.FontWeight = isActive ? FontWeight.SemiBold : FontWeight.Medium;
                     tb.Foreground = new SolidColorBrush(isActive ? AIStatusActive : TextSecondary);
@@ -714,7 +716,8 @@ namespace NudgeTray
                 Padding = new Thickness(12, 10, 12, 10),
                 Cursor = new Cursor(StandardCursorType.Hand),
                 BorderThickness = new Thickness(0, 0, 0, 2),
-                BorderBrush = Brushes.Transparent
+                BorderBrush = Brushes.Transparent,
+                Background = Brushes.Transparent
             };
 
             var textBlock = new TextBlock
@@ -723,17 +726,23 @@ namespace NudgeTray
                 FontSize = 11,
                 FontWeight = FontWeight.Medium,
                 Foreground = new SolidColorBrush(TextSecondary),
-                Background = Brushes.Transparent,
                 IsHitTestVisible = false
             };
 
-            border.Child = textBlock;
+            var button = new Button
+            {
+                Content = textBlock,
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(0)
+            };
+
+            border.Child = button;
 
             ToolTip.SetTip(border, "Live AI predictions, confidence scores, and ML training status");
 
-            border.PointerPressed += (s, e) =>
+            button.Click += (s, e) =>
             {
-                if (!e.GetCurrentPoint(border).Properties.IsLeftButtonPressed) return;
                 _aiTabActive = true;
                 _activeDetailView = DetailViewType.None;
                 _contentScrollOffset = 0;
@@ -1688,18 +1697,16 @@ namespace NudgeTray
             _                 => (Color.FromArgb(40,  144, 164, 174), Color.FromRgb(144, 164, 174), Color.FromArgb(80, 144, 164, 174)),
         };
 
-        private static string GetConfidenceLabelFromScore(float score)
-        {
-            if (score >= 0.90f) return "Verified";
-            if (score >= 0.70f) return "Estimated";
-            if (score >= 0.45f) return "Inferred";
-            return "";
-        }
-
         private static void AddCategoryBadgeRow(StackPanel parent, string category, float confidence = 1f)
         {
             var (bg, fg, borderColor) = GetCategoryBadgeColors(category);
-            string confLabel = GetConfidenceLabelFromScore(confidence);
+            string confLabel = confidence switch
+            {
+                >= 0.90f => "Verified",
+                >= 0.70f => "Estimated",
+                >= 0.45f => "Inferred",
+                _ => ""
+            };
 
             var row = new Grid { ColumnDefinitions = new ColumnDefinitions("90,*") };
             row.Children.Add(new TextBlock
@@ -2476,7 +2483,14 @@ namespace NudgeTray
             var scoreTb = new TextBlock
             {
                 Text = isSuppressed
-                    ? SuppressReasonToDetail(evt.SuppressReason)
+                    ? evt.SuppressReason switch
+                    {
+                        "InMeeting"     => "mic/camera active — in a meeting",
+                        "ScreenSharing" => "screen sharing active — presenting",
+                        "Afk"           => "away from keyboard",
+                        "PoorSignal"    => "unreliable app/window detection",
+                        _               => $"suppressed ({evt.SuppressReason})"
+                    }
                     : $"{(evt.Confidence > 0 ? evt.Confidence : evt.Score) * 100:F0}% · {(evt.Productive ? StrProductive : StrNotProductive)}",
                 FontSize = 11,
                 Foreground = new SolidColorBrush(dotColor)
@@ -2506,29 +2520,6 @@ namespace NudgeTray
             "PoorSignal"   => "⏸ no signal",
             _              => "⏸ suppressed"
         };
-
-        private static string SuppressReasonToDetail(string? reason) => reason switch
-        {
-            "InMeeting"    => "mic/camera active — in a meeting",
-            "ScreenSharing" => "screen sharing active — presenting",
-            "Afk"          => "away from keyboard",
-            "PoorSignal"   => "focus signal too unreliable",
-            _              => "snapshot suppressed"
-        };
-
-        /// <summary>Build a hover tooltip Border (same style as the gradient chart tooltip).</summary>
-        private static Border CreateEventTooltip(MLLiveEvent evt)
-        {
-            return new Border
-            {
-                Background = new SolidColorBrush(Color.FromArgb(200, 30, 30, 30)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(8),
-                Padding = new Thickness(10, 8),
-                Child = CreateTooltipContent(evt)
-            };
-        }
 
         /// <summary>Compact log of most-recent ML checks, newest first.</summary>
         private static Grid CreateEventsLog(IReadOnlyList<MLLiveEvent> events)
