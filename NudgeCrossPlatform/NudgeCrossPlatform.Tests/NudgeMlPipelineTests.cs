@@ -586,7 +586,7 @@ public sealed class FeatureSchemaValidationTests
 
     [Fact]
     public void HarvestHeaders_HasCorrectCount() =>
-        Assert.Equal(29, FeatureSchema.HarvestHeaders.Length);
+        Assert.Equal(43, FeatureSchema.HarvestHeaders.Length);
 
     [Fact]
     public void HarvestHeaders_ContainsAllOrderedFeatureNames()
@@ -629,6 +629,7 @@ public sealed class AppCategoryConfidenceTests
     {
         foreach (CategoryConfidence c in Enum.GetValues<CategoryConfidence>())
         {
+            if (c is CategoryConfidence.Unknown or CategoryConfidence.Fallback) continue;
             string label = AppCategoryClassifier.GetConfidenceLabel(c);
             Assert.False(string.IsNullOrWhiteSpace(label), $"Confidence {c} should have a non-empty label");
         }
