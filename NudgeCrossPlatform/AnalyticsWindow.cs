@@ -1834,51 +1834,11 @@ namespace NudgeTray
                 ClipToBounds = true,
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
-            Action rebuildProgressBar = () =>
-            {
-                long nextAt = LiveAIState.NextCheckAt;
-                long nowSec = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                long total = Math.Max(10, Program.MlCheckIntervalSeconds);
-                long secLeft = nextAt > 0 ? Math.Max(0, nextAt - nowSec) : 0;
-                long secDone = Math.Max(0, total - secLeft);
-                double prog = nextAt > 0
-                    ? Math.Min(1.0, Math.Max(0.0, (double)secDone / total))
-                    : 0;
-
-                if (nextAt > 0 && secLeft == 0)
-                {
-                    barContainer.Child = CreateIndeterminateBar();
-                }
-                else
-                {
-                    var barGrid = new Grid();
-                    if (prog >= 0.995)
-                    {
-                        barGrid.ColumnDefinitions = new ColumnDefinitions("*");
-                        barGrid.Children.Add(new Border
-                        {
-                            Background = new SolidColorBrush(PrimaryBlue),
-                            CornerRadius = new CornerRadius(2),
-                            HorizontalAlignment = HorizontalAlignment.Stretch
-                        });
-                    }
-                    else if (prog > 0.005)
-                    {
-                        double rem = 1.0 - prog;
-                        barGrid.ColumnDefinitions = new ColumnDefinitions($"{prog * 100:F1}*,{rem * 100:F1}*");
-                        var fill = new Border
-                        {
-                            Background = new SolidColorBrush(PrimaryBlue),
-                            CornerRadius = new CornerRadius(2, 0, 0, 2),
-                            HorizontalAlignment = HorizontalAlignment.Stretch
-                        };
-                        Grid.SetColumn(fill, 0);
-                        barGrid.Children.Add(fill);
-                    }
-                    barContainer.Child = barGrid;
-                }
-            };
             panel.Children.Add(barContainer);
+
+            // Create the indeterminate bouncing bar once — reusing it avoids
+            // position-reset and orphaned-timer bugs when the countdown ticks.
+            Border? indeterminateBar = null;
 
             // ── Live countdown update every second (bar + text) ──────────────
             Action tick = () =>
@@ -1895,7 +1855,12 @@ namespace NudgeTray
                      (Environment.TickCount64 - LiveAIState.LastMlNextTick) > Math.Max(30_000, Program.MlCheckIntervalSeconds * 3_000L));
 
                 if (nextAt > 0 && secLeft == 0 && !stalled)
-                    barContainer.Child = CreateIndeterminateBar();
+                {
+                    if (indeterminateBar == null)
+                        indeterminateBar = CreateIndeterminateBar();
+                    if (!ReferenceEquals(barContainer.Child, indeterminateBar))
+                        barContainer.Child = indeterminateBar;
+                }
                 else if (stalled)
                 {
                     barContainer.Child = new Border
@@ -2842,8 +2807,7 @@ namespace NudgeTray
             };
         }
 
-        // Must be called before Start() — Seed setter initialises derived params
-         private void InitFromSeed()
+        private void InitFromSeed()
         {
             int s = Seed;
             int h1 = ((s * 1103515245 + 12345) ^ (s >> 13)) & 0x7FFFFFFF;
@@ -2852,7 +2816,7 @@ namespace NudgeTray
             const double div = 0x7FFFFFFF;
             _step        = 0.016 + 0.006 * (h1 / div);
             _radius      = 12.0  + 2.0  * (h2 / div);
-            _peakOpacity = 0.42  + 0.12  * (h3 / div);
+            _peakOpacity = 0.65  + 0.15  * (h3 / div);
             _stagger     = h2 % 2 == 0 ? 0.48 : 0.52;
         }
 
@@ -2870,10 +2834,10 @@ namespace NudgeTray
             // Ring 1 — one-way emission from center, exponential decay
             double r1 = _phase;
             double ring1R = _radius * r1;
-            double ringAlpha1 = _peakOpacity * Math.Min(1.0, 2.0 * r1) * Math.Exp(-r1 * 3.5);
-            if (ringAlpha1 > 0.002)
+            double ringAlpha1 = _peakOpacity * Math.Min(1.0, 2.0 * r1) * Math.Exp(-r1 * 2.2);
+            if (ringAlpha1 > 0.003)
             {
-                var ringPen = new Pen(new SolidColorBrush(color, ringAlpha1), 0.7);
+                var ringPen = new Pen(new SolidColorBrush(color, ringAlpha1), 1.2);
                 context.DrawEllipse(null, ringPen, center, ring1R, ring1R);
             }
 
@@ -2881,17 +2845,15 @@ namespace NudgeTray
             double r2 = _phase + _stagger;
             if (r2 > 1.0) r2 -= 1.0;
             double ring2R = _radius * r2;
-            double ringAlpha2 = _peakOpacity * Math.Min(1.0, 2.0 * r2) * Math.Exp(-r2 * 3.5);
-            if (ringAlpha2 > 0.002)
+            double ringAlpha2 = _peakOpacity * Math.Min(1.0, 2.0 * r2) * Math.Exp(-r2 * 2.2);
+            if (ringAlpha2 > 0.003)
             {
-                var ringPen = new Pen(new SolidColorBrush(color, ringAlpha2), 0.7);
+                var ringPen = new Pen(new SolidColorBrush(color, ringAlpha2), 1.2);
                 context.DrawEllipse(null, ringPen, center, ring2R, ring2R);
             }
 
-            // Solid center dot — steady, tiny breath
-            double ds = 0.92 + 0.08 * ((Math.Sin(Environment.TickCount64 * 0.000003) + 1.0) / 2.0);
-            double dotR = 4.6 * ds;
-            context.DrawEllipse(new SolidColorBrush(color), null, center, dotR, dotR);
+            // Solid center dot — steady
+            context.DrawEllipse(new SolidColorBrush(color), null, center, 4.6, 4.6);
         }
     }
 
