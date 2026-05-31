@@ -111,7 +111,9 @@ namespace NudgeTray
         private const string StrSensorSignalsClosed = "▸ Sensor Signals";
         private const string StrChevronOpen = "▾";
         private const string StrChevronClosed = "▸";
-        private const string StrPinIcon = "⊙";
+        private const string StrPinIcon = "\U000F0404"; // mdi pin-off
+        /// <summary>Cross-platform Material Design Icons font, bundled as embedded resource.</summary>
+        internal static readonly FontFamily MdiFont = new("avares://nudge-tray/Resources/materialdesignicons-webfont.ttf#Material Design Icons");
         private const string StrProductive = "productive";
         private const string StrNotProductive = "not productive";
         private const string StrNudgedAction = "nudged";
@@ -718,7 +720,7 @@ namespace NudgeTray
 
             border.Child = textBlock;
 
-            ToolTip.SetTip(border, "Live AI predictions, confidence scores, and ML training status");
+            ToolTip.SetTip(border, "Live AI predictions, productivity scores, and ML training status");
 
             border.PointerPressed += (s, e) =>
             {
@@ -1213,7 +1215,7 @@ namespace NudgeTray
 
             var scoreText = new TextBlock
             {
-                Text = $"{confidence * 100:F0}%",
+                Text = $"{score * 100:F0}%",
                 FontSize = 14,
                 FontWeight = FontWeight.SemiBold,
                 Foreground = new SolidColorBrush(stateColor),
@@ -1940,7 +1942,7 @@ namespace NudgeTray
                 };
                 scoreStack.Children.Add(new TextBlock
                 {
-                    Text = $"{(latest.Confidence > 0 ? latest.Confidence : latest.Score) * 100:F0}%",
+                    Text = $"{latest.Score * 100:F0}%",
                     FontSize = 15,
                     FontWeight = FontWeight.Bold,
                     Foreground = new SolidColorBrush(mlColor),
@@ -2162,7 +2164,7 @@ namespace NudgeTray
                 {
                     var scoreLabel = new TextBlock
                     {
-                        Text = $"{(ev.Confidence > 0 ? ev.Confidence : ev.Score) * 100:F0}%",
+                        Text = $"{ev.Score * 100:F0}%",
                         FontSize = 9,
                         FontWeight = FontWeight.SemiBold,
                         Foreground = new SolidColorBrush(dotColor)
@@ -2278,7 +2280,7 @@ namespace NudgeTray
                     Color evColor = nev.Confidence < 0.5
                         ? AIStatusLearning
                         : (nev.Productive ? ProductiveGreen : UnproductiveRed);
-                    scoreTb.Text = $"{(nev.Confidence > 0 ? nev.Confidence : nev.Score) * 100:F0}% · {(nev.Productive ? StrProductive : StrNotProductive)}";
+                    scoreTb.Text = $"{nev.Score * 100:F0}% · {(nev.Productive ? StrProductive : StrNotProductive)}";
                     scoreTb.Foreground = new SolidColorBrush(evColor);
 
                     // Position tooltip above the dot, clamped to chart edges
@@ -2449,7 +2451,7 @@ namespace NudgeTray
                         "PoorSignal"    => "unreliable app/window detection",
                         _               => $"suppressed ({evt.SuppressReason})"
                     }
-                    : $"{(evt.Confidence > 0 ? evt.Confidence : evt.Score) * 100:F0}% · {(evt.Productive ? StrProductive : StrNotProductive)}",
+                    : $"{evt.Score * 100:F0}% · {(evt.Productive ? StrProductive : StrNotProductive)}",
                 FontSize = 11,
                 Foreground = new SolidColorBrush(dotColor)
             };
@@ -2574,7 +2576,7 @@ namespace NudgeTray
                 {
                     Text = evt.SuppressReason != null
                         ? "—"
-                        : $"{(evt.Confidence > 0 ? evt.Confidence : evt.Score) * 100:F0}%",
+                        : $"{evt.Score * 100:F0}%",
                     FontSize = 10,
                     Foreground = new SolidColorBrush(evt.SuppressReason != null ? SuppressedColor : TextSecondary),
                     VerticalAlignment = VerticalAlignment.Center
