@@ -682,6 +682,7 @@ namespace NudgeTray
             // AI Brain tab
             if (_aiLiveTab != null)
             {
+                _aiLiveTab.Background = Brushes.Transparent;
                 bool isActive = _aiTabActive;
                 _aiLiveTab.BorderBrush = isActive
                     ? new SolidColorBrush(AIStatusActive)
@@ -720,7 +721,7 @@ namespace NudgeTray
 
             border.Child = textBlock;
 
-            ToolTip.SetTip(border, "Live AI predictions, productivity scores, and ML training status");
+            ToolTip.SetTip(border, "Live AI predictions, confidence scores, and ML training status");
 
             border.PointerPressed += (s, e) =>
             {
@@ -739,8 +740,7 @@ namespace NudgeTray
             };
             border.PointerExited += (s, e) =>
             {
-                if (!_aiTabActive)
-                    border.Background = Brushes.Transparent;
+                border.Background = Brushes.Transparent;
             };
 
             return border;
@@ -1215,7 +1215,7 @@ namespace NudgeTray
 
             var scoreText = new TextBlock
             {
-                Text = $"{score * 100:F0}%",
+                Text = $"{confidence * 100:F0}%",
                 FontSize = 14,
                 FontWeight = FontWeight.SemiBold,
                 Foreground = new SolidColorBrush(stateColor),
@@ -1942,7 +1942,7 @@ namespace NudgeTray
                 };
                 scoreStack.Children.Add(new TextBlock
                 {
-                    Text = $"{latest.Score * 100:F0}%",
+                    Text = $"{(latest.Confidence > 0 ? latest.Confidence : latest.Score) * 100:F0}%",
                     FontSize = 15,
                     FontWeight = FontWeight.Bold,
                     Foreground = new SolidColorBrush(mlColor),
@@ -2164,7 +2164,7 @@ namespace NudgeTray
                 {
                     var scoreLabel = new TextBlock
                     {
-                        Text = $"{ev.Score * 100:F0}%",
+                        Text = $"{(ev.Confidence > 0 ? ev.Confidence : ev.Score) * 100:F0}%",
                         FontSize = 9,
                         FontWeight = FontWeight.SemiBold,
                         Foreground = new SolidColorBrush(dotColor)
@@ -2280,7 +2280,7 @@ namespace NudgeTray
                     Color evColor = nev.Confidence < 0.5
                         ? AIStatusLearning
                         : (nev.Productive ? ProductiveGreen : UnproductiveRed);
-                    scoreTb.Text = $"{nev.Score * 100:F0}% · {(nev.Productive ? StrProductive : StrNotProductive)}";
+                    scoreTb.Text = $"{(nev.Confidence > 0 ? nev.Confidence : nev.Score) * 100:F0}% · {(nev.Productive ? StrProductive : StrNotProductive)}";
                     scoreTb.Foreground = new SolidColorBrush(evColor);
 
                     // Position tooltip above the dot, clamped to chart edges
@@ -2451,7 +2451,7 @@ namespace NudgeTray
                         "PoorSignal"    => "unreliable app/window detection",
                         _               => $"suppressed ({evt.SuppressReason})"
                     }
-                    : $"{evt.Score * 100:F0}% · {(evt.Productive ? StrProductive : StrNotProductive)}",
+                    : $"{(evt.Confidence > 0 ? evt.Confidence : evt.Score) * 100:F0}% · {(evt.Productive ? StrProductive : StrNotProductive)}",
                 FontSize = 11,
                 Foreground = new SolidColorBrush(dotColor)
             };
@@ -2576,7 +2576,7 @@ namespace NudgeTray
                 {
                     Text = evt.SuppressReason != null
                         ? "—"
-                        : $"{evt.Score * 100:F0}%",
+                        : $"{(evt.Confidence > 0 ? evt.Confidence : evt.Score) * 100:F0}%",
                     FontSize = 10,
                     Foreground = new SolidColorBrush(evt.SuppressReason != null ? SuppressedColor : TextSecondary),
                     VerticalAlignment = VerticalAlignment.Center
