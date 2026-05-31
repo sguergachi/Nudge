@@ -1459,6 +1459,13 @@ namespace NudgeTray
 
             // Fusion quality + meeting status on the same line
             var qualityRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+            qualityRow.Children.Add(new Border
+            {
+                Width = 6, Height = 6,
+                CornerRadius = new CornerRadius(3),
+                Background = new SolidColorBrush(fusionColor),
+                VerticalAlignment = VerticalAlignment.Center
+            });
             qualityRow.Children.Add(new TextBlock
             {
                 Text       = qualityLabel,
@@ -1949,16 +1956,7 @@ namespace NudgeTray
             }
 
             // ── Gradient chart ────────────────────────────────────────────────
-            var chartCanvas = BuildGradientChart(events);
-            var chartViewbox = new Viewbox
-            {
-                Child = chartCanvas,
-                Stretch = Stretch.Uniform,
-                StretchDirection = StretchDirection.DownOnly,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                ClipToBounds = false
-            };
-            panel.Children.Add(chartViewbox);
+            panel.Children.Add(BuildGradientChart(events));
 
             return new Border
             {
@@ -1975,7 +1973,7 @@ namespace NudgeTray
         /// <summary>Full-width gradient area chart of prediction history.</summary>
         private static Canvas BuildGradientChart(IReadOnlyList<MLLiveEvent> events)
         {
-            const double W = 326;
+            const double W = 328;
             const double H = 92;
             const double dotR = 3.5;
             const double yPad = dotR + 4;
@@ -2062,7 +2060,7 @@ namespace NudgeTray
             {
                 double xFrac = n == 1 ? 0.5 : (double)i / (n - 1);
                 double x = dotR + xFrac * (W - dotR * 2);
-                double y = yTop + (1.0 - aiEvents[i].Confidence) * yRange;
+                double y = yTop + (1.0 - aiEvents[i].Score) * yRange;
                 pts.Add((x, y, aiEvents[i]));
             }
 
@@ -2140,11 +2138,7 @@ namespace NudgeTray
                         StrokeThickness = 2,
                         Fill = new SolidColorBrush(Color.FromArgb(15, dotColor.R, dotColor.G, dotColor.B))
                     };
-                    // Clamp ring to canvas so it never overflows horizontally
-                    double ringLeft = Math.Max(0, x - r - 4);
-                    double ringWidth = Math.Min((r + 4) * 2, W - ringLeft);
-                    ring.Width = ringWidth;
-                    Canvas.SetLeft(ring, ringLeft);
+                    Canvas.SetLeft(ring, x - r - 4);
                     Canvas.SetTop(ring, y - r - 4);
                     canvas.Children.Add(ring);
                 }
@@ -2169,10 +2163,9 @@ namespace NudgeTray
                         FontWeight = FontWeight.SemiBold,
                         Foreground = new SolidColorBrush(dotColor)
                     };
-                    // Place label above the dot when near bottom of chart, below when near top.
-                    // Clamp horizontal position so it never extends past the canvas edge.
+                    // Place label above the dot when near bottom of chart, below when near top
                     bool nearBottom = y > H * 0.6;
-                    Canvas.SetLeft(scoreLabel, Math.Max(0, Math.Min(x - 10, W - 28)));
+                    Canvas.SetLeft(scoreLabel, x - 10);
                     Canvas.SetTop(scoreLabel, nearBottom ? y - r - 14 : y + r + 3);
                     canvas.Children.Add(scoreLabel);
                 }
@@ -2243,7 +2236,9 @@ namespace NudgeTray
                 Canvas.SetLeft(overlay, 0);
                 Canvas.SetTop(overlay, 0);
 
+                // Tooltip (added after overlay so it renders on top)
                 tipBorder.IsVisible = false;
+                canvas.Children.Add(tipBorder);
 
                 overlay.PointerMoved += (_, e) =>
                 {
@@ -2268,9 +2263,8 @@ namespace NudgeTray
                     }
 
                     var (nearestDot, nr, nx, ny, nev) = dotElements[nearest];
-                    double enlargedR = Math.Min(nr + 2, W - nx);
-                    nearestDot.Width = enlargedR * 2;
-                    nearestDot.Height = enlargedR * 2;
+                    nearestDot.Width = (nr + 2) * 2;
+                    nearestDot.Height = (nr + 2) * 2;
 
                     Canvas.SetLeft(sweepLine, nx);
                     sweepLine.IsVisible = true;
@@ -2302,7 +2296,6 @@ namespace NudgeTray
                 };
 
                 canvas.Children.Add(overlay);
-                canvas.Children.Add(tipBorder);
             }
 
             // ── Time axis ───────────────────────────────────────────────────
@@ -2333,7 +2326,7 @@ namespace NudgeTray
                         FontSize = 8,
                         Foreground = new SolidColorBrush(Color.FromArgb(80, 180, 180, 190))
                     };
-                    Canvas.SetLeft(label, Math.Max(0, Math.Min(x - 10, W - 30)));
+                    Canvas.SetLeft(label, x - 10);
                     Canvas.SetTop(label, yBottom + 3);
                     canvas.Children.Add(label);
 
