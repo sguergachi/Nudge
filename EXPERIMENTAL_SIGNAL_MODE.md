@@ -30,6 +30,31 @@ must be **cached/throttled** off the 100 ms hot path — see §5.
 
 ---
 
+## 0. Guiding constraints (AGENTS.md alignment)
+
+The dual-pipeline is a user requirement, so the goal is not to avoid it but to keep its footprint as
+small as `AGENTS.md` demands (*"delete before adding"*, *"prefer simple over clever"* — the repo has a
+documented history of over-engineering). Every section below is bound by these:
+
+- **Parametrize, don't fork.** The mode is a *parameter*, not a second copy of the code. Thread
+  `(csvPath, headers, modelDir, port, schema)` through the **existing** write/launch/query paths rather
+  than duplicating `WriteCsvRow`, sidecar-start, or `QueryMLModel`. Two forked code paths that drift is
+  exactly the failure mode AGENTS.md warns about.
+- **Minimize new state.** New daemon state should be the **mode flag + the one reputation store** and
+  nothing more — *"prefer locals over fields, parameters over statics."*
+- **Zero-warning build is a hard gate.** Use `StringComparison.Ordinal` / `CultureInfo.InvariantCulture`
+  for all machine strings (reputation JSON keys, CSV columns, feature names — CA1305/CA1310),
+  `CompositeFormat` for any format string used in a loop (CA1863), and `static`/`sealed` where the
+  analyzer asks (CA1822/CA1852).
+- **Never crash on the harvest path.** Every new sensor (§5) and the reputation store must degrade to a
+  safe default (`0` / neutral) on any failure — no exceptions escape the 100 ms tick.
+- **Read polished code before touching it.** The Analytics chart (§12) is animated, hand-tuned code —
+  read it fully and make the minimal Score-vs-Confidence change only.
+- **This doc is scaffolding.** Delete `EXPERIMENTAL_SIGNAL_MODE.md` once the feature lands (or demote it
+  to living architecture notes) so it doesn't become cruft.
+
+---
+
 ## 1. High-level architecture: dual pipelines
 
 ```
@@ -84,9 +109,12 @@ The V4 schema **drops the 7 hardcoded category flags** that cause #125 and **add
 signals**. Identity hashes are kept so the model can still learn per-app/domain patterns implicitly.
 
 Define a parallel schema alongside the existing one — do **not** mutate `FeatureSchema`. Add a sibling,
-e.g. `FeatureSchemaV4` in `NudgeCore.TestableLogic.cs`, with its own `SchemaVersion = 4`,
-`OrderedFeatureNames`, and `ToFeatureDictionary(FeatureVectorV4)`. The daemon selects which schema to
-use from `_experimentalMode`.
+e.g. `FeatureSchemaV4` in `NudgeCore.TestableLogic.cs`, with its own `SchemaVersion = 4` and
+`OrderedFeatureNames`. The daemon selects which schema to use from `_experimentalMode`.
+
+> **Parametrize, don't duplicate (§0):** `ToFeatureDictionary` should be a **single** builder that takes
+> the ordered-name array + the field values, not two near-identical copies. The only V4-specific data is
+> the name list and the 7 extra field reads — keep the mapping logic shared.
 
 ### V4 `OrderedFeatureNames`
 
@@ -145,7 +173,9 @@ compute V4 only when `_experimentalMode` (avoid extra work in the default path).
 - `PlatformConfig.CsvPath` (`NudgeCore.TestableLogic.cs:635`) currently hardcodes `HARVEST.CSV`. Add
   `CsvPathExp` / `ModelDirExp` (or parametrize by mode). The daemon picks the path from `_experimentalMode`.
 - The label-write path (`SaveSnapshot` → `WriteCsvRow`, `nudge.cs:2061-2130`) must write the V4 column
-  set to `HARVEST_EXP.CSV` when experimental. Keep V3 write path unchanged.
+  set to `HARVEST_EXP.CSV` when experimental. **Parametrize the existing writer** with
+  `(path, headers, values)` rather than forking a second `WriteCsvRow`/`SaveSnapshot` — the V3 and V4
+  rows differ only in which columns/path they target (§0).
 - `--csv` positional arg already exists (`ParseNudgeArgs`) — the tray can also just pass the explicit
   path. Prefer deriving from the mode flag for clarity.
 
@@ -166,11 +196,16 @@ Currently hardcoded `false` (`nudge.cs:1635`, `CaptureActivityTick`). Sway alrea
 - **Windows:** compare the foreground window rect to the monitor work area (or `SHQueryUserNotificationState` / fullscreen-detection via `GetWindowRect` vs monitor bounds).
 - This fixes a latent V3 bug too, but **only wire it into the V4 feature** to avoid changing V3 model
   inputs mid-stream (V3 was trained with `fullscreen_flag` always 0). Document this clearly.
+- **Stability (§0):** each platform path must return `false` on any failure (no window, API error,
+  headless) and never throw on the tick. Add at least one xunit/integration check per platform backend.
 
 ### 5b. `audio_playing_flag` — media render output active
 - **Linux:** extend `PipeWireParser.Parse` (`NudgeCore.TestableLogic.cs:1837-1908`) to also detect
   `media.class: "Stream/Output/Audio"` with `state: "running"`, excluding notification/system streams
   (filter by `media.role`/`application.name`). Fallback: `pactl list sink-inputs` → `State: RUNNING`.
+  **Reuse, don't re-poll (§0):** presence detection already shells `pw-dump` each cycle (`nudge.cs:832`).
+  Extract render-stream audio from that **same** `pw-dump` output — do not invoke a second
+  4 s-timeout subprocess.
 - **Windows:** `IAudioMeterInformation::GetPeakValue` on the default render endpoint (peak > threshold
   over the poll window) — reuses the Core Audio COM plumbing already present for capture detection.
 
@@ -346,9 +381,11 @@ already parametrized by `--model-dir` / `--port`. Minimal changes:
   `--csv ~/.nudge/HARVEST_EXP.CSV --model-dir ~/.nudge/model_exp`. Thresholds/hot-reload all carry over.
 
 **Sidecar lifecycle (tray):** `nudge-tray.cs` currently starts the V3 inference server + trainer. Make
-the launch mode-aware: in experimental mode, start the sidecars with the `_exp` dir/port and the V4 CSV;
-in normal mode, the V3 ones. On toggle, stop the running sidecars and start the other set (the daemon
-restart already happens via `RestartHarvestProcess()` — extend it to also restart the Python sidecars).
+the launch mode-aware **by parametrizing the existing start logic** with `(modelDir, port, csvPath)`
+(§0) — not a forked copy: in experimental mode, start the sidecars with the `_exp` dir/port and the V4
+CSV; in normal mode, the V3 ones. On toggle, stop the running sidecars and start the other set (the
+daemon restart already happens via `RestartHarvestProcess()` — extend it to also restart the Python
+sidecars).
 
 ---
 
