@@ -363,6 +363,26 @@ public sealed class NudgeSignalFusionTests
         Assert.NotEqual(CategoryConfidence.Inferred, conf);
     }
 
+    [Fact]
+    public void Classify_BrowserWithUnknownDomain_ReturnsUnknownNotUtility()
+    {
+        // Browsers without a classifiable domain should return Unknown, not Utility.
+        // Utility implies we know the app's purpose; for browsers we don't until we see the site.
+        // Unknown confidence (0.00) also prevents the analytics UI from downgrading signal quality
+        // to "usable" with reason "category unclassified".
+        var (cat, conf) = AppCategoryClassifier.Classify(FakeBrowserId, "", AppCategory.Unknown);
+        Assert.Equal(AppCategory.Unknown, cat);
+        Assert.Equal(CategoryConfidence.Unknown, conf);
+    }
+
+    [Fact]
+    public void Classify_BrowserWithEntertainmentAnchor_ReturnsUnknownNotUtility()
+    {
+        var (cat, conf) = AppCategoryClassifier.Classify(FakeBrowserId, "", AppCategory.Entertainment);
+        Assert.Equal(AppCategory.Unknown, cat);
+        Assert.Equal(CategoryConfidence.Unknown, conf);
+    }
+
     // ── Browser anchor fusion edge cases ──────────────────────────────────────
     // Test that browser anchor fusion only applies for Dev/Creative/Office anchors
     [Fact]
