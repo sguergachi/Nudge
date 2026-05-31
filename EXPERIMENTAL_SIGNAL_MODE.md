@@ -243,23 +243,90 @@ the dropped columns.
 
 ---
 
-## 8. Seed model strategy (deferred — user will retrain)
+## 8. Seed model strategy + retraining runbook
 
-The user will retrain the V4 seed later. The infra must behave correctly **with no V4 model present**:
+The V4 seed is retrained **after** the §9 Python changes land (so `train_model.py` understands the V4
+columns). Until a seed is bundled, the infra must cold-start gracefully.
 
-- **Cold start:** if `~/.nudge/model_exp/productivity_model.joblib` is absent, the inference server reports
-  `model_available: false` (existing behavior, `model_inference.py`), and the daemon falls back to
-  interval-based nudges (existing `MIN_SAMPLES_THRESHOLD` / no-model logic in `nudge.cs`). Verify this
-  path works pointed at an empty `model_exp/`.
-- **No bundled V4 model shipped initially.** `DeployBundledModel()` (`nudge-tray.cs:1476`) stays V3-only.
-  Add a sibling `DeployBundledModelExp()` that is a **no-op until** a `model_exp/` is bundled — leave a
-  TODO and the directory wiring so dropping in a trained model "just works".
-- **When ready to seed:** the agent/user runs the existing pipeline against V4 data:
-  ```
-  python3 train_model.py ~/.nudge/HARVEST_EXP.CSV --model-dir ~/.nudge/model_exp --architecture standard
-  ```
-  `train_model.py` must recognize the V4 columns (§9). Optionally extend `generate_sample_data.py` to
-  emit synthetic V4 rows (with realistic audio/fullscreen/reputation distributions) for a bundled seed.
+### 8.0 Cold-start contract (must hold before any seed exists)
+- If `~/.nudge/model_exp/productivity_model.joblib` is absent, `model_inference.py` returns
+  `model_available: false` and the daemon falls back to interval nudges (existing
+  `MIN_SAMPLES_THRESHOLD` / no-model logic in `nudge.cs`). **Verify** by launching the V4 inference
+  server pointed at an empty `model_exp/` and confirming no crash and interval fallback.
+- `DeployBundledModel()` (`nudge-tray.cs:1476`) stays V3-only. Add a sibling `DeployBundledModelExp()`
+  that no-ops until `NudgeCrossPlatform/model_exp/` exists in the build output, so a future bundled
+  seed "just works" by dropping files in.
+
+### 8.1 Prerequisites
+```bash
+python3 -m pip install scikit-learn joblib numpy pandas   # same deps as the V3 pipeline
+```
+Confirm the §9 change to `train_model.py` is in place: it must define `FEATURE_COLUMNS_V4` and detect
+the V4 column set → `schema_version = 4`. Without it, training silently falls back to V3/V1 detection
+and produces a model with the wrong `feature_order`.
+
+### 8.2 Get V4 training data — pick ONE source
+
+**Option A — real labels (preferred once available).** Run Nudge with Experimental Mode ON and answer
+YES/NO nudges. Rows accrue in `~/.nudge/HARVEST_EXP.CSV` with the V4 columns + `domain_productive_rate`
+etc. already point-in-time correct (§6). Need ≥ ~100 labeled rows for a usable model (≥ ~150 for the
+`standard` architecture; see `_pick_architecture` in `train_model.py`).
+
+**Option B — synthetic seed (for shipping an out-of-box model).** Extend `generate_sample_data.py` to
+emit V4 rows. Encode the *intended* priors via realistic signal distributions, e.g.:
+- passive video → `fullscreen_flag=1`, `audio_playing_flag=1`, `media_session_active_flag=1`,
+  `current_domain_share_300s≈1`, long `focused_since_ms`, low `switch_count_*` → label `unproductive`.
+- doomscrolling → high `switch_count_300s`, high `distinct_domains_300s`, low `current_domain_share`,
+  short `focused_since_ms` → `unproductive`.
+- deep work → long stable focus, high `title_stability_ms`, low switching, `audio_playing_flag`
+  either value → `productive`.
+- unknown/neutral browsing → `domain_productive_rate≈0.5`, `domain_label_count=0` → mixed labels so the
+  model treats "no evidence" as genuinely neutral (the #125 fix).
+```bash
+python3 generate_sample_data.py --schema v4 --out ~/.nudge/HARVEST_EXP.CSV --n 600
+```
+(Flag names are illustrative — match whatever `generate_sample_data.py` exposes after the §9 edit.)
+
+### 8.3 Train
+```bash
+python3 train_model.py ~/.nudge/HARVEST_EXP.CSV \
+  --model-dir ~/.nudge/model_exp \
+  --architecture standard          # or 'auto' to size by sample count
+```
+Outputs into `~/.nudge/model_exp/`: `productivity_model.joblib`, `scaler.json`, `trainer_state.json`,
+`trainer_meta.json`.
+
+### 8.4 Validate the artifact before trusting it
+- **Schema sanity:** `scaler.json` must show `"schema_version": 4` and a `feature_order` array that is
+  **identical (same names, same order)** to `FeatureSchemaV4.OrderedFeatureNames` in C#. A mismatch
+  silently feeds the model wrong columns — this is the #1 failure mode. Add/extend an xunit test that
+  asserts the C# V4 order equals the committed seed's `feature_order`.
+- **Accuracy:** check `accuracy` in `scaler.json`/`trainer_meta.json` (held-out test split). Sanity-check
+  it predicts `unproductive` on a hand-built passive-video feature row and `productive` on a deep-work
+  row (quick `python3 -c` against `model_inference.ProductivityPredictor`, or via the live server).
+- **No leakage:** confirm `domain_productive_rate` values in the CSV are point-in-time (written before
+  the row's own label was applied — §6).
+
+### 8.5 Live deploy (no restart needed)
+The running V4 inference server (`model_inference.py` on :45003) hot-reloads when
+`productivity_model.joblib` mtime changes (10 s poll). For development, training straight into
+`~/.nudge/model_exp/` is picked up automatically. `background_trainer.py` (launched with
+`--csv ~/.nudge/HARVEST_EXP.CSV --model-dir ~/.nudge/model_exp`) will then keep retraining at the 20+
+new-sample threshold.
+
+### 8.6 Bundle a seed into releases (optional, for OOB experience)
+1. Copy the validated `productivity_model.joblib` + `scaler.json` + `trainer_meta.json` into
+   `NudgeCrossPlatform/model_exp/` and commit them (mirrors how `NudgeCrossPlatform/model/` ships the
+   V3 seed; ensure `build.sh`/csproj copy the dir to the output).
+2. Implement `DeployBundledModelExp()` (§8.0) to copy them to `~/.nudge/model_exp/` on first
+   experimental startup, exactly like `DeployBundledModel()`.
+3. Bump the seed's `model_version` in `trainer_meta.json` so the background trainer's versioning stays
+   monotonic.
+
+> **Re-seeding later:** repeat 8.2→8.5. Because V4 is fully isolated, retraining never touches the V3
+> model or `HARVEST.CSV`. To start the V4 history over from scratch, delete `~/.nudge/model_exp/`,
+> `~/.nudge/HARVEST_EXP.CSV`, and `~/.nudge/exp_reputation.json` (wire these into the Settings
+> "Delete" actions per §6).
 
 ---
 
