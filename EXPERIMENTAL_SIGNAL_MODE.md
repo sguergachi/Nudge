@@ -415,6 +415,52 @@ graph already carry `Score`/`Confidence` — no change needed there for the mode
 
 ---
 
+## 11.5 Logging, observability & tuning (iterate / debug / tune)
+
+The whole point of an experimental mode is to **iterate**, so observability is a first-class deliverable,
+not an afterthought. **Reuse the existing infra — do not add a new logging system:** `FileLogger`
+(`Logger.cs`) already tees all daemon + tray stdout to `~/.nudge/nudge.log` (timestamped, ANSI-stripped,
+rotates at 1 MB), and `Dim()` (`nudge.cs:2577`) is the daemon's log helper. The decision loop already
+logs `ML DEFER`, suppression reasons, stats, and `PERF: Monitoring cycle took Xms` (`:1872`).
+
+**Key constraint:** the 1 MB rotation means per-tick verbose logging evicts useful history fast — so gate
+all detail behind an off-by-default flag.
+
+1. **Verbose flag.** Add `--verbose` (or `NUDGE_DEBUG=1`) to `ParseNudgeArgs`, default off. Only when set
+   (and experimental) do we emit per-tick/per-prediction detail. Normal runs stay quiet.
+2. **Per-prediction decision trace (core tuning tool).** On each V4 ML check, log one structured line:
+   app/domain, `score`, decision (reuse `ML TRIGGER`/`SKIP`/`DEFER`), and the *salient* signals —
+   `audio/media/fullscreen/mic` flags, `domain_productive_rate(count)`, and the behavioral summary
+   (`switch_300s`, `domain_share`, `focused_since`). Answers "why did it predict that?" without
+   re-deriving from the CSV. Match the existing `Dim($"  ML …")` style.
+3. **Sensor-health logging (critical, once — not per tick).** On startup and on first failure, log which
+   V4 sensors are **live vs degraded-to-0** (PipeWire present? SMTC/WinRT available? fullscreen backend
+   working?). Without this you cannot tell "`audio_playing_flag` correctly 0" from "audio detection is
+   silently broken on this platform" — the most likely tuning red herring.
+4. **Schema-mismatch guard (the #1 failure mode, §8.4).** On daemon start and on inference-server model
+   load, compare C# `FeatureSchemaV4.OrderedFeatureNames` against the V4 `scaler.json` `feature_order`;
+   log a loud `WARN` (and refuse to trust the model) on any mismatch. Cheap; saves hours of "why is the
+   model nonsense" debugging.
+5. **Reputation auditing.** At verbose level, log each update (`domain X: p/n -> p'/n', rate=r`). Provide a
+   one-shot dump (`--dump-reputation`, or a tray "Export AI Debug" action) — the store is already
+   human-readable JSON, so this is mostly a convenience.
+6. **The V4 CSV is the primary tuning substrate.** `HARVEST_EXP.CSV` already records every feature + label
+   point-in-time (§4/§6); that is the offline analysis/retraining dataset. Confirm **all** new signals are
+   columns so they can be correlated against labels in a notebook.
+7. **Optional shadow logging for A/B tuning (open decision §15).** §1 runs only the active pipeline to save
+   CPU. As a *temporary tuning aid only*, optionally allow a "shadow" run where the V4 model does
+   inference-only (no nudge) alongside V3 and logs both scores for the same tick — so you can compare V3
+   vs V4 decisions on identical input before committing to the switch. Off by default; a deliberate,
+   documented CPU cost.
+8. **Keep PERF honest.** Verify the new sensors keep the cycle within the existing `PERF` budget; under
+   `--verbose`, also log the sensor-poll cost so regressions are visible.
+
+**Privacy (§0):** everything stays in `~/.nudge/` — no telemetry. Verbose traces may include domain/title
+(same locality as the CSV already), which is exactly why they sit behind the off-by-default flag.
+Logging must never throw on the harvest path (`FileLogger` already swallows — keep new call sites cheap).
+
+---
+
 ## 12. Companion task (separately approved): prediction graph → productivity score
 
 Independent of the mode, issue #125's second request: the Analytics graph should plot **productivity
@@ -453,7 +499,7 @@ the same PR or separately.
 | `SettingsWindow.cs` | Experimental toggle card + wire destructive actions to `_exp` artifacts |
 | `nudge-tray.cs` | `_experimentalMode` state, load/save, `StartNudge` arg, `UpdateSettings(experimental)`, mode-aware sidecar launch, `DeployBundledModelExp()` stub |
 | `NudgeCore.TestableLogic.cs` | `NudgeParsedArgs.ExperimentalMode` + parser; `FeatureSchemaV4` + `FeatureVectorV4`; `HarvestHeadersV4`; `CsvPathExp`/`ModelDirExp`; extend `ComputeFeatures` for V4 fields; PipeWire render-stream parse |
-| `nudge.cs` | mode-aware CSV/headers/port/schema; new-sensor polling (audio/media/fullscreen) + cache; reputation load + update on label; `QueryMLModel` V4 routing |
+| `nudge.cs` | mode-aware CSV/headers/port/schema; new-sensor polling (audio/media/fullscreen) + cache; reputation load + update on label; `QueryMLModel` V4 routing; `--verbose` decision trace + sensor-health + schema-mismatch logging (§11.5) |
 | `KWinScripts.cs` | fullscreen reporting (KWin/Wayland) |
 | `DomainReputationStore.cs` *(new)* | reputation store + smoothing |
 | `train_model.py` | `FEATURE_COLUMNS_V4` + detection → `schema_version=4` |
@@ -474,3 +520,6 @@ the same PR or separately.
 4. Reputation prior strength `α=β=2` — tune after seeing real label volume.
 5. Whether to expose the new OS signals in V3 too (this plan: **no** — keep V3 frozen so its trained
    model's inputs don't shift; V4 is where the new signals live).
+6. Shadow logging (§11.5.7): ship the V3-vs-V4 inference-only comparison as a temporary tuning aid, or
+   skip it to honor the "only the active pipeline runs" CPU decision (this plan: optional, off by
+   default — enable only while tuning).
