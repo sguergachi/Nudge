@@ -1956,7 +1956,15 @@ namespace NudgeTray
             }
 
             // ── Gradient chart ────────────────────────────────────────────────
-            panel.Children.Add(BuildGradientChart(events));
+            var chartCanvas = BuildGradientChart(events);
+            var chartViewbox = new Viewbox
+            {
+                Child = chartCanvas,
+                Stretch = Stretch.Uniform,
+                StretchDirection = StretchDirection.DownOnly,
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            panel.Children.Add(chartViewbox);
 
             return new Border
             {
@@ -1973,7 +1981,7 @@ namespace NudgeTray
         /// <summary>Full-width gradient area chart of prediction history.</summary>
         private static Canvas BuildGradientChart(IReadOnlyList<MLLiveEvent> events)
         {
-            const double W = 328;
+            const double W = 326;
             const double H = 92;
             const double dotR = 3.5;
             const double yPad = dotR + 4;
@@ -2060,7 +2068,7 @@ namespace NudgeTray
             {
                 double xFrac = n == 1 ? 0.5 : (double)i / (n - 1);
                 double x = dotR + xFrac * (W - dotR * 2);
-                double y = yTop + (1.0 - aiEvents[i].Score) * yRange;
+                double y = yTop + (1.0 - aiEvents[i].Confidence) * yRange;
                 pts.Add((x, y, aiEvents[i]));
             }
 
