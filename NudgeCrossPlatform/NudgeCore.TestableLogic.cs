@@ -1974,6 +1974,100 @@ internal static class MeetingTitleDetector
     }
 }
 
+// ── Windows CapabilityAccessManager ConsentStore presence ──────────────────────
+//
+// One app's usage record for one capability (microphone/webcam), as read from
+//   {HKCU,HKLM}\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\<cap>\...
+// This is the same registry the OS privacy indicator reads. The registry I/O lives
+// in nudge.cs (Windows-only); this record and ConsentStorePresence hold the pure
+// decision logic so it compiles and is unit-tested cross-platform in CI.
+internal readonly record struct ConsentLeaf(
+    string AppId,           // raw key name: Package Family Name (packaged) or '#'-mangled exe path (NonPackaged)
+    long StartFileTime,     // LastUsedTimeStart (FILETIME); 0 = never started
+    long StopFileTime,      // LastUsedTimeStop  (FILETIME); 0 = still in use
+    bool IsPackaged,        // true: direct ConsentStore child key (PFN); false: under NonPackaged
+    bool ProcessRunning)    // NonPackaged staleness guard: is the owning exe currently running?
+{
+    // In use right now: started and not yet stopped. NonPackaged entries must also have a
+    // live process — Windows occasionally leaves a stale key (Stop never stamped) when an
+    // app is force-killed. Packaged entries are trusted: their key name is a Package Family
+    // Name (e.g. "MSTeams_8wekyb3d8bbwe") which can't be matched to a running process name.
+    public bool IsActive => StartFileTime != 0 && StopFileTime == 0 && (IsPackaged || ProcessRunning);
+
+    public string AppHint => ConsentStorePresence.ExtractAppHint(AppId);
+}
+
+internal static class ConsentStorePresence
+{
+    // Pure decision logic over already-scanned ConsentStore leaves.
+    //
+    // Mic vs. camera asymmetry: a live camera is treated as a meeting regardless of which
+    // app owns it (camera-on during focused work is rare and almost always a video call).
+    // A live mic is only a meeting when the owning app OR the foreground window looks like a
+    // comms app — otherwise it is dictation, a voice memo, a recorder, music, etc., which
+    // must not suppress nudges.
+    public static PresenceState Evaluate(
+        IReadOnlyList<ConsentLeaf> micLeaves,
+        IReadOnlyList<ConsentLeaf> camLeaves,
+        string foregroundProcess,
+        string foregroundTitle)
+    {
+        bool camActive = AnyActive(camLeaves);
+
+        bool micActive = AnyActive(micLeaves);
+        bool meetingMic = micActive && (
+            AnyActiveMeetingApp(micLeaves) ||
+            IsMeetingApp(foregroundProcess) ||
+            MeetingTitleDetector.IsMeetingTitle(foregroundTitle));
+
+        // IsMicActive carries "meeting-relevant mic" so SnapshotGate.InMeeting stays correct;
+        // raw mic-without-meeting (dictation) deliberately does not suppress. Screen sharing
+        // has no reliable public signal on Windows and is left false (the call still
+        // suppresses via the mic/camera meeting signal).
+        return new PresenceState(meetingMic, camActive, false, PresenceSource.WindowsRegistry);
+    }
+
+    private static bool AnyActive(IReadOnlyList<ConsentLeaf> leaves)
+    {
+        foreach (var l in leaves)
+            if (l.IsActive) return true;
+        return false;
+    }
+
+    private static bool AnyActiveMeetingApp(IReadOnlyList<ConsentLeaf> leaves)
+    {
+        foreach (var l in leaves)
+            if (l.IsActive && IsMeetingApp(l.AppHint)) return true;
+        return false;
+    }
+
+    // Substring match against the known comms-app process list, e.g. "MSTeams" → "teams",
+    // "Zoom" → "zoom". Case-insensitive.
+    internal static bool IsMeetingApp(string appHint)
+    {
+        if (string.IsNullOrWhiteSpace(appHint)) return false;
+        foreach (string name in MeetingTitleDetector.ProcessNames)
+            if (appHint.Contains(name, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    // Reduce a ConsentStore key name to a friendly app token for meeting-app matching.
+    //   NonPackaged: "C:#Program Files#Zoom#bin#Zoom.exe" → "Zoom"
+    //   Packaged:    "MSTeams_8wekyb3d8bbwe"              → "MSTeams"
+    internal static string ExtractAppHint(string appId)
+    {
+        if (string.IsNullOrEmpty(appId)) return "";
+        if (appId.Contains('#'))
+        {
+            string leaf = appId[(appId.LastIndexOf('#') + 1)..];
+            if (leaf.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) leaf = leaf[..^4];
+            return leaf;
+        }
+        int us = appId.LastIndexOf('_');
+        return us > 0 ? appId[..us] : appId;
+    }
+}
+
 #if !NUDGE_NOTIFY
 internal static class SuppressionDeduplication
 {

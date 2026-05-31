@@ -1110,361 +1110,237 @@ sealed class Nudge
         public PresenceState GetPresenceState()
         {
 #if WINDOWS
-            // ── Sensor Fusion: weighted scoring from all signal sources ─────────
-            // There is no single Windows API for "is the user in a meeting."
-            // Instead we fuse signals: audio session, registry state, process
-            // scan, and window title — each weighted by reliability.
-            //
-            // Weight  Signal          Rationale
-            // 0.40    audioActive     Real-time audio — most reliable when present
-            // 0.30    camApps         Camera consent — rarely false-positive
-            // 0.20    micApps         Mic consent — can be stale, needs corroboration
-            // 0.10    titleMatches    Window title — contextual but can mislead
-            // 0.10    appRunning      Known meeting app process — weak alone
-            //
-            // Threshold: 0.25 — two weak signals or one strong signal needed
+            // Authoritative presence via the CapabilityAccessManager ConsentStore — the same
+            // registry the OS privacy indicator reads (LastUsedTimeStop == 0 ⇒ in use now).
+            // A background watcher keeps the (relatively expensive) device scan fresh using
+            // RegNotifyChangeKeyValue, so this call just re-classifies the cached scan against
+            // the current foreground window (mic-in-meeting-app vs. dictation).
+            var watcher = _presenceWatcher ??= WindowsPresenceWatcher.Start();
+            if (!watcher.Available)
+                return PresenceState.Unavailable; // pre-1903 / keys missing → fail open
 
-            const double threshold = 0.25;
-            double score = 0;
-            var signals = new System.Text.StringBuilder();
-
-            bool audioActive = false;
-            try { audioActive = HasActiveAudioSession(); } catch { }
-            if (audioActive) { score += 0.40; signals.Append(" audio"); }
-
-            int camApps = 0;
-            try { camApps = TestCapability("webcam"); } catch { }
-            if (camApps > 0) { score += 0.30; signals.Append($" cam({camApps})"); }
-
-            int micApps = 0;
-            try { micApps = TestCapability("microphone"); } catch { }
-            if (micApps > 0) { score += 0.20; signals.Append($" mic({micApps})"); }
-
+            var scan = watcher.Current;
             var (app, title) = GetForegroundAppWithTitle();
-            bool titleMatch = IsMeetingTitle(title);
-            if (titleMatch) { score += 0.10; signals.Append(" title"); }
-
-            bool appRunning = IsMeetingAppRunning();
-            if (appRunning) { score += 0.10; signals.Append(" app"); }
-
-            bool inMeeting = score >= threshold;
-
-            // Diagnostic: when all signals are zero for an extended period, report
-            // which layers failed so users can diagnose silent detection failures.
-            if (score == 0 && appRunning && Environment.TickCount64 - _lastZeroScoreLog > 30_000)
-            {
-                Console.WriteLine($"  ⓘ Presence check: all signals zero despite meeting app running — audio={audioActive} webcam={camApps} mic={micApps} title={titleMatch}");
-                _lastZeroScoreLog = Environment.TickCount64;
-            }
-
-            // Cooldown: hold IN MEETING for 3s after signals drop to prevent flicker
-            // on brief signal gaps (e.g. muting, window focus loss)
-            if (inMeeting)
-                _lastMeetingHit = Environment.TickCount64;
-            else if (Environment.TickCount64 - _lastMeetingHit < 3000)
-                inMeeting = true;
-
-            Console.WriteLine($"  Presence fusion: score={score:F2}/{threshold} → {(inMeeting ? "IN MEETING" : "clear")}{signals}");
-            return new PresenceState(audioActive || micApps > 0, camApps > 0, false, PresenceSource.WindowsRegistry);
+            return ConsentStorePresence.Evaluate(scan.MicLeaves, scan.CamLeaves, app, title);
 #else
             return PresenceState.Unavailable;
 #endif
         }
 
 #if WINDOWS
-        // Meeting detection — graceful degradation across 4 layers:
-        //   L0: IAudioSessionManager2 Core Audio API (capture session enumeration)
-        //   L1: CapabilityAccessManager registry (hardware-level mic/camera consent)
-        //   L2: Running process scan (Teams, Zoom, Discord, etc.)
-        //   L3: Foreground window title keywords + process name
+        private WindowsPresenceWatcher? _presenceWatcher;
 
-        private static bool IsMeetingAppRunning() => MeetingTitleDetector.IsMeetingProcessRunning();
+        // A cached scan of the ConsentStore: the live mic and webcam usage records.
+        internal sealed record ConsentScan(
+            IReadOnlyList<ConsentLeaf> MicLeaves,
+            IReadOnlyList<ConsentLeaf> CamLeaves);
 
-        private static bool IsMeetingTitle(string title) => MeetingTitleDetector.IsMeetingTitle(title);
-
-        // Layer 0: IAudioSessionManager2 — enumerates active audio sessions
-        // on the default capture device. Returns true if any non-system-sounds
-        // capture session is in the Active state (microphone in use by an app).
-
-        private static bool HasActiveAudioSession()
+        // Event-driven CapabilityAccessManager ConsentStore watcher.
+        //
+        // Watches {HKCU,HKLM} × {microphone,webcam} for value changes via
+        // RegNotifyChangeKeyValue and keeps a cached device scan. This replaces the old
+        // 5-second poll that re-enumerated the registry, walked every process, and activated
+        // Core Audio COM on every tick. Detection is now near-instant and idle CPU is ~zero
+        // (a background thread blocked on a wait handle). A periodic rescan — driven by the
+        // existing 5s GetPresenceState cadence — self-heals if a notification is ever missed.
+        internal sealed class WindowsPresenceWatcher : IDisposable
         {
-            try
-            {
-                var mmdeType = Type.GetTypeFromCLSID(new Guid("BCDE0395-E52F-467C-8E3D-C4579291692E"));
-                if (mmdeType == null) return false;
-                var mmde = (IMMDeviceEnumerator)Activator.CreateInstance(mmdeType)!;
-
-                // Check both the console capture device (default mic) and the
-                // communications capture device (e.g. USB headset set as comm device).
-                foreach (var (dataFlow, role) in new[] { (1, 0), (1, 2) }) // eCapture + eConsole, eCapture + eCommunications
-                {
-                    try
-                    {
-                        mmde.GetDefaultAudioEndpoint(dataFlow, role, out var device);
-                        if (device == null) continue;
-
-                        Guid iid = IID_IAudioSessionManager2;
-                        device.Activate(ref iid, 0, IntPtr.Zero, out var obj);
-                        if (obj is not IAudioSessionManager2 mgr) continue;
-
-                        mgr.GetSessionEnumerator(out var enumerator);
-                        if (enumerator == null) continue;
-
-                        enumerator.GetCount(out int count);
-                        for (int i = 0; i < count; i++)
-                        {
-                            enumerator.GetSession(i, out var session);
-                            if (session == null) continue;
-                            session.GetState(out int state);
-                            if (state != 1) continue; // AudioSessionStateActive
-
-                            // Exclude system sounds (notification dings, etc.)
-                            if (session is IAudioSessionControl2 session2)
-                            {
-                                session2.IsSystemSoundsSession(out bool isSystem);
-                                if (isSystem) continue;
-                            }
-
-                            return true;
-                        }
-                    }
-                    catch { }
-                }
-
-                return false;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private static readonly Guid IID_IAudioSessionManager2 = new("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F");
-
-        // ── Core Audio COM interfaces (vtable order matters) ──────────────────
-
-        [ComImport, Guid("A95664D2-9614-4F35-A746-DE8DB63617E6")]
-        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-        private interface IMMDeviceEnumerator
-        {
-            // IUnknown
-            void _VtblGap0_3();
-            int EnumAudioEndpoints(int dataFlow, int dwStateMask, out IntPtr ppDevices);
-            int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice? ppEndpoint);
-            int GetDevice([MarshalAs(UnmanagedType.LPWStr)] string pwstrId, out IMMDevice ppDevice);
-            int RegisterEndpointNotificationCallback(IntPtr pClient);
-            int UnregisterEndpointNotificationCallback(IntPtr pClient);
-        }
-
-        [ComImport, Guid("D666063F-1587-4E43-81F1-B948E807363F")]
-        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-        private interface IMMDevice
-        {
-            void _VtblGap0_3();
-            int Activate(ref Guid iid, uint dwClsCtx, IntPtr pActivationParams,
-                [MarshalAs(UnmanagedType.IUnknown)] out object ppInterface);
-            int OpenPropertyStore(uint stgmAccess, out IntPtr ppProperties);
-            [return: MarshalAs(UnmanagedType.LPWStr)]
-            string GetId();
-            int GetState(out uint pdwState);
-        }
-
-        [ComImport, Guid("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F")]
-        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-        private interface IAudioSessionManager2
-        {
-            // IAudioSessionManager
-            void _VtblGap0_3();
-            int GetAudioSessionControl(ref Guid AudioSessionGuid, uint StreamFlags,
-                out IntPtr SessionControl);
-            int GetSimpleAudioVolume(ref Guid AudioSessionGuid, uint StreamFlags,
-                out IntPtr AudioVolume);
-            // IAudioSessionManager2
-            int GetSessionEnumerator(out IAudioSessionEnumerator? SessionEnum);
-            int RegisterSessionNotification(IntPtr SessionNotification);
-            int UnregisterSessionNotification(IntPtr SessionNotification);
-            int RegisterDuckNotification([MarshalAs(UnmanagedType.LPWStr)] string sessionId,
-                IntPtr duckNotification);
-            int UnregisterDuckNotification(IntPtr duckNotification);
-        }
-
-        [ComImport, Guid("E2F5BB11-0570-40CA-ACDD-3AA01277DEE8")]
-        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-        private interface IAudioSessionEnumerator
-        {
-            void _VtblGap0_3();
-            int GetCount(out int SessionCount);
-            int GetSession(int SessionCount,
-                [MarshalAs(UnmanagedType.IUnknown)] out IAudioSessionControl? Session);
-        }
-
-        [ComImport, Guid("F4B1A599-7266-4319-A8CA-E70ACB11E8CD")]
-        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-        private interface IAudioSessionControl
-        {
-            void _VtblGap0_3();
-            int GetState(out int pRetVal);  // AudioSessionState: 0=Inactive, 1=Active, 2=Expired
-            [return: MarshalAs(UnmanagedType.LPWStr)]
-            string GetDisplayName();
-            int SetDisplayName([MarshalAs(UnmanagedType.LPWStr)] string Value, ref Guid EventContext);
-            [return: MarshalAs(UnmanagedType.LPWStr)]
-            string GetIconPath();
-            int SetIconPath([MarshalAs(UnmanagedType.LPWStr)] string Value, ref Guid EventContext);
-            int GetGroupingParam(out Guid pRetVal);
-            int SetGroupingParam(ref Guid Override, ref Guid EventContext);
-            int RegisterAudioSessionNotification(IntPtr NewNotifications);
-            int UnregisterAudioSessionNotification(IntPtr NewNotifications);
-        }
-
-        [ComImport, Guid("BFB7FF88-7239-4FC9-8FA2-07C950BE9C6D")]
-        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-        private interface IAudioSessionControl2
-        {
-            // IAudioSessionControl vtable
-            void _VtblGap0_3();
-            int _GetStatePlaceholder(out int pRetVal);
-            [return: MarshalAs(UnmanagedType.LPWStr)]
-            string _GetDisplayNamePlaceholder();
-            int _SetDisplayNamePlaceholder([MarshalAs(UnmanagedType.LPWStr)] string Value, ref Guid EventContext);
-            [return: MarshalAs(UnmanagedType.LPWStr)]
-            string _GetIconPathPlaceholder();
-            int _SetIconPathPlaceholder([MarshalAs(UnmanagedType.LPWStr)] string Value, ref Guid EventContext);
-            int _GetGroupingParamPlaceholder(out Guid pRetVal);
-            int _SetGroupingParamPlaceholder(ref Guid Override, ref Guid EventContext);
-            int _RegisterNotificationPlaceholder(IntPtr NewNotifications);
-            int _UnregisterNotificationPlaceholder(IntPtr NewNotifications);
-            // IAudioSessionControl2
-            int GetSessionIdentifier([MarshalAs(UnmanagedType.LPWStr)] out string pRetVal);
-            int GetSessionInstanceIdentifier([MarshalAs(UnmanagedType.LPWStr)] out string pRetVal);
-            int GetProcessId(out uint pRetVal);
-            int IsSystemSoundsSession(out bool pRetVal);
-            int SetDuckingPreference(bool optOut);
-        }
-
-        /// <summary>Counts how many apps have an active mic/camera session,
-        /// filtering out stale registry entries whose process isn't running.</summary>
-        private static int TestCapability(string capability)
-        {
-            const string storePath =
+            private const string StorePath =
                 @"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore";
-            try
-            {
-                using var root = Microsoft.Win32.Registry.CurrentUser.OpenSubKey($@"{storePath}\{capability}");
-                if (root == null) return 0;
-                return CountActiveApps(root, capability);
-            }
-            catch
-            {
-                return 0;
-            }
-        }
+            private const int REG_NOTIFY_CHANGE_LAST_SET = 0x00000004;
+            private const long RescanBackstopMs = 4000;
 
-        private static int CountActiveApps(Microsoft.Win32.RegistryKey root, string capability)
-        {
-            int active = 0;
-            foreach (string name in root.GetSubKeyNames())
+            private readonly List<Microsoft.Win32.RegistryKey> _keys = new();
+            private readonly object _lock = new();
+            private readonly ManualResetEventSlim _stop = new(false);
+            private readonly Thread? _thread;
+            private ConsentScan _scan = new([], []);
+            private long _lastScanTick;
+
+            public bool Available { get; }
+
+            private WindowsPresenceWatcher()
             {
-                if (string.Equals(name, "NonPackaged", StringComparison.OrdinalIgnoreCase))
+                // Open mic + webcam under both hives. KEY_READ already includes KEY_NOTIFY,
+                // so the managed handle can be used directly for change notifications.
+                foreach (var hive in new[] { Microsoft.Win32.Registry.CurrentUser, Microsoft.Win32.Registry.LocalMachine })
                 {
-                    using var nonPkg = root.OpenSubKey(name);
-                    if (nonPkg == null) continue;
-                    foreach (string appPath in nonPkg.GetSubKeyNames())
+                    foreach (var cap in new[] { "microphone", "webcam" })
                     {
-                        using var app = nonPkg.OpenSubKey(appPath);
-                        if (app != null && IsCurrentlyActive(app, appPath, capability))
-                            active++;
+                        try
+                        {
+                            var k = hive.OpenSubKey($@"{StorePath}\{cap}");
+                            if (k != null) _keys.Add(k);
+                        }
+                        catch { }
                     }
                 }
-                else
+
+                Available = _keys.Count > 0;
+                if (!Available) return;
+
+                Rescan(); // initial state, before any notification fires
+                _thread = new Thread(WatchLoop) { IsBackground = true, Name = "NudgePresenceWatcher" };
+                _thread.Start();
+            }
+
+            public static WindowsPresenceWatcher Start() => new();
+
+            public ConsentScan Current
+            {
+                get
                 {
-                    using var sub = root.OpenSubKey(name);
-                    if (sub != null && IsCurrentlyActive(sub, name, capability))
-                        active++;
+                    // Backstop: re-scan if a notification was missed (or never armed).
+                    if (Environment.TickCount64 - Interlocked.Read(ref _lastScanTick) > RescanBackstopMs)
+                        Rescan();
+                    lock (_lock) return _scan;
                 }
             }
-            return active;
-        }
 
-        private static bool IsCurrentlyActive(Microsoft.Win32.RegistryKey key, string appName, string capability)
-        {
-            // Handle both REG_QWORD (long) and REG_DWORD (int) — Windows
-            // occasionally stores these as 32-bit on some builds/configurations.
-            long start = ReadLastUsedTime(key, "LastUsedTimeStart");
-            if (start == 0) return false;
-            long stop = ReadLastUsedTime(key, "LastUsedTimeStop");
-            if (stop != 0) return false;
+            private void WatchLoop()
+            {
+                var events = new AutoResetEvent[_keys.Count];
+                var handles = new WaitHandle[_keys.Count + 1];
+                for (int i = 0; i < _keys.Count; i++)
+                {
+                    events[i] = new AutoResetEvent(false);
+                    handles[i] = events[i];
+                    Arm(_keys[i], events[i]);
+                }
+                handles[^1] = _stop.WaitHandle;
 
-            // Session appears active. Check for staleness: if the app process
-            // isn't running, the registry entry is stale (e.g. the app crashed
-            // or was killed without Windows cleaning up the key).
-            string? exeName = Path.GetFileName(appName);
-            if (!string.IsNullOrEmpty(exeName) && exeName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                try
+                {
+                    while (true)
+                    {
+                        int idx = WaitHandle.WaitAny(handles);
+                        if (idx == handles.Length - 1) break; // stop signalled
+                        Rescan();
+                        Arm(_keys[idx], events[idx]); // notifications are one-shot — re-arm
+                    }
+                }
+                catch { /* watcher thread must never crash the process */ }
+                finally
+                {
+                    foreach (var e in events) e.Dispose();
+                }
+            }
+
+            private static void Arm(Microsoft.Win32.RegistryKey key, AutoResetEvent evt)
             {
                 try
                 {
-                    var procs = System.Diagnostics.Process.GetProcessesByName(
-                        exeName[..^4]); // strip .exe
-                    if (procs.Length == 0)
-                    {
-                        // Process not running — stale registry entry
-                        LogStaleEntry(appName, capability, start);
-                        return false;
-                    }
-                    foreach (var p in procs) p.Dispose();
+                    RegNotifyChangeKeyValue(key.Handle, bWatchSubtree: true,
+                        REG_NOTIFY_CHANGE_LAST_SET, evt.SafeWaitHandle, fAsynchronous: true);
                 }
-                catch
+                catch { }
+            }
+
+            private void Rescan()
+            {
+                var mic = new List<ConsentLeaf>();
+                var cam = new List<ConsentLeaf>();
+                lock (_lock)
                 {
-                    // Can't verify — allow the detection to stand (safe default)
+                    foreach (var key in _keys)
+                    {
+                        // Last path segment of the key name is the capability.
+                        string cap = key.Name[(key.Name.LastIndexOf('\\') + 1)..];
+                        var into = cap.Equals("webcam", StringComparison.OrdinalIgnoreCase) ? cam : mic;
+                        try { ScanCapability(key, into); } catch { }
+                    }
+                    _scan = new ConsentScan(mic, cam);
+                    Interlocked.Exchange(ref _lastScanTick, Environment.TickCount64);
                 }
             }
 
-            // Log periodic presence summary for diagnostics
-            LogActiveApp(appName, capability);
-            return true;
-        }
-
-        private static long ReadLastUsedTime(Microsoft.Win32.RegistryKey key, string valueName)
-        {
-            object? val = key.GetValue(valueName);
-            if (val is long l) return l;
-            if (val is int i) return i;       // REG_DWORD on some builds
-            if (val is uint ui) return ui;     // REG_DWORD unsigned
-            if (val is ulong ul) return (long)ul; // REG_QWORD unsigned
-            return 0;
-        }
-
-        private static readonly HashSet<string> _loggedApps = new(StringComparer.OrdinalIgnoreCase);
-        private static long _lastPresenceLogTick;
-
-        private static void LogActiveApp(string appName, string capability)
-        {
-            long now = Environment.TickCount64;
-            string key = $"{capability}:{appName}";
-            // Log each app no more than once every 60s
-            if (!_loggedApps.Contains(key) && (now - _lastPresenceLogTick) > 60_000)
+            private static void ScanCapability(Microsoft.Win32.RegistryKey root, List<ConsentLeaf> into)
             {
-                Console.WriteLine($"  ⓘ Presence: {capability} active — {appName}");
-                _loggedApps.Add(key);
-                _lastPresenceLogTick = now;
+                foreach (string name in root.GetSubKeyNames())
+                {
+                    if (string.Equals(name, "NonPackaged", StringComparison.OrdinalIgnoreCase))
+                    {
+                        using var nonPkg = root.OpenSubKey(name);
+                        if (nonPkg == null) continue;
+                        foreach (string appPath in nonPkg.GetSubKeyNames())
+                        {
+                            using var app = nonPkg.OpenSubKey(appPath);
+                            if (app != null) into.Add(ReadLeaf(app, appPath, packaged: false));
+                        }
+                    }
+                    else
+                    {
+                        using var sub = root.OpenSubKey(name);
+                        if (sub != null) into.Add(ReadLeaf(sub, name, packaged: true));
+                    }
+                }
             }
-            else if (_loggedApps.Count > 0 && (now - _lastPresenceLogTick) > 300_000)
-            {
-                _loggedApps.Clear();
-            }
-        }
 
-        private static void LogStaleEntry(string appName, string capability, long startFileTime)
-        {
-            try
+            private static ConsentLeaf ReadLeaf(Microsoft.Win32.RegistryKey key, string appId, bool packaged)
             {
-                var age = DateTime.UtcNow - DateTime.FromFileTimeUtc(startFileTime);
-                Console.WriteLine($"  ⚠ Stale {capability} entry (process not running): {appName} — active since {age.TotalMinutes:F0} min ago, ignoring");
+                long start = ReadFileTime(key, "LastUsedTimeStart");
+                long stop = ReadFileTime(key, "LastUsedTimeStop");
+                // Staleness guard only for NonPackaged entries (their key name is the exe
+                // path). Packaged Package-Family-Name keys don't map to a process name, so
+                // they're trusted — checking would false-negative every Store app (new Teams).
+                bool running = packaged || start == 0 || stop != 0 || IsProcessRunning(appId);
+                return new ConsentLeaf(appId, start, stop, packaged, running);
             }
-            catch { }
+
+            private static bool IsProcessRunning(string appPath)
+            {
+                string? exe = Path.GetFileName(appPath);
+                if (string.IsNullOrEmpty(exe) || !exe.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                    return true; // can't verify → keep the signal (safe default)
+                try
+                {
+                    var procs = System.Diagnostics.Process.GetProcessesByName(exe[..^4]);
+                    bool any = procs.Length > 0;
+                    foreach (var p in procs) p.Dispose();
+                    return any;
+                }
+                catch { return true; }
+            }
+
+            // Handle REG_QWORD (long) and REG_DWORD (int) — Windows stores these as 32-bit
+            // on some builds. Missing value reads as 0 (treated as "still in use" by the
+            // start!=0 && stop==0 rule).
+            private static long ReadFileTime(Microsoft.Win32.RegistryKey key, string valueName) =>
+                key.GetValue(valueName) switch
+                {
+                    long l => l,
+                    int i => i,
+                    uint ui => ui,
+                    ulong ul => (long)ul,
+                    _ => 0
+                };
+
+            public void Dispose()
+            {
+                _stop.Set();
+                try { _thread?.Join(1000); } catch { }
+                lock (_lock)
+                {
+                    foreach (var k in _keys) k.Dispose();
+                    _keys.Clear();
+                }
+                _stop.Dispose();
+            }
+
+            [DllImport("advapi32.dll", SetLastError = true)]
+            private static extern int RegNotifyChangeKeyValue(
+                Microsoft.Win32.SafeHandles.SafeRegistryHandle hKey,
+                bool bWatchSubtree, int dwNotifyFilter,
+                Microsoft.Win32.SafeHandles.SafeWaitHandle hEvent, bool fAsynchronous);
         }
 #endif
 
-        public void Dispose() { }
+        public void Dispose()
+        {
+#if WINDOWS
+            _presenceWatcher?.Dispose();
+#endif
+        }
 
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
@@ -1500,10 +1376,6 @@ sealed class Nudge
     static bool _meetingSuppression = true;
     static PresenceState _cachedPresenceState = PresenceState.Unavailable;
     static int _presenceCheckElapsed;
-#if WINDOWS
-    static long _lastMeetingHit;
-    static long _lastZeroScoreLog;
-#endif
 
     // Activity tracking
     static string _currentApp = "";
