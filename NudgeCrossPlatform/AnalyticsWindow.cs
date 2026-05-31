@@ -1398,12 +1398,7 @@ namespace NudgeTray
                 ? BrowserDetector.GetBrowserDisplayName(currentApp) ?? currentApp
                 : "";
 
-            // Effective quality blends Harvest Engine signal quality with category confidence.
-            // A trusted signal is downgraded to Usable when the app category is too uncertain
-            // (conf < 0.45 means Fallback or Unknown — we genuinely don't know what the app is).
             string effectiveQuality = harvest?.Quality ?? "";
-            if (effectiveQuality == "trusted" && harvest != null && harvest.CategoryConf < 0.45f && !string.IsNullOrEmpty(harvest.Category))
-                effectiveQuality = "usable";
 
             Color fusionColor = harvest == null         ? TextTertiary
                 : effectiveQuality == "trusted"         ? ProductiveGreen
@@ -1622,10 +1617,6 @@ namespace NudgeTray
         private static string ComputeQualityReason(HarvestSignal harvest, string effectiveQuality)
         {
             if (effectiveQuality == "trusted") return "";
-
-            // Downgraded from trusted because category is unclassified
-            if (harvest.Quality == "trusted" && effectiveQuality == "usable")
-                return "category unclassified";
 
             if (effectiveQuality == "poor")
             {
@@ -2523,11 +2514,10 @@ namespace NudgeTray
                 };
                 Grid.SetColumn(timeText, 0);
 
-                // Trigger source (⏸ = suppressed, INT = interval, AI = ML)
+                // Trigger source (INT = interval, AI = ML)
                 var sourceText = new TextBlock
                 {
-                    Text = evt.SuppressReason != null ? "⏸"
-                         : evt.TriggerSource == "int" ? "INT" : "AI",
+                    Text = evt.TriggerSource == "ai" ? "AI" : "INT",
                     FontSize = 10,
                     FontWeight = FontWeight.Medium,
                     Foreground = new SolidColorBrush(evt.SuppressReason != null
@@ -2612,11 +2602,12 @@ namespace NudgeTray
                 };
                 Grid.SetColumn(actionText, 4);
 
-                // Response icon (✓ = correct, ✗ = wrong, ⏸ = skipped, empty for suppressed)
+                // Response icon (✓ = correct, ✗ = wrong, ⏸ = skipped/suppressed)
                 var respText = new TextBlock
                 {
                     Text = evt.AiCorrect == true ? "✓"
                          : evt.AiCorrect == false ? "✗"
+                         : evt.SuppressReason != null ? "⏸"
                          : evt.Triggered ? "⏸"
                          : "",
                     FontSize = 11,
@@ -2624,6 +2615,7 @@ namespace NudgeTray
                     Foreground = new SolidColorBrush(
                         evt.AiCorrect == true ? ProductiveGreen
                         : evt.AiCorrect == false ? UnproductiveRed
+                        : evt.SuppressReason != null ? SuppressedColor
                         : evt.Triggered ? AIStatusInactive
                         : Colors.Transparent),
                     HorizontalAlignment = HorizontalAlignment.Center,

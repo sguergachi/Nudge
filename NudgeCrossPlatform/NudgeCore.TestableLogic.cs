@@ -223,7 +223,7 @@ internal sealed class ActivityFeatureTracker
         if (_titleSince == DateTime.MinValue || !string.Equals(title, _lastTitle, StringComparison.Ordinal))
             _titleSince = now;
 
-        var signalQuality = DetermineSignalQuality(window, appId, title);
+        var signalQuality = DetermineSignalQuality(window, appId, title, domain);
         // Override to poor if the user is afk (idle > AfkThresholdMs)
         if (idle.IdleMs >= AfkThresholdMs)
         {
@@ -388,7 +388,7 @@ internal sealed class ActivityFeatureTracker
         return true;
     }
 
-    private static SignalQuality DetermineSignalQuality(WindowObservation window, string appId, string title)
+    private static SignalQuality DetermineSignalQuality(WindowObservation window, string appId, string title, string domain)
     {
         if (string.IsNullOrWhiteSpace(appId) || string.Equals(appId, "unknown", StringComparison.OrdinalIgnoreCase))
             return SignalQuality.Poor;
@@ -396,8 +396,14 @@ internal sealed class ActivityFeatureTracker
         if (window.FocusSource is FocusSource.Unknown or FocusSource.HeuristicProcessScan)
             return SignalQuality.Poor;
 
-        if (window.CatalogDisagrees || (BrowserDetector.IsBrowser(appId) && string.IsNullOrWhiteSpace(title)))
+        if (window.CatalogDisagrees)
             return SignalQuality.Usable;
+
+        if (BrowserDetector.IsBrowser(appId))
+        {
+            if (string.IsNullOrWhiteSpace(title) || string.IsNullOrEmpty(domain))
+                return SignalQuality.Usable;
+        }
 
         return SignalQuality.Trusted;
     }

@@ -126,7 +126,7 @@ namespace NudgeTray
             {
                 Text = StrPinIcon,
                 FontSize = 16,
-                FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                FontFamily = AnalyticsWindow.MdiFont,
                 Foreground = new SolidColorBrush(TextSecondary),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -141,7 +141,7 @@ namespace NudgeTray
                 Topmost = _isPinned;
                 if (_pinIcon != null)
                 {
-                    _pinIcon.Text = _isPinned ? "\uE77A" : StrPinIcon;
+                    _pinIcon.Text = _isPinned ? "\U000F0403" : StrPinIcon; // mdi pin / mdi pin-off
                     _pinIcon.Foreground = _isPinned
                         ? new SolidColorBrush(PrimaryBlue)
                         : new SolidColorBrush(TextSecondary);
@@ -171,10 +171,10 @@ namespace NudgeTray
 
             var closeIcon = new TextBlock
             {
-                Text = "\uE10A",
+                Text = "\U000F0156", // mdi close
                 FontSize = 16,
                 FontWeight = FontWeight.Normal,
-                FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                FontFamily = AnalyticsWindow.MdiFont,
                 Foreground = new SolidColorBrush(TextSecondary),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
