@@ -80,10 +80,10 @@ Every snapshot (ML or interval) passes through `SnapshotGate.Evaluate()` before 
 |--------|-----------|
 | `Afk` | `AfkFlag == 1` (idle > 60s) |
 | `PoorSignal` | `SignalQuality == Poor` (unknown app, process scan, etc.) |
-| `InMeeting` | Mic/camera active (Core Audio API, PipeWire, PulseAudio, Windows Registry, or app scan) |
+| `InMeeting` | Mic/camera active (Core Audio API, PipeWire, PulseAudio, Windows Registry, process scan) |
 | `ScreenSharing` | PipeWire screen-cast stream active |
 
-Presence detection (`GetPresenceState()`) uses graceful degradation across 3 layers on each platform. Linux: PipeWire (`pw-dump`) → PulseAudio (`pactl`). Windows uses a 4-layer approach:
+Presence detection (`GetPresenceState()`) uses graceful degradation across 3 layers on each platform. Linux: PipeWire (`pw-dump`) → PulseAudio (`pactl`) → Process scan (`IsMeetingProcessRunning()`). Windows uses a 4-layer approach:
 
 0. **IAudioSessionManager2 Core Audio API** — directly queries the audio subsystem for active capture sessions. Catches ALL mic usage including WASAPI exclusive mode, virtual devices, and apps that bypass the consent store. Most reliable layer.
 1. **CapabilityAccessManager registry** (`ConsentStore\microphone`, `ConsentStore\webcam`) — hardware-level mic/camera detection. Handles both `REG_QWORD` and `REG_DWORD` value types. Stale entries (process not running) are filtered out.
