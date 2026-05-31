@@ -251,6 +251,26 @@ public sealed class NudgePredictionHistoryTests
         Assert.Equal(0.3, filtered[1].Score);
         Assert.Equal(0.9, filtered[2].Score);
     }
+
+    [Fact]
+    public void FilterToAiOnly_SuppressedAiEvents_Excluded()
+    {
+        // Suppressed events from HandleSuppress default TriggerSource="ai" with Score=0.
+        // These must be excluded from the chart to prevent artificial zig-zags.
+        var events = new List<MLLiveEvent>
+        {
+            new MLLiveEvent { TriggerSource = "ai",  Score = 0.9 },
+            new MLLiveEvent { TriggerSource = "ai",  Score = 0.0, SuppressReason = "InMeeting" },
+            new MLLiveEvent { TriggerSource = "ai",  Score = 0.7 },
+            new MLLiveEvent { TriggerSource = "ai",  Score = 0.0, SuppressReason = "PoorSignal" },
+        };
+
+        var filtered = PredictionChartHelper.FilterToAiOnly(events);
+
+        Assert.Equal(2, filtered.Count);
+        Assert.Equal(0.9, filtered[0].Score);
+        Assert.Equal(0.7, filtered[1].Score);
+    }
 }
 
 /// <summary>

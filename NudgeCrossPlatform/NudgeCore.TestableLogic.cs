@@ -1955,7 +1955,7 @@ internal static class PredictionChartHelper
     {
         var result = new List<MLLiveEvent>(events.Count);
         foreach (var e in events)
-            if (e.TriggerSource == "ai") result.Add(e);
+            if (e.TriggerSource == "ai" && e.SuppressReason is null) result.Add(e);
         return result;
     }
 }
