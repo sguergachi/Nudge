@@ -1459,13 +1459,6 @@ namespace NudgeTray
 
             // Fusion quality + meeting status on the same line
             var qualityRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
-            qualityRow.Children.Add(new Border
-            {
-                Width = 6, Height = 6,
-                CornerRadius = new CornerRadius(3),
-                Background = new SolidColorBrush(fusionColor),
-                VerticalAlignment = VerticalAlignment.Center
-            });
             qualityRow.Children.Add(new TextBlock
             {
                 Text       = qualityLabel,
