@@ -49,7 +49,7 @@ namespace NudgeTray
     sealed class Program
     {
         const int UDP_PORT = 45001;
-        const string VERSION = "1.9.1";
+        const string VERSION = "1.9.2";
         const string NudgeExeName = "nudge";
         const string NudgeDllName = "nudge.dll";
         const int TRAINER_CHECK_INTERVAL_SEC = 15;

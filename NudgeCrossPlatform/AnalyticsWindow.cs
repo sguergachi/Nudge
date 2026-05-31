@@ -764,7 +764,11 @@ namespace NudgeTray
             panel.Children.Add(focusCard);
 
             // ── Prediction History (countdown + score + chart merged) ─────────────
-            var predSection = CreatePredictionHistorySection(events, latest);
+            var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var recentEvents = events
+                .Where(e => now - e.T <= 5 * 3600)
+                .ToList();
+            var predSection = CreatePredictionHistorySection(recentEvents, latest);
             predSection.Tag = "ai_prediction_section";
             panel.Children.Add(predSection);
 
@@ -2303,6 +2307,8 @@ namespace NudgeTray
             {
                 var firstDt = DateTimeOffset.FromUnixTimeSeconds(aiEvents[0].T).LocalDateTime;
                 var lastDt  = DateTimeOffset.FromUnixTimeSeconds(aiEvents[^1].T).LocalDateTime;
+                double totalSec = Math.Max(1, (lastDt - firstDt).TotalSeconds);
+                double timeW = W - dotR * 2;
 
                 // Thin horizontal separator
                 var baseline = new Border
@@ -2314,27 +2320,36 @@ namespace NudgeTray
                 Canvas.SetTop(baseline, yBottom);
                 canvas.Children.Add(baseline);
 
-                // First label — left-aligned near start
-                canvas.Children.Add(new TextBlock
-                {
-                    Text = firstDt.ToString("h tt", CultureInfo.InvariantCulture),
-                    FontSize = 7,
-                    Foreground = new SolidColorBrush(Color.FromArgb(40, 180, 180, 190))
-                });
-                Canvas.SetLeft(canvas.Children[^1], dotR + 2);
-                Canvas.SetTop(canvas.Children[^1], yBottom + 4);
+                // Hourly ticks (≤5hr window → at most 6 labels)
+                var hourStart = new DateTime(firstDt.Year, firstDt.Month, firstDt.Day,
+                    firstDt.Hour, 0, 0);
+                if (hourStart < firstDt) hourStart = hourStart.AddHours(1);
 
-                // Last label — right-aligned near end
-                var endLabel = new TextBlock
+                for (var t = hourStart; t <= lastDt; t = t.AddHours(1))
                 {
-                    Text = lastDt.ToString("h tt", CultureInfo.InvariantCulture),
-                    FontSize = 7,
-                    Foreground = new SolidColorBrush(Color.FromArgb(40, 180, 180, 190))
-                };
-                // Rough estimate: ~7px per char, so "12 PM" ≈ 28px offset from right edge
-                Canvas.SetLeft(endLabel, W - dotR - 28);
-                Canvas.SetTop(endLabel, yBottom + 4);
-                canvas.Children.Add(endLabel);
+                    double frac = (t - firstDt).TotalSeconds / totalSec;
+                    double x = dotR + frac * timeW;
+                    if (x < dotR + 8 || x > W - dotR - 8) continue;
+
+                    var tick = new Border
+                    {
+                        Width = 1, Height = 3,
+                        Background = new SolidColorBrush(Color.FromArgb(35, 180, 180, 190))
+                    };
+                    Canvas.SetLeft(tick, x);
+                    Canvas.SetTop(tick, yBottom + 1);
+                    canvas.Children.Add(tick);
+
+                    var label = new TextBlock
+                    {
+                        Text = t.ToString("h tt", CultureInfo.InvariantCulture),
+                        FontSize = 7,
+                        Foreground = new SolidColorBrush(Color.FromArgb(40, 180, 180, 190))
+                    };
+                    Canvas.SetLeft(label, x - 10);
+                    Canvas.SetTop(label, yBottom + 4);
+                    canvas.Children.Add(label);
+                }
             }
 
 
