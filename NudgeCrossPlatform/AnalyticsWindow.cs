@@ -1955,7 +1955,8 @@ namespace NudgeTray
                 Child = chartCanvas,
                 Stretch = Stretch.Uniform,
                 StretchDirection = StretchDirection.DownOnly,
-                HorizontalAlignment = HorizontalAlignment.Stretch
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                ClipToBounds = false
             };
             panel.Children.Add(chartViewbox);
 
@@ -2242,9 +2243,7 @@ namespace NudgeTray
                 Canvas.SetLeft(overlay, 0);
                 Canvas.SetTop(overlay, 0);
 
-                // Tooltip (added after overlay so it renders on top)
                 tipBorder.IsVisible = false;
-                canvas.Children.Add(tipBorder);
 
                 overlay.PointerMoved += (_, e) =>
                 {
@@ -2303,6 +2302,7 @@ namespace NudgeTray
                 };
 
                 canvas.Children.Add(overlay);
+                canvas.Children.Add(tipBorder);
             }
 
             // ── Time axis ───────────────────────────────────────────────────
