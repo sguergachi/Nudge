@@ -2299,7 +2299,68 @@ namespace NudgeTray
             }
 
             // ── Time axis ───────────────────────────────────────────────────
-            // Removed — rendered as fat grey bar due to label/text overlap rendering bug
+            if (aiEvents.Count >= 2)
+            {
+                var firstDt = DateTimeOffset.FromUnixTimeSeconds(aiEvents[0].T).LocalDateTime;
+                var lastDt  = DateTimeOffset.FromUnixTimeSeconds(aiEvents[^1].T).LocalDateTime;
+                double totalSec = Math.Max(1, (lastDt - firstDt).TotalSeconds);
+                double spanHours = totalSec / 3600.0;
+
+                // Auto-adjust step size to keep labels uncrowded (max ~1 per 50px)
+                int stepHours = 1;
+                double timeW = W - dotR * 2;
+                double estLabels = spanHours / stepHours;
+                while (estLabels > timeW / 50 && stepHours < 24)
+                {
+                    stepHours = stepHours < 6 ? stepHours + 1 : stepHours + 6;
+                    estLabels = spanHours / stepHours;
+                }
+
+                var start = new DateTime(firstDt.Year, firstDt.Month, firstDt.Day,
+                    firstDt.Hour - (firstDt.Hour % stepHours), 0, 0);
+                if (start < firstDt) start = start.AddHours(stepHours);
+
+                // Thin horizontal separator
+                var baseline = new Border
+                {
+                    Width = W, Height = 1,
+                    Background = new SolidColorBrush(Color.FromArgb(25, 180, 180, 190))
+                };
+                Canvas.SetLeft(baseline, 0);
+                Canvas.SetTop(baseline, yBottom);
+                canvas.Children.Add(baseline);
+
+                for (var t = start; t <= lastDt; t = t.AddHours(stepHours))
+                {
+                    double frac = (t - firstDt).TotalSeconds / totalSec;
+                    double x = dotR + frac * timeW;
+
+                    // Skip ticks/labels within 12px of canvas edges
+                    if (x < 12 || x > W - 12) continue;
+
+                    // Tick mark
+                    var tick = new Border
+                    {
+                        Width = 1, Height = 4,
+                        Background = new SolidColorBrush(Color.FromArgb(40, 180, 180, 190))
+                    };
+                    Canvas.SetLeft(tick, x);
+                    Canvas.SetTop(tick, yBottom + 2);
+                    canvas.Children.Add(tick);
+
+                    // Label — measure first for centered placement
+                    var label = new TextBlock
+                    {
+                        Text = t.ToString("h tt", CultureInfo.InvariantCulture),
+                        FontSize = 7,
+                        Foreground = new SolidColorBrush(Color.FromArgb(40, 180, 180, 190))
+                    };
+                    label.Measure(Size.Infinity);
+                    Canvas.SetLeft(label, x - label.DesiredSize.Width / 2);
+                    Canvas.SetTop(label, yBottom + 6);
+                    canvas.Children.Add(label);
+                }
+            }
 
 
             return canvas;
