@@ -1395,10 +1395,12 @@ namespace NudgeTray
             // Effective quality blends Harvest Engine signal quality with category confidence.
             // A trusted signal is downgraded to Usable when category confidence is too low
             // (conf < 0.45 means Fallback — we genuinely don't know what the app is).
-            // Browsers without a known domain return Utility at Semantic confidence (0.75),
-            // so they are never downgraded — signal stays Trusted with a Utility badge.
+            // Browsers are exempt: for browsers the category uncertainty is about the site,
+            // not the app — DetermineSignalQuality already handles browser-specific degradation
+            // (Usable when title is empty). A second downgrade here would be double-counting.
             string effectiveQuality = harvest?.Quality ?? "";
-            if (effectiveQuality == "trusted" && harvest != null && harvest.CategoryConf < 0.45f && !string.IsNullOrEmpty(harvest.Category))
+            if (effectiveQuality == "trusted" && harvest != null && harvest.CategoryConf < 0.45f
+                    && !string.IsNullOrEmpty(harvest.Category) && harvest.Browser == 0)
                 effectiveQuality = "usable";
 
             Color fusionColor = harvest == null         ? TextTertiary

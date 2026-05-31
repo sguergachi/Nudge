@@ -364,23 +364,23 @@ public sealed class NudgeSignalFusionTests
     }
 
     [Fact]
-    public void Classify_BrowserWithUnknownDomain_ReturnsUtilityAtSemanticConfidence()
+    public void Classify_BrowserWithUnknownDomain_ReturnsUtilityFallback()
     {
-        // Browsers are Utility — we know this via process-name detection (same basis as a
-        // semantic keyword match). Semantic confidence (0.75) keeps signal quality Trusted.
+        // Browsers with no classifiable domain fall back to Utility/Fallback in the classifier.
+        // Signal quality is NOT downgraded by this — the analytics layer exempts browsers
+        // from the category-confidence downgrade (harvest.Browser == 0 guard).
         var (cat, conf) = AppCategoryClassifier.Classify(FakeBrowserId, "", AppCategory.Unknown);
         Assert.Equal(AppCategory.Utility, cat);
-        Assert.Equal(CategoryConfidence.Semantic, conf);
-        Assert.True(AppCategoryClassifier.GetConfidenceScore(conf) >= 0.45f);
+        Assert.Equal(CategoryConfidence.Fallback, conf);
     }
 
     [Fact]
-    public void Classify_BrowserWithUnclassifiedAnchor_ReturnsUtilityNotFallback()
+    public void Classify_BrowserWithUnclassifiedAnchor_ReturnsUtilityFallback()
     {
-        // Entertainment anchor must not transfer, but browser should still be Utility/Semantic.
+        // Entertainment anchor must not transfer; browser gets Utility/Fallback.
         var (cat, conf) = AppCategoryClassifier.Classify(FakeBrowserId, "", AppCategory.Entertainment);
         Assert.Equal(AppCategory.Utility, cat);
-        Assert.Equal(CategoryConfidence.Semantic, conf);
+        Assert.Equal(CategoryConfidence.Fallback, conf);
     }
 
     // ── Browser anchor fusion edge cases ──────────────────────────────────────
