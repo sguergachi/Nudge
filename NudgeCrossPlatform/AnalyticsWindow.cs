@@ -2306,19 +2306,20 @@ namespace NudgeTray
                 double totalSec = Math.Max(1, (lastDt - firstDt).TotalSeconds);
                 double spanHours = totalSec / 3600.0;
 
-                // Auto-adjust step size to keep labels uncrowded (max ~1 per 50px)
+                // Pick step size so we get at most 4 labels
+                int[] steps = { 1, 2, 3, 6, 8, 12, 24 };
                 int stepHours = 1;
-                double timeW = W - dotR * 2;
-                double estLabels = spanHours / stepHours;
-                while (estLabels > timeW / 50 && stepHours < 24)
+                foreach (int s in steps)
                 {
-                    stepHours = stepHours < 6 ? stepHours + 1 : stepHours + 6;
-                    estLabels = spanHours / stepHours;
+                    stepHours = s;
+                    if (spanHours / s <= 4) break;
                 }
 
                 var start = new DateTime(firstDt.Year, firstDt.Month, firstDt.Day,
                     firstDt.Hour - (firstDt.Hour % stepHours), 0, 0);
                 if (start < firstDt) start = start.AddHours(stepHours);
+
+                double timeW = W - dotR * 2;
 
                 // Thin horizontal separator
                 var baseline = new Border
@@ -2335,8 +2336,8 @@ namespace NudgeTray
                     double frac = (t - firstDt).TotalSeconds / totalSec;
                     double x = dotR + frac * timeW;
 
-                    // Skip ticks/labels within 12px of canvas edges
-                    if (x < 12 || x > W - 12) continue;
+                    // Skip labels within 16px of edges
+                    if (x < 16 || x > W - 16) continue;
 
                     // Tick mark
                     var tick = new Border
