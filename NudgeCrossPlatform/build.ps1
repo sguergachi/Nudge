@@ -21,6 +21,12 @@ $DotnetMajorRequired = 10
 $MainTfm = "net10.0"
 $WindowsTfm = "net10.0-windows10.0.17763.0"
 
+# Bundled Python runtime (python-build-standalone)
+$PythonRuntimeVersion = "3.11.15"
+$PythonRuntimeDate = "20260510"
+$PythonRuntimeBaseUrl = "https://github.com/astral-sh/python-build-standalone/releases/download/${PythonRuntimeDate}"
+$PythonRuntimeDir = "python-runtime"
+
 function Write-Success { param([string]$Message) Write-Host $Message -ForegroundColor Green }
 function Write-Info { param([string]$Message) Write-Host $Message -ForegroundColor Cyan }
 function Write-Warn { param([string]$Message) Write-Host $Message -ForegroundColor Yellow }
@@ -224,6 +230,54 @@ function Install-PythonDeps {
     Write-Success "[OK] Python dependencies checked"
 }
 
+function Bundle-PythonRuntime {
+    param([string]$Rid)
+    if (Test-Path "$PythonRuntimeDir/bin/python3") {
+        Write-Host "  Bundled Python runtime already present, skipping download." -ForegroundColor DarkGray
+        return
+    }
+    if (Test-Path "$PythonRuntimeDir/python.exe") {
+        Write-Host "  Bundled Python runtime already present, skipping download." -ForegroundColor DarkGray
+        return
+    }
+    $url = if ($Rid -eq "win-x64") {
+        "${PythonRuntimeBaseUrl}/cpython-${PythonRuntimeVersion}+${PythonRuntimeDate}-x86_64-pc-windows-msvc-install_only.tar.gz"
+    } else {
+        "${PythonRuntimeBaseUrl}/cpython-${PythonRuntimeVersion}+${PythonRuntimeDate}-x86_64-unknown-linux-gnu-install_only.tar.gz"
+    }
+    Write-Info "Downloading bundled Python runtime for $Rid..."
+    Write-Host "  $url" -ForegroundColor DarkGray
+    $tmpTar = Join-Path $env:TEMP "nudge-python-runtime.tar.gz"
+    Invoke-WebRequest -Uri $url -OutFile $tmpTar -UseBasicParsing
+    New-Item -ItemType Directory -Force -Path $PythonRuntimeDir | Out-Null
+    tar -xzf $tmpTar --strip-components=1 -C $PythonRuntimeDir
+    Remove-Item $tmpTar -Force
+    Write-Success "[OK] Bundled Python runtime ready"
+}
+
+function Bundle-PythonRuntimeForDist {
+    param([string]$Rid, [string]$DestDir)
+    $runtimeDest = Join-Path $DestDir "python-runtime"
+    # Skip if already present in dest
+    if ((Test-Path "$runtimeDest/bin/python3") -or (Test-Path "$runtimeDest/python.exe")) {
+        Write-Host "  Bundled Python already in $DestDir, skipping." -ForegroundColor DarkGray
+        return
+    }
+    $url = if ($Rid -eq "win-x64") {
+        "${PythonRuntimeBaseUrl}/cpython-${PythonRuntimeVersion}+${PythonRuntimeDate}-x86_64-pc-windows-msvc-install_only.tar.gz"
+    } else {
+        "${PythonRuntimeBaseUrl}/cpython-${PythonRuntimeVersion}+${PythonRuntimeDate}-x86_64-unknown-linux-gnu-install_only.tar.gz"
+    }
+    Write-Info "  Downloading bundled Python runtime for $Rid..."
+    Write-Host "    $url" -ForegroundColor DarkGray
+    $tmpTar = Join-Path $env:TEMP "nudge-python-runtime-$Rid.tar.gz"
+    Invoke-WebRequest -Uri $url -OutFile $tmpTar -UseBasicParsing
+    New-Item -ItemType Directory -Force -Path $runtimeDest | Out-Null
+    tar -xzf $tmpTar --strip-components=2 -C $runtimeDest
+    Remove-Item $tmpTar -Force
+    Write-Success "  [OK] Bundled Python runtime → $runtimeDest"
+}
+
 function Prepare-BuildSources {
     Write-Host "  Preparing shebang-stripped sources..." -ForegroundColor DarkGray
     $body = [System.IO.File]::ReadAllText((Resolve-Path "nudge.cs"), [System.Text.Encoding]::UTF8) -replace '^#!.*\r?\n', ''
@@ -380,6 +434,9 @@ if ($Platform) {
             New-Item -ItemType Directory -Force -Path $modelDest | Out-Null
             Copy-Item "model\productivity_model.joblib", "model\scaler.json", "model\trainer_meta.json" -Destination $modelDest -Force -ErrorAction SilentlyContinue
         }
+
+        # Download and bundle the self-contained Python runtime
+        Bundle-PythonRuntimeForDist -Rid $Rid -DestDir $Dir
 
         Remove-Item "$Dir/_.nudge", "$Dir/_.notify", "$Dir/_.tray" -Recurse -Force
         Write-Success "  [OK] $Rid → $Dir"

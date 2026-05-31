@@ -73,6 +73,16 @@ jobs:
           Copy-Item "NudgeCrossPlatform/model/productivity_model.joblib" $modelDest
           Copy-Item "NudgeCrossPlatform/model/scaler.json"              $modelDest
           Copy-Item "NudgeCrossPlatform/model/trainer_meta.json"        $modelDest
+          # Download and bundle the self-contained Python runtime
+          $pyUrl = "https://github.com/astral-sh/python-build-standalone/releases/download/20260510/cpython-3.11.15+20260510-x86_64-pc-windows-msvc-install_only.tar.gz"
+          $pyTmp = Join-Path $env:TEMP "nudge-python-runtime.tar.gz"
+          Write-Host "Downloading bundled Python runtime..."
+          Invoke-WebRequest -Uri $pyUrl -OutFile $pyTmp -UseBasicParsing
+          $pyDest = Join-Path $dist "python-runtime"
+          New-Item -ItemType Directory -Force -Path $pyDest | Out-Null
+          tar -xzf $pyTmp --strip-components=1 -C $pyDest
+          Remove-Item $pyTmp -Force
+          Write-Host "Bundled Python runtime ready"
           Compress-Archive -Path "$dist/*" -DestinationPath "nudge-win-x64.zip" -Force
 
       - name: Upload Windows zip
@@ -175,8 +185,18 @@ jobs:
           cp model/scaler.json               "$dist/model/"
           cp model/trainer_meta.json         "$dist/model/"
           
+          # Download and bundle the self-contained Python runtime
+          echo "Downloading bundled Python runtime..."
+          PY_URL="https://github.com/astral-sh/python-build-standalone/releases/download/20260510/cpython-3.11.15+20260510-x86_64-unknown-linux-gnu-install_only.tar.gz"
+          curl -fSL --progress-bar -o /tmp/nudge-python-runtime.tar.gz "$PY_URL"
+          mkdir -p "$dist/python-runtime"
+          tar -xzf /tmp/nudge-python-runtime.tar.gz --strip-components=1 -C "$dist/python-runtime"
+          rm -f /tmp/nudge-python-runtime.tar.gz
+          echo "Bundled Python runtime ready"
+
           # Set execute permissions
           chmod +x "$dist/nudge" "$dist/nudge-notify" "$dist/nudge-tray" "$dist/install-linux-app.sh"
+          chmod +x "$dist/python-runtime/bin/python3" 2>/dev/null || true
           
           # Create portable tarball
           tar -czf ../nudge-linux-x64.tar.gz -C dist linux

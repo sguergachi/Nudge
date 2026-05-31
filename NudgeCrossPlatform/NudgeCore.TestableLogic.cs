@@ -664,13 +664,21 @@ internal static class PlatformConfig
             ? Path.Combine(VenvDirectory, "Scripts", "pip.exe")
             : Path.Combine(VenvDirectory, "bin", "pip");
 
+    /// <summary>Path to the bundled self-contained Python runtime shipped with the app.</summary>
+    public static string BundledPythonPath(string baseDir) =>
+        IsWindows
+            ? Path.Combine(baseDir, "python-runtime", "python.exe")
+            : Path.Combine(baseDir, "python-runtime", "bin", "python3");
+
     /// <summary>
-    /// Find a working Python: check user-level venv, local venv, dev venv, then system Python.
+    /// Find a working Python: check user-level venv, bundled runtime, local venv, dev venv, then system Python.
     /// After EnsureVenv() has run, this returns the venv Python.
     /// </summary>
     public static string FindPython(string baseDir)
     {
         if (File.Exists(VenvPythonPath)) return VenvPythonPath;
+        var bundled = BundledPythonPath(baseDir);
+        if (File.Exists(bundled)) return bundled;
         if (IsWindows)
         {
             var local = Path.Combine(baseDir, "venv", "Scripts", "python.exe");
@@ -678,7 +686,6 @@ internal static class PlatformConfig
             var srcDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", ".."));
             var dev = Path.Combine(srcDir, "venv", "Scripts", "python.exe");
             if (File.Exists(dev)) return dev;
-            // Probe candidates in priority order: py launcher, python, python3
             return ProbeSystemPython("py", "python", "python3") ?? "py";
         }
         var localNix = Path.Combine(baseDir, "venv", "bin", "python");
@@ -1767,7 +1774,8 @@ internal enum PresenceSource
     None,             // Detection not available on this platform — gate fails open
     PipeWire,
     PulseAudio,
-    WindowsRegistry
+    WindowsRegistry,
+    ProcessList       // Process-scan fallback — weak signal, used when hw detection unavailable
 }
 
 internal readonly record struct PresenceState(
@@ -1932,6 +1940,37 @@ internal static class MeetingTitleDetector
                 return true;
         }
         return false;
+    }
+
+    internal static bool IsMeetingProcessRunning()
+    {
+        Process[]? procs = null;
+        try
+        {
+            procs = Process.GetProcesses();
+            foreach (var p in procs)
+            {
+                try
+                {
+                    if (ProcessNames.Contains(p.ProcessName))
+                        return true;
+                }
+                catch { }
+            }
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
+        finally
+        {
+            if (procs != null)
+            {
+                foreach (var p in procs)
+                    p.Dispose();
+            }
+        }
     }
 }
 

@@ -831,21 +831,30 @@ sealed class Nudge
 
         public PresenceState GetPresenceState()
         {
-            // Try PipeWire first — covers mic, camera, and screen-share in one pass.
+            // Layer 0: PipeWire — mic, camera, and screen-share in one pass.
             if (CommandExists("pw-dump"))
             {
                 string pwOut = NudgeCoreLogic.RunCommand("pw-dump", "", timeoutMs: 4000);
                 if (!string.IsNullOrWhiteSpace(pwOut))
-                    return PipeWireParser.Parse(pwOut);
+                {
+                    var state = PipeWireParser.Parse(pwOut);
+                    if (state.InMeeting || state.IsScreenSharing)
+                        return state;
+                }
             }
 
-            // Fall back to PulseAudio for mic detection (no screen-share signal).
+            // Layer 1: PulseAudio — mic detection only (no camera/screen-share signal).
             if (CommandExists("pactl"))
             {
                 string pactlOut = NudgeCoreLogic.RunCommand("pactl", "list source-outputs", timeoutMs: 3000);
-                bool micActive = PulseAudioParser.HasActiveCaptureStream(pactlOut);
-                return new PresenceState(micActive, false, false, PresenceSource.PulseAudio);
+                if (PulseAudioParser.HasActiveCaptureStream(pactlOut))
+                    return new PresenceState(true, false, false, PresenceSource.PulseAudio);
             }
+
+            // Layer 2: Process scan — known meeting apps running.
+            // Weak signal; doesn't distinguish mic from camera.
+            if (MeetingTitleDetector.IsMeetingProcessRunning())
+                return new PresenceState(true, false, false, PresenceSource.ProcessList);
 
             return PresenceState.Unavailable;
         }
@@ -1115,7 +1124,7 @@ sealed class Nudge
             //
             // Threshold: 0.25 — two weak signals or one strong signal needed
 
-            const double threshold = 0.40;
+            const double threshold = 0.25;
             double score = 0;
             var signals = new System.Text.StringBuilder();
 
@@ -1140,6 +1149,14 @@ sealed class Nudge
 
             bool inMeeting = score >= threshold;
 
+            // Diagnostic: when all signals are zero for an extended period, report
+            // which layers failed so users can diagnose silent detection failures.
+            if (score == 0 && appRunning && Environment.TickCount64 - _lastZeroScoreLog > 30_000)
+            {
+                Console.WriteLine($"  ⓘ Presence check: all signals zero despite meeting app running — audio={audioActive} webcam={camApps} mic={micApps} title={titleMatch}");
+                _lastZeroScoreLog = Environment.TickCount64;
+            }
+
             // Cooldown: hold IN MEETING for 3s after signals drop to prevent flicker
             // on brief signal gaps (e.g. muting, window focus loss)
             if (inMeeting)
@@ -1148,7 +1165,7 @@ sealed class Nudge
                 inMeeting = true;
 
             Console.WriteLine($"  Presence fusion: score={score:F2}/{threshold} → {(inMeeting ? "IN MEETING" : "clear")}{signals}");
-            return new PresenceState(inMeeting, false, false, PresenceSource.WindowsRegistry);
+            return new PresenceState(audioActive || micApps > 0, camApps > 0, false, PresenceSource.WindowsRegistry);
 #else
             return PresenceState.Unavailable;
 #endif
@@ -1161,38 +1178,7 @@ sealed class Nudge
         //   L2: Running process scan (Teams, Zoom, Discord, etc.)
         //   L3: Foreground window title keywords + process name
 
-        private static readonly FrozenSet<string> MeetingProcessNames = MeetingTitleDetector.ProcessNames;
-
-        private static bool IsMeetingAppRunning()
-        {
-            Process[]? procs = null;
-            try
-            {
-                procs = Process.GetProcesses();
-                foreach (var p in procs)
-                {
-                    try
-                    {
-                        if (MeetingProcessNames.Contains(p.ProcessName))
-                            return true;
-                    }
-                    catch { }
-                }
-                return false;
-            }
-            catch
-            {
-                return false;
-            }
-            finally
-            {
-                if (procs != null)
-                {
-                    foreach (var p in procs)
-                        p.Dispose();
-                }
-            }
-        }
+        private static bool IsMeetingAppRunning() => MeetingTitleDetector.IsMeetingProcessRunning();
 
         private static bool IsMeetingTitle(string title) => MeetingTitleDetector.IsMeetingTitle(title);
 
@@ -1514,7 +1500,10 @@ sealed class Nudge
     static bool _meetingSuppression = true;
     static PresenceState _cachedPresenceState = PresenceState.Unavailable;
     static int _presenceCheckElapsed;
+#if WINDOWS
     static long _lastMeetingHit;
+    static long _lastZeroScoreLog;
+#endif
 
     // Activity tracking
     static string _currentApp = "";

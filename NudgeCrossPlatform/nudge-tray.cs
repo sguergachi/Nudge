@@ -49,7 +49,7 @@ namespace NudgeTray
     sealed class Program
     {
         const int UDP_PORT = 45001;
-        const string VERSION = "1.8.5";
+        const string VERSION = "1.9.0";
         const string NudgeExeName = "nudge";
         const string NudgeDllName = "nudge.dll";
         const int TRAINER_CHECK_INTERVAL_SEC = 15;
@@ -1314,7 +1314,7 @@ namespace NudgeTray
                 if (!pythonWorks)
                 {
                     if (string.IsNullOrEmpty(MlSetupError))
-                        MlSetupError = "Python 3 is not installed.\nPlease install Python 3.8+ from python.org and try again.";
+                        MlSetupError = "Python runtime is missing or broken.\nPlease re-download Nudge from the releases page or install Python 3.8+ from python.org.";
                     Console.WriteLine("  ✗ Python not found or not working");
                     return false;
                 }
