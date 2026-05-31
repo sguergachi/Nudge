@@ -1982,7 +1982,9 @@ namespace NudgeTray
             const double yBottom = H - yPad - 12;
             const double yRange = yBottom - yTop;
 
-            var canvas = new Canvas { Width = W, Height = H };
+            var wrapper = new Canvas { Width = W, Height = H, Background = Brushes.Transparent };
+            var canvas = new Canvas { Width = W, Height = H, ClipToBounds = true };
+            wrapper.Children.Add(canvas);
 
             // Zone gradient background: green (productive) → red (unproductive)
             var zoneBg = new Border
@@ -2052,7 +2054,7 @@ namespace NudgeTray
                 Canvas.SetLeft(tb, 0);
                 Canvas.SetTop(tb, yBottom / 2);
                 canvas.Children.Add(tb);
-                return canvas;
+                return wrapper;
             }
 
             int n = aiEvents.Count;
@@ -2164,9 +2166,10 @@ namespace NudgeTray
                         FontWeight = FontWeight.SemiBold,
                         Foreground = new SolidColorBrush(dotColor)
                     };
-                    // Place label above the dot when near bottom of chart, below when near top
+                    // Place label above the dot when near bottom of chart, below when near top.
+                    // Clamp horizontal position so it never extends past the canvas edge.
                     bool nearBottom = y > H * 0.6;
-                    Canvas.SetLeft(scoreLabel, x - 10);
+                    Canvas.SetLeft(scoreLabel, Math.Max(0, Math.Min(x - 10, W - 28)));
                     Canvas.SetTop(scoreLabel, nearBottom ? y - r - 14 : y + r + 3);
                     canvas.Children.Add(scoreLabel);
                 }
@@ -2239,7 +2242,7 @@ namespace NudgeTray
 
                 // Tooltip (added after overlay so it renders on top)
                 tipBorder.IsVisible = false;
-                canvas.Children.Add(tipBorder);
+                wrapper.Children.Add(tipBorder);
 
                 overlay.PointerMoved += (_, e) =>
                 {
@@ -2327,7 +2330,7 @@ namespace NudgeTray
                         FontSize = 8,
                         Foreground = new SolidColorBrush(Color.FromArgb(80, 180, 180, 190))
                     };
-                    Canvas.SetLeft(label, x - 10);
+                    Canvas.SetLeft(label, Math.Max(0, Math.Min(x - 10, W - 30)));
                     Canvas.SetTop(label, yBottom + 3);
                     canvas.Children.Add(label);
 
@@ -2343,7 +2346,7 @@ namespace NudgeTray
                 }
             }
 
-            return canvas;
+            return wrapper;
         }
 
         /// <summary>Build tooltip content Grid for a given event.</summary>
