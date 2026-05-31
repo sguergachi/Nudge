@@ -55,4 +55,7 @@ cp "$BUILD_DIR/nudge-notify" ./nudge-notify && chmod +x ./nudge-notify
 cp "$BUILD_DIR/nudge-tray" ./nudge-tray && chmod +x ./nudge-tray
 cp "$BUILD_DIR"/*.dll ./
 
+info "Running tests..."
+dotnet test NudgeCrossPlatform.Tests/NudgeCrossPlatform.Tests.csproj --no-restore -v quiet
+
 info "Build complete."
