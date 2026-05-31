@@ -2795,8 +2795,8 @@ namespace NudgeTray
 
         public PulseDot()
         {
-            Width = 30;
-            Height = 30;
+            Width = 50;
+            Height = 50;
             IsHitTestVisible = false;
             _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(24) };
             _timer.Tick += (_, _) =>
@@ -2815,9 +2815,9 @@ namespace NudgeTray
             int h3 = ((s * 1664525 + 1013904223) ^ (s >> 17)) & 0x7FFFFFFF;
             const double div = 0x7FFFFFFF;
             _step        = 0.016 + 0.006 * (h1 / div);
-            _radius      = 12.0  + 2.0  * (h2 / div);
-            _peakOpacity = 0.65  + 0.15  * (h3 / div);
-            _stagger     = h2 % 2 == 0 ? 0.48 : 0.52;
+            _radius      = 18.0  + 4.0  * (h2 / div);
+            _peakOpacity = 0.75  + 0.20  * (h3 / div);
+            _stagger     = h2 % 2 == 0 ? 0.45 : 0.55;
         }
 
         public void Start()
@@ -2828,32 +2828,45 @@ namespace NudgeTray
 
         public override void Render(DrawingContext context)
         {
-            var center = new Point(14, 14);
+            var center = new Point(25, 25);
             var color = Color;
 
-            // Ring 1 — one-way emission from center, exponential decay
+            // Wave 1 — expanding ring, fast ramp-in + gentle decay
             double r1 = _phase;
-            double ring1R = _radius * r1;
-            double ringAlpha1 = _peakOpacity * Math.Min(1.0, 2.0 * r1) * Math.Exp(-r1 * 2.2);
-            if (ringAlpha1 > 0.003)
+            if (r1 > 0.01 && r1 < 0.92)
             {
-                var ringPen = new Pen(new SolidColorBrush(color, ringAlpha1), 1.2);
-                context.DrawEllipse(null, ringPen, center, ring1R, ring1R);
+                double ringR = _radius * r1;
+                double fadeIn = Math.Min(1.0, r1 * 5.0);
+                double fadeOut = Math.Exp(-r1 * 2.5);
+                double alpha = _peakOpacity * fadeIn * fadeOut;
+                if (alpha > 0.02)
+                {
+                    var pen = new Pen(new SolidColorBrush(color, alpha), 3.0);
+                    context.DrawEllipse(null, pen, center, ringR, ringR);
+                }
             }
 
-            // Ring 2 — staggered
+            // Wave 2 — staggered
             double r2 = _phase + _stagger;
             if (r2 > 1.0) r2 -= 1.0;
-            double ring2R = _radius * r2;
-            double ringAlpha2 = _peakOpacity * Math.Min(1.0, 2.0 * r2) * Math.Exp(-r2 * 2.2);
-            if (ringAlpha2 > 0.003)
+            if (r2 > 0.01 && r2 < 0.92)
             {
-                var ringPen = new Pen(new SolidColorBrush(color, ringAlpha2), 1.2);
-                context.DrawEllipse(null, ringPen, center, ring2R, ring2R);
+                double ringR2 = _radius * r2;
+                double fadeIn2 = Math.Min(1.0, r2 * 5.0);
+                double fadeOut2 = Math.Exp(-r2 * 2.5);
+                double alpha2 = _peakOpacity * fadeIn2 * fadeOut2;
+                if (alpha2 > 0.02)
+                {
+                    var pen = new Pen(new SolidColorBrush(color, alpha2), 3.0);
+                    context.DrawEllipse(null, pen, center, ringR2, ringR2);
+                }
             }
 
-            // Solid center dot — steady
-            context.DrawEllipse(new SolidColorBrush(color), null, center, 4.6, 4.6);
+            // Soft glow behind the center dot
+            context.DrawEllipse(new SolidColorBrush(color, 0.18), null, center, 9.0, 9.0);
+
+            // Solid center dot
+            context.DrawEllipse(new SolidColorBrush(color), null, center, 5.5, 5.5);
         }
     }
 
