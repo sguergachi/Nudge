@@ -25,7 +25,7 @@ jobs:
 
       - name: Test
         working-directory: NudgeCrossPlatform
-        run: dotnet test NudgeCrossPlatform.Tests/NudgeCrossPlatform.Tests.csproj --nologo -v quiet
+        run: dotnet test NudgeCrossPlatform.Tests/NudgeCrossPlatform.Tests.csproj --nologo -v normal
 
   build-linux:
     runs-on: ubuntu-latest
