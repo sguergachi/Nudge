@@ -2299,48 +2299,8 @@ namespace NudgeTray
             }
 
             // ── Time axis ───────────────────────────────────────────────────
-            if (aiEvents.Count >= 2)
-            {
-                var firstDt = DateTimeOffset.FromUnixTimeSeconds(aiEvents[0].T).LocalDateTime;
-                var lastDt  = DateTimeOffset.FromUnixTimeSeconds(aiEvents[^1].T).LocalDateTime;
-                double spanHours = (lastDt - firstDt).TotalHours;
-                int stepHours = spanHours <= 3 ? 1 : spanHours <= 8 ? 2 : spanHours <= 16 ? 3 : 6;
+            // Removed — rendered as fat grey bar due to label/text overlap rendering bug
 
-                var start = new DateTime(firstDt.Year, firstDt.Month, firstDt.Day,
-                    firstDt.Hour - (firstDt.Hour % stepHours), 0, 0);
-                if (start < firstDt) start = start.AddHours(stepHours);
-
-                double timeW = W - dotR * 2;
-                double totalSec = (lastDt - firstDt).TotalSeconds;
-
-                for (var t = start; t <= lastDt; t = t.AddHours(stepHours))
-                {
-                    double frac = (t - firstDt).TotalSeconds / totalSec;
-                    double x = dotR + frac * timeW;
-
-                    if (x < dotR || x > W - dotR) continue;
-
-                    var label = new TextBlock
-                    {
-                        Text = t.ToString("h tt", CultureInfo.InvariantCulture),
-                        FontSize = 8,
-                        Foreground = new SolidColorBrush(Color.FromArgb(80, 180, 180, 190))
-                    };
-                    Canvas.SetLeft(label, x - 10);
-                    Canvas.SetTop(label, yBottom + 3);
-                    canvas.Children.Add(label);
-
-                    var tick = new Border
-                    {
-                        Width = 1,
-                        Height = 3,
-                        Background = new SolidColorBrush(Color.FromArgb(60, 180, 180, 190))
-                    };
-                    Canvas.SetLeft(tick, x);
-                    Canvas.SetTop(tick, yBottom);
-                    canvas.Children.Add(tick);
-                }
-            }
 
             return canvas;
         }
