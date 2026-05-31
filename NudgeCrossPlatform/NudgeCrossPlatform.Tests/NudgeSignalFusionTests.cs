@@ -364,23 +364,23 @@ public sealed class NudgeSignalFusionTests
     }
 
     [Fact]
-    public void Classify_BrowserWithUnknownDomain_ReturnsUnknownNotUtility()
+    public void Classify_BrowserWithUnknownDomain_ReturnsUtilityAtSemanticConfidence()
     {
-        // Browsers without a classifiable domain should return Unknown, not Utility.
-        // Utility implies we know the app's purpose; for browsers we don't until we see the site.
-        // Unknown confidence (0.00) also prevents the analytics UI from downgrading signal quality
-        // to "usable" with reason "category unclassified".
+        // Browsers are Utility — we know this via process-name detection (same basis as a
+        // semantic keyword match). Semantic confidence (0.75) keeps signal quality Trusted.
         var (cat, conf) = AppCategoryClassifier.Classify(FakeBrowserId, "", AppCategory.Unknown);
-        Assert.Equal(AppCategory.Unknown, cat);
-        Assert.Equal(CategoryConfidence.Unknown, conf);
+        Assert.Equal(AppCategory.Utility, cat);
+        Assert.Equal(CategoryConfidence.Semantic, conf);
+        Assert.True(AppCategoryClassifier.GetConfidenceScore(conf) >= 0.45f);
     }
 
     [Fact]
-    public void Classify_BrowserWithEntertainmentAnchor_ReturnsUnknownNotUtility()
+    public void Classify_BrowserWithUnclassifiedAnchor_ReturnsUtilityNotFallback()
     {
+        // Entertainment anchor must not transfer, but browser should still be Utility/Semantic.
         var (cat, conf) = AppCategoryClassifier.Classify(FakeBrowserId, "", AppCategory.Entertainment);
-        Assert.Equal(AppCategory.Unknown, cat);
-        Assert.Equal(CategoryConfidence.Unknown, conf);
+        Assert.Equal(AppCategory.Utility, cat);
+        Assert.Equal(CategoryConfidence.Semantic, conf);
     }
 
     // ── Browser anchor fusion edge cases ──────────────────────────────────────

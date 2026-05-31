@@ -925,10 +925,10 @@ internal static class AppCategoryClassifier
         if (BrowserDetector.IsBrowser(appId) && anchorCategory is AppCategory.Development or AppCategory.Creative or AppCategory.Office)
             return Store(appId, anchorCategory, CategoryConfidence.Inferred, persist: false);
 
-        // Browsers without a classifiable domain have no meaningful category — Unknown is more
-        // accurate than Utility and avoids spuriously downgrading signal quality in the analytics UI.
+        // Browser detected by process name — Utility is correct, and we know this as confidently
+        // as any semantic keyword match. Semantic confidence (0.75) keeps signal quality Trusted.
         if (isBrowser)
-            return (AppCategory.Unknown, CategoryConfidence.Unknown);
+            return Store(appId, AppCategory.Utility, CategoryConfidence.Semantic, persist: false);
 
         // Fallback: don't persist — nothing was learned, re-classification is fast
         return Store(appId, AppCategory.Utility, CategoryConfidence.Fallback, persist: false);
