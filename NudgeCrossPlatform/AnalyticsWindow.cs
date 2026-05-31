@@ -2303,23 +2303,6 @@ namespace NudgeTray
             {
                 var firstDt = DateTimeOffset.FromUnixTimeSeconds(aiEvents[0].T).LocalDateTime;
                 var lastDt  = DateTimeOffset.FromUnixTimeSeconds(aiEvents[^1].T).LocalDateTime;
-                double totalSec = Math.Max(1, (lastDt - firstDt).TotalSeconds);
-                double spanHours = totalSec / 3600.0;
-
-                // Pick step size so we get at most 4 labels
-                int[] steps = { 1, 2, 3, 6, 8, 12, 24 };
-                int stepHours = 1;
-                foreach (int s in steps)
-                {
-                    stepHours = s;
-                    if (spanHours / s <= 4) break;
-                }
-
-                var start = new DateTime(firstDt.Year, firstDt.Month, firstDt.Day,
-                    firstDt.Hour - (firstDt.Hour % stepHours), 0, 0);
-                if (start < firstDt) start = start.AddHours(stepHours);
-
-                double timeW = W - dotR * 2;
 
                 // Thin horizontal separator
                 var baseline = new Border
@@ -2331,36 +2314,27 @@ namespace NudgeTray
                 Canvas.SetTop(baseline, yBottom);
                 canvas.Children.Add(baseline);
 
-                for (var t = start; t <= lastDt; t = t.AddHours(stepHours))
+                // First label — left-aligned near start
+                canvas.Children.Add(new TextBlock
                 {
-                    double frac = (t - firstDt).TotalSeconds / totalSec;
-                    double x = dotR + frac * timeW;
+                    Text = firstDt.ToString("h tt", CultureInfo.InvariantCulture),
+                    FontSize = 7,
+                    Foreground = new SolidColorBrush(Color.FromArgb(40, 180, 180, 190))
+                });
+                Canvas.SetLeft(canvas.Children[^1], dotR + 2);
+                Canvas.SetTop(canvas.Children[^1], yBottom + 4);
 
-                    // Skip labels within 16px of edges
-                    if (x < 16 || x > W - 16) continue;
-
-                    // Tick mark
-                    var tick = new Border
-                    {
-                        Width = 1, Height = 4,
-                        Background = new SolidColorBrush(Color.FromArgb(40, 180, 180, 190))
-                    };
-                    Canvas.SetLeft(tick, x);
-                    Canvas.SetTop(tick, yBottom + 2);
-                    canvas.Children.Add(tick);
-
-                    // Label — measure first for centered placement
-                    var label = new TextBlock
-                    {
-                        Text = t.ToString("h tt", CultureInfo.InvariantCulture),
-                        FontSize = 7,
-                        Foreground = new SolidColorBrush(Color.FromArgb(40, 180, 180, 190))
-                    };
-                    label.Measure(Size.Infinity);
-                    Canvas.SetLeft(label, x - label.DesiredSize.Width / 2);
-                    Canvas.SetTop(label, yBottom + 6);
-                    canvas.Children.Add(label);
-                }
+                // Last label — right-aligned near end
+                var endLabel = new TextBlock
+                {
+                    Text = lastDt.ToString("h tt", CultureInfo.InvariantCulture),
+                    FontSize = 7,
+                    Foreground = new SolidColorBrush(Color.FromArgb(40, 180, 180, 190))
+                };
+                // Rough estimate: ~7px per char, so "12 PM" ≈ 28px offset from right edge
+                Canvas.SetLeft(endLabel, W - dotR - 28);
+                Canvas.SetTop(endLabel, yBottom + 4);
+                canvas.Children.Add(endLabel);
             }
 
 
