@@ -1982,7 +1982,9 @@ namespace NudgeTray
             const double yBottom = H - yPad - 12;
             const double yRange = yBottom - yTop;
 
-            var canvas = new Canvas { Width = W, Height = H };
+            var wrapper = new Canvas { Width = W, Height = H };
+            var canvas = new Canvas { Width = W, Height = H, ClipToBounds = true };
+            wrapper.Children.Add(canvas);
 
             // Zone gradient background: green (productive) → red (unproductive)
             var zoneBg = new Border
@@ -2052,7 +2054,7 @@ namespace NudgeTray
                 Canvas.SetLeft(tb, 0);
                 Canvas.SetTop(tb, yBottom / 2);
                 canvas.Children.Add(tb);
-                return canvas;
+                return wrapper;
             }
 
             int n = aiEvents.Count;
@@ -2239,7 +2241,7 @@ namespace NudgeTray
 
                 // Tooltip (added after overlay so it renders on top)
                 tipBorder.IsVisible = false;
-                canvas.Children.Add(tipBorder);
+                wrapper.Children.Add(tipBorder);
 
                 overlay.PointerMoved += (_, e) =>
                 {
@@ -2343,7 +2345,7 @@ namespace NudgeTray
                 }
             }
 
-            return canvas;
+            return wrapper;
         }
 
         /// <summary>Build tooltip content Grid for a given event.</summary>
