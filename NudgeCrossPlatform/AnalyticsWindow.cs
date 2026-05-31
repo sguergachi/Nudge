@@ -2281,9 +2281,10 @@ namespace NudgeTray
                     scoreTb.Text = $"{(nev.Confidence > 0 ? nev.Confidence : nev.Score) * 100:F0}% · {(nev.Productive ? StrProductive : StrNotProductive)}";
                     scoreTb.Foreground = new SolidColorBrush(evColor);
 
-                    // Position tooltip above the dot, centered horizontally
+                    // Position tooltip above the dot, clamped to chart edges
                     double tipW = tipBorder.Width > 0 ? tipBorder.Width : 180;
-                    Canvas.SetLeft(tipBorder, nx - tipW / 2);
+                    double tipLeft = Math.Max(4, Math.Min(nx - tipW / 2, W - tipW - 4));
+                    Canvas.SetLeft(tipBorder, tipLeft);
                     Canvas.SetTop(tipBorder, ny - 60);
                     tipBorder.IsVisible = true;
                 };
