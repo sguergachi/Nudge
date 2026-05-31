@@ -2222,7 +2222,8 @@ namespace NudgeTray
                 try
                 {
                     Console.WriteLine("  Stopping ML inference service...");
-                    _mlInferenceProcess.Kill();
+                    _mlInferenceProcess.Kill(entireProcessTree: true);
+                    _mlInferenceProcess.WaitForExit(3000);
                     _mlInferenceProcess.Dispose();
                 }
                 catch { }
@@ -2233,7 +2234,8 @@ namespace NudgeTray
                 try
                 {
                     Console.WriteLine("  Stopping background trainer...");
-                    _mlTrainerProcess.Kill();
+                    _mlTrainerProcess.Kill(entireProcessTree: true);
+                    _mlTrainerProcess.WaitForExit(3000);
                     _mlTrainerProcess.Dispose();
                 }
                 catch { }
