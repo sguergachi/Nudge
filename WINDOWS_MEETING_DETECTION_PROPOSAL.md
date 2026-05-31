@@ -1,6 +1,9 @@
 # Proposal: Reliable Windows Meeting Detection
 
-> **Status:** Proposal / design. No runtime behavior changed yet.
+> **Status:** ✅ Implemented — event-driven `ConsentStore` watcher
+> (`WindowsPresenceWatcher` in `nudge.cs`) plus pure `ConsentStorePresence`
+> decision logic in `NudgeCore.TestableLogic.cs` with cross-platform unit tests.
+> This document remains the design rationale.
 > **Scope:** Replace the current polled signal-fusion presence detector on Windows
 > with an event-driven detector built on the same authoritative source Windows
 > itself uses to draw the camera/mic privacy indicator.

@@ -332,6 +332,129 @@ public sealed class NudgeMeetingGateTests
         Assert.False(decision.Suppress);
     }
 
+    // ── ConsentStorePresence (Windows ConsentStore) ───────────────────────────
+
+    private static ConsentLeaf Leaf(string appId, bool active, bool packaged = false, bool running = true)
+        => new(appId, StartFileTime: active ? 1 : 0, StopFileTime: 0, IsPackaged: packaged, ProcessRunning: running);
+
+    [Fact]
+    public void ConsentLeaf_StartedNotStopped_Packaged_IsActive() =>
+        Assert.True(new ConsentLeaf("MSTeams_8wekyb3d8bbwe", 100, 0, IsPackaged: true, ProcessRunning: false).IsActive);
+
+    [Fact]
+    public void ConsentLeaf_Stopped_IsInactive() =>
+        Assert.False(new ConsentLeaf("app", 100, 200, false, true).IsActive);
+
+    [Fact]
+    public void ConsentLeaf_NeverStarted_IsInactive() =>
+        Assert.False(new ConsentLeaf("app", 0, 0, false, true).IsActive);
+
+    [Fact]
+    public void ConsentLeaf_NonPackagedProcessNotRunning_IsInactive() =>
+        Assert.False(new ConsentLeaf("C:#x#Zoom.exe", 100, 0, IsPackaged: false, ProcessRunning: false).IsActive);
+
+    [Fact]
+    public void ConsentLeaf_NonPackagedProcessRunning_IsActive() =>
+        Assert.True(new ConsentLeaf("C:#x#Zoom.exe", 100, 0, IsPackaged: false, ProcessRunning: true).IsActive);
+
+    [Theory]
+    [InlineData(@"C:#Program Files#Zoom#bin#Zoom.exe", "Zoom")]
+    [InlineData("MSTeams_8wekyb3d8bbwe", "MSTeams")]
+    [InlineData("SomeApp", "SomeApp")]
+    [InlineData("", "")]
+    public void ExtractAppHint_ReducesToToken(string appId, string expected) =>
+        Assert.Equal(expected, ConsentStorePresence.ExtractAppHint(appId));
+
+    [Theory]
+    [InlineData("MSTeams", true)]
+    [InlineData("Zoom", true)]
+    [InlineData("chrome", false)]
+    [InlineData("", false)]
+    public void IsMeetingApp_MatchesKnownCommsApps(string hint, bool expected) =>
+        Assert.Equal(expected, ConsentStorePresence.IsMeetingApp(hint));
+
+    [Fact]
+    public void Evaluate_MicActiveMeetingAppOwner_IsInMeeting()
+    {
+        var state = ConsentStorePresence.Evaluate(
+            micLeaves: [Leaf(@"C:#x#Zoom.exe", active: true)],
+            camLeaves: [],
+            foregroundProcess: "notepad", foregroundTitle: "Untitled");
+        Assert.True(state.IsMicActive);
+        Assert.True(state.InMeeting);
+        Assert.Equal(PresenceSource.WindowsRegistry, state.Source);
+    }
+
+    [Fact]
+    public void Evaluate_MicActivePackagedTeams_IsInMeeting()
+    {
+        var state = ConsentStorePresence.Evaluate(
+            [Leaf("MSTeams_8wekyb3d8bbwe", active: true, packaged: true)], [],
+            "explorer", "");
+        Assert.True(state.InMeeting);
+    }
+
+    [Fact]
+    public void Evaluate_MicActiveForegroundMeetingTitle_IsInMeeting()
+    {
+        // Browser meeting: mic is owned by chrome, but the foreground title gives it away.
+        var state = ConsentStorePresence.Evaluate(
+            [Leaf(@"C:#x#chrome.exe", active: true)], [],
+            "chrome", "Weekly sync - Google Meet");
+        Assert.True(state.InMeeting);
+    }
+
+    [Fact]
+    public void Evaluate_MicActiveNoMeetingContext_NotInMeeting()
+    {
+        // Dictation / voice typing in a normal app must NOT suppress nudges.
+        var state = ConsentStorePresence.Evaluate(
+            [Leaf(@"C:#x#notepad.exe", active: true)], [],
+            "notepad", "Untitled - Notepad");
+        Assert.False(state.IsMicActive);
+        Assert.False(state.InMeeting);
+    }
+
+    [Fact]
+    public void Evaluate_CameraActive_IsInMeetingRegardlessOfApp()
+    {
+        var state = ConsentStorePresence.Evaluate(
+            [], [Leaf(@"C:#x#obs64.exe", active: true)],
+            "obs64", "OBS Studio");
+        Assert.True(state.IsCameraActive);
+        Assert.True(state.InMeeting);
+    }
+
+    [Fact]
+    public void Evaluate_StaleMicEntry_NotInMeeting()
+    {
+        // Active timestamps but the owning process isn't running (force-killed app):
+        // the device leaf is ignored, so a stale meeting window doesn't suppress.
+        var state = ConsentStorePresence.Evaluate(
+            [Leaf(@"C:#x#zoom.exe", active: true, running: false)], [],
+            "zoom", "Zoom Meeting");
+        Assert.False(state.InMeeting);
+    }
+
+    [Fact]
+    public void Evaluate_NothingActive_NotInMeeting_ButSourceKnown()
+    {
+        var state = ConsentStorePresence.Evaluate([], [], "code", "main.cs");
+        Assert.False(state.InMeeting);
+        Assert.Equal(PresenceSource.WindowsRegistry, state.Source);
+        // Source != None but nothing active → gate must allow.
+        Assert.False(SnapshotGate.Evaluate(null, state).Suppress);
+    }
+
+    [Fact]
+    public void Evaluate_ScreenSharingAlwaysFalseOnWindows()
+    {
+        var state = ConsentStorePresence.Evaluate(
+            [Leaf("MSTeams_8wekyb3d8bbwe", active: true, packaged: true)], [],
+            "ms-teams", "");
+        Assert.False(state.IsScreenSharing);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static ActivityTickResult MakeTick(SignalQuality quality, bool afk)
