@@ -1982,9 +1982,7 @@ namespace NudgeTray
             const double yBottom = H - yPad - 12;
             const double yRange = yBottom - yTop;
 
-            var wrapper = new Canvas { Width = W, Height = H, Background = Brushes.Transparent };
-            var canvas = new Canvas { Width = W, Height = H, ClipToBounds = true };
-            wrapper.Children.Add(canvas);
+            var canvas = new Canvas { Width = W, Height = H };
 
             // Zone gradient background: green (productive) → red (unproductive)
             var zoneBg = new Border
@@ -2054,7 +2052,7 @@ namespace NudgeTray
                 Canvas.SetLeft(tb, 0);
                 Canvas.SetTop(tb, yBottom / 2);
                 canvas.Children.Add(tb);
-                return wrapper;
+                return canvas;
             }
 
             int n = aiEvents.Count;
@@ -2141,7 +2139,11 @@ namespace NudgeTray
                         StrokeThickness = 2,
                         Fill = new SolidColorBrush(Color.FromArgb(15, dotColor.R, dotColor.G, dotColor.B))
                     };
-                    Canvas.SetLeft(ring, x - r - 4);
+                    // Clamp ring to canvas so it never overflows horizontally
+                    double ringLeft = Math.Max(0, x - r - 4);
+                    double ringWidth = Math.Min((r + 4) * 2, W - ringLeft);
+                    ring.Width = ringWidth;
+                    Canvas.SetLeft(ring, ringLeft);
                     Canvas.SetTop(ring, y - r - 4);
                     canvas.Children.Add(ring);
                 }
@@ -2242,7 +2244,7 @@ namespace NudgeTray
 
                 // Tooltip (added after overlay so it renders on top)
                 tipBorder.IsVisible = false;
-                wrapper.Children.Add(tipBorder);
+                canvas.Children.Add(tipBorder);
 
                 overlay.PointerMoved += (_, e) =>
                 {
@@ -2267,8 +2269,9 @@ namespace NudgeTray
                     }
 
                     var (nearestDot, nr, nx, ny, nev) = dotElements[nearest];
-                    nearestDot.Width = (nr + 2) * 2;
-                    nearestDot.Height = (nr + 2) * 2;
+                    double enlargedR = Math.Min(nr + 2, W - nx);
+                    nearestDot.Width = enlargedR * 2;
+                    nearestDot.Height = enlargedR * 2;
 
                     Canvas.SetLeft(sweepLine, nx);
                     sweepLine.IsVisible = true;
@@ -2346,7 +2349,7 @@ namespace NudgeTray
                 }
             }
 
-            return wrapper;
+            return canvas;
         }
 
         /// <summary>Build tooltip content Grid for a given event.</summary>
