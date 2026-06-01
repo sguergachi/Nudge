@@ -148,11 +148,11 @@ namespace NudgeTray
             Grid.SetColumn(title, 1);
 
             // Minimize button
-            var minimizeBtn = MakeChromeButton("–", 15, () => WindowState = WindowState.Minimized, "Minimize");
+            var minimizeBtn = MakeChromeButton("\U000F05B0", 15, () => WindowState = WindowState.Minimized, "Minimize"); // mdi window-minimize
             Grid.SetColumn(minimizeBtn, 2);
 
             // Close button
-            var closeBtn = MakeChromeButton("✖", 13, Close, "Close", danger: true);
+            var closeBtn = MakeChromeButton("\U000F0156", 14, Close, "Close", danger: true); // mdi close
             Grid.SetColumn(closeBtn, 4);
 
             grid.Children.Add(gear);
@@ -169,7 +169,7 @@ namespace NudgeTray
             {
                 Text = symbol,
                 FontSize = fontSize,
-                FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                FontFamily = AnalyticsWindow.MdiFont,
                 Foreground = new SolidColorBrush(TextSecondary),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,

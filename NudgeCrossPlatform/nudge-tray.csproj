@@ -47,6 +47,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <AvaloniaResource Include="Resources/materialdesignicons-webfont.ttf" />
+
     <Content Include="model_inference.py">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

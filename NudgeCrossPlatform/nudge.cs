@@ -1121,7 +1121,16 @@ sealed class Nudge
 
             var scan = watcher.Current;
             var (app, title) = GetForegroundAppWithTitle();
-            return ConsentStorePresence.Evaluate(scan.MicLeaves, scan.CamLeaves, app, title);
+            var result = ConsentStorePresence.Evaluate(scan.MicLeaves, scan.CamLeaves, app, title);
+
+            if (result.InMeeting)
+            {
+                var activeMic = scan.MicLeaves.Where(l => l.IsActive).Select(FormatLeaf);
+                var activeCam = scan.CamLeaves.Where(l => l.IsActive).Select(FormatLeaf);
+                Console.WriteLine($"MEETINGDETAIL: mic=[{string.Join(", ", activeMic)}] cam=[{string.Join(", ", activeCam)}] fg={app} title=\"{title}\"");
+            }
+
+            return result;
 #else
             return PresenceState.Unavailable;
 #endif
@@ -1279,7 +1288,7 @@ sealed class Nudge
             private static ConsentLeaf ReadLeaf(Microsoft.Win32.RegistryKey key, string appId, bool packaged)
             {
                 long start = ReadFileTime(key, "LastUsedTimeStart");
-                long stop = ReadFileTime(key, "LastUsedTimeStop");
+                long stop = ReadStopFileTime(key);
                 // Staleness guard only for NonPackaged entries (their key name is the exe
                 // path). Packaged Package-Family-Name keys don't map to a process name, so
                 // they're trusted — checking would false-negative every Store app (new Teams).
@@ -1303,8 +1312,8 @@ sealed class Nudge
             }
 
             // Handle REG_QWORD (long) and REG_DWORD (int) — Windows stores these as 32-bit
-            // on some builds. Missing value reads as 0 (treated as "still in use" by the
-            // start!=0 && stop==0 rule).
+            // on some builds. Used for LastUsedTimeStart only; LastUsedTimeStop is read
+            // separately via ReadStopFileTime to distinguish missing value from actual zero.
             private static long ReadFileTime(Microsoft.Win32.RegistryKey key, string valueName) =>
                 key.GetValue(valueName) switch
                 {
@@ -1314,6 +1323,22 @@ sealed class Nudge
                     ulong ul => (long)ul,
                     _ => 0
                 };
+
+            // LastUsedTimeStop that distinguishes missing value (-1) from actual zero:
+            // Windows writes 0 while a capability is in use; missing means never written.
+            internal static long ReadStopFileTime(Microsoft.Win32.RegistryKey key)
+            {
+                object? val = key.GetValue("LastUsedTimeStop", null);
+                if (val == null) return -1;
+                return val switch
+                {
+                    long l => l,
+                    int i => i,
+                    uint ui => ui,
+                    ulong ul => (long)ul,
+                    _ => 0
+                };
+            }
 
             public void Dispose()
             {
@@ -1333,6 +1358,9 @@ sealed class Nudge
                 bool bWatchSubtree, int dwNotifyFilter,
                 Microsoft.Win32.SafeHandles.SafeWaitHandle hEvent, bool fAsynchronous);
         }
+
+        private static string FormatLeaf(ConsentLeaf l)
+            => $"{l.AppHint}(s={l.StartFileTime},st={l.StopFileTime},pkg={l.IsPackaged})";
 #endif
 
         public void Dispose()
@@ -1405,7 +1433,7 @@ sealed class Nudge
     static int _mlProductiveSamples;
     static int _mlUnproductiveSamples;
     static List<double> _mlConfidenceScores = new List<double>();
-    static long _lastMLTriggerT;  // Unix timestamp of last ML-triggered snapshot (0=none/interval)
+    static long _lastMLTriggerT;  // Unix timestamp of last triggered snapshot (0=none)
 
     // Log message formats
     private const string LogPredictionFormat = "📊 Request #{0}: {1} (confidence: {2:F1}%, {3:F1}ms)";
@@ -1818,6 +1846,7 @@ sealed class Nudge
                             TriggerSource = "int"
                         };
                         Console.WriteLine($"MLDATA:{JsonSerializer.Serialize(intEvt, NudgeJsonContext.Default.MLLiveEvent)}");
+                        _lastMLTriggerT = intEvt.T;
                     }
 
                     // Unified suppression gate: AFK, poor signal, meeting, screen sharing.

@@ -49,7 +49,7 @@ namespace NudgeTray
     sealed class Program
     {
         const int UDP_PORT = 45001;
-        const string VERSION = "1.9.0";
+        const string VERSION = "1.9.3";
         const string NudgeExeName = "nudge";
         const string NudgeDllName = "nudge.dll";
         const int TRAINER_CHECK_INTERVAL_SEC = 15;
@@ -93,7 +93,7 @@ namespace NudgeTray
 
         // Common tray icon for all platforms
         static TrayIcon? _trayIcon;
-        static AnalyticsWindow? _analyticsWindow;
+        internal static AnalyticsWindow? _analyticsWindow;
         static SettingsWindow? _settingsWindow;
         static NativeMenuItem? _statusItem;
         static NativeMenuItem? _updateItem;
@@ -1966,7 +1966,8 @@ namespace NudgeTray
                     if ((now - _lastHarvestRefresh).TotalSeconds >= 1)
                     {
                         _lastHarvestRefresh = now;
-                        _analyticsWindow?.RequestTrainingViewRefresh();
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                            AnalyticsWindow.UpdateLivePulseDot());
                     }
                 }
             }

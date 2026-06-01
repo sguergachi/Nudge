@@ -126,7 +126,7 @@ namespace NudgeTray
             {
                 Text = StrPinIcon,
                 FontSize = 16,
-                FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                FontFamily = AnalyticsWindow.MdiFont,
                 Foreground = new SolidColorBrush(TextSecondary),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -141,7 +141,7 @@ namespace NudgeTray
                 Topmost = _isPinned;
                 if (_pinIcon != null)
                 {
-                    _pinIcon.Text = _isPinned ? "\uE77A" : StrPinIcon;
+                    _pinIcon.Text = _isPinned ? "\U000F0403" : StrPinIcon; // mdi pin / mdi pin-off
                     _pinIcon.Foreground = _isPinned
                         ? new SolidColorBrush(PrimaryBlue)
                         : new SolidColorBrush(TextSecondary);
@@ -171,10 +171,10 @@ namespace NudgeTray
 
             var closeIcon = new TextBlock
             {
-                Text = "\uE10A",
+                Text = "\U000F0156", // mdi close
                 FontSize = 16,
                 FontWeight = FontWeight.Normal,
-                FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                FontFamily = AnalyticsWindow.MdiFont,
                 Foreground = new SolidColorBrush(TextSecondary),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -199,23 +199,23 @@ namespace NudgeTray
         }
 
 
-        private void RefreshContent()
+        internal void RefreshContent()
         {
             if (_contentPanel == null) return;
 
             // ── AI Brain live tab ─────────────────────────────────────────────────
             if (_aiTabActive)
             {
-                // Skip no-op rebuilds: only rebuild when data actually changed
+                // Skip no-op rebuilds: only rebuild when data or ML state actually changed
                 long version = LiveAIState.UpdateVersion;
-                if (version == _lastAiUpdateVersion) return;
+                if (version == _lastAiUpdateVersion && Program._mlEnabled == _lastMlEnabled) return;
                 _lastAiUpdateVersion = version;
                 _lastAiEventCount = LiveAIState.GetCount();
+                _lastMlEnabled = Program._mlEnabled;
 
-                // Stop all live timers from the previous content build before replacing
+                // Don't tear down the visual tree — update in-place so PulseDot animation never freezes
                 StopLiveTimers();
-                _contentPanel.Children.Clear();
-                _contentPanel.Children.Add(CreateAILiveView());
+                RefreshAILiveView();
                 Dispatcher.UIThread.Post(ClampContentScrollOffset, DispatcherPriority.Background);
                 return;
             }
