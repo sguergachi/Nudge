@@ -138,7 +138,7 @@ internal static class BrowserDetector
         if (string.IsNullOrWhiteSpace(title))
             return null;
 
-        ReadOnlySpan<char> cleanedTitle = TrimKnownBrowserSuffix(title.AsSpan().Trim());
+        ReadOnlySpan<char> cleanedTitle = TrimKnownBrowserSuffix(TrimTabCountPrefix(title.AsSpan().Trim()));
         if (cleanedTitle.IsEmpty)
             return null;
 
@@ -201,6 +201,29 @@ internal static class BrowserDetector
         }
 
         return title;
+    }
+
+    // Chromium/Edge prefix browser titles with an unread/tab count, e.g. "(2) Reddit - …" or
+    // "(99+) Messenger - …". Strip a leading "(<digits>[+])" so the site name/domain that
+    // follows can be matched. A non-numeric parenthetical (e.g. "(Draft)") is left untouched.
+    internal static ReadOnlySpan<char> TrimTabCountPrefix(ReadOnlySpan<char> title)
+    {
+        if (title.Length < 3 || title[0] != '(')
+            return title;
+
+        int i = 1;
+        while (i < title.Length && char.IsDigit(title[i]))
+            i++;
+        if (i == 1)                                 // no digits after '('
+            return title;
+        if (i < title.Length && title[i] == '+')    // "(99+)"
+            i++;
+        if (i >= title.Length || title[i] != ')')
+            return title;
+        i++;                                        // skip ')'
+        while (i < title.Length && char.IsWhiteSpace(title[i]))
+            i++;
+        return title[i..];
     }
 
     private static bool TryExtractKnownDomain(ReadOnlySpan<char> title, out string? domain)

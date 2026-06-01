@@ -1921,9 +1921,13 @@ internal static class PipeWireParser
 /// </summary>
 internal static class MeetingTitleDetector
 {
+    // Bare app names (e.g. "microsoft teams") are intentionally excluded: a Teams *chat*
+    // window title contains "Microsoft Teams" too, so matching it would false-positive a
+    // meeting (issue #128). Only call/meeting-specific titles belong here; real Teams calls
+    // are caught by the Teams package owning the mic (AnyActiveMeetingApp) or by the camera.
     internal static readonly FrozenSet<string> TitleKeywords = new[]
     {
-        "zoom meeting", "zoom video", "google meet", "microsoft teams",
+        "zoom meeting", "zoom video", "google meet",
         "skype for business", "webex meeting", "gotomeeting", "bluejeans",
         "slack call", "slack huddle", "discord voice", "ringcentral meeting",
         "whereby", "lark meeting", "dingtalk meeting",
@@ -2009,9 +2013,15 @@ internal static class ConsentStorePresence
     //
     // Mic vs. camera asymmetry: a live camera is treated as a meeting regardless of which
     // app owns it (camera-on during focused work is rare and almost always a video call).
-    // A live mic is only a meeting when the owning app OR the foreground window looks like a
-    // comms app — otherwise it is dictation, a voice memo, a recorder, music, etc., which
-    // must not suppress nudges.
+    // A live mic is only a meeting when a comms app actually OWNS the mic, or the foreground
+    // window title is a real call/meeting — otherwise it is dictation, a voice memo, music,
+    // etc., which must not suppress nudges.
+    //
+    // We deliberately do NOT treat "the foreground process is a comms app" as sufficient:
+    // apps like Microsoft Teams hold the mic (via a helper such as MicrosoftOfficeHub) merely
+    // by being open, so foreground-Teams + held-mic would false-positive a meeting during a
+    // plain chat (issue #128). foregroundProcess is kept for context/signature but is no
+    // longer part of the mic-meeting decision.
     public static PresenceState Evaluate(
         IReadOnlyList<ConsentLeaf> micLeaves,
         IReadOnlyList<ConsentLeaf> camLeaves,
@@ -2023,7 +2033,6 @@ internal static class ConsentStorePresence
         bool micActive = AnyActive(micLeaves);
         bool meetingMic = micActive && (
             AnyActiveMeetingApp(micLeaves) ||
-            IsMeetingApp(foregroundProcess) ||
             MeetingTitleDetector.IsMeetingTitle(foregroundTitle));
 
         // IsMicActive carries "meeting-relevant mic" so SnapshotGate.InMeeting stays correct;
