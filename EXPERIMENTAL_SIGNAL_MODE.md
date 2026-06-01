@@ -55,6 +55,92 @@ documented history of over-engineering). Every section below is bound by these:
 
 ---
 
+## 0.5 Prerequisites & open-issue impact (do these FIRST)
+
+A review of the open issues showed the signal model is necessary but **not sufficient** — two root
+causes sit *beneath* it and one new sensor risks *worsening* an existing bug. Address these before/with
+the V4 work, or you ship a smarter model fed broken inputs.
+
+**Issue traceability**
+
+| Issue | Symptom | Addressed by | Status |
+|---|---|---|---|
+| #125 | Unknown/entertainment browsing predicted productive | §3 (drop category flags) + §6 (reputation) + §8 (seed) | core plan |
+| #131 | URL/domain not detected for Edge/Chrome (`domain:""`) | **§0.5a** (prerequisite) | gates §6 |
+| #130 | Recent-checks shows browser name, not the site | **§0.5a** | gates §6 |
+| #128 | Teams *chat* falsely flagged as a meeting | **§0.5b** | risk: §5 could worsen |
+| #129 | AI Brain tab renders blank | **§0.5c** | ✅ fixed in this PR |
+
+### 0.5a — Browser domain/URL extraction on Windows (gates Solution 5)
+
+**Root cause (confirmed):** every OS exposes only the window *title*, never the address bar. Windows
+Edge/Chrome titles carry a tab-count prefix (`(2) Reddit - … - Google Chrome`) and say "Reddit", not
+"reddit.com". `BrowserDetector.ExtractSite` (`BrowserDetector.cs:136`) + `TrimKnownBrowserSuffix`
+(`:195`) strip the browser *suffix* but not the `(N)` prefix, and the title rarely contains a real
+domain → `ExtractSite` returns null → `domain=""` at `NudgeCore.TestableLogic.cs:215`. With `domain=""`,
+`hd=false` zeroes `FocusedDomainHash`, `DistinctDomains300s`, `CurrentDomainShare300s`. **Per-domain
+reputation (§6) is starved on Windows until this is fixed.** Title is captured via Win32 `GetWindowText`
+in `WindowsPlatformService.GetForegroundAppWithTitle` (`nudge.cs:1047`). No UIA code exists today.
+
+> **Scope note:** Solutions 1 (behavioral) and 4 (audio/media/fullscreen) need **no** domain and work
+> on Windows regardless. Only Solution 5 depends on 0.5a. So 0.5a is the gate for *personalization*, not
+> for the whole mode.
+
+**Tier 1 — cheap title fixes (do now; recovers ~80% of *known* sites):**
+- Strip a leading numeric `(N)` tab-count prefix in `TrimKnownBrowserSuffix` (`BrowserDetector.cs:195`).
+- Add a page-title alias fallback: take the last non-browser-name `" - "`/`" | "` segment and match it
+  against the existing `KnownSiteAliases` map (e.g. "… - Stack Overflow" → `stackoverflow.com`).
+- Add the missing cases to `NudgeBrowserParsingTests.cs` (Windows `(N)` prefix; display-name segments).
+
+**Tier 2 — real fix: Windows UI Automation address-bar reader (new file, behind the experimental flag):**
+- New `WindowsBrowserUrlReader.cs` reading the Chromium omnibox edit control via UIA `ValuePattern`
+  (COM `CUIAutomation8`). Returns the actual URL → normalize to a domain.
+- **Hot-path safety (§0):** UIA calls are 30–50 ms — **must** be cached per-HWND and throttled off the
+  100 ms tick (refresh only on focus/title change, reuse the existing 500 ms app cache). Degrade to the
+  Tier-1 title parse on any failure; never throw.
+- Integrate as a *fallback* at the domain-derivation point (`NudgeCore.TestableLogic.cs:215`): prefer the
+  reader's URL when available, else title parsing. Guard with `RuntimeInformation.IsOSPlatform(Windows)`.
+- **Linux:** X11/Wayland titles *sometimes* include the domain; there is no clean URL API. Out of scope
+  beyond title parsing — behavioral/media signals carry the load there. (A browser-extension bridge is a
+  possible future, explicitly deferred.)
+
+### 0.5b — Meeting/presence hardening (#128), and don't let Solution 4 worsen it
+
+**Root cause (confirmed):** `ConsentStorePresence.Evaluate` (`NudgeCore.TestableLogic.cs:2000`) sets
+`meetingMic = micActive && (A || B || C)` where
+A = a comms app *owns* the active mic leaf, B = the *foreground* process is a comms app, C = the title
+contains a meeting keyword. For a Teams **chat**: A is false (mic is held by `MicrosoftOfficeHub`, not a
+comms-named leaf), but **B is true** (`ms-teams` foreground) **and C is true** (title contains the bare
+keyword `"microsoft teams"`, `:1918`). Both B and C fire → false meeting → nudges suppressed. Narrowing
+the title keyword alone is **not enough** because clause B independently fires.
+
+**Fix:**
+- **Clause C:** in `MeetingTitleDetector.TitleKeywords` (`:1918`) replace bare `"microsoft teams"` with
+  `"microsoft teams meeting"` / `"microsoft teams call"`; add `"skype meeting"`/`"skype call"`.
+- **Clause B:** drop the standalone "foreground process is a comms app" condition — it's too loose for
+  apps (Teams) that hold the mic merely by being open. Keep **A** (a comms app actively *owns* the mic →
+  Zoom-in-call still suppresses) and the narrowed **C**, plus the unconditional camera signal.
+- New rule: `meetingMic = micActive && (AnyActiveMeetingApp(micLeaves) || IsMeetingTitle(title))`.
+- **Synergy with §5b:** the registry permission flag can't tell a *held* mic from a *streaming* one. The
+  Core Audio `IAudioSessionManager2` capture-session *state* (audio actually flowing) — same COM
+  plumbing §5b adds for render detection — is the robust confirmation of a real call. Use it to gate A.
+- **Tests** (`NudgeMeetingGateTests.cs`): add Teams-chat-is-NOT-meeting, Teams-meeting-IS, Teams-call-IS;
+  confirm the existing Zoom-owns-mic and Google-Meet-title tests still pass.
+
+> **Open decision (§15):** dropping clause B means an audio-only call in an app whose mic-owning leaf is
+> unrecognized *and* whose title lacks a meeting/call keyword would be missed. Acceptable default (favors
+> not over-suppressing nudges); revisit if users report missed calls.
+
+### 0.5c — AI Brain tab blank (#129) — ✅ already fixed in this PR
+
+`RefreshContent` (`AnalyticsWindow.Views.cs:207`) skipped rebuilding the panel when
+`LiveAIState.UpdateVersion` was unchanged, which also fired on tab activation → blank tab. Fixed by
+forcing a rebuild (`_lastAiUpdateVersion = -1`) at both activation points. The new V4 signals surface in
+the same `CreateLiveFocusCard` "Sensor Signals" panel (`AnalyticsWindow.cs:1385`) — see §11. Follow-up
+polish (empty-state placeholder when there are no events yet) is optional, not required for #129.
+
+---
+
 ## 1. High-level architecture: dual pipelines
 
 ```
@@ -221,6 +307,11 @@ Currently hardcoded `false` (`nudge.cs:1635`, `CaptureActivityTick`). Sway alrea
 Already detectable via the existing presence layer (`GetPresenceState`, PipeWire `Stream/Input/Audio` /
 Windows ConsentStore). Surface the mic-active boolean as a **feature** (in addition to its existing
 meeting-suppression role). No new sensor — just expose the value.
+
+> **Coordinate with §0.5b (#128):** the Windows ConsentStore flag reports a *held* mic, not a *streaming*
+> one — which is exactly why Teams-chat false-positives a meeting. Prefer the Core Audio capture-session
+> *state* (audio actually flowing) for both this feature and the §0.5b meeting gate, so adding
+> `mic_active_flag` tightens rather than amplifies the false positive.
 
 > **Heuristic the model learns (not hardcoded):** `fullscreen_flag=1` + `current_domain_share≈1` +
 > long `focused_since_ms` + `audio_playing_flag=1` ≈ passive video. We do **not** hardcode this — we
@@ -410,8 +501,10 @@ Keep all V4 work behind `if (_experimentalMode)` so the V3 hot path is byte-for-
 
 Extend `HarvestSignal` (`NudgeJsonContext.cs:72`) and the `HARVEST:{json}` emit (`nudge.cs:1703`) with
 the new flags so the Analytics "AI Brain" tab can show them in experimental mode:
-`audio`, `media`, `mic`, `fullscreen` (already a field), `dom_rate`, `app_rate`. The `MLDATA` event and
-graph already carry `Score`/`Confidence` — no change needed there for the model output itself.
+`audio`, `media`, `mic`, `fullscreen` (already a field), `dom_rate`, `app_rate`. These render in the
+`CreateLiveFocusCard` "Sensor Signals" panel (`AnalyticsWindow.cs:1385`, via `AddFusionRow`) — the tab
+itself was fixed in this PR (§0.5c). The `MLDATA` event and graph already carry `Score`/`Confidence` —
+no change needed there for the model output itself.
 
 ---
 
@@ -501,6 +594,10 @@ the same PR or separately.
 | `NudgeCore.TestableLogic.cs` | `NudgeParsedArgs.ExperimentalMode` + parser; `FeatureSchemaV4` + `FeatureVectorV4`; `HarvestHeadersV4`; `CsvPathExp`/`ModelDirExp`; extend `ComputeFeatures` for V4 fields; PipeWire render-stream parse |
 | `nudge.cs` | mode-aware CSV/headers/port/schema; new-sensor polling (audio/media/fullscreen) + cache; reputation load + update on label; `QueryMLModel` V4 routing; `--verbose` decision trace + sensor-health + schema-mismatch logging (§11.5) |
 | `KWinScripts.cs` | fullscreen reporting (KWin/Wayland) |
+| `BrowserDetector.cs` | §0.5a Tier 1: strip `(N)` tab-count prefix; page-title alias fallback |
+| `WindowsBrowserUrlReader.cs` *(new, Windows)* | §0.5a Tier 2: UIA omnibox URL reader (cached/throttled, graceful degrade) |
+| `NudgeCore.TestableLogic.cs` (presence) | §0.5b: narrow `TitleKeywords`, drop standalone foreground-comms-app clause in `ConsentStorePresence.Evaluate` |
+| `AnalyticsWindow.cs` / `AnalyticsWindow.Views.cs` | §0.5c #129 fix (done); new signal rows in `CreateLiveFocusCard` |
 | `DomainReputationStore.cs` *(new)* | reputation store + smoothing |
 | `train_model.py` | `FEATURE_COLUMNS_V4` + detection → `schema_version=4` |
 | `generate_sample_data.py` *(optional)* | synthetic V4 seed rows |
@@ -523,3 +620,8 @@ the same PR or separately.
 6. Shadow logging (§11.5.7): ship the V3-vs-V4 inference-only comparison as a temporary tuning aid, or
    skip it to honor the "only the active pipeline runs" CPU decision (this plan: optional, off by
    default — enable only while tuning).
+7. §0.5a Tier 2 scope: ship the Windows UIA address-bar reader now, or start with Tier-1 title fixes
+   only and rely on behavioral/media signals until real domains are needed (this plan: Tier 1 is the
+   minimum gate for §6; Tier 2 makes Windows personalization actually work — recommended but separable).
+8. §0.5b clause-B removal trade-off: accept the rare missed audio-only call (default, favors not
+   over-suppressing) vs. keep a tighter foreground+streaming-mic check to retain it.
