@@ -87,7 +87,11 @@ public sealed class NudgeHarvestBenchmarks
         GC.Collect(2, GCCollectionMode.Forced);
         GC.WaitForPendingFinalizers();
         GC.Collect(2, GCCollectionMode.Forced);
-        long allocBefore = GC.GetTotalAllocatedBytes(precise: true);
+        // Thread-local counter: GC.GetTotalAllocatedBytes is process-wide, so it was polluted by
+        // the other benchmark classes xunit runs in parallel — causing flaky failures on the
+        // Windows CI VM (e.g. 18 MB measured vs. the harvest loop's real ~1 MB). The loop runs
+        // synchronously on this thread, so per-thread bytes are the correct, noise-free measure.
+        long allocBefore = GC.GetAllocatedBytesForCurrentThread();
 
         for (int i = 0; i < iterations; i++)
         {
@@ -97,7 +101,7 @@ public sealed class NudgeHarvestBenchmarks
                 Active());
         }
 
-        long allocAfter = GC.GetTotalAllocatedBytes(precise: true);
+        long allocAfter = GC.GetAllocatedBytesForCurrentThread();
         long totalAlloc = allocAfter - allocBefore;
         double avgAlloc = totalAlloc / (double)iterations;
 
