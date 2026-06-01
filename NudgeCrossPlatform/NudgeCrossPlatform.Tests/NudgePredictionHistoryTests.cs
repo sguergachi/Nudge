@@ -301,8 +301,6 @@ public sealed class NudgeMeetingTitleDetectorTests
     }
 
     [Theory]
-    [InlineData("Microsoft Teams")]
-    [InlineData("microsoft teams | some meeting")]
     [InlineData("Zoom Meeting — Project Kickoff")]
     [InlineData("zoom video webinar")]
     [InlineData("Google Meet - Weekly Sync")]
@@ -343,9 +341,19 @@ public sealed class NudgeMeetingTitleDetectorTests
     [Fact]
     public void IsMeetingTitle_IsCaseInsensitive()
     {
-        Assert.True(MeetingTitleDetector.IsMeetingTitle("MICROSOFT TEAMS"));
         Assert.True(MeetingTitleDetector.IsMeetingTitle("zoom meeting"));
         Assert.True(MeetingTitleDetector.IsMeetingTitle("ZOOM MEETING"));
+    }
+
+    [Theory]
+    [InlineData("Microsoft Teams")]
+    [InlineData("Chat | Singer, Malek | Microsoft Teams")]
+    public void IsMeetingTitle_BareTeamsOrTeamsChat_DoesNotMatch(string title)
+    {
+        // Issue #128: a Teams chat window title contains "Microsoft Teams" but is not a call,
+        // so the bare app name is deliberately not a meeting-title keyword. Real Teams calls
+        // are caught by the Teams package owning the mic or by the camera, not the title.
+        Assert.False(MeetingTitleDetector.IsMeetingTitle(title));
     }
 
     [Fact]
