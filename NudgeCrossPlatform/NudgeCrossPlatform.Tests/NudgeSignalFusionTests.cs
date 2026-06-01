@@ -329,8 +329,9 @@ public sealed class NudgeSignalFusionTests
 
     // ── Browser anchor fusion edge cases ──────────────────────────────────────
 
-    // Use a fake browser name so we don't depend on installed .desktop files
-    private const string FakeBrowserId = "my-fake-test-browser-x7z";
+    // Use a fake browser name recognised by IsBrowser (contains "msedge") but not a valid
+    // binary prefix — prevents false matches in TryMatchByExec on Ubuntu CI.
+    private const string FakeBrowserId = "fake-test-qxz7-msedge";
 
     [Fact]
     public void Classify_BrowserWithDevAnchor_InheritsDevCategory()
@@ -367,8 +368,8 @@ public sealed class NudgeSignalFusionTests
     public void Classify_BrowserWithUnknownDomain_ReturnsUtilityFallback()
     {
         // Browsers with no classifiable domain fall back to Utility/Fallback in the classifier.
-        // Signal quality is NOT downgraded by this — the analytics layer exempts browsers
-        // from the category-confidence downgrade (harvest.Browser == 0 guard).
+        // Signal quality is handled explicitly by DetermineSignalQuality (Usable when no site
+        // can be extracted) — the category confidence does not drive signal degradation.
         var (cat, conf) = AppCategoryClassifier.Classify(FakeBrowserId, "", AppCategory.Unknown);
         Assert.Equal(AppCategory.Utility, cat);
         Assert.Equal(CategoryConfidence.Fallback, conf);
@@ -399,7 +400,7 @@ public sealed class NudgeSignalFusionTests
         
         var entertainmentResult = entertainmentTracker.Capture(
             t.AddSeconds(6),
-            new WindowObservation("my-browser", "Some Page - MyBrowser", "f1", "1", FocusSource.KWinScript, false, 1),
+            new WindowObservation("fake-qxz-msedge", "Some Page", "f1", "1", FocusSource.KWinScript, false, 1),
             new IdleObservation(0, IdleSource.Unknown));
             
         Assert.NotEqual(AppCategory.Entertainment, entertainmentResult.AppCategory);
@@ -414,7 +415,7 @@ public sealed class NudgeSignalFusionTests
                 
         var communicationResult = communicationTracker.Capture(
             t.AddSeconds(6),
-            new WindowObservation("my-browser", "Some Page - MyBrowser", "f1", "1", FocusSource.KWinScript, false, 1),
+            new WindowObservation("fake-qxz-msedge", "Some Page", "f1", "1", FocusSource.KWinScript, false, 1),
             new IdleObservation(0, IdleSource.Unknown));
             
         Assert.NotEqual(AppCategory.Communication, communicationResult.AppCategory);
@@ -429,7 +430,7 @@ public sealed class NudgeSignalFusionTests
                 
         var devResult = devTracker.Capture(
             t.AddSeconds(6),
-            new WindowObservation("my-browser", "Some Page - MyBrowser", "f1", "1", FocusSource.KWinScript, false, 1),
+            new WindowObservation("fake-qxz-msedge", "Some Page", "f1", "1", FocusSource.KWinScript, false, 1),
             new IdleObservation(0, IdleSource.Unknown));
             
         Assert.Equal(AppCategory.Development, devResult.AppCategory);
@@ -444,7 +445,7 @@ public sealed class NudgeSignalFusionTests
                 
         var creativeResult = creativeTracker.Capture(
             t.AddSeconds(6),
-            new WindowObservation("my-browser", "Some Page - MyBrowser", "f1", "1", FocusSource.KWinScript, false, 1),
+            new WindowObservation("fake-qxz-msedge", "Some Page", "f1", "1", FocusSource.KWinScript, false, 1),
             new IdleObservation(0, IdleSource.Unknown));
             
         Assert.Equal(AppCategory.Creative, creativeResult.AppCategory);
@@ -459,7 +460,7 @@ public sealed class NudgeSignalFusionTests
                 
         var officeResult = officeTracker.Capture(
             t.AddSeconds(6),
-            new WindowObservation("my-browser", "Some Page - MyBrowser", "f1", "1", FocusSource.KWinScript, false, 1),
+            new WindowObservation("fake-qxz-msedge", "Some Page", "f1", "1", FocusSource.KWinScript, false, 1),
             new IdleObservation(0, IdleSource.Unknown));
             
         Assert.Equal(AppCategory.Office, officeResult.AppCategory);

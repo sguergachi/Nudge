@@ -396,7 +396,11 @@ internal sealed class ActivityFeatureTracker
         if (window.FocusSource is FocusSource.Unknown or FocusSource.HeuristicProcessScan)
             return SignalQuality.Poor;
 
-        if (window.CatalogDisagrees || (BrowserDetector.IsBrowser(appId) && string.IsNullOrWhiteSpace(title)))
+        if (window.CatalogDisagrees)
+            return SignalQuality.Usable;
+
+        if (BrowserDetector.IsBrowser(appId) &&
+            (string.IsNullOrWhiteSpace(title) || string.IsNullOrEmpty(BrowserDetector.ExtractSite(title))))
             return SignalQuality.Usable;
 
         return SignalQuality.Trusted;
@@ -1100,7 +1104,9 @@ internal static class AppCategoryClassifier
                     string exec = span["Exec=".Length..].ToString();
                     string binary = Path.GetFileNameWithoutExtension(exec.Split(' ')[0]).ToLowerInvariant();
                     if (binary.Contains(appId, StringComparison.OrdinalIgnoreCase) ||
-                        appId.Contains(binary, StringComparison.OrdinalIgnoreCase))
+                        appId.Equals(binary, StringComparison.OrdinalIgnoreCase) ||
+                        appId.StartsWith(binary + "-", StringComparison.OrdinalIgnoreCase) ||
+                        appId.StartsWith(binary + "_", StringComparison.OrdinalIgnoreCase))
                     {
                         matched = true;
                     }
