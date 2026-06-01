@@ -1320,6 +1320,7 @@ namespace NudgeTray
             _aiTabActive = true;
             _activeDetailView = DetailViewType.None;
             _contentScrollOffset = 0;
+            _lastAiUpdateVersion = -1;   // force rebuild on tab activation (see CreateAIBrainTab)
             UpdateTabStyles();
             RefreshContent();
         }

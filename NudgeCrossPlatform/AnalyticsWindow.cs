@@ -725,6 +725,10 @@ namespace NudgeTray
                 _aiTabActive = true;
                 _activeDetailView = DetailViewType.None;
                 _contentScrollOffset = 0;
+                // Force a rebuild on tab activation: the version-skip in RefreshContent is for
+                // periodic refreshes only, otherwise switching to the tab with no new ML data
+                // would early-return and leave the panel blank.
+                _lastAiUpdateVersion = -1;
                 UpdateTabStyles();
                 RefreshContent();
                 _aiLiveRefreshTimer?.Start();
