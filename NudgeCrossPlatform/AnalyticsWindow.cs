@@ -1506,6 +1506,18 @@ namespace NudgeTray
             return canvas;
         }
 
+        // In the live focus card, a browser with a resolved site shows the web app (domain) —
+        // e.g. "linear.app" — instead of the browser name ("Chrome"); the site is what the user
+        // cares about. Non-browsers, and browsers whose site can't be resolved, use the app name.
+        private static string ResolveFocusDisplayName(string currentApp, HarvestSignal? harvest)
+        {
+            if (string.IsNullOrEmpty(currentApp))
+                return "";
+            if (harvest is { Browser: 1 } && !string.IsNullOrEmpty(harvest.Domain))
+                return harvest.Domain;
+            return BrowserDetector.GetBrowserDisplayName(currentApp) ?? currentApp;
+        }
+
         /// <summary>Live card: current app in focus + latest prediction verdict.</summary>
         private static Border CreateLiveFocusCard(MLLiveEvent? latest)
         {
@@ -1513,9 +1525,7 @@ namespace NudgeTray
             var currentDetail = LiveAIState.CurrentDetail;
             var harvest     = LiveAIState.LastHarvest;
             bool hasApp     = !string.IsNullOrEmpty(currentApp);
-            string displayApp = hasApp
-                ? BrowserDetector.GetBrowserDisplayName(currentApp) ?? currentApp
-                : "";
+            string displayApp = ResolveFocusDisplayName(currentApp, harvest);
 
             string effectiveQuality = harvest?.Quality ?? "";
 
@@ -1623,7 +1633,14 @@ namespace NudgeTray
                     string cat = !string.IsNullOrEmpty(harvest.Category) ? harvest.Category : GetHarvestCategoryFallback(harvest);
                     if (!string.IsNullOrEmpty(cat))
                         AddCategoryBadgeRow(signalPanel, cat, harvest.CategoryConf);
-                    if (!string.IsNullOrEmpty(harvest.Domain))
+                    // For a browser, always surface the web app (the site is what matters, not
+                    // the browser). Show the resolved domain, or a placeholder when the title
+                    // didn't expose one so the user knows it's a browser with an unknown site.
+                    if (harvest.Browser == 1)
+                        AddFusionRow(signalPanel, "Web App",
+                            !string.IsNullOrEmpty(harvest.Domain) ? harvest.Domain : "unknown site",
+                            !string.IsNullOrEmpty(harvest.Domain) ? PrimaryBlue : TextTertiary);
+                    else if (!string.IsNullOrEmpty(harvest.Domain))
                         AddFusionRow(signalPanel, "Domain", harvest.Domain, PrimaryBlue);
                     if (showDetail && !string.IsNullOrEmpty(currentDetail))
                         AddFusionRow(signalPanel, "Tab", currentDetail, TextSecondary);
@@ -1779,9 +1796,7 @@ namespace NudgeTray
             var ts = _liveFocusTextStack;
             if (ts == null) return;
 
-            string displayApp = hasApp
-                ? BrowserDetector.GetBrowserDisplayName(currentApp) ?? currentApp
-                : "";
+            string displayApp = ResolveFocusDisplayName(currentApp, harvest);
             bool showDetail = !string.IsNullOrWhiteSpace(currentDetail)
                 && !currentDetail.Equals(currentApp, StringComparison.OrdinalIgnoreCase)
                 && !currentDetail.Contains(currentApp, StringComparison.OrdinalIgnoreCase);
