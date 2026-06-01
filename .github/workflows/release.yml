@@ -47,9 +47,9 @@ jobs:
       - name: Publish self-contained Windows binaries
         working-directory: NudgeCrossPlatform
         run: |
-          dotnet publish nudge.csproj        -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o ../dist/nudge --nologo
-          dotnet publish nudge-notify.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o ../dist/notify --nologo
-          dotnet publish nudge-tray.csproj   -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -f net10.0-windows10.0.17763.0 -p:SkipBuildNudgeDaemon=true -o ../dist/tray --nologo
+          dotnet publish nudge.csproj        -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:PublishReadyToRun=true -o ../dist/nudge --nologo
+          dotnet publish nudge-notify.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:PublishReadyToRun=true -o ../dist/notify --nologo
+          dotnet publish nudge-tray.csproj   -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:PublishReadyToRun=true -f net10.0-windows10.0.17763.0 -p:SkipBuildNudgeDaemon=true -o ../dist/tray --nologo
           New-Item -ItemType Directory -Force -Path ../dist/win-x64
           Copy-Item ../dist/nudge/nudge.exe, ../dist/notify/nudge-notify.exe, ../dist/tray/nudge-tray.exe ../dist/win-x64/
           Copy-Item ../dist/tray/*.dll, ../dist/tray/*.exe, ../dist/tray/*.pdb ../dist/win-x64/ -ErrorAction SilentlyContinue
@@ -144,15 +144,15 @@ jobs:
           # Restore + publish each project sequentially (shared obj/ overwrites on restore)
           rm -rf obj
           dotnet restore nudge.csproj -r linux-x64 --nologo
-          dotnet publish nudge.csproj -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true --no-restore -o bin/Release/net10.0/linux-x64/publish_nudge --nologo
+          dotnet publish nudge.csproj -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -p:PublishReadyToRun=true --no-restore -o bin/Release/net10.0/linux-x64/publish_nudge --nologo
 
           rm -rf obj
           dotnet restore nudge-notify.csproj -r linux-x64 --nologo
-          dotnet publish nudge-notify.csproj -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true --no-restore -o bin/Release/net10.0/linux-x64/publish_notify --nologo
+          dotnet publish nudge-notify.csproj -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -p:PublishReadyToRun=true --no-restore -o bin/Release/net10.0/linux-x64/publish_notify --nologo
 
           rm -rf obj
           dotnet restore nudge-tray.csproj -r linux-x64 --nologo
-          dotnet publish nudge-tray.csproj -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -f net10.0 -p:SkipBuildNudgeDaemon=true --no-restore -o bin/Release/net10.0/linux-x64/publish_tray --nologo
+          dotnet publish nudge-tray.csproj -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -p:PublishReadyToRun=true -f net10.0 -p:SkipBuildNudgeDaemon=true --no-restore -o bin/Release/net10.0/linux-x64/publish_tray --nologo
 
           # Copy executables (name matches project — nudge, nudge-notify, nudge-tray)
           cp bin/Release/net10.0/linux-x64/publish_nudge/nudge dist/linux/nudge

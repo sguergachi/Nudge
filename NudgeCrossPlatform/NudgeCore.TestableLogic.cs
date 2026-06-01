@@ -1998,7 +1998,7 @@ internal readonly record struct ConsentLeaf(
     // live process — Windows occasionally leaves a stale key (Stop never stamped) when an
     // app is force-killed. Packaged entries are trusted: their key name is a Package Family
     // Name (e.g. "MSTeams_8wekyb3d8bbwe") which can't be matched to a running process name.
-    public bool IsActive => StartFileTime != 0 && StopFileTime == 0 && (IsPackaged || ProcessRunning);
+    public bool IsActive => StartFileTime > 0 && StopFileTime == 0 && (IsPackaged || ProcessRunning);
 
     public string AppHint => ConsentStorePresence.ExtractAppHint(AppId);
 }

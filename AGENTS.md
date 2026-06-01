@@ -54,8 +54,12 @@ Or let the build script run them: `build.sh` always runs tests; `build.ps1 -Skip
 | `HARVEST:{json}` | Sensor fusion signal (2s) |
 | `MEETING:{mic}\|{cam}\|{sharing}` | Live meeting/presence state (5s) |
 | `SUPPRESS:{reason}` | Snapshot suppressed (InMeeting/ScreenSharing/Afk/PoorSignal) |
+| `MEETINGDETAIL:{mic}\|{cam}\|{fg}\|{title}` | Windows-only: active ConsentLeaves detail when InMeeting (5s) |
+| `MLRESPONSE:{json}` | `MLResponseEvent` — daemon → tray after user responds YES/NO |
 
 YES/NO responses flow back via UDP `127.0.0.1:45001`.
+
+**Response correlation:** `_lastMLTriggerT` (`nudge.cs:1436`) tracks the timestamp of the last triggered snapshot — **both AI (`"ai"`) and interval (`"int"`)**. When a YES/NO UDP response arrives, `BroadcastMLResponse()` (`nudge.cs:2221`) checks this field. If >0, it emits `MLRESPONSE:{json}` to stdout so the tray's `LiveAIState.UpdateResponse()` can set `AiCorrect` on the matching event by timestamp. This is how interval responses get ✓/✗ in the Recent Checks UI — do not add a separate field/branch; `_lastMLTriggerT` serves both trigger sources.
 
 ### V2 Harvest Engine
 
@@ -80,15 +84,79 @@ Every snapshot (ML or interval) passes through `SnapshotGate.Evaluate()` before 
 |--------|-----------|
 | `Afk` | `AfkFlag == 1` (idle > 60s) |
 | `PoorSignal` | `SignalQuality == Poor` (unknown app, process scan, etc.) |
-| `InMeeting` | Mic/camera active (Core Audio API, PipeWire, PulseAudio, Windows Registry, process scan) |
+| `InMeeting` | Mic/camera active (Windows ConsentStore, PipeWire, PulseAudio, process scan) |
 | `ScreenSharing` | PipeWire screen-cast stream active |
 
-Presence detection (`GetPresenceState()`) uses graceful degradation across 3 layers on each platform. Linux: PipeWire (`pw-dump`) → PulseAudio (`pactl`) → Process scan (`IsMeetingProcessRunning()`). Windows uses a 4-layer approach:
+### Linux presence detection (3-layer graceful degradation)
 
-0. **IAudioSessionManager2 Core Audio API** — directly queries the audio subsystem for active capture sessions. Catches ALL mic usage including WASAPI exclusive mode, virtual devices, and apps that bypass the consent store. Most reliable layer.
-1. **CapabilityAccessManager registry** (`ConsentStore\microphone`, `ConsentStore\webcam`) — hardware-level mic/camera detection. Handles both `REG_QWORD` and `REG_DWORD` value types. Stale entries (process not running) are filtered out.
-2. **Process scan** — checks if known meeting apps are running (Teams, Zoom, Skype, Webex, Slack, Discord, GoToMeeting, BlueJeans, RingCentral, Whereby, Lark, DingTalk, Tencent Meeting, Voov).
-3. **Window title heuristic** — checks the foreground window title for meeting keywords (e.g. "Zoom Meeting", "Google Meet", "Microsoft Teams").
+`LinuxPlatformService.GetPresenceState()` (`nudge.cs:832`):
+
+| Layer | Source | Signals | Fall-through condition |
+|-------|--------|---------|----------------------|
+| 0 | `pw-dump` → `PipeWireParser.Parse` | Mic, camera, screenshare | PipeWire not available OR found nothing |
+| 1 | `pactl list source-outputs` → `PulseAudioParser` | Mic only | PulseAudio not available OR found nothing |
+| 2 | `Process.GetProcesses()` → `MeetingTitleDetector` | Any known meeting app running (weak) | Last resort |
+
+Process scan (layer 2) only fires when neither PipeWire nor PulseAudio is available. It checks process names against `MeetingTitleDetector.ProcessNames` (teams, zoom, skype, webex, slack, discord, etc.) — but cannot distinguish chat from call, so it's a fallback for systems with broken audio detection.
+
+### Windows presence detection
+
+A **single layer**: the CapabilityAccessManager ConsentStore registry — the same keys the Windows privacy indicator icon reads.
+
+`WindowsPlatformService.GetPresenceState()` (`nudge.cs:1110`) delegates to a background `WindowsPresenceWatcher` that monitors `{HKCU,HKLM}\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\{microphone,webcam}` for changes via `RegNotifyChangeKeyValue`. No polling, no Core Audio COM — near-instant detection with ~zero idle CPU.
+
+#### Registry data model
+
+Each app under the ConsentStore has two FILETIME values:
+
+| Value | Meaning |
+|-------|---------|
+| `LastUsedTimeStart` | When the capability was last started; 0 = never used |
+| `LastUsedTimeStop` | When the capability was last stopped; 0 = **currently in use**; missing = never written |
+
+These are read into `ConsentLeaf` records (`NudgeCore.TestableLogic.cs:1990`):
+
+```csharp
+record struct ConsentLeaf(string AppId, long StartFileTime, long StopFileTime,
+                          bool IsPackaged, bool ProcessRunning)
+{
+    bool IsActive => StartFileTime > 0 && StopFileTime == 0
+                     && (IsPackaged || ProcessRunning);
+}
+```
+
+**Key detail:** `ReadStopFileTime()` (`nudge.cs:1329`) returns `-1` when `LastUsedTimeStop` is **missing** from the registry — distinct from an actual `0` (which means "still in use"). A missing value is treated as inactive. This prevents false positives when Windows omits the key for packaged Store apps (e.g. new Teams) that previously accessed the mic but aren't actively using it.
+
+For NonPackaged (classic Win32) apps, `IsActive` also requires the process to be running — a staleness guard against force-killed apps whose ConsentStore entries linger with `StopFileTime == 0`.
+
+#### Classification logic
+
+`ConsentStorePresence.Evaluate()` (`NudgeCore.TestableLogic.cs:2015`) applies **mic-vs-camera asymmetry**:
+
+| Condition | Meeting? | Rationale |
+|-----------|----------|-----------|
+| Any camera active | **Yes** | Camera-on during focus work is almost always a video call |
+| Mic active, owned by a meeting app | **Yes** | e.g. Teams.exe owns the mic |
+| Mic active, foreground is a meeting app | **Yes** | e.g. Teams in focus, mic owned by another process |
+| Mic active, foreground title has meeting keywords | **Yes** | Browser meeting: Chrome owns mic, title says "Google Meet" |
+| Mic active, none of the above | **No** | Dictation, voice memo, recorder — must not suppress |
+| Nothing active | **No** | — |
+
+A meeting app is one whose name substring-matches `MeetingTitleDetector.ProcessNames` (teams, zoom, skype, webex, slack, discord, etc.). Packaged apps are matched via `ExtractAppHint()` which reduces `MSTeams_8wekyb3d8bbwe` → `MSTeams`.
+
+#### Diagnostic output
+
+When `InMeeting` is true on Windows, `GetPresenceState()` emits a `MEETINGDETAIL:` line every 5s:
+
+```
+MEETINGDETAIL: mic=[MSTeams(s=133789012345,st=0,pkg=True)] cam=[] fg=ms-teams title="Weekly sync"
+```
+
+Fields: `s` = StartFileTime, `st` = StopFileTime (-1 = missing, 0 = in use, >0 = stopped), `pkg` = IsPackaged, `fg` = foreground process name.
+
+### Gating
+
+`SnapshotGate.Evaluate()` (`NudgeCore.TestableLogic.cs:1810`) applies suppression in priority order: PoorSignal → Afk → ScreenSharing → InMeeting. If `PresenceSource.None` (detection unavailable), meeting/screenshare flags are ignored — gate fails open.
 
 Gated by `--no-meeting-suppression` flag — passes `PresenceState.Unavailable` so gate fails open (never suppresses).
 

@@ -357,6 +357,19 @@ public sealed class NudgeMeetingGateTests
     public void ConsentLeaf_NonPackagedProcessRunning_IsActive() =>
         Assert.True(new ConsentLeaf("C:#x#Zoom.exe", 100, 0, IsPackaged: false, ProcessRunning: true).IsActive);
 
+    [Fact]
+    public void ConsentLeaf_PackagedStopMissing_IsInactive()
+    {
+        // Missing LastUsedTimeStop (sentinel -1) must not be treated as "still in use".
+        Assert.False(new ConsentLeaf("MSTeams_8wekyb3d8bbwe", 100, -1, IsPackaged: true, ProcessRunning: false).IsActive);
+    }
+
+    [Fact]
+    public void ConsentLeaf_NonPackagedStopMissing_IsInactive()
+    {
+        Assert.False(new ConsentLeaf("C:#x#Teams.exe", 100, -1, IsPackaged: false, ProcessRunning: true).IsActive);
+    }
+
     [Theory]
     [InlineData(@"C:#Program Files#Zoom#bin#Zoom.exe", "Zoom")]
     [InlineData("MSTeams_8wekyb3d8bbwe", "MSTeams")]
@@ -453,6 +466,20 @@ public sealed class NudgeMeetingGateTests
             [Leaf("MSTeams_8wekyb3d8bbwe", active: true, packaged: true)], [],
             "ms-teams", "");
         Assert.False(state.IsScreenSharing);
+    }
+
+    [Fact]
+    public void Evaluate_PackagedTeamsStopMissing_NotInMeeting()
+    {
+        // Packaged Teams has a mic history but LastUsedTimeStop is missing (-1 sentinel).
+        // Must NOT suppress nudges — Teams being open is not a meeting.
+        var leaf = new ConsentLeaf("MSTeams_8wekyb3d8bbwe",
+            StartFileTime: 100, StopFileTime: -1,
+            IsPackaged: true, ProcessRunning: false);
+        var state = ConsentStorePresence.Evaluate(
+            [leaf], [],
+            "ms-teams", "Microsoft Teams");
+        Assert.False(state.InMeeting);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

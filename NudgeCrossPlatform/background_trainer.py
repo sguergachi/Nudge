@@ -24,7 +24,6 @@ if _SCRIPT_DIR not in sys.path:
 
 DEFAULT_MIN_SAMPLES = 10
 DEFAULT_CHECK_INTERVAL = 15  # check for new labeled samples every 15 seconds
-_RETRAIN_NEW_DATA_RATIO = 0.10  # retrain when 10% more data exists
 
 
 def _count_labeled_rows(csv_path: str) -> int:
@@ -142,7 +141,7 @@ def _should_train(model_dir: str, current_count: int, min_samples: int,
     if force:
         return True
     last_count = _load_meta(model_dir).get('sample_count', 0)
-    threshold = last_count + max(20, int(last_count * _RETRAIN_NEW_DATA_RATIO))
+    threshold = last_count + 20
     return current_count >= threshold
 
 

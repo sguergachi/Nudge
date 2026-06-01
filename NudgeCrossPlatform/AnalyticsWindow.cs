@@ -20,6 +20,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -58,6 +59,7 @@ namespace NudgeTray
 
         // AI Brain live tab
         private bool _aiTabActive;
+        private bool _lastMlEnabled;
         private Border? _aiLiveTab;
         private DispatcherTimer? _aiLiveRefreshTimer;
         private int _lastAiEventCount;
@@ -73,6 +75,12 @@ namespace NudgeTray
         private static bool _trainingDetailsOpen;
         // Track live timers created by AI tab content so they can be stopped on rebuild
         private static readonly List<DispatcherTimer> _liveTimers = new();
+
+        // Persistent pulse-dot animation — survives content rebuilds so waves die naturally
+        private static PulseDot? _livePulseDot;
+
+        // Cached reference to the text stack in the live focus card — updated in-place.
+        private static StackPanel? _liveFocusTextStack;
 
         // Countdown / progress bar (kept for timer lifetime across rebuilds)
         private DispatcherTimer? _countdownTimer;
@@ -171,10 +179,12 @@ namespace NudgeTray
             {
                 if (_aiTabActive)
                 {
+                    bool mlEnabled = Program._mlEnabled;
+                    long version = LiveAIState.UpdateVersion;
                     int eventCount = LiveAIState.GetRecent().Count;
-                    if (eventCount != _lastAiEventCount)
+                    if (mlEnabled != _lastMlEnabled || version != _lastAiUpdateVersion || eventCount != _lastAiEventCount)
                     {
-                        _lastAiEventCount = eventCount;
+                        _lastMlEnabled = mlEnabled;
                         RefreshContent();
                     }
                 }
@@ -324,6 +334,9 @@ namespace NudgeTray
             _aiLiveRefreshTimer?.Stop();
             _countdownTimer?.Stop();
             StopLiveTimers();
+            _livePulseDot?.Stop();
+            _livePulseDot = null;
+            _liveFocusTextStack = null;
             base.OnClosed(e);
         }
 
@@ -726,6 +739,8 @@ namespace NudgeTray
             border.PointerPressed += (s, e) =>
             {
                 _aiTabActive = true;
+                _lastMlEnabled = !Program._mlEnabled;  // force delta → RefreshContent rebuilds
+                _lastAiUpdateVersion = -1;
                 _activeDetailView = DetailViewType.None;
                 _contentScrollOffset = 0;
                 UpdateTabStyles();
@@ -790,6 +805,122 @@ namespace NudgeTray
             return panel;
         }
 
+        /// <summary>Refresh the AI tab content in-place — never clears the visual tree.
+        /// Keeps the PulseDot animation running at 60fps without interruption.</summary>
+        private void RefreshAILiveView()
+        {
+            if (_contentPanel == null) return;
+
+            // When ML is not running, always show the "Enable AI" card.
+            // This prevents broken hybrid views where empty sections get
+            // appended below the card during the 5s refresh cycle.
+            if (!Program._mlEnabled)
+            {
+                _contentPanel.Children.Clear();
+                var fresh = CreateAILiveView();
+                if (fresh.Children.Count > 0)
+                    _contentPanel.Children.Add(fresh);
+                return;
+            }
+
+            long t0 = Stopwatch.GetTimestamp();
+
+            bool hasExisting = _contentPanel.Children.Count == 1
+                            && _contentPanel.Children[0] is StackPanel;
+            var panel = hasExisting ? (StackPanel)_contentPanel.Children[0]!
+                                    : new StackPanel { Spacing = 10 };
+
+            // ── Focus card: update in-place or create ──────────────────────────
+            if (panel.Children.Count > 0 && panel.Children[0] is Border)
+            {
+                UpdateFocusCardInPlace();
+            }
+            else
+            {
+                if (panel.Children.Count > 0)
+                    panel.Children.Clear();
+                var events = LiveAIState.GetRecent();
+                var latest = events.Count > 0 ? events[events.Count - 1] : null;
+                panel.Children.Add(CreateLiveFocusCard(latest));
+            }
+
+            // ── Downstream sections: rebuild & replace (indices 1..n) ─────────
+            var eventsList = LiveAIState.GetRecent();
+            var latestEvent = eventsList.Count > 0 ? eventsList[eventsList.Count - 1] : null;
+            var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var recentEvents = eventsList
+                .Where(e => now - e.T <= 5 * 3600)
+                .ToList();
+
+            // Prediction section (index 1)
+            var predSection = CreatePredictionHistorySection(recentEvents, latestEvent);
+            predSection.Tag = "ai_prediction_section";
+            SetOrReplaceChild(panel, 1, predSection);
+
+            // Events section (index 2) — optional
+            if (eventsList.Count > 0)
+            {
+                var eventsSection = CreateSection("Recent Checks", CreateEventsLog(eventsList));
+                eventsSection.Tag = "ai_events_section";
+                SetOrReplaceChild(panel, 2, eventsSection);
+            }
+            else
+            {
+                RemoveChild(panel, 2);
+            }
+
+            // Training section (index 3)
+            var trainingSection = CreateSection("Model Training", CreateTrainingView());
+            trainingSection.Tag = "ai_training_section";
+            SetOrReplaceChild(panel, 3, trainingSection);
+
+            // Remove any extra children beyond index 3
+            while (panel.Children.Count > 4)
+                panel.Children.RemoveAt(panel.Children.Count - 1);
+
+            // Attach to content panel if new
+            if (!hasExisting)
+            {
+                _contentPanel.Children.Clear();
+                _contentPanel.Children.Add(panel);
+            }
+
+            double elapsedMs = (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency;
+            if (elapsedMs > 10.0)
+                Console.WriteLine($"[AI-REBUILD] RefreshAILiveView took {elapsedMs:F1}ms (hasExisting={hasExisting})");
+        }
+
+        private static void SetOrReplaceChild(Panel panel, int index, Control child)
+        {
+            long t0 = Stopwatch.GetTimestamp();
+            while (panel.Children.Count <= index)
+                panel.Children.Add(new Panel());
+            var old = panel.Children[index];
+            if (old != null)
+            {
+                panel.Children.RemoveAt(index);
+                panel.Children.Insert(index, child);
+            }
+            else
+            {
+                panel.Children[index] = child;
+            }
+            double elapsedMs = (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency;
+            if (elapsedMs > 5.0)
+                Console.WriteLine($"[AI-REBUILD] SetOrReplaceChild idx={index} took {elapsedMs:F1}ms");
+        }
+
+        private static void RemoveChild(Panel panel, int index)
+        {
+            if (index < panel.Children.Count)
+                panel.Children.RemoveAt(index);
+        }
+
+        public static void UpdateLivePulseDot()
+        {
+            UpdateFocusCardInPlace();
+        }
+
         private static StackPanel CreateTrainingView()
         {
             var (sampleCount, minSamples, lastTrainedCount, isTraining,
@@ -802,23 +933,21 @@ namespace NudgeTray
             // ── Status row ──────────────────────────────────────────────────────
             bool hasModel = lastTrained != DateTime.MinValue;
             int newSinceTrain = hasModel ? Math.Max(0, sampleCount - lastTrainedCount) : sampleCount;
-            int retrainThreshold = hasModel
-                ? lastTrainedCount + Math.Max(20, (int)(lastTrainedCount * 0.10))
-                : minSamples;
+            int retrainDelta = hasModel ? 20 : 0;
 
             Color statusColor;
             string statusText;
             if (isTraining)
             {
                 statusColor = AIStatusLearning;
-                statusText  = architecture is "" or "…" ? "Training…" : $"Training ({architecture})…";
+                statusText  = "Training…";
             }
             else if (!string.IsNullOrEmpty(lastError))
             {
                 statusColor = UnproductiveRed;
                 statusText  = "Error";
             }
-            else if (hasModel && newSinceTrain >= retrainThreshold)
+            else if (hasModel && newSinceTrain >= retrainDelta)
             {
                 statusColor = AIStatusLearning;
                 statusText  = "Ready to retrain";
@@ -831,7 +960,7 @@ namespace NudgeTray
             else if (sampleCount >= minSamples && hasModel)
             {
                 statusColor = AIStatusLearning;
-                statusText  = $"{retrainThreshold - newSinceTrain} more responses until retrain";
+                statusText  = $"{retrainDelta - newSinceTrain} more responses until retrain";
             }
             else if (sampleCount >= minSamples)
             {
@@ -920,24 +1049,14 @@ namespace NudgeTray
                         Foreground = new SolidColorBrush(deltaColor)
                     });
                 }
-                if (!string.IsNullOrEmpty(architecture) && !isTraining)
-                {
-                    modelRow.Children.Add(new TextBlock
-                    {
-                        Text = $"· {architecture}",
-                        FontSize = 11,
-                        Foreground = new SolidColorBrush(TextTertiary)
-                    });
-                }
+
                 panel.Children.Add(modelRow);
             }
 
             // ── Training / Sample progress bar ────────────────────────────────────
             if (isTraining)
             {
-                string trainLabel = architecture is "" or "…"
-                    ? "Training model…"
-                    : $"Training {architecture} model…";
+                string trainLabel = "Training model…";
 
                 panel.Children.Add(new TextBlock
                 {
@@ -997,7 +1116,7 @@ namespace NudgeTray
                 if (hasModel || sampleCount > 0)
                 {
                     int barNumerator = hasModel ? newSinceTrain : sampleCount;
-                    int barDenominator = hasModel ? retrainThreshold : minSamples;
+                    int barDenominator = hasModel ? retrainDelta : minSamples;
                     double barFill = barDenominator > 0
                         ? Math.Min(1.0, (double)barNumerator / barDenominator)
                         : 0;
@@ -1032,7 +1151,7 @@ namespace NudgeTray
                     panel.Children.Add(barBg);
 
                     string thresholdLabel = hasModel
-                        ? $"{newSinceTrain} / {retrainThreshold} new samples needed for retraining"
+                        ? $"{newSinceTrain} / {retrainDelta} new samples needed for retraining"
                         : $"{sampleCount} / {minSamples} samples needed for first model";
                     panel.Children.Add(new TextBlock
                     {
@@ -1413,18 +1532,19 @@ namespace NudgeTray
             // ── Main row ──────────────────────────────────────────────────────
             var mainGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
 
-            var pulseDot = new PulseDot
+            // Reuse persistent pulse dot so waves die naturally across rebuilds.
+            // Only the seed/color is updated; the phase/timer continues uninterrupted.
+            int seed = ComputePulseSeed(harvest);
+            _livePulseDot ??= new PulseDot
             {
-                Color = fusionColor,
-                Seed  = ComputePulseSeed(harvest),
                 VerticalAlignment = VerticalAlignment.Top,
                 Margin = new Thickness(0, 3, 1, 0)
             };
-            _liveTimers.Add(pulseDot._timer);
-            pulseDot.Start();
+            _livePulseDot.UpdateFromHarvest(seed, fusionColor);
+            _livePulseDot.Start();
 
-            mainGrid.Children.Add(pulseDot);
-            Grid.SetColumn(pulseDot, 0);
+            mainGrid.Children.Add(_livePulseDot);
+            Grid.SetColumn(_livePulseDot, 0);
 
             bool showDetail = !string.IsNullOrWhiteSpace(currentDetail)
                 && !currentDetail.Equals(currentApp, StringComparison.OrdinalIgnoreCase)
@@ -1460,13 +1580,6 @@ namespace NudgeTray
 
             // Fusion quality + meeting status on the same line
             var qualityRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
-            qualityRow.Children.Add(new Border
-            {
-                Width = 6, Height = 6,
-                CornerRadius = new CornerRadius(3),
-                Background = new SolidColorBrush(fusionColor),
-                VerticalAlignment = VerticalAlignment.Center
-            });
             qualityRow.Children.Add(new TextBlock
             {
                 Text       = qualityLabel,
@@ -1482,6 +1595,7 @@ namespace NudgeTray
                 Foreground = new SolidColorBrush(focusStatusColor)
             });
             textStack.Children.Add(qualityRow);
+            _liveFocusTextStack = textStack;
             Grid.SetColumn(textStack, 1);
 
             mainGrid.Children.Add(textStack);
@@ -1638,6 +1752,83 @@ namespace NudgeTray
             return "degraded signal";
         }
 
+        /// <summary>Update just the mutable elements (PulseDot + text) of the existing focus card in-place.
+        /// Does NOT remove or reparent any control — the animation continues uninterrupted.</summary>
+        private static void UpdateFocusCardInPlace()
+        {
+            var harvest    = LiveAIState.LastHarvest;
+            var currentApp = LiveAIState.CurrentApp;
+            var currentDetail = LiveAIState.CurrentDetail;
+            bool hasApp    = !string.IsNullOrEmpty(currentApp);
+
+            string effectiveQuality = harvest?.Quality ?? "";
+            Color fusionColor = harvest == null         ? TextTertiary
+                : effectiveQuality == "trusted"         ? ProductiveGreen
+                : effectiveQuality == "usable"          ? AIStatusLearning
+                                                        : UnproductiveRed;
+            string qualityLabel = harvest == null            ? "Initializing"
+                : effectiveQuality == "trusted"              ? "Trusted"
+                : effectiveQuality == "usable"               ? "Usable"
+                                                             : "Poor Signal";
+
+            // ── PulseDot ─────────────────────────────────────────────────────
+            int seed = ComputePulseSeed(harvest);
+            _livePulseDot?.UpdateFromHarvest(seed, fusionColor);
+
+            // ── Text updates (use stored index-based access — faster than tree walking) ──
+            var ts = _liveFocusTextStack;
+            if (ts == null) return;
+
+            string displayApp = hasApp
+                ? BrowserDetector.GetBrowserDisplayName(currentApp) ?? currentApp
+                : "";
+            bool showDetail = !string.IsNullOrWhiteSpace(currentDetail)
+                && !currentDetail.Equals(currentApp, StringComparison.OrdinalIgnoreCase)
+                && !currentDetail.Contains(currentApp, StringComparison.OrdinalIgnoreCase);
+
+            // Index 0 = app name
+            if (ts.Children.Count > 0 && ts.Children[0] is TextBlock appName)
+            {
+                appName.Text = hasApp ? TruncateAppName(displayApp, 24) : "Engine starting up…";
+                appName.Foreground = new SolidColorBrush(hasApp ? TextPrimary : TextTertiary);
+            }
+
+            // Index 1 = app detail (optional)
+            if (showDetail)
+            {
+                if (ts.Children.Count > 1 && ts.Children[1] is TextBlock detail)
+                    detail.Text = TruncateAppName(currentDetail, 55);
+            }
+
+            // Quality row is the last child of textStack
+            if (ts.Children.Count > 0 &&
+                ts.Children[ts.Children.Count - 1] is StackPanel qualityRow &&
+                qualityRow.Children.Count >= 2)
+            {
+                // Label
+                if (qualityRow.Children[0] is TextBlock ql)
+                {
+                    ql.Text = qualityLabel;
+                    ql.Foreground = new SolidColorBrush(fusionColor);
+                }
+                // Status
+                bool away = harvest?.Afk == 1;
+                bool inMeeting = LiveAIState.InMeeting;
+                bool screenSharing = LiveAIState.ScreenSharing;
+                string statusText = away ? "· Away From Keyboard"
+                    : screenSharing ? "· Presenting"
+                    : inMeeting ? "· In a Meeting"
+                    : "· In Focus Now";
+                Color statusColor = away ? AIStatusLearning
+                    : screenSharing || inMeeting ? ProductiveGreen : TextTertiary;
+                if (qualityRow.Children[1] is TextBlock st)
+                {
+                    st.Text = statusText;
+                    st.Foreground = new SolidColorBrush(statusColor);
+                }
+            }
+        }
+
         private static string FormatKWinStatus(string src) => src switch
         {
             "KWinScript"              => "KWin Script ✓",
@@ -1756,6 +1947,8 @@ namespace NudgeTray
                 CornerRadius = new CornerRadius(2),
                 HorizontalAlignment = HorizontalAlignment.Left
             };
+            var bubbleTransform = new TranslateTransform();
+            bubble.RenderTransform = bubbleTransform;
             track.Child = bubble;
 
             double pos = -(bubbleWidth / 2);
@@ -1770,7 +1963,7 @@ namespace NudgeTray
                 if (pos > w - bubbleWidth + 4) { pos = w - bubbleWidth + 4; dir = -1; }
                 else if (pos < -4) { pos = -4; dir = 1; }
 
-                bubble.Margin = new Thickness(pos, 0, 0, 0);
+                bubbleTransform.X = pos;
             };
             timer.Start();
             _liveTimers.Add(timer);
@@ -2736,11 +2929,25 @@ namespace NudgeTray
                 descText.Foreground = new SolidColorBrush(TextSecondary);
                 descText.Text = "Installing Python dependencies and starting ML services…";
                 if (hintTextRef != null) hintTextRef.IsVisible = false;
+
+                // Live progress: poll MlLoadingStep so the user sees each phase
+                var progressTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
+                progressTimer.Tick += (_, _) =>
+                {
+                    var step = Program.MlLoadingStep;
+                    if (!string.IsNullOrEmpty(step))
+                        descText.Text = step;
+                };
+                progressTimer.Start();
+
                 bool success = await Task.Run(() => Program.RestartWithML());
+
+                progressTimer.Stop();
+
                 if (!success)
                 {
                     enableBtn.IsEnabled = true;
-                    enableBtn.Content = StrEnableAI;
+                    enableBtn.Content = hasError ? "Retry" : StrEnableAI;
                     var detail = !string.IsNullOrWhiteSpace(Program.MlSetupError)
                         ? Program.MlSetupError
                         : "Setup failed. Check the logs for details.";
@@ -2751,6 +2958,14 @@ namespace NudgeTray
                         hintTextRef.Text = "Check that Python 3.8+ is installed and try again.\nOpen Analytics → Send Feedback to include logs.";
                         hintTextRef.IsVisible = true;
                     }
+                }
+                else
+                {
+                    // ML started — force the AI tab to show the full live view
+                    _ = Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        Program._analyticsWindow?.RefreshContent();
+                    });
                 }
             };
             panel.Children.Add(enableBtn);
@@ -2789,28 +3004,42 @@ namespace NudgeTray
     /// Avoids Avalonia visual-tree conflicts by painting everything in a single Render pass.</summary>
     internal sealed class PulseDot : Control
     {
-        private double _phase;
-        private double _step;
-        private double _radius;
-        private double _peakOpacity;
-        private double _stagger;
-        internal readonly DispatcherTimer _timer;
-
         public Color Color { get; set; }
         public int Seed { get; set; }
+
+        // Cached drawing resources — reused across frames, mutated in Render (render-thread safe).
+        private const int MaxWaves = 8;
+        private readonly double[] _wavePhases = new double[MaxWaves];
+        private readonly SolidColorBrush[] _waveBrushes = new SolidColorBrush[MaxWaves];
+        private readonly Pen[] _wavePens = new Pen[MaxWaves];
+
+        private readonly SolidColorBrush _centerBrush = new();
+
+        // Wave lifecycle — driven by seed
+        private double _step;             // how fast each wave advances (radial speed)
+        private double _radius;           // max ring radius
+        private double _peakOpacity;      // peak alpha at the top of the bell
+        private double _spawnIntervalMs;  // ms between wave births
+        private int _nextWaveSlot;        // next free slot in circular buffer
+        private double _timeSinceSpawnMs; // accumulator for spawn timing
+
+        // Animation jank diagnostics
+        private long _lastTickTs;
+        private long _jankCount;
+        private long _tickCount;
+        private bool _diagnosticsStarted;
+        private bool _isRunning;
 
         public PulseDot()
         {
             Width = 50;
             Height = 50;
             IsHitTestVisible = false;
-            _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(24) };
-            _timer.Tick += (_, _) =>
+            for (int i = 0; i < MaxWaves; i++)
             {
-                _phase += _step;
-                if (_phase > 1.0) _phase -= 1.0;
-                InvalidateVisual();
-            };
+                _waveBrushes[i] = new SolidColorBrush();
+                _wavePens[i] = new Pen(_waveBrushes[i], 3.0);
+            }
         }
 
         private void InitFromSeed()
@@ -2820,59 +3049,152 @@ namespace NudgeTray
             int h2 = ((s * 214013 + 2531011) ^ (s <<  7)) & 0x7FFFFFFF;
             int h3 = ((s * 1664525 + 1013904223) ^ (s >> 17)) & 0x7FFFFFFF;
             const double div = 0x7FFFFFFF;
-            _step        = 0.016 + 0.006 * (h1 / div);
-            _radius      = 18.0  + 4.0  * (h2 / div);
-            _peakOpacity = 0.75  + 0.20  * (h3 / div);
-            _stagger     = h2 % 2 == 0 ? 0.45 : 0.55;
+            _step            = (0.016 + 0.006 * (h1 / div)) * 0.5;
+            _radius          = 18.0 + 4.0 * (h2 / div);
+            _peakOpacity     = (0.75 + 0.20 * (h3 / div)) * 0.25;
+            _spawnIntervalMs = (350.0 + 550.0 * ((h1 ^ h3) & 0x7FFFFFFF) / div) * 1.5;
         }
 
         public void Start()
         {
+            if (_isRunning) return;
+            for (int i = 0; i < MaxWaves; i++)
+                _wavePhases[i] = -1.0;
+            _timeSinceSpawnMs = 0;
             InitFromSeed();
-            _timer.Start();
+            _lastTickTs = Stopwatch.GetTimestamp();
+            _diagnosticsStarted = true;
+            _isRunning = true;
+            RequestNextFrame();
+        }
+
+        public void Stop()
+        {
+            _isRunning = false;
+            _diagnosticsStarted = false;
+        }
+
+        protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            base.OnAttachedToVisualTree(e);
+            RequestNextFrame();
+        }
+
+        private void RequestNextFrame()
+        {
+            if (!_isRunning) return;
+            var tl = TopLevel.GetTopLevel(this);
+            if (tl != null)
+                tl.RequestAnimationFrame(OnCompositionFrame);
+        }
+
+        private void OnCompositionFrame(TimeSpan ts)
+        {
+            if (!_isRunning) return;
+            RequestNextFrame();
+
+            long now = Stopwatch.GetTimestamp();
+            if (_diagnosticsStarted)
+            {
+                _tickCount++;
+                double elapsedMs = (now - _lastTickTs) * 1000.0 / Stopwatch.Frequency;
+                if (elapsedMs > 22.0)
+                {
+                    _jankCount++;
+                    Console.WriteLine($"[PulseDot JANK #{_jankCount}] frame gap={elapsedMs:F1}ms (expected ~16ms). Total ticks={_tickCount}");
+                    if (elapsedMs > 50.0)
+                        Console.WriteLine($"[PulseDot HEAVY JANK] frame gap={elapsedMs:F1}ms — UI thread blocked for {(int)elapsedMs}ms");
+                }
+            }
+            _lastTickTs = now;
+
+            // ── Advance & spawn waves ──────────────────────────────────────────
+            double dtMs = _diagnosticsStarted
+                ? (now - _lastTickTs) * 1000.0 / Stopwatch.Frequency  // reuse above calc
+                : 16.67;
+            // Use a fixed dt for consistency when diagnostics aren't measuring yet
+            double frameMs = 16.67;
+
+            // Advance existing waves — kill when phase passes 1.0 (alpha already at zero)
+            for (int i = 0; i < MaxWaves; i++)
+            {
+                if (_wavePhases[i] < 0) continue;
+                _wavePhases[i] += _step * (frameMs / 16.67);
+                if (_wavePhases[i] >= 1.0)
+                    _wavePhases[i] = -1.0;
+            }
+
+            // Spawn new waves at seed-driven intervals
+            if (_spawnIntervalMs > 0)
+            {
+                _timeSinceSpawnMs += frameMs;
+                while (_timeSinceSpawnMs >= _spawnIntervalMs)
+                {
+                    _timeSinceSpawnMs -= _spawnIntervalMs;
+                    SpawnWave();
+                }
+            }
+
+            InvalidateVisual();
+        }
+
+        private void SpawnWave()
+        {
+            // Find a free slot (marked -1) or overwrite the oldest
+            int slot = _nextWaveSlot;
+            for (int attempt = 0; attempt < MaxWaves; attempt++)
+            {
+                int idx = (slot + attempt) % MaxWaves;
+                if (_wavePhases[idx] < 0)
+                {
+                    _wavePhases[idx] = 0.0;
+                    _nextWaveSlot = (idx + 1) % MaxWaves;
+                    return;
+                }
+            }
+            // Buffer full — overwrite the oldest active wave (keep it cycling)
+            _wavePhases[_nextWaveSlot] = 0.0;
+            _nextWaveSlot = (_nextWaveSlot + 1) % MaxWaves;
+        }
+
+        public void UpdateFromHarvest(int seed, Color color)
+        {
+            if (Seed == seed && Color == color) return;
+            Seed = seed;
+            Color = color;
+            InitFromSeed();
+            _centerBrush.Color = color;
         }
 
         public override void Render(DrawingContext context)
         {
             var center = new Point(25, 25);
-            var color = Color;
+            byte r = Color.R, g = Color.G, b = Color.B;
 
-            // Wave 1 — expanding ring, fast ramp-in + gentle decay
-            double r1 = _phase;
-            if (r1 > 0.01 && r1 < 0.92)
+            for (int i = 0; i < MaxWaves; i++)
             {
-                double ringR = _radius * r1;
-                double fadeIn = Math.Min(1.0, r1 * 5.0);
-                double fadeOut = Math.Exp(-r1 * 2.5);
-                double alpha = _peakOpacity * fadeIn * fadeOut;
-                if (alpha > 0.02)
+                double phase = _wavePhases[i];
+                if (phase < 0) continue;
+
+                // Bell curve: sin²(π·phase) → 0 at phase=0, 1 at phase=0.5, 0 at phase=1.0
+                double s = Math.Sin(Math.PI * phase);
+                double alpha = _peakOpacity * s * s;
+
+                // Radius expands linearly — never shrinks back
+                double ringR = _radius * phase;
+
+                if (alpha > 0.008)
                 {
-                    var pen = new Pen(new SolidColorBrush(color, alpha), 3.0);
-                    context.DrawEllipse(null, pen, center, ringR, ringR);
+                    _waveBrushes[i].Color = Color.FromArgb((byte)(alpha * 255.0), r, g, b);
+                    // Fresh Pen per frame — Avalonia caches SKPaint on first use, so we
+                    // must recreate the pen to pick up the brush's mutated color/alpha.
+                    _wavePens[i] = new Pen(_waveBrushes[i], 3.0);
+                    context.DrawEllipse(null, _wavePens[i], center, ringR, ringR);
                 }
             }
 
-            // Wave 2 — staggered
-            double r2 = _phase + _stagger;
-            if (r2 > 1.0) r2 -= 1.0;
-            if (r2 > 0.01 && r2 < 0.92)
-            {
-                double ringR2 = _radius * r2;
-                double fadeIn2 = Math.Min(1.0, r2 * 5.0);
-                double fadeOut2 = Math.Exp(-r2 * 2.5);
-                double alpha2 = _peakOpacity * fadeIn2 * fadeOut2;
-                if (alpha2 > 0.02)
-                {
-                    var pen = new Pen(new SolidColorBrush(color, alpha2), 3.0);
-                    context.DrawEllipse(null, pen, center, ringR2, ringR2);
-                }
-            }
-
-            // Soft glow behind the center dot
-            context.DrawEllipse(new SolidColorBrush(color, 0.18), null, center, 9.0, 9.0);
-
-            // Solid center dot
-            context.DrawEllipse(new SolidColorBrush(color), null, center, 5.5, 5.5);
+            // Solid center dot — no glow ring
+            context.DrawEllipse(_centerBrush, null, center, 5.5, 5.5);
         }
     }
 

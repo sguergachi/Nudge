@@ -199,23 +199,23 @@ namespace NudgeTray
         }
 
 
-        private void RefreshContent()
+        internal void RefreshContent()
         {
             if (_contentPanel == null) return;
 
             // ── AI Brain live tab ─────────────────────────────────────────────────
             if (_aiTabActive)
             {
-                // Skip no-op rebuilds: only rebuild when data actually changed
+                // Skip no-op rebuilds: only rebuild when data or ML state actually changed
                 long version = LiveAIState.UpdateVersion;
-                if (version == _lastAiUpdateVersion) return;
+                if (version == _lastAiUpdateVersion && Program._mlEnabled == _lastMlEnabled) return;
                 _lastAiUpdateVersion = version;
                 _lastAiEventCount = LiveAIState.GetCount();
+                _lastMlEnabled = Program._mlEnabled;
 
-                // Stop all live timers from the previous content build before replacing
+                // Don't tear down the visual tree — update in-place so PulseDot animation never freezes
                 StopLiveTimers();
-                _contentPanel.Children.Clear();
-                _contentPanel.Children.Add(CreateAILiveView());
+                RefreshAILiveView();
                 Dispatcher.UIThread.Post(ClampContentScrollOffset, DispatcherPriority.Background);
                 return;
             }
