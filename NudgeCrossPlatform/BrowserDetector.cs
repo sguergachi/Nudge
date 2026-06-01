@@ -25,7 +25,6 @@ internal static class BrowserDetector
         ("zen-browser", "Zen"),
         ("zen", "Zen"),
         ("iexplore", "Explorer"),
-        ("explorer", "Explorer"),
         ("browser", "Browser")
     ];
 

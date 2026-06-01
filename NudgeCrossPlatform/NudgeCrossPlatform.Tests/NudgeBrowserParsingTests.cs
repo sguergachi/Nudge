@@ -69,7 +69,9 @@ public sealed class NudgeBrowserParsingTests
     [InlineData("zen", true)]
     [InlineData("librewolf", true)]
     [InlineData("iexplore", true)]
-    [InlineData("explorer", true)]
+    // Windows File Explorer (explorer.exe) is NOT a web browser (issue #135): treating it as
+    // one flagged folder windows as browser tabs and ran (empty) domain extraction on them.
+    [InlineData("explorer", false)]
     [InlineData("code", false)]
     [InlineData("konsole", false)]
     [InlineData("", false)]
