@@ -482,6 +482,20 @@ public sealed class NudgeMeetingGateTests
         Assert.False(state.InMeeting);
     }
 
+    [Fact]
+    public void Evaluate_TeamsChatWindowWithHeldMic_NotInMeeting()
+    {
+        // Issue #128: a Teams *chat* window (not a call). A Teams helper (MicrosoftOfficeHub)
+        // holds the mic merely because Teams is open, the foreground process is Teams, and the
+        // title contains "Microsoft Teams" — but the user is not in a call. The mic is not
+        // owned by a comms-app leaf and the title is not a call/meeting, so it must NOT suppress.
+        var state = ConsentStorePresence.Evaluate(
+            [Leaf("Microsoft.MicrosoftOfficeHub_8wekyb3d8bbwe", active: true, packaged: true)], [],
+            "ms-teams", "Chat | Singer, Malek | Microsoft Teams");
+        Assert.False(state.IsMicActive);
+        Assert.False(state.InMeeting);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static ActivityTickResult MakeTick(SignalQuality quality, bool afk)

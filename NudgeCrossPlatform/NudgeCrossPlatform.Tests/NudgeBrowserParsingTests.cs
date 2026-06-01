@@ -23,6 +23,25 @@ public sealed class NudgeBrowserParsingTests
         Assert.Equal(expected, BrowserDetector.ExtractSite(title));
     }
 
+    [Theory]
+    // Issue #131/#130: Chromium/Edge prefix titles with an unread/tab count "(N)" which
+    // previously broke the site-name match, leaving the domain empty on Windows.
+    [InlineData("(2) Reddit - Dive into anything - Google Chrome", "reddit.com")]
+    [InlineData("(1) Inbox - Gmail - Google Chrome", "mail.google.com")]
+    [InlineData("(15) GitHub - Microsoft Edge", "github.com")]
+    [InlineData("(99+) Messenger - Google Chrome", "messenger.com")]
+    public void ExtractSite_TabCountPrefix_StrippedAndResolved(string title, string expected)
+    {
+        Assert.Equal(expected, BrowserDetector.ExtractSite(title));
+    }
+
+    [Fact]
+    public void ExtractSite_NonNumericParenthetical_NotTreatedAsTabCount()
+    {
+        // "(Draft)" is not a tab count, so it is left in place and yields no false domain.
+        Assert.Null(BrowserDetector.ExtractSite("(Draft) Meeting notes - Firefox"));
+    }
+
     [Fact]
     public void ExtractSite_GenericTitleWithoutDomain_ReturnsNull()
     {
