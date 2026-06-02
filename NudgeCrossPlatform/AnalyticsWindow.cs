@@ -82,6 +82,9 @@ namespace NudgeTray
         // Cached reference to the text stack in the live focus card — updated in-place.
         private static StackPanel? _liveFocusTextStack;
 
+        // Cached reference to the sensor signals panel — rebuilt in-place on each harvest tick.
+        private static StackPanel? _liveSignalPanel;
+
         // Countdown / progress bar (kept for timer lifetime across rebuilds)
         private DispatcherTimer? _countdownTimer;
         private Border? _progressTrack;
@@ -337,6 +340,7 @@ namespace NudgeTray
             _livePulseDot?.Stop();
             _livePulseDot = null;
             _liveFocusTextStack = null;
+            _liveSignalPanel = null;
             base.OnClosed(e);
         }
 
@@ -1627,54 +1631,8 @@ namespace NudgeTray
 
             // ── Sensor Signals collapse ──────────────────────────────────────
             var signalPanel = new StackPanel { Spacing = 5, IsVisible = _sensorSignalsOpen, Margin = new Thickness(0, 6, 0, 2) };
-            if (harvest != null)
-            {
-                string qualityReason = ComputeQualityReason(harvest, effectiveQuality);
-                string qualityText = !string.IsNullOrEmpty(qualityReason) ? $"{qualityLabel} ({qualityReason})" : qualityLabel;
-                AddFusionRow(signalPanel, "Signal Quality", qualityText, fusionColor);
-                AddFusionRow(signalPanel, "Win Tracking",  FormatKWinStatus(harvest.FocusSrc),
-                    harvest.FocusSrc == "KWinScript" ? ProductiveGreen : AIStatusLearning);
-                AddFusionRow(signalPanel, "Idle",           FormatMs(harvest.IdleMs),      TextSecondary);
-                AddFusionRow(signalPanel, "In Focus",       FormatMs(harvest.FocusedMs),   TextSecondary);
-                {
-                    string cat = !string.IsNullOrEmpty(harvest.Category) ? harvest.Category : GetHarvestCategoryFallback(harvest);
-                    if (!string.IsNullOrEmpty(cat))
-                        AddCategoryBadgeRow(signalPanel, cat, harvest.CategoryConf);
-                    // For a browser, always surface the web app (the site is what matters, not
-                    // the browser). Show the resolved domain, or a placeholder when the title
-                    // didn't expose one so the user knows it's a browser with an unknown site.
-                    if (harvest.Browser == 1)
-                        AddFusionRow(signalPanel, "Web App",
-                            !string.IsNullOrEmpty(harvest.Domain) ? harvest.Domain : "unknown site",
-                            !string.IsNullOrEmpty(harvest.Domain) ? PrimaryBlue : TextTertiary);
-                    else if (!string.IsNullOrEmpty(harvest.Domain))
-                        AddFusionRow(signalPanel, "Domain", harvest.Domain, PrimaryBlue);
-                    if (showDetail && !string.IsNullOrEmpty(currentDetail))
-                        AddFusionRow(signalPanel, "Tab", currentDetail, TextSecondary);
-                    AddFusionRow(signalPanel, "Activity (5m)",
-                        $"{harvest.Sw300} switches · {harvest.Share * 100:F0}% dominant", TextSecondary);
-                    if (harvest.Apps300 > 1)
-                        AddFusionRow(signalPanel, "Distinct Apps", $"{harvest.Apps300} apps seen", TextSecondary);
-                    if (harvest.Fullscreen == 1)
-                        AddFusionRow(signalPanel, "Fullscreen", "Yes", AIStatusLearning);
-                }
-            }
-            else
-            {
-                signalPanel.Children.Add(new TextBlock
-                {
-                    Text       = "Win Tracking: detecting…",
-                    FontSize   = 10,
-                    Foreground = new SolidColorBrush(Color.FromArgb(120, 255, 193, 7))
-                });
-                signalPanel.Children.Add(new TextBlock
-                {
-                    Text       = "Signal Quality: initializing",
-                    FontSize   = 10,
-                    Foreground = new SolidColorBrush(TextTertiary),
-                    Margin     = new Thickness(0, 2, 0, 0)
-                });
-            }
+            _liveSignalPanel = signalPanel;
+            PopulateSignalPanel(signalPanel, harvest, effectiveQuality, qualityLabel, fusionColor, currentDetail, showDetail);
 
             // Toggle button for the collapse
             var toggleText = new TextBlock
@@ -1848,6 +1806,68 @@ namespace NudgeTray
                     st.Text = statusText;
                     st.Foreground = new SolidColorBrush(statusColor);
                 }
+            }
+
+            // ── Signal panel: rebuild rows so URL/domain is always current ────
+            if (_liveSignalPanel != null && _liveSignalPanel.IsVisible)
+            {
+                bool showDetail = !string.IsNullOrWhiteSpace(currentDetail)
+                    && !currentDetail.Equals(currentApp, StringComparison.OrdinalIgnoreCase)
+                    && !currentDetail.Contains(currentApp, StringComparison.OrdinalIgnoreCase);
+                _liveSignalPanel.Children.Clear();
+                PopulateSignalPanel(_liveSignalPanel, harvest, effectiveQuality, qualityLabel, fusionColor, currentDetail, showDetail);
+            }
+        }
+
+        private static void PopulateSignalPanel(StackPanel panel, HarvestSignal? harvest,
+            string effectiveQuality, string qualityLabel, Color fusionColor,
+            string currentDetail, bool showDetail)
+        {
+            if (harvest != null)
+            {
+                string qualityReason = ComputeQualityReason(harvest, effectiveQuality);
+                string qualityText = !string.IsNullOrEmpty(qualityReason) ? $"{qualityLabel} ({qualityReason})" : qualityLabel;
+                AddFusionRow(panel, "Signal Quality", qualityText, fusionColor);
+                AddFusionRow(panel, "Win Tracking",  FormatKWinStatus(harvest.FocusSrc),
+                    harvest.FocusSrc == "KWinScript" ? ProductiveGreen : AIStatusLearning);
+                AddFusionRow(panel, "Idle",           FormatMs(harvest.IdleMs),      TextSecondary);
+                AddFusionRow(panel, "In Focus",       FormatMs(harvest.FocusedMs),   TextSecondary);
+                string cat = !string.IsNullOrEmpty(harvest.Category) ? harvest.Category : GetHarvestCategoryFallback(harvest);
+                if (!string.IsNullOrEmpty(cat))
+                    AddCategoryBadgeRow(panel, cat, harvest.CategoryConf);
+                // For a browser, always surface the web app (the site is what matters, not
+                // the browser). Show the resolved domain, or a placeholder when the title
+                // didn't expose one so the user knows it's a browser with an unknown site.
+                if (harvest.Browser == 1)
+                    AddFusionRow(panel, "Web App",
+                        !string.IsNullOrEmpty(harvest.Domain) ? harvest.Domain : "unknown site",
+                        !string.IsNullOrEmpty(harvest.Domain) ? PrimaryBlue : TextTertiary);
+                else if (!string.IsNullOrEmpty(harvest.Domain))
+                    AddFusionRow(panel, "Domain", harvest.Domain, PrimaryBlue);
+                if (showDetail && !string.IsNullOrEmpty(currentDetail))
+                    AddFusionRow(panel, "Tab", currentDetail, TextSecondary);
+                AddFusionRow(panel, "Activity (5m)",
+                    $"{harvest.Sw300} switches · {harvest.Share * 100:F0}% dominant", TextSecondary);
+                if (harvest.Apps300 > 1)
+                    AddFusionRow(panel, "Distinct Apps", $"{harvest.Apps300} apps seen", TextSecondary);
+                if (harvest.Fullscreen == 1)
+                    AddFusionRow(panel, "Fullscreen", "Yes", AIStatusLearning);
+            }
+            else
+            {
+                panel.Children.Add(new TextBlock
+                {
+                    Text       = "Win Tracking: detecting…",
+                    FontSize   = 10,
+                    Foreground = new SolidColorBrush(Color.FromArgb(120, 255, 193, 7))
+                });
+                panel.Children.Add(new TextBlock
+                {
+                    Text       = "Signal Quality: initializing",
+                    FontSize   = 10,
+                    Foreground = new SolidColorBrush(TextTertiary),
+                    Margin     = new Thickness(0, 2, 0, 0)
+                });
             }
         }
 
