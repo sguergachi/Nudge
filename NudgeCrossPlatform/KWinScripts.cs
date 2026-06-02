@@ -18,7 +18,7 @@ internal static class KWinScripts
 ";
 
     internal const string MainJs = @"// Auto-installed by Nudge. Publishes active window info via D-Bus.
-// Fully passive: listens to windowActivated + captionChanged.
+// Fully passive: listens to windowActivated + captionChanged + fullScreenChanged.
 var _trackedWin = null;
 
 function publish() {
@@ -27,17 +27,20 @@ function publish() {
         if (w !== _trackedWin) {
             if (_trackedWin) {
                 try { _trackedWin.captionChanged.disconnect(publish); } catch (e) {}
+                try { _trackedWin.fullScreenChanged.disconnect(publish); } catch (e) {}
             }
             _trackedWin = w;
             if (w) {
                 try { w.captionChanged.connect(publish); } catch (e) {}
+                try { w.fullScreenChanged.connect(publish); } catch (e) {}
             }
         }
         var cls = (w && w.resourceClass) ? w.resourceClass.toString() : """";
         var title = (w && w.caption) ? w.caption.toString() : """";
+        var fs = (w && w.fullScreen) ? 1 : 0;
         
         // Use callDBus for background IPC.
-        callDBus(""org.nudge.WindowTracker"", ""/"", ""org.nudge.WindowTracker"", ""Update"", cls, title);
+        callDBus(""org.nudge.WindowTracker"", ""/"", ""org.nudge.WindowTracker"", ""Update"", cls, title, fs);
     } catch (e) {
         console.error(""nudge-window-tracker error: "" + e);
     }

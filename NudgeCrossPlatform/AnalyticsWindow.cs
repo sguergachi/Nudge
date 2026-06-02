@@ -734,7 +734,7 @@ namespace NudgeTray
 
             border.Child = textBlock;
 
-            ToolTip.SetTip(border, "Live AI predictions, confidence scores, and ML training status");
+            ToolTip.SetTip(border, "Live AI predictions, productivity scores, and ML training status");
 
             border.PointerPressed += (s, e) =>
             {
@@ -1334,7 +1334,7 @@ namespace NudgeTray
 
             var scoreText = new TextBlock
             {
-                Text = $"{confidence * 100:F0}%",
+                Text = $"{score * 100:F0}%",
                 FontSize = 14,
                 FontWeight = FontWeight.SemiBold,
                 Foreground = new SolidColorBrush(stateColor),
@@ -1650,6 +1650,16 @@ namespace NudgeTray
                         AddFusionRow(signalPanel, "Distinct Apps", $"{harvest.Apps300} apps seen", TextSecondary);
                     if (harvest.Fullscreen == 1)
                         AddFusionRow(signalPanel, "Fullscreen", "Yes", AIStatusLearning);
+                    if (harvest.Audio == 1)
+                        AddFusionRow(signalPanel, "Audio playing", "Yes", AIStatusLearning);
+                    if (harvest.Media == 1)
+                        AddFusionRow(signalPanel, "Media session", "Playing", AIStatusLearning);
+                    if (harvest.Mic == 1)
+                        AddFusionRow(signalPanel, "Mic active", "Yes", AIStatusLearning);
+                    if (harvest.DomRate > 0)
+                        AddFusionRow(signalPanel, "Domain reputation", $"{harvest.DomRate:P0}", TextSecondary);
+                    if (harvest.AppRate > 0)
+                        AddFusionRow(signalPanel, "App reputation", $"{harvest.AppRate:P0}", TextSecondary);
                 }
             }
             else
@@ -2141,7 +2151,7 @@ namespace NudgeTray
                 };
                 scoreStack.Children.Add(new TextBlock
                 {
-                    Text = $"{(latest.Confidence > 0 ? latest.Confidence : latest.Score) * 100:F0}%",
+                    Text = $"{latest.Score * 100:F0}%",
                     FontSize = 15,
                     FontWeight = FontWeight.Bold,
                     Foreground = new SolidColorBrush(mlColor),
@@ -2273,7 +2283,7 @@ namespace NudgeTray
             if (n >= 2)
             {
                 var latestEv = pts[pts.Count - 1].ev;
-                Color fillColor = latestEv.Confidence < 0.5
+                Color fillColor = latestEv.Score < 0.5
                     ? AIStatusLearning
                     : (latestEv.Productive ? ProductiveGreen : UnproductiveRed);
 
@@ -2329,7 +2339,7 @@ namespace NudgeTray
                 bool isLatest = i == pts.Count - 1;
                 double r = isLatest ? dotR + 1.5 : dotR;
 
-                Color dotColor = ev.Confidence < 0.5
+                Color dotColor = ev.Score < 0.5
                     ? AIStatusLearning
                     : (ev.Productive ? ProductiveGreen : UnproductiveRed);
 
@@ -2363,7 +2373,7 @@ namespace NudgeTray
                 {
                     var scoreLabel = new TextBlock
                     {
-                        Text = $"{(ev.Confidence > 0 ? ev.Confidence : ev.Score) * 100:F0}%",
+                        Text = $"{ev.Score * 100:F0}%",
                         FontSize = 9,
                         FontWeight = FontWeight.SemiBold,
                         Foreground = new SolidColorBrush(dotColor)
@@ -2476,10 +2486,10 @@ namespace NudgeTray
 
                     timeTb.Text = DateTimeOffset.FromUnixTimeSeconds(nev.T).LocalDateTime.ToString("t", CultureInfo.CurrentCulture);
                     appTb.Text = nev.App;
-                    Color evColor = nev.Confidence < 0.5
+                    Color evColor = nev.Score < 0.5
                         ? AIStatusLearning
                         : (nev.Productive ? ProductiveGreen : UnproductiveRed);
-                    scoreTb.Text = $"{(nev.Confidence > 0 ? nev.Confidence : nev.Score) * 100:F0}% · {(nev.Productive ? StrProductive : StrNotProductive)}";
+                    scoreTb.Text = $"{nev.Score * 100:F0}% · {(nev.Productive ? StrProductive : StrNotProductive)}";
                     scoreTb.Foreground = new SolidColorBrush(evColor);
 
                     // Position tooltip above the dot, clamped to chart edges
@@ -2565,7 +2575,7 @@ namespace NudgeTray
 
             Color dotColor = isSuppressed
                 ? SuppressedColor
-                : evt.Confidence < 0.5
+                : evt.Score < 0.5
                     ? AIStatusLearning
                     : (evt.Productive ? ProductiveGreen : UnproductiveRed);
 
@@ -2650,7 +2660,7 @@ namespace NudgeTray
                         "PoorSignal"    => "unreliable app/window detection",
                         _               => $"suppressed ({evt.SuppressReason})"
                     }
-                    : $"{(evt.Confidence > 0 ? evt.Confidence : evt.Score) * 100:F0}% · {(evt.Productive ? StrProductive : StrNotProductive)}",
+                    : $"{evt.Score * 100:F0}% · {(evt.Productive ? StrProductive : StrNotProductive)}",
                 FontSize = 11,
                 Foreground = new SolidColorBrush(dotColor)
             };
@@ -2750,7 +2760,7 @@ namespace NudgeTray
                 // Score with colored dot (suppressed events show "—" — no ML score)
                 Color dotColor = evt.SuppressReason != null
                     ? SuppressedColor
-                    : evt.Confidence < 0.5
+                    : evt.Score < 0.5
                         ? AIStatusLearning
                         : (evt.Productive ? ProductiveGreen : UnproductiveRed);
                 var scoreRow = new StackPanel

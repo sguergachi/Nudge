@@ -50,6 +50,10 @@ namespace NudgeCrossPlatform.Tests
             // Should collect resourceClass and caption
             Assert.Contains("resourceClass", js);
             Assert.Contains("caption", js);
+
+            // V4: should also report fullscreen state
+            Assert.Contains("fullScreen", js);
+            Assert.Contains("fullScreenChanged", js);
         }
     }
 }

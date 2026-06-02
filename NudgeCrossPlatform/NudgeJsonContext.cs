@@ -87,6 +87,11 @@ internal sealed class HarvestSignal
     public int Sw300 { get; set; }      // SwitchCount300s
     public double Share { get; set; }   // CurrentAppShare300s
     public int Apps300 { get; set; }    // DistinctApps300s
+    public int Audio { get; set; }      // AudioPlayingFlag
+    public int Media { get; set; }      // MediaSessionActiveFlag
+    public int Mic { get; set; }        // MicActiveFlag
+    public double DomRate { get; set; } // DomainProductiveRate
+    public double AppRate { get; set; } // AppProductiveRate
 }
 
 internal sealed class NotificationPositionConfig
@@ -107,6 +112,8 @@ internal sealed class TraySettings
     public int IntervalMinutes { get; set; } = 5;
     /// <summary>How often the AI should run focus checks in seconds.</summary>
     public int MlCheckIntervalSeconds { get; set; } = 60;
+    /// <summary>Whether experimental signal-based detection mode is enabled.</summary>
+    public bool ExperimentalSignalMode { get; set; }
 }
 
 /// <summary>
