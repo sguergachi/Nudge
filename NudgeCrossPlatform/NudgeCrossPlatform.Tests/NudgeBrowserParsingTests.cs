@@ -49,6 +49,35 @@ public sealed class NudgeBrowserParsingTests
     }
 
     [Fact]
+    public void ExtractSite_TryGetBrowserUrl_InjectedReaderTakesPrecedence()
+    {
+        // Tier 2: when a platform URL reader is injected, its result is preferred over title parsing.
+        BrowserDetector.TryGetBrowserUrl = () => "https://docs.python.org/tutorial/";
+        try
+        {
+            Assert.Equal("docs.python.org", BrowserDetector.ExtractSite("Python docs - Chrome"));
+        }
+        finally
+        {
+            BrowserDetector.TryGetBrowserUrl = null;
+        }
+    }
+
+    [Fact]
+    public void ExtractSite_TryGetBrowserUrl_ReturnsNull_FallsBackToTitle()
+    {
+        BrowserDetector.TryGetBrowserUrl = () => null;
+        try
+        {
+            Assert.Equal("github.com", BrowserDetector.ExtractSite("openai/nudge - GitHub - Chrome"));
+        }
+        finally
+        {
+            BrowserDetector.TryGetBrowserUrl = null;
+        }
+    }
+
+    [Fact]
     public void GetAppAndSite_ForBrowserTitle_ReturnsFormattedLabel()
     {
         var label = BrowserDetector.GetAppAndSite("chrome", "chat.openai.com - Google Chrome");

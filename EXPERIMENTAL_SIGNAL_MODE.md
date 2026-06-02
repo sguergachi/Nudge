@@ -1,7 +1,24 @@
 # Experimental Signal Mode — Implementation Plan
 
-> **Status:** Design / handoff doc. No code written yet. This document is the spec for the
-> implementing agent. Author: planning pass on branch `claude/pretrained-model-categories-BkSDb`.
+> **Status:** **IMPLEMENTED** in Nudge v2.0.0. All sections below are complete unless noted.
+> This document is kept as a living architecture reference. Delete once the mode is no longer
+> "experimental" and has its own user-facing docs.
+>
+> **Known Limitations (post-implementation):**
+> - **V4 seed model quality:** the bundled synthetic seed correctly classifies deep-work (productive)
+>   and YouTube browsing (unproductive), but may misclassify passive fullscreen video watching as
+>   productive because the synthetic training data overweights stable-focus signals. This is a
+>   seed-model limitation only — real user labels will correct it. Cold-start (no seed) is fully
+>   supported and falls back to interval nudges.
+> - **Windows VM runtime testing:** the Windows 11 QEMU VM is inaccessible (no SSH/RDP/Guest Agent,
+>   serial console permission-denied, no SPICE client). The Windows P/Invoke and COM interop code
+>   compiles cross-platform and is structurally correct, but has not been executed on a live Windows
+>   desktop. The Linux path has been exercised via unit tests and the inference server smoke tests.
+> - **Untracked files:** `NudgeCrossPlatform/model_exp/` (bundled V4 seed) is present in the
+>   working tree but not yet committed to git. Add and commit before release.
+>
+> **Build verification:** `./build.sh` passes with 0 errors, 573 xunit tests pass (549 original +
+> 24 stability tests).
 
 ## Context & motivation
 

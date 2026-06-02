@@ -496,6 +496,25 @@ public sealed class NudgeMeetingGateTests
         Assert.False(state.InMeeting);
     }
 
+    [Fact]
+    public void Evaluate_TeamsMeetingTitle_IsInMeeting()
+    {
+        // Browser meeting: mic owned by chrome, but the title gives it away.
+        var state = ConsentStorePresence.Evaluate(
+            [Leaf(@"C:#x#chrome.exe", active: true)], [],
+            "chrome", "Weekly sync - Microsoft Teams Meeting");
+        Assert.True(state.InMeeting);
+    }
+
+    [Fact]
+    public void Evaluate_TeamsCallTitle_IsInMeeting()
+    {
+        var state = ConsentStorePresence.Evaluate(
+            [Leaf(@"C:#x#chrome.exe", active: true)], [],
+            "chrome", "1-on-1 with Alex - Microsoft Teams Call");
+        Assert.True(state.InMeeting);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static ActivityTickResult MakeTick(SignalQuality quality, bool afk)
@@ -533,6 +552,7 @@ public sealed class NudgeMeetingGateTests
         return new ActivityTickResult(
             Context: ctx,
             Features: features,
+            FeaturesV4: null,
             AppCategory: AppCategory.Unknown,
             AppCategoryConfidence: CategoryConfidence.Unknown,
             DisplayAppName: "testapp",

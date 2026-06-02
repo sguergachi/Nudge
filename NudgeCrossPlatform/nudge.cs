@@ -49,6 +49,9 @@ interface IPlatformService
     (string app, string title) GetForegroundAppWithTitle();
     int GetIdleTime();
     PresenceState GetPresenceState();
+    bool IsFullscreen();
+    bool IsAudioPlaying();
+    bool IsMediaSessionActive();
 }
 
 sealed class Nudge
@@ -57,8 +60,8 @@ sealed class Nudge
     // VERSION & CONSTANTS
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    const string ProgramVersion = "2.1.0";
-    const string VersionSuffix = "dev";
+    const string ProgramVersion = "2.0.0";
+    const string VersionSuffix = "";
     static readonly string VERSION = $"{ProgramVersion}-{VersionSuffix}";
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -92,11 +95,14 @@ sealed class Nudge
     static int ML_CHECK_INTERVAL_MS = 60000;
     const int ACTIVITY_LOG_INTERVAL_MS = 60000;
     const string ML_HOST = "127.0.0.1";
-    const int ML_PORT = 45002;
     static int SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;
     static bool _customInterval;
     static bool _mlEnabled;
     static bool _mlAvailable;
+    static bool _experimentalMode;
+    static bool _verbose;
+    static int ML_PORT => _experimentalMode ? 45003 : 45002;
+    static DomainReputationStore? _reputationStore;
 
 #if !WINDOWS
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -131,6 +137,7 @@ sealed class Nudge
         private readonly object _lock = new();
         private string _cachedApp = "";
         private string _cachedTitle = "";
+        private bool _cachedFullscreen;
         private DateTime _lastUpdate;
         private volatile bool _ready;
 
@@ -143,9 +150,9 @@ sealed class Nudge
             _connection?.Dispose();
         }
 
-        public (string app, string title, DateTime updatedAt) Snapshot()
+        public (string app, string title, bool fullscreen, DateTime updatedAt) Snapshot()
         {
-            lock (_lock) return (_cachedApp, _cachedTitle, _lastUpdate);
+            lock (_lock) return (_cachedApp, _cachedTitle, _cachedFullscreen, _lastUpdate);
         }
 
         public int GetIdleMs()
@@ -167,10 +174,13 @@ sealed class Nudge
                     var reader = msg.GetBodyReader();
                     var app = reader.ReadString().ToString();
                     var title = reader.ReadString().ToString();
+                    bool fs = false;
+                    try { fs = reader.ReadInt32() != 0; } catch { }
                     lock (_lock)
                     {
                         _cachedApp = app;
                         _cachedTitle = title;
+                        _cachedFullscreen = fs;
                         _lastUpdate = DateTime.UtcNow;
                     }
                 }
@@ -360,6 +370,14 @@ sealed class Nudge
         private IdleSource _lastIdleSource;
         private KWinWindowTracker? _kwinTracker;
         private WaylandIdleMonitor? _waylandIdle;
+
+        // Sensor caches (2s throttle — see EXPERIMENTAL_SIGNAL_MODE.md §5)
+        private bool _cachedFullscreen;
+        private DateTime _fullscreenCacheExpiry;
+        private bool _cachedAudioPlaying;
+        private DateTime _audioCacheExpiry;
+        private bool _cachedMediaSession;
+        private DateTime _mediaCacheExpiry;
 
         private static readonly char[] Separators = [' ', '\n', '\r', '\t'];
 
@@ -622,7 +640,7 @@ sealed class Nudge
             // Primary: KWin-script-driven tracker (invisible, covers native Wayland too).
             if (_kwinTracker != null && _kwinTracker.IsReady)
             {
-                var (app, title, updatedAt) = _kwinTracker.Snapshot();
+                var (app, title, _, updatedAt) = _kwinTracker.Snapshot();
                 if (updatedAt != DateTime.MinValue && !string.IsNullOrEmpty(app))
                     return (app, title);
             }
@@ -1018,6 +1036,120 @@ sealed class Nudge
         private static (string app, string title) ExtractFocusedAppFromSwayTree(string json) =>
             NudgeCoreLogic.ExtractFocusedAppFromSwayJson(json);
 
+        // ── Experimental Signal Mode sensors (§5) ────────────────────────────
+
+        public bool IsFullscreen()
+        {
+            if (DateTime.Now < _fullscreenCacheExpiry)
+                return _cachedFullscreen;
+
+            bool result = false;
+
+            if (_compositor == "kde" && _kwinTracker is KWinWindowTracker kwt && kwt.IsReady)
+            {
+                (_, _, result, _) = kwt.Snapshot();
+            }
+            else if (_compositor == "sway" && CommandExists("swaymsg"))
+            {
+                string json = RunCommand("swaymsg", "-t get_tree");
+                if (!string.IsNullOrWhiteSpace(json))
+                {
+                    var match = System.Text.RegularExpressions.Regex.Match(
+                        json,
+                        @"""focused""\s*:\s*true.*?""fullscreen_mode""\s*:\s*(\d+)",
+                        System.Text.RegularExpressions.RegexOptions.Singleline);
+                    if (match.Success && int.TryParse(match.Groups[1].Value, out int mode) && mode > 0)
+                        result = true;
+                }
+            }
+            else if (CommandExists("xprop"))
+            {
+                try
+                {
+                    string activeWin = RunCommand("sh", "-c \"xprop -root _NET_ACTIVE_WINDOW | awk '{print \\$$5}'\"");
+                    if (!string.IsNullOrWhiteSpace(activeWin))
+                    {
+                        string state = RunCommand("xprop", $"-id {activeWin.Trim()} _NET_WM_STATE");
+                        if (state.Contains("_NET_WM_STATE_FULLSCREEN", StringComparison.Ordinal))
+                            result = true;
+                    }
+                }
+                catch { /* degrade to false */ }
+            }
+
+            _cachedFullscreen = result;
+            _fullscreenCacheExpiry = DateTime.Now.AddSeconds(2);
+            return result;
+        }
+
+        public bool IsAudioPlaying()
+        {
+            if (DateTime.Now < _audioCacheExpiry)
+                return _cachedAudioPlaying;
+
+            bool result = false;
+
+            if (CommandExists("pw-dump"))
+            {
+                string pwOut = NudgeCoreLogic.RunCommand("pw-dump", "", timeoutMs: 4000);
+                if (PipeWireParser.HasAudioOutput(pwOut))
+                    result = true;
+            }
+            else if (CommandExists("pactl"))
+            {
+                string pactlOut = NudgeCoreLogic.RunCommand("pactl", "list sink-inputs", timeoutMs: 3000);
+                if (PulseAudioParser.HasActivePlaybackStream(pactlOut))
+                    result = true;
+            }
+
+            _cachedAudioPlaying = result;
+            _audioCacheExpiry = DateTime.Now.AddSeconds(2);
+            return result;
+        }
+
+        public bool IsMediaSessionActive()
+        {
+            if (DateTime.Now < _mediaCacheExpiry)
+                return _cachedMediaSession;
+
+            bool result = false;
+
+            try
+            {
+                if (CommandExists("dbus-send"))
+                {
+                    string dbusOut = RunCommand("dbus-send", "--session --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListNames");
+                    if (!string.IsNullOrWhiteSpace(dbusOut))
+                    {
+                        var lines = dbusOut.Split('\n');
+                        foreach (var line in lines)
+                        {
+                            if (line.Contains("org.mpris.MediaPlayer2", StringComparison.Ordinal))
+                            {
+                                // Extract player name from quoted string
+                                string? player = NudgeCoreLogic.ExtractQuotedString(line);
+                                if (!string.IsNullOrEmpty(player))
+                                {
+                                    string status = RunCommand("dbus-send",
+                                        $"--session --dest={player} --type=method_call --print-reply /org/mpris/MediaPlayer2 org.freedesktop.DBus.Properties.Get string:org.mpris.MediaPlayer2.Player string:PlaybackStatus");
+                                    if (status.Contains("\"Playing\"", StringComparison.Ordinal))
+                                    {
+                                        result = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch { /* degrade to false */ }
+
+            _cachedMediaSession = result;
+            _mediaCacheExpiry = DateTime.Now.AddSeconds(2);
+            return result;
+        }
+
         private static string ExtractQuotedString(string input) =>
             NudgeCoreLogic.ExtractQuotedString(input);
     }
@@ -1035,6 +1167,14 @@ sealed class Nudge
         private DateTime _appCacheExpiry = DateTime.MinValue;
         private string _cachedApp = "";
         private string _cachedTitle = "";
+
+        // Sensor caches (2s throttle — see EXPERIMENTAL_SIGNAL_MODE.md §5)
+        private bool _cachedFullscreen;
+        private DateTime _fullscreenCacheExpiry;
+        private bool _cachedAudioPlaying;
+        private DateTime _audioCacheExpiry;
+        private bool _cachedMediaSession;
+        private DateTime _mediaCacheExpiry;
 
         public bool Initialize() => true;
 
@@ -1363,6 +1503,200 @@ sealed class Nudge
             => $"{l.AppHint}(s={l.StartFileTime},st={l.StopFileTime},pkg={l.IsPackaged})";
 #endif
 
+        // ── Experimental Signal Mode sensors (§5) ────────────────────────────
+
+        public bool IsFullscreen()
+        {
+            if (DateTime.Now < _fullscreenCacheExpiry)
+                return _cachedFullscreen;
+
+            bool result = false;
+#if WINDOWS
+            try
+            {
+                var hwnd = GetForegroundWindow();
+                if (hwnd != IntPtr.Zero)
+                {
+                    GetWindowRect(hwnd, out var winRect);
+                    var hMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+                    var mi = new MONITORINFO { cbSize = (uint)Marshal.SizeOf<MONITORINFO>() };
+                    if (GetMonitorInfo(hMonitor, ref mi))
+                    {
+                        result = winRect.Left == mi.rcMonitor.Left && winRect.Top == mi.rcMonitor.Top
+                              && winRect.Right == mi.rcMonitor.Right && winRect.Bottom == mi.rcMonitor.Bottom;
+                    }
+                }
+            }
+            catch { /* degrade to false */ }
+#endif
+            _cachedFullscreen = result;
+            _fullscreenCacheExpiry = DateTime.Now.AddSeconds(2);
+            return result;
+        }
+
+        public bool IsAudioPlaying()
+        {
+            if (DateTime.Now < _audioCacheExpiry)
+                return _cachedAudioPlaying;
+
+            bool result = false;
+#if WINDOWS
+            try
+            {
+                result = WindowsAudioMeter.IsAudioPlaying();
+            }
+            catch { /* degrade to false */ }
+#endif
+            _cachedAudioPlaying = result;
+            _audioCacheExpiry = DateTime.Now.AddSeconds(2);
+            return result;
+        }
+
+        public bool IsMediaSessionActive()
+        {
+            if (DateTime.Now < _mediaCacheExpiry)
+                return _cachedMediaSession;
+
+            // No reliable WinRT SMTC interop without CsWinRT; degrade to audio_playing_flag
+            // (a media player in "Playing" state almost always has an active render stream).
+            bool result = IsAudioPlaying();
+
+            _cachedMediaSession = result;
+            _mediaCacheExpiry = DateTime.Now.AddSeconds(2);
+            return result;
+        }
+
+#if WINDOWS
+        // ── Windows Core Audio render-meter (§5b) ──────────────────────────────
+        internal static class WindowsAudioMeter
+        {
+            private const int E_DATAFLOW_RENDER = 0;
+            private const int E_ROLE_MULTIMEDIA = 1;
+            private const int CLSCTX_ALL = 23;
+
+            [ComImport, Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+            interface IMMDeviceEnumerator
+            {
+                [PreserveSig] int EnumAudioEndpoints(int dataFlow, int dwStateMask, out object ppDevices);
+                [PreserveSig] int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice ppEndpoint);
+            }
+
+            [ComImport, Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+            interface IMMDevice
+            {
+                [PreserveSig] int Activate(ref Guid iid, int dwClsCtx, IntPtr pActivationParams, [MarshalAs(UnmanagedType.IUnknown)] out object ppInterface);
+            }
+
+            [ComImport, Guid("C02216F6-8C67-4B5B-9D00-D008E73E0064"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+            interface IAudioMeterInformation
+            {
+                [PreserveSig] int GetPeakValue(out float peak);
+            }
+
+            private static readonly Guid CLSID_MMDeviceEnumerator = new("BCDE0395-E52F-467C-8E3D-C4579291692E");
+            private static readonly Guid IID_IMMDeviceEnumerator = new("A95664D2-9614-4F35-A746-DE8DB63617E6");
+            private static Guid IID_IAudioMeterInformation = new("C02216F6-8C67-4B5B-9D00-D008E73E0064");
+
+            internal static bool IsAudioPlaying()
+            {
+                var enumeratorType = Type.GetTypeFromCLSID(CLSID_MMDeviceEnumerator);
+                if (enumeratorType == null) return false;
+                var enumerator = (IMMDeviceEnumerator?)Activator.CreateInstance(enumeratorType);
+                if (enumerator == null) return false;
+
+                int hr = enumerator.GetDefaultAudioEndpoint(E_DATAFLOW_RENDER, E_ROLE_MULTIMEDIA, out IMMDevice? device);
+                if (hr != 0 || device == null) return false;
+
+                hr = device.Activate(ref IID_IAudioMeterInformation, CLSCTX_ALL, IntPtr.Zero, out object? meterObj);
+                if (hr != 0 || meterObj == null) return false;
+                var meter = (IAudioMeterInformation)meterObj;
+
+                hr = meter.GetPeakValue(out float peak);
+                return hr == 0 && peak > 0.001f;
+            }
+        }
+
+        // ── Windows UIA browser URL reader (§0.5a Tier 2) ─────────────────────
+        internal static class WindowsBrowserUrlReader
+        {
+            private const uint OBJID_CLIENT = 0xFFFFFFFC;
+            private static Guid IID_IAccessible = new("618736E0-3C3D-11CF-810C-00AA00389B71");
+            private static readonly DateTime _urlCacheExpiry = DateTime.MinValue;
+            private static string? _cachedUrl;
+            private static IntPtr _cachedHwnd;
+
+            [DllImport("oleacc.dll", PreserveSig = true)]
+            private static extern int AccessibleObjectFromWindow(IntPtr hwnd, uint dwObjectID, ref Guid riid, [MarshalAs(UnmanagedType.IUnknown)] out object ppacc);
+
+            [ComImport, Guid("618736E0-3C3D-11CF-810C-00AA00389B71"), InterfaceType(ComInterfaceType.InterfaceIsIDispatch)]
+            interface IAccessible
+            {
+                [DispId(-5001)] int accChildCount { get; }
+                [DispId(-5002)] object get_accChild(object childID);
+                [DispId(-5003)] string get_accName(object childID);
+                [DispId(-5004)] object get_accRole(object childID);
+                [DispId(-5005)] string get_accValue(object childID);
+            }
+
+            internal static string? TryReadUrl()
+            {
+                var hwnd = GetForegroundWindow();
+                if (hwnd == IntPtr.Zero) return null;
+
+                // Cache per-HWND, refresh on focus change or after 500 ms
+                if (hwnd == _cachedHwnd && DateTime.Now < _urlCacheExpiry)
+                    return _cachedUrl;
+
+                string? url = TryReadUrlFromHwnd(hwnd);
+                _cachedUrl = url;
+                _cachedHwnd = hwnd;
+                return url;
+            }
+
+            private static string? TryReadUrlFromHwnd(IntPtr hwnd)
+            {
+                try
+                {
+                    int hr = AccessibleObjectFromWindow(hwnd, OBJID_CLIENT, ref IID_IAccessible, out object? accObj);
+                    if (hr != 0 || accObj == null) return null;
+                    var acc = (IAccessible)accObj;
+                    return SearchAccessibleForUrl(acc);
+                }
+                catch { return null; }
+            }
+
+            private static string? SearchAccessibleForUrl(IAccessible acc)
+            {
+                try
+                {
+                    int count = acc.accChildCount;
+                    for (int i = 1; i <= count; i++)
+                    {
+                        object childObj;
+                        try { childObj = acc.get_accChild(i); } catch { continue; }
+                        if (childObj is not IAccessible child) continue;
+
+                        string? value;
+                        try { value = child.get_accValue(0); } catch { value = null; }
+                        if (!string.IsNullOrEmpty(value))
+                        {
+                            string v = value.Trim();
+                            if (v.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                                return v;
+                        }
+
+                        // Recurse one level for browsers that nest the address bar
+                        string? nested = SearchAccessibleForUrl(child);
+                        if (!string.IsNullOrEmpty(nested))
+                            return nested;
+                    }
+                }
+                catch { }
+                return null;
+            }
+        }
+#endif
+
         public void Dispose()
         {
 #if WINDOWS
@@ -1384,6 +1718,29 @@ sealed class Nudge
 
         [DllImport("user32.dll")]
         private static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
+
+        [DllImport("user32.dll")]
+        private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
+
+        private const uint MONITOR_DEFAULTTONEAREST = 2;
+
+#pragma warning disable CS0649 // Fields assigned by P/Invoke marshaller
+        private struct RECT { public int Left, Top, Right, Bottom; }
+
+        private struct MONITORINFO
+        {
+            public uint cbSize;
+            public RECT rcMonitor;
+            public RECT rcWork;
+            public uint dwFlags;
+        }
+#pragma warning restore CS0649
 
         private struct LASTINPUTINFO
         {
@@ -1485,9 +1842,15 @@ sealed class Nudge
         }
         _mlEnabled = parsed.MlEnabled;
         _meetingSuppression = parsed.MeetingSuppression;
+        _experimentalMode = parsed.ExperimentalMode;
+        _verbose = parsed.Verbose;
         if (!string.IsNullOrWhiteSpace(parsed.CsvPath))
         {
             _csvPath = parsed.CsvPath;
+        }
+        else if (_experimentalMode)
+        {
+            _csvPath = PlatformConfig.CsvPathExp;
         }
 
         // Welcome banner
@@ -1501,6 +1864,11 @@ sealed class Nudge
         }
 
         // Initialize
+        if (_experimentalMode)
+        {
+            string reputationPath = Path.Combine(PlatformConfig.DataDirectory, "exp_reputation.json");
+            _reputationStore = new DomainReputationStore(reputationPath);
+        }
         InitializeCSV();
         StartUDPListener();
 
@@ -1522,6 +1890,12 @@ sealed class Nudge
             Info($"  Confidence threshold: {ML_CONFIDENCE_THRESHOLD*100:F0}%");
             Info($"  AI check frequency: {ML_CHECK_INTERVAL_MS/1000} seconds");
             Info($"  Pretrained model: active from first launch, refined as samples accumulate");
+        }
+        if (_experimentalMode)
+        {
+            Info($"  {Color.BYELLOW}Experimental signal mode enabled{Color.RESET}");
+            LogSensorHealth();
+            ValidateModelSchema();
         }
         Info($"  Respond with: {Color.BCYAN}nudge-notify YES{Color.RESET} or {Color.BCYAN}nudge-notify NO{Color.RESET}");
         Console.WriteLine();
@@ -1549,6 +1923,9 @@ sealed class Nudge
         if (PlatformConfig.IsWindows)
         {
             _platformService = new WindowsPlatformService();
+#if WINDOWS
+            BrowserDetector.TryGetBrowserUrl = WindowsPlatformService.WindowsBrowserUrlReader.TryReadUrl;
+#endif
             Success($"✓ Platform: Windows");
         }
 #if !WINDOWS
@@ -1663,9 +2040,13 @@ sealed class Nudge
                 WindowId: "",
                 WorkspaceId: "",
                 FocusSource: GetFocusSource(),
-                Fullscreen: false,
-                MappedToplevelCount: 0),
-            new IdleObservation(idle, _platformService?.LastIdleSource ?? IdleSource.Unknown));
+                Fullscreen: _platformService?.IsFullscreen() ?? false,
+                MappedToplevelCount: 0,
+                AudioPlaying: _platformService?.IsAudioPlaying() ?? false,
+                MediaSessionActive: _platformService?.IsMediaSessionActive() ?? false,
+                MicActive: _cachedPresenceState.IsMicActive),
+            new IdleObservation(idle, _platformService?.LastIdleSource ?? IdleSource.Unknown),
+            _experimentalMode);
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // MAIN LOOP - Core event loop with professional status updates
@@ -1728,6 +2109,25 @@ sealed class Nudge
 
             ActivityTickResult? tick = CaptureActivityTick(now, app, title, idle);
 
+            // Overlay reputation values into the V4 feature vector when experimental mode is active
+            if (_experimentalMode && tick is ActivityTickResult t4 && t4.FeaturesV4 is FeatureVectorV4 fv4)
+            {
+                double domainRate = _reputationStore?.DomainRate(t4.Context.FocusedDomain) ?? 0.5;
+                int domainCount = _reputationStore?.DomainCount(t4.Context.FocusedDomain) ?? 0;
+                double appRate = _reputationStore?.AppRate(t4.Context.FocusedAppId) ?? 0.5;
+                int appCount = _reputationStore?.AppCount(t4.Context.FocusedAppId) ?? 0;
+                tick = t4 with
+                {
+                    FeaturesV4 = fv4 with
+                    {
+                        DomainProductiveRate = domainRate,
+                        DomainLabelCount = domainCount,
+                        AppProductiveRate = appRate,
+                        AppLabelCount = appCount
+                    }
+                };
+            }
+
             // Broadcast harvest sensor signals to AI Brain tab every 2 seconds
             harvestElapsed += CYCLE_MS;
             if (harvestElapsed >= 2000)
@@ -1755,6 +2155,11 @@ sealed class Nudge
                         Sw300     = feat.SwitchCount300s,
                         Share     = feat.CurrentAppShare300s,
                         Apps300   = feat.DistinctApps300s,
+                        Audio     = _experimentalMode && t.FeaturesV4 is FeatureVectorV4 fv4a ? fv4a.AudioPlayingFlag : 0,
+                        Media     = _experimentalMode && t.FeaturesV4 is FeatureVectorV4 fv4m ? fv4m.MediaSessionActiveFlag : 0,
+                        Mic       = _experimentalMode && t.FeaturesV4 is FeatureVectorV4 fv4mic ? fv4mic.MicActiveFlag : 0,
+                        DomRate   = _experimentalMode && t.FeaturesV4 is FeatureVectorV4 fv4d ? fv4d.DomainProductiveRate : 0.0,
+                        AppRate   = _experimentalMode && t.FeaturesV4 is FeatureVectorV4 fv4ap ? fv4ap.AppProductiveRate : 0.0,
                     };
                     Console.WriteLine($"HARVEST:{JsonSerializer.Serialize(sig, NudgeJsonContext.Default.HarvestSignal)}");
                 }
@@ -1957,7 +2362,9 @@ sealed class Nudge
             Info($"{(harvestExists ? "Appending to" : "Created new CSV")}: {_csvPath}");
 
             // Initialize activity log
-            var activityLogPath = Path.Combine(Path.GetDirectoryName(_csvPath) ?? "", "ACTIVITY_LOG.CSV");
+            var activityLogPath = _experimentalMode
+                ? PlatformConfig.ActivityLogPathExp
+                : PlatformConfig.ActivityLogPath;
             bool activityExists = File.Exists(activityLogPath);
             EnsureCsvSchema(activityLogPath, FeatureSchema.ActivityLogHeaders);
             _activityLogFile = new StreamWriter(activityLogPath, append: true);
@@ -2111,53 +2518,121 @@ sealed class Nudge
                 }
                 else
                 {
-
-                    WriteCsvRow(
-                        _csvFile,
-                        timestamp,
-                        hourOfDay,
-                        dayOfWeek,
-                        fusedTick.DisplayAppName,
-                        fusedTick.LegacyForegroundAppHash,
-                        fusedTick.Context.IdleMs,
-                        fusedTick.TimeLastRequestMs,
-                        (object?)productiveInt,
-                        FeatureSchema.SchemaVersion,
-                        fusedTick.Context.FocusedAppId,
-                        fusedTick.Context.FocusedTitle,
-                        fusedTick.Context.FocusedDomain,
-                        fusedTick.Context.FocusedWindowId,
-                        fusedTick.Context.IsIdleNow,
-                        fusedTick.Context.FocusedSinceMs,
-                        fusedTick.Context.TitleUnchangedForMs,
-                        fusedTick.Context.MappedToplevelCount,
-                        fusedTick.Context.ActiveWorkspaceId,
-                        NudgeCoreLogic.GetFocusSourceName(fusedTick.Context.FocusSource),
-                        NudgeCoreLogic.GetSignalQualityName(fusedTick.Context.SignalQuality),
-                        fusedTick.Context.FullscreenFlag,
-                        fusedTick.Features.FocusedAppHash,
-                        fusedTick.Features.FocusedDomainHash,
-                        fusedTick.Features.IdleMs,
-                        fusedTick.Features.TitleStabilityMs,
-                        fusedTick.Features.SwitchCount60s,
-                        fusedTick.Features.SwitchCount300s,
-                        fusedTick.Features.DistinctApps300s,
-                        fusedTick.Features.DistinctDomains300s,
-                        fusedTick.Features.ReturnedToAnchorApp300s,
-                        fusedTick.Features.CurrentAppShare300s,
-                        fusedTick.Features.CurrentDomainShare300s,
-                        fusedTick.Features.BrowserWindowFlag,
-                        fusedTick.Features.CommunicationAppFlag,
-                        fusedTick.Features.EntertainmentDomainFlag,
-                        fusedTick.Features.WorkDomainFlag,
-                        fusedTick.Features.AfkFlag,
-                        fusedTick.Features.WorkspaceSwitchCount300s,
-                        fusedTick.Features.DevAppFlag,
-                        fusedTick.Features.CreativeAppFlag,
-                        fusedTick.Features.OfficeAppFlag,
-                        fusedTick.Features.CommAppFlag,
-                        fusedTick.Features.EntAppFlag);
+                    if (_experimentalMode && fusedTick.FeaturesV4 is FeatureVectorV4 fv4)
+                    {
+                        WriteCsvRow(
+                            _csvFile,
+                            timestamp,
+                            hourOfDay,
+                            dayOfWeek,
+                            fusedTick.DisplayAppName,
+                            fusedTick.LegacyForegroundAppHash,
+                            fusedTick.Context.IdleMs,
+                            fusedTick.TimeLastRequestMs,
+                            (object?)productiveInt,
+                            FeatureSchemaV4.SchemaVersion,
+                            fusedTick.Context.FocusedAppId,
+                            fusedTick.Context.FocusedTitle,
+                            fusedTick.Context.FocusedDomain,
+                            fusedTick.Context.FocusedWindowId,
+                            fusedTick.Context.IsIdleNow,
+                            fusedTick.Context.FocusedSinceMs,
+                            fusedTick.Context.TitleUnchangedForMs,
+                            fusedTick.Context.MappedToplevelCount,
+                            fusedTick.Context.ActiveWorkspaceId,
+                            NudgeCoreLogic.GetFocusSourceName(fusedTick.Context.FocusSource),
+                            NudgeCoreLogic.GetSignalQualityName(fusedTick.Context.SignalQuality),
+                            fusedTick.Context.FullscreenFlag,
+                            fv4.FocusedAppHash,
+                            fv4.FocusedDomainHash,
+                            fv4.IdleMs,
+                            fv4.TitleStabilityMs,
+                            fv4.SwitchCount60s,
+                            fv4.SwitchCount300s,
+                            fv4.DistinctApps300s,
+                            fv4.DistinctDomains300s,
+                            fv4.ReturnedToAnchorApp300s,
+                            fv4.CurrentAppShare300s,
+                            fv4.CurrentDomainShare300s,
+                            fv4.BrowserWindowFlag,
+                            fv4.AfkFlag,
+                            fv4.WorkspaceSwitchCount300s,
+                            fv4.AudioPlayingFlag,
+                            fv4.MediaSessionActiveFlag,
+                            fv4.MicActiveFlag,
+                            fv4.DomainProductiveRate,
+                            fv4.DomainLabelCount,
+                            fv4.AppProductiveRate,
+                            fv4.AppLabelCount);
+                    }
+                    else
+                    {
+                        WriteCsvRow(
+                            _csvFile,
+                            timestamp,
+                            hourOfDay,
+                            dayOfWeek,
+                            fusedTick.DisplayAppName,
+                            fusedTick.LegacyForegroundAppHash,
+                            fusedTick.Context.IdleMs,
+                            fusedTick.TimeLastRequestMs,
+                            (object?)productiveInt,
+                            FeatureSchema.SchemaVersion,
+                            fusedTick.Context.FocusedAppId,
+                            fusedTick.Context.FocusedTitle,
+                            fusedTick.Context.FocusedDomain,
+                            fusedTick.Context.FocusedWindowId,
+                            fusedTick.Context.IsIdleNow,
+                            fusedTick.Context.FocusedSinceMs,
+                            fusedTick.Context.TitleUnchangedForMs,
+                            fusedTick.Context.MappedToplevelCount,
+                            fusedTick.Context.ActiveWorkspaceId,
+                            NudgeCoreLogic.GetFocusSourceName(fusedTick.Context.FocusSource),
+                            NudgeCoreLogic.GetSignalQualityName(fusedTick.Context.SignalQuality),
+                            fusedTick.Context.FullscreenFlag,
+                            fusedTick.Features.FocusedAppHash,
+                            fusedTick.Features.FocusedDomainHash,
+                            fusedTick.Features.IdleMs,
+                            fusedTick.Features.TitleStabilityMs,
+                            fusedTick.Features.SwitchCount60s,
+                            fusedTick.Features.SwitchCount300s,
+                            fusedTick.Features.DistinctApps300s,
+                            fusedTick.Features.DistinctDomains300s,
+                            fusedTick.Features.ReturnedToAnchorApp300s,
+                            fusedTick.Features.CurrentAppShare300s,
+                            fusedTick.Features.CurrentDomainShare300s,
+                            fusedTick.Features.BrowserWindowFlag,
+                            fusedTick.Features.CommunicationAppFlag,
+                            fusedTick.Features.EntertainmentDomainFlag,
+                            fusedTick.Features.WorkDomainFlag,
+                            fusedTick.Features.AfkFlag,
+                            fusedTick.Features.WorkspaceSwitchCount300s,
+                            fusedTick.Features.DevAppFlag,
+                            fusedTick.Features.CreativeAppFlag,
+                            fusedTick.Features.OfficeAppFlag,
+                            fusedTick.Features.CommAppFlag,
+                            fusedTick.Features.EntAppFlag);
+                    }
                     wroteRow = true;
+
+                    // Update reputation store after the row is written (point-in-time correctness)
+                    if (_experimentalMode && productive.HasValue)
+                    {
+                        string dom = fusedTick.Context.FocusedDomain;
+                        string ap = fusedTick.Context.FocusedAppId;
+                        double oldDomRate = _reputationStore?.DomainRate(dom) ?? 0.5;
+                        double oldAppRate = _reputationStore?.AppRate(ap) ?? 0.5;
+
+                        _reputationStore?.Update(dom, ap, productive.Value);
+                        _reputationStore?.Flush();
+
+                        if (_verbose)
+                        {
+                            double newDomRate = _reputationStore?.DomainRate(dom) ?? 0.5;
+                            double newAppRate = _reputationStore?.AppRate(ap) ?? 0.5;
+                            Dim($"  [verbose] reputation update: domain={dom} {oldDomRate:F2}->{newDomRate:F2}, app={ap} {oldAppRate:F2}->{newAppRate:F2}");
+                        }
+                    }
                 }
             }
 
@@ -2333,14 +2808,29 @@ sealed class Nudge
             string requestJson;
             if (tick is ActivityTickResult fusedTick)
             {
-                var request = new MLPredictionRequest
+                MLPredictionRequest request;
+                if (_experimentalMode && fusedTick.FeaturesV4 is FeatureVectorV4 fv4)
                 {
-                    SchemaVersion = FeatureSchema.SchemaVersion,
-                    FeatureOrder = FeatureSchema.OrderedFeatureNames,
-                    Features = FeatureSchema.ToFeatureDictionary(fusedTick.Features),
-                    FocusSource = NudgeCoreLogic.GetFocusSourceName(fusedTick.Context.FocusSource),
-                    SignalQuality = NudgeCoreLogic.GetSignalQualityName(fusedTick.Context.SignalQuality)
-                };
+                    request = new MLPredictionRequest
+                    {
+                        SchemaVersion = FeatureSchemaV4.SchemaVersion,
+                        FeatureOrder = FeatureSchemaV4.OrderedFeatureNames,
+                        Features = FeatureSchemaV4.ToFeatureDictionary(fv4),
+                        FocusSource = NudgeCoreLogic.GetFocusSourceName(fusedTick.Context.FocusSource),
+                        SignalQuality = NudgeCoreLogic.GetSignalQualityName(fusedTick.Context.SignalQuality)
+                    };
+                }
+                else
+                {
+                    request = new MLPredictionRequest
+                    {
+                        SchemaVersion = FeatureSchema.SchemaVersion,
+                        FeatureOrder = FeatureSchema.OrderedFeatureNames,
+                        Features = FeatureSchema.ToFeatureDictionary(fusedTick.Features),
+                        FocusSource = NudgeCoreLogic.GetFocusSourceName(fusedTick.Context.FocusSource),
+                        SignalQuality = NudgeCoreLogic.GetSignalQualityName(fusedTick.Context.SignalQuality)
+                    };
+                }
                 requestJson = JsonSerializer.Serialize(request, NudgeJsonContext.Default.MLPredictionRequest) + "\n";
             }
             else
@@ -2407,9 +2897,10 @@ sealed class Nudge
     {
         try
         {
+            string modelDir = _experimentalMode ? "model_exp" : "model";
             string metaPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                ".nudge", "model", "trainer_meta.json");
+                ".nudge", modelDir, "trainer_meta.json");
             if (File.Exists(metaPath))
             {
                 var json = File.ReadAllText(metaPath);
@@ -2459,6 +2950,10 @@ sealed class Nudge
 
         // Query ML model
         var prediction = QueryMLModel(app, idle, attention, tick);
+
+        // Verbose decision trace (§11.5.2)
+        if (tick is ActivityTickResult t)
+            LogMLDecisionTrace(app, t.Context.FocusedDomain, prediction, t);
 
         if (prediction == null || !prediction.ModelAvailable)
         {
@@ -2585,6 +3080,101 @@ sealed class Nudge
         int minutes = ms / 60000;
         int seconds = (ms % 60000) / 1000;
         return seconds > 0 ? $"{minutes}m {seconds}s" : $"{minutes}m";
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // SENSOR HEALTH - Startup diagnostic for experimental mode
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    static void LogSensorHealth()
+    {
+        bool fs = false, audio = false, media = false, mic = false;
+        try { fs = _platformService?.IsFullscreen() ?? false; } catch { }
+        try { audio = _platformService?.IsAudioPlaying() ?? false; } catch { }
+        try { media = _platformService?.IsMediaSessionActive() ?? false; } catch { }
+        try { mic = _cachedPresenceState.IsMicActive; } catch { }
+
+        string Status(bool ok) => ok ? $"{Color.BGREEN}live{Color.RESET}" : $"{Color.DIM}degraded{Color.RESET}";
+        Dim($"  Sensor status: fullscreen={Status(fs)} audio={Status(audio)} media={Status(media)} mic={Status(mic)}");
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // SCHEMA VALIDATION - Guard against model/feature mismatch (§11.5.4)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    static bool ValidateModelSchema()
+    {
+        try
+        {
+            string modelDir = _experimentalMode ? "model_exp" : "model";
+            string scalerPath = Path.Combine(PlatformConfig.DataDirectory, modelDir, "scaler.json");
+            if (!File.Exists(scalerPath))
+                return true; // No model yet — cold start, no mismatch possible
+
+            using var doc = JsonDocument.Parse(File.ReadAllText(scalerPath));
+            if (!doc.RootElement.TryGetProperty("feature_order", out var orderEl) ||
+                orderEl.ValueKind != JsonValueKind.Array)
+            {
+                Warning("  [WARN] scaler.json missing feature_order — model schema unknown");
+                return false;
+            }
+
+            var expected = _experimentalMode
+                ? FeatureSchemaV4.OrderedFeatureNames
+                : FeatureSchema.OrderedFeatureNames;
+
+            if (orderEl.GetArrayLength() != expected.Length)
+            {
+                Warning($"  [WARN] Model feature count mismatch: expected {expected.Length}, got {orderEl.GetArrayLength()}");
+                return false;
+            }
+
+            int i = 0;
+            foreach (var nameEl in orderEl.EnumerateArray())
+            {
+                string? name = nameEl.GetString();
+                if (!string.Equals(name, expected[i], StringComparison.Ordinal))
+                {
+                    Warning($"  [WARN] Model feature mismatch at index {i}: expected '{expected[i]}', got '{name}'");
+                    return false;
+                }
+                i++;
+            }
+
+            Dim("  Model schema validated ✓");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Warning($"  [WARN] Schema validation failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // VERBOSE DECISION TRACE - Per-prediction signal logging (§11.5.2)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    static void LogMLDecisionTrace(string app, string domain, MLPrediction? prediction,
+                                   ActivityTickResult? tick)
+    {
+        if (!_verbose || !_experimentalMode || prediction == null || tick?.FeaturesV4 is not FeatureVectorV4 fv4)
+            return;
+
+        string decision = prediction.Prediction == 0
+            ? (prediction.Confidence >= ML_CONFIDENCE_THRESHOLD ? "TRIGGER" : "DEFER")
+            : "SKIP";
+
+        double score = prediction.Prediction == 1
+            ? prediction.Confidence
+            : (1.0 - prediction.Confidence);
+
+        double sc = score * 100;
+        double conf = prediction.Confidence * 100;
+        string sig = $"fs={fv4.FullscreenFlag} audio={fv4.AudioPlayingFlag} media={fv4.MediaSessionActiveFlag} mic={fv4.MicActiveFlag}";
+        string rep = $"dom={fv4.DomainProductiveRate:F2}({fv4.DomainLabelCount}) app={fv4.AppProductiveRate:F2}({fv4.AppLabelCount})";
+        string beh = $"sw300={fv4.SwitchCount300s} share={fv4.CurrentAppShare300s:F2} focus={fv4.FocusedSinceMs}";
+        Dim($"  [verbose] ML {decision} | app={app} domain={domain} score={sc:F1}% conf={conf:F1}% | signals=[{sig}] | reputation=[{rep}] | behavior=[{beh}]");
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

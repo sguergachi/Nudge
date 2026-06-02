@@ -134,6 +134,43 @@ public sealed class NudgeCliParserTests
         Assert.Equal(NudgeStartupAction.ShowHelp, parsed.Action);
     }
 
+    [Fact]
+    public void ParseNudgeArgs_ExperimentalFlag_SetsExperimentalMode()
+    {
+        var parsed = NudgeCoreLogic.ParseNudgeArgs(["--experimental"]);
+        Assert.True(parsed.ExperimentalMode);
+    }
+
+    [Fact]
+    public void ParseNudgeArgs_ExperimentalWithOtherFlags_SetsAll()
+    {
+        var parsed = NudgeCoreLogic.ParseNudgeArgs(["--ml", "--experimental", "--interval", "3"]);
+        Assert.True(parsed.MlEnabled);
+        Assert.True(parsed.ExperimentalMode);
+        Assert.Equal(3, parsed.IntervalMinutes);
+    }
+
+    [Fact]
+    public void ParseNudgeArgs_DefaultExperimentalMode_IsFalse()
+    {
+        var parsed = NudgeCoreLogic.ParseNudgeArgs([]);
+        Assert.False(parsed.ExperimentalMode);
+    }
+
+    [Fact]
+    public void ParseNudgeArgs_VerboseFlag_SetsVerbose()
+    {
+        var parsed = NudgeCoreLogic.ParseNudgeArgs(["--verbose"]);
+        Assert.True(parsed.Verbose);
+    }
+
+    [Fact]
+    public void ParseNudgeArgs_DefaultVerbose_IsFalse()
+    {
+        var parsed = NudgeCoreLogic.ParseNudgeArgs([]);
+        Assert.False(parsed.Verbose);
+    }
+
     // ── nudge-notify arg parser ───────────────────────────────────────────────
 
     [Fact]

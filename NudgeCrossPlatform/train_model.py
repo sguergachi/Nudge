@@ -57,6 +57,34 @@ FEATURE_COLUMNS_V3 = [
     'ent_app_flag',
 ]
 
+FEATURE_COLUMNS_V4 = [
+    'hour_of_day',
+    'day_of_week',
+    'focused_app_hash',
+    'focused_domain_hash',
+    'idle_ms',
+    'focused_since_ms',
+    'title_stability_ms',
+    'switch_count_60s',
+    'switch_count_300s',
+    'distinct_apps_300s',
+    'distinct_domains_300s',
+    'returned_to_anchor_app_300s',
+    'current_app_share_300s',
+    'current_domain_share_300s',
+    'browser_window_flag',
+    'afk_flag',
+    'fullscreen_flag',
+    'workspace_switch_count_300s',
+    'audio_playing_flag',
+    'media_session_active_flag',
+    'mic_active_flag',
+    'domain_productive_rate',
+    'domain_label_count',
+    'app_productive_rate',
+    'app_label_count',
+]
+
 LEGACY_FEATURE_COLUMNS_V1 = [
     'hour_of_day',
     'day_of_week',
@@ -94,9 +122,29 @@ def load_and_prepare_data(csv_file):
     print(f'Loading: {csv_file}')
     df = pd.read_csv(csv_file)
 
+    _v4_cols_present = all(c in df.columns for c in FEATURE_COLUMNS_V4)
     _v3_cols_present = all(c in df.columns for c in FEATURE_COLUMNS_V3)
 
-    if _v3_cols_present:
+    if _v4_cols_present:
+        for col in FEATURE_COLUMNS_V4:
+            if col in df.columns:
+                df[col] = df[col].fillna(0)
+
+        feature_cols = FEATURE_COLUMNS_V4
+        schema_version = 4
+        df['is_migrated'] = 0
+        print(f'   Schema v4 — {len(df)} rows')
+
+        if 'afk_flag' in df.columns:
+            before = len(df)
+            df = df[df['afk_flag'].fillna(0).astype(int) == 0]
+            print(f'   Filtered AFK rows: {before - len(df)}')
+        if 'signal_quality' in df.columns:
+            before = len(df)
+            quality = df['signal_quality'].fillna('poor').astype(str).str.lower()
+            df = df[quality != 'poor']
+            print(f'   Filtered poor-signal rows: {before - len(df)}')
+    elif _v3_cols_present:
         v1_mask = df['idle_ms'].isna()
         n_migrated = int(v1_mask.sum())
 

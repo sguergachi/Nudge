@@ -15,9 +15,10 @@
     <Compile Include="NudgeJsonContext.cs" />
     <Compile Include="BrowserDetector.cs" />
     <Compile Include="KWinScripts.cs" />
+    <Compile Include="DomainReputationStore.cs" />
   </ItemGroup>
 
-  <PropertyGroup Condition="'$(OS)' == 'Windows_NT'">
+  <PropertyGroup>
     <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
   </PropertyGroup>
 

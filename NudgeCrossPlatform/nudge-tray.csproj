@@ -29,6 +29,7 @@
     <Compile Include="TrainerState.cs" />
     <Compile Include="LiveAIState.cs" />
     <Compile Include="AnalyticsWindow.Views.cs" />
+    <Compile Include="DomainReputationStore.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -56,6 +57,12 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="background_trainer.py">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="model\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="model_exp\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

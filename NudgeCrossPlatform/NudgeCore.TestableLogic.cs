@@ -33,6 +33,8 @@ internal sealed class NudgeParsedArgs
     public bool ForceTrainedModel { get; init; }
     public string? CsvPath { get; init; }
     public bool MeetingSuppression { get; init; } = true;
+    public bool ExperimentalMode { get; init; }
+    public bool Verbose { get; init; }
 }
 
 internal enum NudgeNotifyAction
@@ -115,7 +117,10 @@ internal readonly record struct WindowObservation(
     FocusSource FocusSource,
     bool Fullscreen,
     int MappedToplevelCount,
-    bool CatalogDisagrees = false);
+    bool CatalogDisagrees = false,
+    bool AudioPlaying = false,
+    bool MediaSessionActive = false,
+    bool MicActive = false);
 
 internal readonly record struct IdleObservation(int IdleMs, IdleSource IdleSource);
 
@@ -132,7 +137,10 @@ internal readonly record struct ActivityContext(
     string ActiveWorkspaceId,
     FocusSource FocusSource,
     SignalQuality SignalQuality,
-    int FullscreenFlag);
+    int FullscreenFlag,
+    int AudioPlayingFlag = 0,
+    int MediaSessionActiveFlag = 0,
+    int MicActiveFlag = 0);
 
 internal readonly record struct ActivityContextRecord(
     DateTime Timestamp,
@@ -182,9 +190,37 @@ internal readonly record struct FeatureVector(
     int CommAppFlag,
     int EntAppFlag);
 
+internal readonly record struct FeatureVectorV4(
+    int HourOfDay,
+    int DayOfWeek,
+    int FocusedAppHash,
+    int FocusedDomainHash,
+    int IdleMs,
+    int FocusedSinceMs,
+    int TitleStabilityMs,
+    int SwitchCount60s,
+    int SwitchCount300s,
+    int DistinctApps300s,
+    int DistinctDomains300s,
+    int ReturnedToAnchorApp300s,
+    double CurrentAppShare300s,
+    double CurrentDomainShare300s,
+    int BrowserWindowFlag,
+    int AfkFlag,
+    int FullscreenFlag,
+    int WorkspaceSwitchCount300s,
+    int AudioPlayingFlag,
+    int MediaSessionActiveFlag,
+    int MicActiveFlag,
+    double DomainProductiveRate,
+    int DomainLabelCount,
+    double AppProductiveRate,
+    int AppLabelCount);
+
 internal readonly record struct ActivityTickResult(
     ActivityContext Context,
     FeatureVector Features,
+    FeatureVectorV4? FeaturesV4,
     AppCategory AppCategory,
     CategoryConfidence AppCategoryConfidence,
     string DisplayAppName,
@@ -208,7 +244,7 @@ internal sealed class ActivityFeatureTracker
     private DateTime _titleSince;
     private readonly Dictionary<string, int> _freqDict = new(16, StringComparer.Ordinal);
 
-    public ActivityTickResult Capture(DateTime now, WindowObservation window, IdleObservation idle)
+    public ActivityTickResult Capture(DateTime now, WindowObservation window, IdleObservation idle, bool experimental = false)
     {
         string appId = NormalizeRawValue(window.AppId, "unknown");
         string title = NormalizeRawValue(window.Title, "");
@@ -243,7 +279,10 @@ internal sealed class ActivityFeatureTracker
             ActiveWorkspaceId: workspaceId,
             FocusSource: window.FocusSource,
             SignalQuality: signalQuality,
-            FullscreenFlag: window.Fullscreen ? 1 : 0);
+            FullscreenFlag: window.Fullscreen ? 1 : 0,
+            AudioPlayingFlag: window.AudioPlaying ? 1 : 0,
+            MediaSessionActiveFlag: window.MediaSessionActive ? 1 : 0,
+            MicActiveFlag: window.MicActive ? 1 : 0);
 
         var sample = new ActivitySample(now, focusKey, appId, domain, workspaceId);
         _buf[_head] = sample;
@@ -251,7 +290,7 @@ internal sealed class ActivityFeatureTracker
         if (_count < BufferSize) _count++;
         TrimOld(now);
 
-        var (featureVector, appCategory, appConf) = ComputeFeatures(now, context);
+        var (featureVector, featureVectorV4, appCategory, appConf) = ComputeFeatures(now, context, experimental);
         string legacyAppName = BuildLegacyAppName(appId, title);
         string displayAppName = BuildDisplayAppName(appId, title, domain);
 
@@ -261,6 +300,7 @@ internal sealed class ActivityFeatureTracker
         return new ActivityTickResult(
             Context: context,
             Features: featureVector,
+            FeaturesV4: featureVectorV4,
             AppCategory: appCategory,
             AppCategoryConfidence: appConf,
             DisplayAppName: displayAppName,
@@ -269,7 +309,7 @@ internal sealed class ActivityFeatureTracker
             TimeLastRequestMs: context.FocusedSinceMs);
     }
 
-    private (FeatureVector Features, AppCategory Category, CategoryConfidence Confidence) ComputeFeatures(DateTime now, ActivityContext context)
+    private (FeatureVector Features, FeatureVectorV4? FeaturesV4, AppCategory Category, CategoryConfidence Confidence) ComputeFeatures(DateTime now, ActivityContext context, bool experimental)
     {
         int n = _count;
         string fa = context.FocusedAppId;
@@ -360,7 +400,28 @@ internal sealed class ActivityFeatureTracker
             DevAppFlag: apc == AppCategory.Development ? 1 : 0, CreativeAppFlag: apc == AppCategory.Creative ? 1 : 0,
             OfficeAppFlag: apc == AppCategory.Office ? 1 : 0, CommAppFlag: apc == AppCategory.Communication ? 1 : 0,
             EntAppFlag: apc == AppCategory.Entertainment ? 1 : 0);
-        return (fv, apc, co);
+
+        FeatureVectorV4? fv4 = null;
+        if (experimental)
+        {
+            // Sensor and personalization fields are populated by the daemon (§5, §6);
+            // the tracker provides the base behavioural signals.
+            fv4 = new FeatureVectorV4(HourOfDay: fv.HourOfDay, DayOfWeek: fv.DayOfWeek,
+                FocusedAppHash: fv.FocusedAppHash, FocusedDomainHash: fv.FocusedDomainHash,
+                IdleMs: fv.IdleMs, FocusedSinceMs: fv.FocusedSinceMs, TitleStabilityMs: fv.TitleStabilityMs,
+                SwitchCount60s: fv.SwitchCount60s, SwitchCount300s: fv.SwitchCount300s,
+                DistinctApps300s: fv.DistinctApps300s, DistinctDomains300s: fv.DistinctDomains300s,
+                ReturnedToAnchorApp300s: fv.ReturnedToAnchorApp300s,
+                CurrentAppShare300s: fv.CurrentAppShare300s, CurrentDomainShare300s: fv.CurrentDomainShare300s,
+                BrowserWindowFlag: fv.BrowserWindowFlag, AfkFlag: fv.AfkFlag,
+                FullscreenFlag: fv.FullscreenFlag, WorkspaceSwitchCount300s: fv.WorkspaceSwitchCount300s,
+                AudioPlayingFlag: context.AudioPlayingFlag,
+                MediaSessionActiveFlag: context.MediaSessionActiveFlag,
+                MicActiveFlag: context.MicActiveFlag,
+                DomainProductiveRate: 0.5, DomainLabelCount: 0, AppProductiveRate: 0.5, AppLabelCount: 0);
+        }
+
+        return (fv, fv4, apc, co);
     }
     private void TrimOld(DateTime now)
     {
@@ -627,6 +688,116 @@ internal static class FeatureSchema
         };
 }
 
+internal static class FeatureSchemaV4
+{
+    public const int SchemaVersion = 4;
+
+    public static readonly string[] OrderedFeatureNames =
+    [
+        "hour_of_day",
+        "day_of_week",
+        "focused_app_hash",
+        "focused_domain_hash",
+        "idle_ms",
+        "focused_since_ms",
+        "title_stability_ms",
+        "switch_count_60s",
+        "switch_count_300s",
+        "distinct_apps_300s",
+        "distinct_domains_300s",
+        "returned_to_anchor_app_300s",
+        "current_app_share_300s",
+        "current_domain_share_300s",
+        "browser_window_flag",
+        "afk_flag",
+        "fullscreen_flag",
+        "workspace_switch_count_300s",
+        "audio_playing_flag",
+        "media_session_active_flag",
+        "mic_active_flag",
+        "domain_productive_rate",
+        "domain_label_count",
+        "app_productive_rate",
+        "app_label_count"
+    ];
+
+    public static readonly string[] HarvestHeadersV4 =
+    [
+        "timestamp",
+        "hour_of_day",
+        "day_of_week",
+        "app_name",
+        "foreground_app",
+        "idle_time",
+        "time_last_request",
+        "productive",
+        "schema_version",
+        "focused_app_id",
+        "focused_title",
+        "focused_domain",
+        "focused_window_id",
+        "is_idle_now",
+        "focused_since_ms",
+        "title_unchanged_for_ms",
+        "mapped_toplevel_count",
+        "active_workspace_id",
+        "focus_source",
+        "signal_quality",
+        "fullscreen_flag",
+        "focused_app_hash",
+        "focused_domain_hash",
+        "idle_ms",
+        "title_stability_ms",
+        "switch_count_60s",
+        "switch_count_300s",
+        "distinct_apps_300s",
+        "distinct_domains_300s",
+        "returned_to_anchor_app_300s",
+        "current_app_share_300s",
+        "current_domain_share_300s",
+        "browser_window_flag",
+        "afk_flag",
+        "workspace_switch_count_300s",
+        "audio_playing_flag",
+        "media_session_active_flag",
+        "mic_active_flag",
+        "domain_productive_rate",
+        "domain_label_count",
+        "app_productive_rate",
+        "app_label_count"
+    ];
+
+    public static IReadOnlyDictionary<string, double> ToFeatureDictionary(FeatureVectorV4 features) =>
+        new Dictionary<string, double>(OrderedFeatureNames.Length, StringComparer.Ordinal)
+        {
+            ["hour_of_day"] = features.HourOfDay,
+            ["day_of_week"] = features.DayOfWeek,
+            ["focused_app_hash"] = features.FocusedAppHash,
+            ["focused_domain_hash"] = features.FocusedDomainHash,
+            ["idle_ms"] = features.IdleMs,
+            ["focused_since_ms"] = features.FocusedSinceMs,
+            ["title_stability_ms"] = features.TitleStabilityMs,
+            ["switch_count_60s"] = features.SwitchCount60s,
+            ["switch_count_300s"] = features.SwitchCount300s,
+            ["distinct_apps_300s"] = features.DistinctApps300s,
+            ["distinct_domains_300s"] = features.DistinctDomains300s,
+            ["returned_to_anchor_app_300s"] = features.ReturnedToAnchorApp300s,
+            ["current_app_share_300s"] = features.CurrentAppShare300s,
+            ["current_domain_share_300s"] = features.CurrentDomainShare300s,
+            ["browser_window_flag"] = features.BrowserWindowFlag,
+            ["afk_flag"] = features.AfkFlag,
+            ["fullscreen_flag"] = features.FullscreenFlag,
+            ["workspace_switch_count_300s"] = features.WorkspaceSwitchCount300s,
+            ["audio_playing_flag"] = features.AudioPlayingFlag,
+            ["media_session_active_flag"] = features.MediaSessionActiveFlag,
+            ["mic_active_flag"] = features.MicActiveFlag,
+            ["domain_productive_rate"] = features.DomainProductiveRate,
+            ["domain_label_count"] = features.DomainLabelCount,
+            ["app_productive_rate"] = features.AppProductiveRate,
+            ["app_label_count"] = features.AppLabelCount
+        };
+}
+
 internal static class PlatformConfig
 {
     private static string? _dataDirectory;
@@ -639,7 +810,11 @@ internal static class PlatformConfig
 
     public static string CsvPath => Path.Combine(DataDirectory, "HARVEST.CSV");
 
+    public static string CsvPathExp => Path.Combine(DataDirectory, "HARVEST_EXP.CSV");
+
     public static string ActivityLogPath => Path.Combine(DataDirectory, "ACTIVITY_LOG.CSV");
+
+    public static string ActivityLogPathExp => Path.Combine(DataDirectory, "ACTIVITY_LOG_EXP.CSV");
 
     /// <summary>Rolling diagnostic log file (mirrors console output) used by the Send Feedback flow.</summary>
     public static string LogFilePath => Path.Combine(DataDirectory, "nudge.log");
@@ -1265,6 +1440,8 @@ internal static class NudgeCoreLogic
         int? mlIntervalSeconds = null;
         bool mlEnabled = false;
         bool forceModel = false;
+        bool experimentalMode = false;
+        bool verbose = false;
         string? csvPath = null;
         bool meetingSuppression = true;
 
@@ -1310,6 +1487,16 @@ internal static class NudgeCoreLogic
                 forceModel = true;
                 continue;
             }
+            if (arg == "--experimental")
+            {
+                experimentalMode = true;
+                continue;
+            }
+            if (arg == "--verbose")
+            {
+                verbose = true;
+                continue;
+            }
             if (arg == "--no-meeting-suppression")
             {
                 meetingSuppression = false;
@@ -1329,7 +1516,9 @@ internal static class NudgeCoreLogic
             MlEnabled = mlEnabled,
             ForceTrainedModel = forceModel,
             CsvPath = csvPath,
-            MeetingSuppression = meetingSuppression
+            MeetingSuppression = meetingSuppression,
+            ExperimentalMode = experimentalMode,
+            Verbose = verbose
         };
     }
 
@@ -1838,6 +2027,14 @@ internal static class PulseAudioParser
         if (string.IsNullOrEmpty(pactlOutput)) return false;
         return pactlOutput.Contains("State: RUNNING", StringComparison.OrdinalIgnoreCase);
     }
+
+    // Returns true if `pactl list sink-inputs` output has any RUNNING stream.
+    // sink-inputs = playback / audio output.
+    public static bool HasActivePlaybackStream(string pactlOutput)
+    {
+        if (string.IsNullOrEmpty(pactlOutput)) return false;
+        return pactlOutput.Contains("State: RUNNING", StringComparison.OrdinalIgnoreCase);
+    }
 }
 
 internal static class PipeWireParser
@@ -1860,16 +2057,21 @@ internal static class PipeWireParser
 
             foreach (var node in doc.RootElement.EnumerateArray())
             {
+                if (node.ValueKind != JsonValueKind.Object) continue;
                 if (!node.TryGetProperty("type", out var typeEl) ||
                     typeEl.GetString() != "PipeWire:Interface:Node") continue;
 
                 if (!node.TryGetProperty("info", out var info)) continue;
+                if (info.ValueKind != JsonValueKind.Object) continue;
 
                 if (!info.TryGetProperty("state", out var stateEl) ||
+                    stateEl.ValueKind != JsonValueKind.String ||
                     !string.Equals(stateEl.GetString(), "running", StringComparison.OrdinalIgnoreCase)) continue;
 
                 if (!info.TryGetProperty("props", out var props)) continue;
+                if (props.ValueKind != JsonValueKind.Object) continue;
                 if (!props.TryGetProperty("media.class", out var classEl)) continue;
+                if (classEl.ValueKind != JsonValueKind.String) continue;
 
                 string? mediaClass = classEl.GetString();
                 switch (mediaClass)
@@ -1911,6 +2113,67 @@ internal static class PipeWireParser
 
     private static readonly string[] PortalNodeProps =
         ["node.name", "application.name", "pipewire.access.portal.app_id"];
+
+    // Returns true if any Stream/Output/Audio node is in "running" state,
+    // excluding known system/notification streams (filter by application.name / media.role).
+    public static bool HasAudioOutput(string pwDumpJson)
+    {
+        if (string.IsNullOrWhiteSpace(pwDumpJson)) return false;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(pwDumpJson);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return false;
+
+            foreach (var node in doc.RootElement.EnumerateArray())
+            {
+                if (!node.TryGetProperty("type", out var typeEl) ||
+                    typeEl.GetString() != "PipeWire:Interface:Node") continue;
+
+                if (!node.TryGetProperty("info", out var info)) continue;
+
+                if (!info.TryGetProperty("state", out var stateEl) ||
+                    !string.Equals(stateEl.GetString(), "running", StringComparison.OrdinalIgnoreCase)) continue;
+
+                if (!info.TryGetProperty("props", out var props)) continue;
+                if (!props.TryGetProperty("media.class", out var classEl)) continue;
+
+                if (classEl.GetString() != "Stream/Output/Audio") continue;
+
+                // Exclude system/notification streams
+                string? appName = null;
+                string? mediaRole = null;
+                if (props.TryGetProperty("application.name", out var appNameEl))
+                    appName = appNameEl.GetString();
+                if (props.TryGetProperty("media.role", out var roleEl))
+                    mediaRole = roleEl.GetString();
+
+                if (IsSystemAudioStream(appName, mediaRole))
+                    continue;
+
+                return true;
+            }
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+
+        return false;
+    }
+
+    private static bool IsSystemAudioStream(string? appName, string? mediaRole)
+    {
+        if (string.Equals(mediaRole, "Notification", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(mediaRole, "Event", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (appName is null) return false;
+
+        return appName.Contains("notification", StringComparison.OrdinalIgnoreCase) ||
+               appName.Contains("alert", StringComparison.OrdinalIgnoreCase) ||
+               appName.Contains("bell", StringComparison.OrdinalIgnoreCase);
+    }
 }
 
 /// <summary>
@@ -1928,9 +2191,11 @@ internal static class MeetingTitleDetector
     internal static readonly FrozenSet<string> TitleKeywords = new[]
     {
         "zoom meeting", "zoom video", "google meet",
-        "skype for business", "webex meeting", "gotomeeting", "bluejeans",
+        "skype for business", "skype meeting", "skype call",
+        "webex meeting", "gotomeeting", "bluejeans",
         "slack call", "slack huddle", "discord voice", "ringcentral meeting",
         "whereby", "lark meeting", "dingtalk meeting",
+        "microsoft teams meeting", "microsoft teams call",
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     internal static readonly FrozenSet<string> ProcessNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)

@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 """
-Generate V3-schema synthetic productivity data for model pre-training.
+Generate synthetic productivity data for model pre-training.
 
-Creates labeled training data with realistic feature distributions based on
-app categories, time-of-day, and work/eve/weekend patterns. The synthetic data
-gives the model a useful prior before real user labels accumulate.
+Supports both V3 and V4 schema.
 
 Usage:
-  python generate_sample_data.py                          # default: 500 samples to /tmp/HARVEST.CSV
+  python generate_sample_data.py                          # default: 500 V3 samples to /tmp/HARVEST.CSV
   python generate_sample_data.py --samples 1000 --output ~/.nudge/HARVEST.CSV
-  python generate_sample_data.py --output ~/.nudge/seed_data.csv
+  python generate_sample_data.py --schema v4 --samples 600 --output ~/.nudge/HARVEST_EXP.CSV
 """
 
 import random
@@ -31,7 +29,6 @@ CATEGORY_BIAS = {
 }
 
 # Feature ranges per category: (low, high) for random generation
-# Each tuple is (min, max) — values drawn uniformly from this range
 CATEGORY_FEATURES = {
     'development': {
         'idle_ms': (100, 8000),
@@ -152,8 +149,8 @@ DOMAIN_FLAGS = {
     'unknown':       (0, 0, 0),
 }
 
-# Full V3 harvest schema header (matching FeatureSchema.HarvestHeaders)
-HARVEST_HEADER = [
+# Full V3 harvest schema header
+HARVEST_HEADER_V3 = [
     'timestamp', 'hour_of_day', 'day_of_week', 'app_name', 'foreground_app',
     'idle_time', 'time_last_request', 'productive', 'schema_version',
     'focused_app_id', 'focused_title', 'focused_domain', 'focused_window_id',
@@ -170,6 +167,58 @@ HARVEST_HEADER = [
     'dev_app_flag', 'creative_app_flag', 'office_app_flag', 'comm_app_flag',
     'ent_app_flag',
 ]
+
+# V4 harvest schema header (drops category flags, adds OS signals + personalization)
+HARVEST_HEADER_V4 = [
+    'timestamp', 'hour_of_day', 'day_of_week', 'app_name', 'foreground_app',
+    'idle_time', 'time_last_request', 'productive', 'schema_version',
+    'focused_app_id', 'focused_title', 'focused_domain', 'focused_window_id',
+    'is_idle_now', 'focused_since_ms', 'title_unchanged_for_ms',
+    'mapped_toplevel_count', 'active_workspace_id', 'focus_source',
+    'signal_quality', 'fullscreen_flag',
+    'focused_app_hash', 'focused_domain_hash', 'idle_ms',
+    'title_stability_ms', 'switch_count_60s', 'switch_count_300s',
+    'distinct_apps_300s', 'distinct_domains_300s',
+    'returned_to_anchor_app_300s', 'current_app_share_300s',
+    'current_domain_share_300s', 'browser_window_flag',
+    'afk_flag', 'workspace_switch_count_300s',
+    'audio_playing_flag', 'media_session_active_flag', 'mic_active_flag',
+    'domain_productive_rate', 'domain_label_count',
+    'app_productive_rate', 'app_label_count',
+]
+
+
+# Known domains with pre-learned reputation for V4 seed data
+KNOWN_DOMAINS = {
+    'github.com':          (0.90, 42),   # very productive, many labels
+    'stackoverflow.com':   (0.85, 38),
+    'docs.python.org':     (0.88, 25),
+    'notion.so':           (0.78, 30),
+    'gmail.com':           (0.60, 20),
+    'reddit.com':          (0.12, 35),   # unproductive
+    'youtube.com':         (0.08, 50),
+    'netflix.com':         (0.05, 28),
+    'twitter.com':         (0.15, 32),
+    'discord.com':         (0.25, 18),
+    'slack.com':           (0.45, 22),
+    'zoom.us':             (0.30, 15),
+}
+
+KNOWN_APPS = {
+    'code':        (0.92, 45),
+    'vim':         (0.90, 30),
+    'idea':        (0.88, 28),
+    'gimp':        (0.82, 20),
+    'blender':     (0.80, 18),
+    'firefox':     (0.45, 35),
+    'chrome':      (0.42, 40),
+    'mpv':         (0.10, 15),
+    'spotify':     (0.12, 20),
+    'slack':       (0.35, 18),
+    'discord':     (0.20, 16),
+    'teams':       (0.30, 14),
+    'zoom':        (0.28, 12),
+}
 
 
 def _randint(r):
@@ -206,20 +255,100 @@ def _adjust_weights(categories, weights, hour, is_weekend):
     return [w / total for w in adjusted]
 
 
-def generate_sample_data(num_samples=500, output_file='/tmp/HARVEST.CSV'):
-    """Generate synthetic V3-schema productivity data for model pre-training.
+def _pick_domain(category, browser_flag):
+    """Return a domain name and its reputation for the given category."""
+    if not browser_flag:
+        return '', 0.5, 0
 
-    Produces labeled data with realistic feature distributions conditioned on
-    app categories, time-of-day, and work/eve/weekend patterns. The data is
-    schema-compatible with train_model.py's V3 feature pipeline.
+    # Filter known domains by approximate category alignment
+    candidates = []
+    for domain, (rate, count) in KNOWN_DOMAINS.items():
+        if category == 'development' and rate > 0.7:
+            candidates.append((domain, rate, count))
+        elif category == 'entertainment' and rate < 0.3:
+            candidates.append((domain, rate, count))
+        elif category == 'communication' and 0.2 < rate < 0.6:
+            candidates.append((domain, rate, count))
+        elif category == 'unknown' and 0.3 < rate < 0.7:
+            candidates.append((domain, rate, count))
+        elif category in ('office', 'creative', 'utility'):
+            candidates.append((domain, rate, count))
+
+    if candidates and random.random() < 0.75:
+        return random.choice(candidates)
+
+    # Unknown domain — neutral reputation
+    return '', 0.5, 0
+
+
+def _pick_app(category):
+    """Return an app name and its reputation for the given category."""
+    candidates = []
+    for app, (rate, count) in KNOWN_APPS.items():
+        if category == 'development' and rate > 0.7:
+            candidates.append((app, rate, count))
+        elif category == 'entertainment' and rate < 0.3:
+            candidates.append((app, rate, count))
+        elif category == 'communication' and rate < 0.4:
+            candidates.append((app, rate, count))
+        elif category in ('office', 'creative', 'utility', 'unknown'):
+            candidates.append((app, rate, count))
+
+    if candidates and random.random() < 0.75:
+        return random.choice(candidates)
+
+    # Unknown app — neutral reputation
+    return '', 0.5, 0
+
+
+def _v4_signals(category, browser_flag, app_share, focused_since_ms, switch_300s):
+    """Generate realistic V4 OS-sensor signals correlated with the scenario.
+
+    Signals are designed to be strongly discriminative for the V4 model:
+    - entertainment + browser + audio + media + fullscreen → unproductive
+    - communication + mic → unproductive (calls/meetings are not "productive work")
+    - development/office + low switching + high app_share + long focus → productive
+    """
+    audio = 0
+    media = 0
+    mic = 0
+    fullscreen = 0
+
+    if category == 'entertainment' and browser_flag:
+        # Passive video / music → very high chance of audio + media session + fullscreen
+        audio = 1 if random.random() < 0.90 else 0
+        media = 1 if random.random() < 0.80 else 0
+        fullscreen = 1 if random.random() < 0.70 else 0
+    elif category == 'communication':
+        # Video/voice call → mic active, sometimes audio
+        mic = 1 if random.random() < 0.70 else 0
+        audio = 1 if mic or random.random() < 0.30 else 0
+    elif category in ('development', 'office', 'creative'):
+        # Deep work → usually quiet; occasional background music
+        if random.random() < 0.15:
+            audio = 1
+            media = 1 if random.random() < 0.60 else 0
+
+    return audio, media, mic, fullscreen
+
+
+def generate_sample_data(num_samples=500, output_file='/tmp/HARVEST.CSV', schema='v3'):
+    """Generate synthetic productivity data for model pre-training.
+
+    Supports V3 (legacy category-flag schema) and V4 (signal-based schema).
 
     Args:
         num_samples: Number of synthetic rows to generate (default: 500).
         output_file: Path for the output CSV (default: /tmp/HARVEST.CSV).
+        schema: 'v3' or 'v4' (default: v3).
 
     Returns:
         The output_file path on success.
     """
+    if schema not in ('v3', 'v4'):
+        raise ValueError(f"schema must be 'v3' or 'v4', got {schema}")
+
+    is_v4 = schema == 'v4'
     categories = list(BASE_CATEGORY_WEIGHTS.keys())
     weights = list(BASE_CATEGORY_WEIGHTS.values())
 
@@ -227,14 +356,16 @@ def generate_sample_data(num_samples=500, output_file='/tmp/HARVEST.CSV'):
     now = time_mod.time()
     window_start = now - 14 * 86400
 
-    print(f'Generating {num_samples} V3-schema samples across 14-day window...')
+    print(f'Generating {num_samples} {schema.upper()}-schema samples across 14-day window...')
 
     prod_count = 0
     unprod_count = 0
 
+    header = HARVEST_HEADER_V4 if is_v4 else HARVEST_HEADER_V3
+
     with open(output_file, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow(HARVEST_HEADER)
+        writer.writerow(header)
 
         for i in range(num_samples):
             # Random timestamp across the 14-day window
@@ -260,10 +391,9 @@ def generate_sample_data(num_samples=500, output_file='/tmp/HARVEST.CSV'):
             distinct_apps = _randint(feat['distinct_apps_300s'])
             app_share = _randfloat(feat['app_share_300s'])
             browser_flag = 1 if random.random() < feat['browser_prob'] else 0
-            fullscreen_flag = 1 if random.random() < feat['fullscreen_prob'] else 0
             ws_switches = _randint(feat['workspace_switches'])
 
-            # Domain features (only meaningful when browser is focused)
+            # Domain features
             domain_hash = random.randint(0, 100000) if browser_flag else 0
             domain_share = round(app_share * random.uniform(0.5, 1.0), 4) if browser_flag else 0.0
             distinct_domains = random.randint(0, min(4, distinct_apps)) if browser_flag else 0
@@ -271,85 +401,169 @@ def generate_sample_data(num_samples=500, output_file='/tmp/HARVEST.CSV'):
             # Anchor return — more common in focused/productive sessions
             returned_to_anchor = 1 if random.random() < (0.35 if bias > 0.5 else 0.12) else 0
 
-            # Domain-level flags
-            comm_domain_flag, ent_domain_flag, work_domain_flag = DOMAIN_FLAGS[category]
+            # ── Label determination ──
+            if is_v4:
+                # V4: stronger signal-driven label with reputation + OS sensors
+                domain, domain_rate, domain_count = _pick_domain(category, browser_flag)
+                app_name, app_rate, app_count = _pick_app(category)
+                audio, media, mic, fullscreen = _v4_signals(
+                    category, browser_flag, app_share, focused_since_ms, switch_300s)
+                fullscreen_flag = fullscreen
 
-            # App-category flags
-            dev_flag, creative_flag, office_flag, comm_app_flag, ent_app_flag = CATEGORY_FLAGS[category]
+                noise = random.gauss(0, 0.06)
+                base_bias = max(0.05, min(0.95, bias + noise))
 
-            # Label: category bias + noise, then flip based on behavioral signals
-            noise = random.gauss(0, 0.10)
-            adjusted_bias = max(0.02, min(0.98, bias + noise))
+                signal_adj = 0.0
+                if audio and media and fullscreen:
+                    signal_adj -= 0.35
+                elif audio and media:
+                    signal_adj -= 0.20
+                elif mic:
+                    signal_adj -= 0.15
 
-            # Secondary behavioral adjustment: within-category, feature values
-            # affect the likelihood (e.g., high idle → more unproductive)
-            behavior_signal = 0.0
-            if idle_ms > 15000:
-                behavior_signal -= 0.10
-            elif idle_ms < 1000:
-                behavior_signal += 0.05
-            if switch_300s > 20:
-                behavior_signal -= 0.08
-            elif switch_300s < 5:
-                behavior_signal += 0.05
-            if app_share > 0.7:
-                behavior_signal += 0.08
-            if returned_to_anchor:
-                behavior_signal += 0.05
+                if switch_300s > 18:
+                    signal_adj -= 0.12
+                elif switch_300s < 4:
+                    signal_adj += 0.10
+                if app_share > 0.75:
+                    signal_adj += 0.10
+                elif app_share < 0.25:
+                    signal_adj -= 0.08
+                if focused_since_ms > 180000:
+                    signal_adj += 0.08
+                if title_stability_ms > 120000:
+                    signal_adj += 0.06
 
-            effective_bias = max(0.02, min(0.98, adjusted_bias + behavior_signal))
-            productive = 1 if random.random() < effective_bias else 0
+                if domain_count >= 10:
+                    signal_adj += (domain_rate - 0.5) * 0.25
+                if app_count >= 10:
+                    signal_adj += (app_rate - 0.5) * 0.20
+
+                effective_bias = max(0.02, min(0.98, base_bias + signal_adj))
+                productive = 1 if random.random() < effective_bias else 0
+            else:
+                # V3: original category-bias + behavioral noise
+                noise = random.gauss(0, 0.10)
+                adjusted_bias = max(0.02, min(0.98, bias + noise))
+
+                behavior_signal = 0.0
+                if idle_ms > 15000:
+                    behavior_signal -= 0.10
+                elif idle_ms < 1000:
+                    behavior_signal += 0.05
+                if switch_300s > 20:
+                    behavior_signal -= 0.08
+                elif switch_300s < 5:
+                    behavior_signal += 0.05
+                if app_share > 0.7:
+                    behavior_signal += 0.08
+                if returned_to_anchor:
+                    behavior_signal += 0.05
+
+                effective_bias = max(0.02, min(0.98, adjusted_bias + behavior_signal))
+                productive = 1 if random.random() < effective_bias else 0
+                fullscreen_flag = 1 if random.random() < feat['fullscreen_prob'] else 0
 
             if productive:
                 prod_count += 1
             else:
                 unprod_count += 1
 
-            writer.writerow([
-                ts,
-                hour,
-                day_of_week,
-                '',
-                '',
-                idle_ms,
-                focused_since_ms,
-                productive,
-                3,
-                '',
-                '',
-                '',
-                '',
-                0,
-                focused_since_ms,
-                title_stability_ms,
-                random.randint(1, 5),
-                '',
-                'ewmh',
-                'good',
-                fullscreen_flag,
-                random.randint(0, 100000),
-                domain_hash,
-                idle_ms,
-                title_stability_ms,
-                switch_60s,
-                switch_300s,
-                distinct_apps,
-                distinct_domains,
-                returned_to_anchor,
-                app_share,
-                domain_share,
-                browser_flag,
-                comm_domain_flag,
-                ent_domain_flag,
-                work_domain_flag,
-                0,  # afk_flag
-                ws_switches,
-                dev_flag,
-                creative_flag,
-                office_flag,
-                comm_app_flag,
-                ent_app_flag,
-            ])
+            if is_v4:
+                writer.writerow([
+                    ts,
+                    hour,
+                    day_of_week,
+                    app_name,
+                    '',
+                    idle_ms,
+                    focused_since_ms,
+                    productive,
+                    4,  # schema_version for V4
+                    app_name,
+                    '',
+                    domain,
+                    '',
+                    0,
+                    focused_since_ms,
+                    title_stability_ms,
+                    random.randint(1, 5),
+                    '',
+                    'ewmh',
+                    'good',
+                    fullscreen_flag,
+                    random.randint(0, 100000),
+                    domain_hash,
+                    idle_ms,
+                    title_stability_ms,
+                    switch_60s,
+                    switch_300s,
+                    distinct_apps,
+                    distinct_domains,
+                    returned_to_anchor,
+                    app_share,
+                    domain_share,
+                    browser_flag,
+                    0,  # afk_flag
+                    ws_switches,
+                    audio,
+                    media,
+                    mic,
+                    round(domain_rate, 4),
+                    domain_count,
+                    round(app_rate, 4),
+                    app_count,
+                ])
+            else:
+                # V3 path with category flags
+                comm_domain_flag, ent_domain_flag, work_domain_flag = DOMAIN_FLAGS[category]
+                dev_flag, creative_flag, office_flag, comm_app_flag, ent_app_flag = CATEGORY_FLAGS[category]
+
+                writer.writerow([
+                    ts,
+                    hour,
+                    day_of_week,
+                    '',
+                    '',
+                    idle_ms,
+                    focused_since_ms,
+                    productive,
+                    3,  # schema_version for V3
+                    '',
+                    '',
+                    '',
+                    '',
+                    0,
+                    focused_since_ms,
+                    title_stability_ms,
+                    random.randint(1, 5),
+                    '',
+                    'ewmh',
+                    'good',
+                    fullscreen_flag,
+                    random.randint(0, 100000),
+                    domain_hash,
+                    idle_ms,
+                    title_stability_ms,
+                    switch_60s,
+                    switch_300s,
+                    distinct_apps,
+                    distinct_domains,
+                    returned_to_anchor,
+                    app_share,
+                    domain_share,
+                    browser_flag,
+                    comm_domain_flag,
+                    ent_domain_flag,
+                    work_domain_flag,
+                    0,  # afk_flag
+                    ws_switches,
+                    dev_flag,
+                    creative_flag,
+                    office_flag,
+                    comm_app_flag,
+                    ent_app_flag,
+                ])
 
             if (i + 1) % 100 == 0:
                 print(f'  {i + 1}/{num_samples}')
@@ -364,10 +578,12 @@ def generate_sample_data(num_samples=500, output_file='/tmp/HARVEST.CSV'):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description='Generate V3-schema synthetic productivity data')
+        description='Generate synthetic productivity data for model pre-training')
     parser.add_argument('--samples', type=int, default=500,
                         help='Number of samples (default: 500)')
     parser.add_argument('--output', default='/tmp/HARVEST.CSV',
                         help='Output CSV path (default: /tmp/HARVEST.CSV)')
+    parser.add_argument('--schema', default='v3', choices=['v3', 'v4'],
+                        help='Schema version: v3 (category flags) or v4 (signal-based)')
     args = parser.parse_args()
-    generate_sample_data(args.samples, args.output)
+    generate_sample_data(args.samples, args.output, args.schema)
