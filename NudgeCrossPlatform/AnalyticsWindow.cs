@@ -1544,7 +1544,14 @@ namespace NudgeTray
 
             // Reuse persistent pulse dot so waves die naturally across rebuilds.
             // Only the seed/color is updated; the phase/timer continues uninterrupted.
+            // If the dot is still attached to a previous window's visual tree (e.g. after
+            // Hide() without Close()), release it so we can reparent it here.
             int seed = ComputePulseSeed(harvest);
+            if (_livePulseDot?.Parent != null)
+            {
+                _livePulseDot.Stop();
+                _livePulseDot = null;
+            }
             _livePulseDot ??= new PulseDot
             {
                 VerticalAlignment = VerticalAlignment.Top,
