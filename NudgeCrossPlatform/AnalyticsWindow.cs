@@ -1811,9 +1811,6 @@ namespace NudgeTray
             // ── Signal panel: rebuild rows so URL/domain is always current ────
             if (_liveSignalPanel != null && _liveSignalPanel.IsVisible)
             {
-                bool showDetail = !string.IsNullOrWhiteSpace(currentDetail)
-                    && !currentDetail.Equals(currentApp, StringComparison.OrdinalIgnoreCase)
-                    && !currentDetail.Contains(currentApp, StringComparison.OrdinalIgnoreCase);
                 _liveSignalPanel.Children.Clear();
                 PopulateSignalPanel(_liveSignalPanel, harvest, effectiveQuality, qualityLabel, fusionColor, currentDetail, showDetail);
             }
