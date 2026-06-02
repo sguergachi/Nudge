@@ -143,15 +143,15 @@ jobs:
 
           # Restore + publish each project sequentially (shared obj/ overwrites on restore)
           rm -rf obj
-          dotnet restore nudge.csproj -r linux-x64 --nologo
+          dotnet restore nudge.csproj -r linux-x64 -p:PublishReadyToRun=true --nologo
           dotnet publish nudge.csproj -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -p:PublishReadyToRun=true --no-restore -o bin/Release/net10.0/linux-x64/publish_nudge --nologo
 
           rm -rf obj
-          dotnet restore nudge-notify.csproj -r linux-x64 --nologo
+          dotnet restore nudge-notify.csproj -r linux-x64 -p:PublishReadyToRun=true --nologo
           dotnet publish nudge-notify.csproj -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -p:PublishReadyToRun=true --no-restore -o bin/Release/net10.0/linux-x64/publish_notify --nologo
 
           rm -rf obj
-          dotnet restore nudge-tray.csproj -r linux-x64 --nologo
+          dotnet restore nudge-tray.csproj -r linux-x64 -p:PublishReadyToRun=true --nologo
           dotnet publish nudge-tray.csproj -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -p:PublishReadyToRun=true -f net10.0 -p:SkipBuildNudgeDaemon=true --no-restore -o bin/Release/net10.0/linux-x64/publish_tray --nologo
 
           # Copy executables (name matches project — nudge, nudge-notify, nudge-tray)
