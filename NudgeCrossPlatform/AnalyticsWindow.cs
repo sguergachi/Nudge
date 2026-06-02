@@ -2660,7 +2660,7 @@ namespace NudgeTray
                         "PoorSignal"    => "unreliable app/window detection",
                         _               => $"suppressed ({evt.SuppressReason})"
                     }
-                    : $"{evt.Score * 100:F0}% · {(evt.Productive ? StrProductive : StrNotProductive)}",
+                    : $"{evt.Confidence * 100:F0}% · {(evt.Productive ? StrProductive : StrNotProductive)}",
                 FontSize = 11,
                 Foreground = new SolidColorBrush(dotColor)
             };
@@ -2784,7 +2784,7 @@ namespace NudgeTray
                 {
                     Text = evt.SuppressReason != null
                         ? "—"
-                        : $"{(evt.Confidence > 0 ? evt.Confidence : evt.Score) * 100:F0}%",
+                        : $"{evt.Confidence * 100:F0}%",
                     FontSize = 10,
                     Foreground = new SolidColorBrush(evt.SuppressReason != null ? SuppressedColor : TextSecondary),
                     VerticalAlignment = VerticalAlignment.Center
