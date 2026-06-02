@@ -70,11 +70,11 @@ YES/NO responses flow back via UDP `127.0.0.1:45001`.
 - Meeting detection runs **first** every ML check (60s) — if in meeting or screen sharing, snapshot is suppressed with `SUPPRESS:{reason}` and ML is never consulted. Meeting trumps AI.
 - ML check runs every 60s (`ML_CHECK_INTERVAL_MS`), only if NOT in a meeting.
 - **Not productive** + confidence ≥ **85%** (`ML_CONFIDENCE_THRESHOLD`) → ML-triggered snapshot.
-- **Not productive** + confidence < 98% → defers to interval (`_mlLowConfidence = true`), interval timer NOT reset.
-- **Productive** → skip snapshot, reset interval timer (`_productivityConfirmed = true`).
+- **Not productive** + confidence < 85% → defers to interval (`_mlLowConfidence = true`), interval timer NOT reset.
+- **Productive** + confidence ≥ **85%** → skip snapshot, reset interval timer (`_productivityConfirmed = true`), clear `_mlLowConfidence`.
+- **Productive** + confidence < 85% → skip snapshot, interval NOT reset (`_mlLowConfidence = true`). Uncertain productive predictions must not suppress the safety nudge.
 - Interval fallback: random 5–10 min (or `--interval N`).
 - Log patterns: `ML TRIGGER`, `ML SKIP`, `ML DEFER`, `INTERVAL SNAPSHOT`.
-- Requires 100 (`MIN_SAMPLES_THRESHOLD`) training samples before ML activates.
 
 ### SnapshotGate — suppression rules
 
