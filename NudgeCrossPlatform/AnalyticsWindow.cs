@@ -1569,7 +1569,8 @@ namespace NudgeTray
 
             bool showDetail = !string.IsNullOrWhiteSpace(currentDetail)
                 && !currentDetail.Equals(currentApp, StringComparison.OrdinalIgnoreCase)
-                && !currentDetail.Contains(currentApp, StringComparison.OrdinalIgnoreCase);
+                && !currentDetail.Contains(currentApp, StringComparison.OrdinalIgnoreCase)
+                && !(harvest is { Browser: 1 } && !string.IsNullOrEmpty(harvest.Domain));
 
             var textStack = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
             textStack.Children.Add(new TextBlock
@@ -1764,7 +1765,8 @@ namespace NudgeTray
             string displayApp = ResolveFocusDisplayName(currentApp, harvest);
             bool showDetail = !string.IsNullOrWhiteSpace(currentDetail)
                 && !currentDetail.Equals(currentApp, StringComparison.OrdinalIgnoreCase)
-                && !currentDetail.Contains(currentApp, StringComparison.OrdinalIgnoreCase);
+                && !currentDetail.Contains(currentApp, StringComparison.OrdinalIgnoreCase)
+                && !(harvest is { Browser: 1 } && !string.IsNullOrEmpty(harvest.Domain));
 
             // Index 0 = app name
             if (ts.Children.Count > 0 && ts.Children[0] is TextBlock appName)
