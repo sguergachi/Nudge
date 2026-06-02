@@ -1567,7 +1567,9 @@ namespace NudgeTray
             mainGrid.Children.Add(_livePulseDot);
             Grid.SetColumn(_livePulseDot, 0);
 
-            bool showDetail = !string.IsNullOrWhiteSpace(currentDetail)
+            bool isBrowserFocus = harvest is { Browser: 1 } || BrowserDetector.IsBrowser(currentApp);
+            bool showDetail = !isBrowserFocus
+                && !string.IsNullOrWhiteSpace(currentDetail)
                 && !currentDetail.Equals(currentApp, StringComparison.OrdinalIgnoreCase)
                 && !currentDetail.Contains(currentApp, StringComparison.OrdinalIgnoreCase);
 
@@ -1762,7 +1764,9 @@ namespace NudgeTray
             if (ts == null) return;
 
             string displayApp = ResolveFocusDisplayName(currentApp, harvest);
-            bool showDetail = !string.IsNullOrWhiteSpace(currentDetail)
+            bool isBrowserFocus = harvest is { Browser: 1 } || BrowserDetector.IsBrowser(currentApp);
+            bool showDetail = !isBrowserFocus
+                && !string.IsNullOrWhiteSpace(currentDetail)
                 && !currentDetail.Equals(currentApp, StringComparison.OrdinalIgnoreCase)
                 && !currentDetail.Contains(currentApp, StringComparison.OrdinalIgnoreCase);
 
