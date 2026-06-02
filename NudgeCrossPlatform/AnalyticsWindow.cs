@@ -1567,10 +1567,11 @@ namespace NudgeTray
             mainGrid.Children.Add(_livePulseDot);
             Grid.SetColumn(_livePulseDot, 0);
 
-            bool showDetail = !string.IsNullOrWhiteSpace(currentDetail)
+            bool isBrowserFocus = harvest is { Browser: 1 } || BrowserDetector.IsBrowser(currentApp);
+            bool showDetail = !isBrowserFocus
+                && !string.IsNullOrWhiteSpace(currentDetail)
                 && !currentDetail.Equals(currentApp, StringComparison.OrdinalIgnoreCase)
-                && !currentDetail.Contains(currentApp, StringComparison.OrdinalIgnoreCase)
-                && !(harvest is { Browser: 1 } && !string.IsNullOrEmpty(harvest.Domain));
+                && !currentDetail.Contains(currentApp, StringComparison.OrdinalIgnoreCase);
 
             var textStack = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
             textStack.Children.Add(new TextBlock
@@ -1763,10 +1764,11 @@ namespace NudgeTray
             if (ts == null) return;
 
             string displayApp = ResolveFocusDisplayName(currentApp, harvest);
-            bool showDetail = !string.IsNullOrWhiteSpace(currentDetail)
+            bool isBrowserFocus = harvest is { Browser: 1 } || BrowserDetector.IsBrowser(currentApp);
+            bool showDetail = !isBrowserFocus
+                && !string.IsNullOrWhiteSpace(currentDetail)
                 && !currentDetail.Equals(currentApp, StringComparison.OrdinalIgnoreCase)
-                && !currentDetail.Contains(currentApp, StringComparison.OrdinalIgnoreCase)
-                && !(harvest is { Browser: 1 } && !string.IsNullOrEmpty(harvest.Domain));
+                && !currentDetail.Contains(currentApp, StringComparison.OrdinalIgnoreCase);
 
             // Index 0 = app name
             if (ts.Children.Count > 0 && ts.Children[0] is TextBlock appName)

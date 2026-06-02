@@ -2060,12 +2060,13 @@ namespace NudgeTray
                     try
                     {
                         var notifHarvest = LiveAIState.LastHarvest;
-                        string appName = (notifHarvest is { Browser: 1 } && !string.IsNullOrEmpty(notifHarvest.Domain))
-                            ? notifHarvest.Domain
-                            : BrowserDetector.GetBrowserDisplayName(LiveAIState.CurrentApp) ?? LiveAIState.CurrentApp ?? "";
-                        string detail = (notifHarvest is { Browser: 1 } && !string.IsNullOrEmpty(notifHarvest.Domain))
-                            ? ""
-                            : LiveAIState.CurrentDetail ?? "";
+                        bool notifIsBrowser = notifHarvest is { Browser: 1 } || BrowserDetector.IsBrowser(LiveAIState.CurrentApp ?? "");
+                        string appName = notifIsBrowser
+                            ? ((notifHarvest is { Browser: 1 } && !string.IsNullOrEmpty(notifHarvest.Domain))
+                                ? notifHarvest.Domain
+                                : BrowserDetector.GetBrowserDisplayName(LiveAIState.CurrentApp) ?? LiveAIState.CurrentApp ?? "")
+                            : LiveAIState.CurrentApp ?? "";
+                        string detail = notifIsBrowser ? "" : LiveAIState.CurrentDetail ?? "";
                         var notificationWindow = new CustomNotificationWindow(appName, detail);
                         notificationWindow.Closed += (s, e) => RestorePreviousAppFocus(previousApp);
                         notificationWindow.ShowWithAnimation((productive) =>
