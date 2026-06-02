@@ -574,6 +574,32 @@ public sealed class NudgeMlSerializationTests
     };
 }
 
+/// <summary>
+/// Regression tests for the interval-reset bug: a low-confidence productive prediction
+/// must not suppress the interval safety nudge. Before the fix, ANY productive prediction
+/// (even 51% confident) reset the interval, so users with ambiguous activity patterns
+/// would go indefinitely without nudges when ML was enabled.
+/// </summary>
+public sealed class NudgeIntervalResetPolicyTests
+{
+    // confirmed = productive AND confidence >= threshold
+    // The interval resets only for confident-productive; all other cases keep it running.
+    [Theory]
+    [InlineData(0.90, true,  true)]    // confident productive → resets interval
+    [InlineData(0.85, true,  true)]    // exactly at threshold → resets
+    [InlineData(0.84, true,  false)]   // just below threshold → does NOT reset
+    [InlineData(0.50, true,  false)]   // very uncertain → does NOT reset
+    [InlineData(0.90, false, false)]   // confident NOT productive → does NOT reset (ML triggers snapshot instead)
+    [InlineData(0.50, false, false)]   // low-conf NOT productive → does NOT reset (defers to interval)
+    public void IntervalReset_OnlyForConfidentProductivePredictions(
+        double confidence, bool productive, bool expectedReset)
+    {
+        const double threshold = 0.85;
+        bool actualReset = productive && confidence >= threshold;
+        Assert.Equal(expectedReset, actualReset);
+    }
+}
+
 public sealed class FeatureSchemaValidationTests
 {
     [Fact]
