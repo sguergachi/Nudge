@@ -146,7 +146,7 @@ def _should_train(model_dir: str, current_count: int, min_samples: int,
 
 
 def _generate_seed_data(csv_path: str, target_samples: int,
-                        seed_dir: str | None = None) -> str | None:
+                        seed_dir: str | None = None, schema: str = 'v3') -> str | None:
     """Generate synthetic seed data for model bootstrapping.
 
     Creates labeled V3-schema data and merges it with any existing real data
@@ -162,7 +162,7 @@ def _generate_seed_data(csv_path: str, target_samples: int,
         seed_dir = seed_dir or os.path.dirname(os.path.abspath(csv_path))
         os.makedirs(seed_dir, exist_ok=True)
         seed_path = os.path.join(seed_dir, f'.seed_{int(time.time())}.csv')
-        generate_sample_data(num_samples=target_samples, output_file=seed_path)
+        generate_sample_data(num_samples=target_samples, output_file=seed_path, schema=schema)
 
         # If HARVEST.CSV exists with data, merge seed + real rows
         if os.path.exists(csv_path):
@@ -211,6 +211,8 @@ def main() -> None:
                         help='Run a single training pass then exit')
     parser.add_argument('--seed', action='store_true',
                         help='Generate synthetic seed data if insufficient real labels exist')
+    parser.add_argument('--schema', default='v3', choices=['v3', 'v4'],
+                        help='Feature schema for synthetic seed generation (default: v3)')
     args = parser.parse_args()
 
     csv_path = args.csv
@@ -220,6 +222,7 @@ def main() -> None:
     force = args.force
     once = args.once
     seed = args.seed
+    schema = args.schema
 
     print(f'[trainer] Starting. csv={csv_path} model-dir={model_dir} '
           f'interval={interval}s min-samples={min_samples}', flush=True)
@@ -242,7 +245,7 @@ def main() -> None:
                 print(f'[trainer] Seed mode: {"no CSV" if not csv_exists else f"{real_count} real labels < {min_samples}"}, '
                       f'generating {needed} synthetic rows...', flush=True)
                 merged = _generate_seed_data(csv_path, needed,
-                                             seed_dir=os.path.dirname(csv_path))
+                                             seed_dir=os.path.dirname(csv_path), schema=schema)
                 if merged:
                     train_path = merged
                     merged_path = merged
