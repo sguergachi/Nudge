@@ -1617,7 +1617,7 @@ namespace NudgeTray
 
                 // Start background trainer
                 SetMlStatus("🧠 Starting background trainer…");
-                string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --seed --csv \"{csvPath}\" --model-dir \"{modelDir}\" --check-interval {TRAINER_CHECK_INTERVAL_SEC}";
+                string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --seed --csv \"{csvPath}\" --model-dir \"{modelDir}\" --check-interval {TRAINER_CHECK_INTERVAL_SEC}{(_experimentalMode ? " --schema v4" : "")}";
                 if (_forceTrainedModel)
                 {
                     trainerArgs += " --min-total-samples 1";
@@ -1694,7 +1694,7 @@ namespace NudgeTray
 
                 string csvPath = _experimentalMode ? PlatformConfig.CsvPathExp : PlatformConfig.CsvPath;
                 string modelDir = _experimentalMode ? _modelDirPathExp : _modelDirPath;
-                string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --seed --csv \"{csvPath}\" --model-dir \"{modelDir}\" --check-interval {TRAINER_CHECK_INTERVAL_SEC} --min-total-samples 1 --force --once";
+                string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --seed --csv \"{csvPath}\" --model-dir \"{modelDir}\" --check-interval {TRAINER_CHECK_INTERVAL_SEC} --min-total-samples 1 --force --once{(_experimentalMode ? " --schema v4" : "")}";
 
                 _mlTrainerProcess = new Process
                 {
@@ -1770,7 +1770,7 @@ namespace NudgeTray
         {
             string csvPath = _experimentalMode ? PlatformConfig.CsvPathExp : PlatformConfig.CsvPath;
             string modelDir = _experimentalMode ? _modelDirPathExp : _modelDirPath;
-            string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --seed --csv \"{csvPath}\" --model-dir \"{modelDir}\" --check-interval {TRAINER_CHECK_INTERVAL_SEC}";
+            string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --seed --csv \"{csvPath}\" --model-dir \"{modelDir}\" --check-interval {TRAINER_CHECK_INTERVAL_SEC}{(_experimentalMode ? " --schema v4" : "")}";
             if (_forceTrainedModel)
                 trainerArgs += " --min-total-samples 1";
 
