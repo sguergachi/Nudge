@@ -2102,8 +2102,14 @@ namespace NudgeTray
                 {
                     try
                     {
-                        var appName = LiveAIState.CurrentApp ?? "";
-                        var detail = LiveAIState.CurrentDetail ?? "";
+                        var notifHarvest = LiveAIState.LastHarvest;
+                        bool notifIsBrowser = notifHarvest is { Browser: 1 } || BrowserDetector.IsBrowser(LiveAIState.CurrentApp ?? "");
+                        string appName = notifIsBrowser
+                            ? ((notifHarvest is { Browser: 1 } && !string.IsNullOrEmpty(notifHarvest.Domain))
+                                ? notifHarvest.Domain
+                                : BrowserDetector.GetBrowserDisplayName(LiveAIState.CurrentApp) ?? LiveAIState.CurrentApp ?? "")
+                            : LiveAIState.CurrentApp ?? "";
+                        string detail = notifIsBrowser ? "" : LiveAIState.CurrentDetail ?? "";
                         var notificationWindow = new CustomNotificationWindow(appName, detail);
                         notificationWindow.Closed += (s, e) => RestorePreviousAppFocus(previousApp);
                         notificationWindow.ShowWithAnimation((productive) =>
