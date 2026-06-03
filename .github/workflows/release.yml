@@ -96,7 +96,7 @@ jobs:
         run: |
           dotnet tool install -g vpk
           $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
-          $m = Select-String -Path "NudgeCrossPlatform\nudge-tray.cs" -Pattern 'const string VERSION = "([.\d]+)"'
+          $m = Select-String -Path "NudgeCrossPlatform\nudge-tray.cs" -Pattern 'const string VERSION = "([^"]+)"'
           $version = if ($m) { $m.Matches[0].Groups[1].Value } else { "1.0.0" }
           Write-Host "Building Velopack installer for v$version..."
           vpk pack `
@@ -279,4 +279,5 @@ jobs:
           gh release create "v$VERSION" \
             --title "Nudge v$VERSION" \
             --notes-file release-notes.md \
+            $([[ "$VERSION" == *-* ]] && echo --prerelease) \
             "${ASSETS[@]}"
