@@ -1785,7 +1785,7 @@ sealed class Nudge
     static int _mlLowConfidenceSkips;
     static int _intervalTriggeredSnapshots;
     static bool _productivityConfirmed;
-    static bool _mlLowConfidence;  // Set when model predicts unproductive below confidence threshold
+    static bool _mlLowConfidence;  // Set when model confidence < threshold (either direction); enables interval fallback
     static int _mlSampleCount;     // Cached from trainer_meta.json, refreshed in CheckMLAvailability
     static int _mlProductiveSamples;
     static int _mlUnproductiveSamples;
@@ -3020,11 +3020,21 @@ sealed class Nudge
         }
         else
         {
-            // User IS productive — skip snapshot, reset interval
+            // User IS productive — skip snapshot.
+            // Only reset the interval when confident; an uncertain productive prediction
+            // (< threshold) keeps _mlLowConfidence=true so the interval safety net fires.
             _mlSkippedAlerts++;
-            _productivityConfirmed = true;
-            _mlLowConfidence = false;
-            Info($"  {Color.BGREEN}ML SKIP{Color.RESET}: Productive (confidence: {Color.BYELLOW}{prediction.Confidence*100:F1}%{Color.RESET}, avg: {avgConfidence*100:F1}%)");
+            if (prediction.Confidence >= ML_CONFIDENCE_THRESHOLD)
+            {
+                _productivityConfirmed = true;
+                _mlLowConfidence = false;
+                Info($"  {Color.BGREEN}ML SKIP{Color.RESET}: Productive (confidence: {Color.BYELLOW}{prediction.Confidence*100:F1}%{Color.RESET}, avg: {avgConfidence*100:F1}%)");
+            }
+            else
+            {
+                _mlLowConfidence = true;
+                Info($"  {Color.BGREEN}ML SKIP{Color.RESET}: Productive low-conf (confidence: {Color.BYELLOW}{prediction.Confidence*100:F1}%{Color.RESET} < {ML_CONFIDENCE_THRESHOLD*100:F0}% — interval not reset)");
+            }
             Dim($"  {Color.DIM}Stats: {_mlPredictions} predictions, {_mlTriggeredSnapshots} triggered, {_mlSkippedAlerts} skipped{Color.RESET}");
             return false;
         }
