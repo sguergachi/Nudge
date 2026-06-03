@@ -274,9 +274,17 @@ jobs:
 
           cat .github/release-notes-footer.md >> release-notes.md
 
+          # The 2.0 line is experimental: publish builds from any non-master branch
+          # (or any version carrying a SemVer prerelease suffix) as a GitHub pre-release.
+          PRERELEASE_FLAG=""
+          if [ "$GITHUB_REF_NAME" != "master" ] || [[ "$VERSION" == *-* ]]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+
           git tag "v$VERSION" 2>/dev/null || echo "Tag v$VERSION already exists, reusing it"
           git push origin "v$VERSION" 2>/dev/null || echo "Tag v$VERSION already pushed, continuing"
           gh release create "v$VERSION" \
             --title "Nudge v$VERSION" \
             --notes-file release-notes.md \
+            $PRERELEASE_FLAG \
             "${ASSETS[@]}"
