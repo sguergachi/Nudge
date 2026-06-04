@@ -1616,85 +1616,7 @@ sealed class Nudge
             }
         }
 
-        // ── Windows UIA browser URL reader (§0.5a Tier 2) ─────────────────────
-        internal static class WindowsBrowserUrlReader
-        {
-            private const uint OBJID_CLIENT = 0xFFFFFFFC;
-            private static Guid IID_IAccessible = new("618736E0-3C3D-11CF-810C-00AA00389B71");
-            private static readonly DateTime _urlCacheExpiry = DateTime.MinValue;
-            private static string? _cachedUrl;
-            private static IntPtr _cachedHwnd;
 
-            [DllImport("oleacc.dll", PreserveSig = true)]
-            private static extern int AccessibleObjectFromWindow(IntPtr hwnd, uint dwObjectID, ref Guid riid, [MarshalAs(UnmanagedType.IUnknown)] out object ppacc);
-
-            [ComImport, Guid("618736E0-3C3D-11CF-810C-00AA00389B71"), InterfaceType(ComInterfaceType.InterfaceIsIDispatch)]
-            interface IAccessible
-            {
-                [DispId(-5001)] int accChildCount { get; }
-                [DispId(-5002)] object get_accChild(object childID);
-                [DispId(-5003)] string get_accName(object childID);
-                [DispId(-5004)] object get_accRole(object childID);
-                [DispId(-5005)] string get_accValue(object childID);
-            }
-
-            internal static string? TryReadUrl()
-            {
-                var hwnd = GetForegroundWindow();
-                if (hwnd == IntPtr.Zero) return null;
-
-                // Cache per-HWND, refresh on focus change or after 500 ms
-                if (hwnd == _cachedHwnd && DateTime.Now < _urlCacheExpiry)
-                    return _cachedUrl;
-
-                string? url = TryReadUrlFromHwnd(hwnd);
-                _cachedUrl = url;
-                _cachedHwnd = hwnd;
-                return url;
-            }
-
-            private static string? TryReadUrlFromHwnd(IntPtr hwnd)
-            {
-                try
-                {
-                    int hr = AccessibleObjectFromWindow(hwnd, OBJID_CLIENT, ref IID_IAccessible, out object? accObj);
-                    if (hr != 0 || accObj == null) return null;
-                    var acc = (IAccessible)accObj;
-                    return SearchAccessibleForUrl(acc);
-                }
-                catch { return null; }
-            }
-
-            private static string? SearchAccessibleForUrl(IAccessible acc)
-            {
-                try
-                {
-                    int count = acc.accChildCount;
-                    for (int i = 1; i <= count; i++)
-                    {
-                        object childObj;
-                        try { childObj = acc.get_accChild(i); } catch { continue; }
-                        if (childObj is not IAccessible child) continue;
-
-                        string? value;
-                        try { value = child.get_accValue(0); } catch { value = null; }
-                        if (!string.IsNullOrEmpty(value))
-                        {
-                            string v = value.Trim();
-                            if (v.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-                                return v;
-                        }
-
-                        // Recurse one level for browsers that nest the address bar
-                        string? nested = SearchAccessibleForUrl(child);
-                        if (!string.IsNullOrEmpty(nested))
-                            return nested;
-                    }
-                }
-                catch { }
-                return null;
-            }
-        }
 #endif
 
         public void Dispose()
@@ -1924,7 +1846,7 @@ sealed class Nudge
         {
             _platformService = new WindowsPlatformService();
 #if WINDOWS
-            BrowserDetector.TryGetBrowserUrl = WindowsPlatformService.WindowsBrowserUrlReader.TryReadUrl;
+            BrowserDetector.TryGetBrowserUrl = WindowsBrowserUrlReader.TryReadUrl;
 #endif
             Success($"✓ Platform: Windows");
         }
