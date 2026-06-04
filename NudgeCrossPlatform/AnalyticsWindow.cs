@@ -1581,16 +1581,17 @@ namespace NudgeTray
                 FontWeight = FontWeight.SemiBold,
                 Foreground = new SolidColorBrush(hasApp ? TextPrimary : TextTertiary)
             });
-            if (showDetail)
+            // Subtitle is always present (index 1) so the in-place update can reliably refresh
+            // or clear it — hidden when there's no tab detail. Prevents a previous app's title
+            // from lingering after switching focus (e.g. PowerPoint → an unknown browser tab).
+            textStack.Children.Add(new TextBlock
             {
-                textStack.Children.Add(new TextBlock
-                {
-                    Text          = TruncateAppName(currentDetail, 55),
-                    FontSize      = 10,
-                    Foreground    = new SolidColorBrush(TextSecondary),
-                    TextTrimming  = TextTrimming.CharacterEllipsis
-                });
-            }
+                Text          = showDetail ? TruncateAppName(currentDetail, 55) : "",
+                FontSize      = 10,
+                Foreground    = new SolidColorBrush(TextSecondary),
+                TextTrimming  = TextTrimming.CharacterEllipsis,
+                IsVisible     = showDetail
+            });
             bool away = harvest?.Afk == 1;
             bool inMeeting = LiveAIState.InMeeting;
             bool screenSharing = LiveAIState.ScreenSharing;
@@ -1778,11 +1779,12 @@ namespace NudgeTray
                 appName.Foreground = new SolidColorBrush(hasApp ? TextPrimary : TextTertiary);
             }
 
-            // Index 1 = app detail (optional)
-            if (showDetail)
+            // Index 1 = app detail (always present; cleared + hidden when there's nothing to
+            // show, so a previous app's title can't linger after switching focus).
+            if (ts.Children.Count > 1 && ts.Children[1] is TextBlock detail)
             {
-                if (ts.Children.Count > 1 && ts.Children[1] is TextBlock detail)
-                    detail.Text = TruncateAppName(currentDetail, 55);
+                detail.Text = showDetail ? TruncateAppName(currentDetail, 55) : "";
+                detail.IsVisible = showDetail;
             }
 
             // Quality row is the last child of textStack
