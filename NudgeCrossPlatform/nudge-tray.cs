@@ -1823,7 +1823,18 @@ namespace NudgeTray
             try
             {
                 // Kill any nudge daemon from a previous session so we start fresh
-                if (!PlatformConfig.IsWindows)
+                if (PlatformConfig.IsWindows)
+                {
+                    try
+                    {
+                        foreach (var proc in System.Diagnostics.Process.GetProcessesByName("nudge"))
+                        {
+                            try { proc.Kill(); proc.WaitForExit(3000); } catch { }
+                        }
+                    }
+                    catch { /* no previous process to kill */ }
+                }
+                else
                 {
                     try
                     {
@@ -1893,27 +1904,34 @@ namespace NudgeTray
 
                 _nudgeProcess.OutputDataReceived += (s, e) =>
                 {
-                    if (!string.IsNullOrEmpty(e.Data))
-                    {
+                    if (string.IsNullOrEmpty(e.Data)) return;
+
+                    // Only log non-routine lines to keep console output useful
+                    bool isHighFrequency =
+                        e.Data.StartsWith("APPFOCUS:", StringComparison.Ordinal) ||
+                        e.Data.StartsWith("HARVEST:", StringComparison.Ordinal) ||
+                        e.Data.StartsWith("MEETING:", StringComparison.Ordinal) ||
+                        e.Data.StartsWith("MLNEXT:", StringComparison.Ordinal);
+
+                    if (!isHighFrequency)
                         Console.WriteLine($"[Nudge Harvest] {e.Data}");
 
-                        if (e.Data.Trim() == "SNAPSHOT")
-                            HandleSnapshot();
-                        else if (e.Data.StartsWith("MLDATA:", StringComparison.Ordinal))
-                            HandleMLData(e.Data.AsSpan(7));
-                        else if (e.Data.StartsWith("MLRESPONSE:", StringComparison.Ordinal))
-                            HandleMLResponse(e.Data.AsSpan(11));
-                        else if (e.Data.StartsWith("MLNEXT:", StringComparison.Ordinal))
-                            HandleMLNext(e.Data.AsSpan(7));
-                        else if (e.Data.StartsWith("APPFOCUS:", StringComparison.Ordinal))
-                            HandleAppFocus(e.Data.AsSpan(9));
-                        else if (e.Data.StartsWith("HARVEST:", StringComparison.Ordinal))
-                            HandleHarvest(e.Data.AsSpan(8));
-                        else if (e.Data.StartsWith("MEETING:", StringComparison.Ordinal))
-                            HandleMeeting(e.Data.AsSpan(8));
-                        else if (e.Data.StartsWith("SUPPRESS:", StringComparison.Ordinal))
-                            HandleSuppress(e.Data.AsSpan(9));
-                    }
+                    if (e.Data.Trim() == "SNAPSHOT")
+                        HandleSnapshot();
+                    else if (e.Data.StartsWith("MLDATA:", StringComparison.Ordinal))
+                        HandleMLData(e.Data.AsSpan(7));
+                    else if (e.Data.StartsWith("MLRESPONSE:", StringComparison.Ordinal))
+                        HandleMLResponse(e.Data.AsSpan(11));
+                    else if (e.Data.StartsWith("MLNEXT:", StringComparison.Ordinal))
+                        HandleMLNext(e.Data.AsSpan(7));
+                    else if (e.Data.StartsWith("APPFOCUS:", StringComparison.Ordinal))
+                        HandleAppFocus(e.Data.AsSpan(9));
+                    else if (e.Data.StartsWith("HARVEST:", StringComparison.Ordinal))
+                        HandleHarvest(e.Data.AsSpan(8));
+                    else if (e.Data.StartsWith("MEETING:", StringComparison.Ordinal))
+                        HandleMeeting(e.Data.AsSpan(8));
+                    else if (e.Data.StartsWith("SUPPRESS:", StringComparison.Ordinal))
+                        HandleSuppress(e.Data.AsSpan(9));
                 };
 
                 _nudgeProcess.ErrorDataReceived += (s, e) =>

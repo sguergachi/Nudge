@@ -341,6 +341,8 @@ namespace NudgeTray
             _livePulseDot = null;
             _liveFocusTextStack = null;
             _liveSignalPanel = null;
+            if (Program._analyticsWindow == this)
+                Program._analyticsWindow = null;
             base.OnClosed(e);
         }
 
@@ -890,8 +892,7 @@ namespace NudgeTray
             }
 
             double elapsedMs = (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency;
-            if (elapsedMs > 10.0)
-                Console.WriteLine($"[AI-REBUILD] RefreshAILiveView took {elapsedMs:F1}ms (hasExisting={hasExisting})");
+            _ = elapsedMs; // timing kept for future profiling
         }
 
         private static void SetOrReplaceChild(Panel panel, int index, Control child)
@@ -910,8 +911,7 @@ namespace NudgeTray
                 panel.Children[index] = child;
             }
             double elapsedMs = (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency;
-            if (elapsedMs > 5.0)
-                Console.WriteLine($"[AI-REBUILD] SetOrReplaceChild idx={index} took {elapsedMs:F1}ms");
+            _ = elapsedMs;
         }
 
         private static void RemoveChild(Panel panel, int index)
@@ -3077,11 +3077,6 @@ namespace NudgeTray
         private int _nextWaveSlot;        // next free slot in circular buffer
         private double _timeSinceSpawnMs; // accumulator for spawn timing
 
-        // Animation jank diagnostics
-        private long _lastTickTs;
-        private long _jankCount;
-        private long _tickCount;
-        private bool _diagnosticsStarted;
         private bool _isRunning;
 
         public PulseDot()
@@ -3116,8 +3111,6 @@ namespace NudgeTray
                 _wavePhases[i] = -1.0;
             _timeSinceSpawnMs = 0;
             InitFromSeed();
-            _lastTickTs = Stopwatch.GetTimestamp();
-            _diagnosticsStarted = true;
             _isRunning = true;
             RequestNextFrame();
         }
@@ -3125,7 +3118,6 @@ namespace NudgeTray
         public void Stop()
         {
             _isRunning = false;
-            _diagnosticsStarted = false;
         }
 
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -3147,27 +3139,8 @@ namespace NudgeTray
             if (!_isRunning) return;
             RequestNextFrame();
 
-            long now = Stopwatch.GetTimestamp();
-            if (_diagnosticsStarted)
-            {
-                _tickCount++;
-                double elapsedMs = (now - _lastTickTs) * 1000.0 / Stopwatch.Frequency;
-                if (elapsedMs > 22.0)
-                {
-                    _jankCount++;
-                    Console.WriteLine($"[PulseDot JANK #{_jankCount}] frame gap={elapsedMs:F1}ms (expected ~16ms). Total ticks={_tickCount}");
-                    if (elapsedMs > 50.0)
-                        Console.WriteLine($"[PulseDot HEAVY JANK] frame gap={elapsedMs:F1}ms — UI thread blocked for {(int)elapsedMs}ms");
-                }
-            }
-            _lastTickTs = now;
-
             // ── Advance & spawn waves ──────────────────────────────────────────
-            double dtMs = _diagnosticsStarted
-                ? (now - _lastTickTs) * 1000.0 / Stopwatch.Frequency  // reuse above calc
-                : 16.67;
-            // Use a fixed dt for consistency when diagnostics aren't measuring yet
-            double frameMs = 16.67;
+            const double frameMs = 16.67;
 
             // Advance existing waves — kill when phase passes 1.0 (alpha already at zero)
             for (int i = 0; i < MaxWaves; i++)
