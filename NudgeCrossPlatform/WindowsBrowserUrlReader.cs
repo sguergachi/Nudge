@@ -6,7 +6,10 @@ namespace NudgeCore;
 
 #if WINDOWS
 
-[ComImport, Guid("30CBE57D-D9D0-452A-AB13-7AC5AC4825EE"),
+// IUIAutomation — method order MUST match the COM vtable exactly (UIAutomationClient.h).
+// We only invoke ElementFromHandle and CreatePropertyCondition, but every preceding slot
+// must be declared so those two land on the correct function pointer.
+[ComImport, Guid("30cbe57d-d9d0-452a-ab13-7ac5ac4825ee"),
  InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 internal interface IUIAutomation
 {
@@ -21,107 +24,27 @@ internal interface IUIAutomation
     [PreserveSig] int ElementFromPointBuildCache(int x, int y, IntPtr cr, [MarshalAs(UnmanagedType.Interface)] out object el);
     [PreserveSig] int GetFocusedElementBuildCache(IntPtr cr, [MarshalAs(UnmanagedType.Interface)] out object el);
     [PreserveSig] int CreateTreeWalker(IntPtr cond, [MarshalAs(UnmanagedType.Interface)] out object walker);
+    [PreserveSig] int Get_ControlViewWalker([MarshalAs(UnmanagedType.Interface)] out object walker);
+    [PreserveSig] int Get_ContentViewWalker([MarshalAs(UnmanagedType.Interface)] out object walker);
+    [PreserveSig] int Get_RawViewWalker([MarshalAs(UnmanagedType.Interface)] out object walker);
+    [PreserveSig] int Get_RawViewCondition([MarshalAs(UnmanagedType.Interface)] out object cond);
     [PreserveSig] int Get_ControlViewCondition([MarshalAs(UnmanagedType.Interface)] out object cond);
     [PreserveSig] int Get_ContentViewCondition([MarshalAs(UnmanagedType.Interface)] out object cond);
-    [PreserveSig] int Get_RawViewCondition([MarshalAs(UnmanagedType.Interface)] out object cond);
+    [PreserveSig] int CreateCacheRequest([MarshalAs(UnmanagedType.Interface)] out object cr);
     [PreserveSig] int CreateTrueCondition([MarshalAs(UnmanagedType.Interface)] out object cond);
     [PreserveSig] int CreateFalseCondition([MarshalAs(UnmanagedType.Interface)] out object cond);
     [PreserveSig] int CreatePropertyCondition(int pid, object val, [MarshalAs(UnmanagedType.Interface)] out object cond);
-    [PreserveSig] int CreatePropertyConditionEx(int pid, object val, int flags, [MarshalAs(UnmanagedType.Interface)] out object cond);
-    [PreserveSig] int CreateAndCondition(IntPtr c1, IntPtr c2, [MarshalAs(UnmanagedType.Interface)] out object cond);
-    [PreserveSig] int CreateAndConditionFromArray(object[] conds, [MarshalAs(UnmanagedType.Interface)] out object cond);
-    [PreserveSig] int CreateOrCondition(IntPtr c1, IntPtr c2, [MarshalAs(UnmanagedType.Interface)] out object cond);
-    [PreserveSig] int CreateOrConditionFromArray(object[] conds, [MarshalAs(UnmanagedType.Interface)] out object cond);
-    [PreserveSig] int CreateNotCondition(IntPtr c, [MarshalAs(UnmanagedType.Interface)] out object cond);
-    [PreserveSig] int AddAutomationEventHandler(int eid, IntPtr el, int scope, IntPtr cr, IntPtr handler);
-    [PreserveSig] int RemoveAutomationEventHandler(int eid, IntPtr el, IntPtr handler);
-    [PreserveSig] int AddPropertyChangedEventHandlerNativeArray(IntPtr el, int scope, IntPtr cr, IntPtr handler, int[] pids, int count);
-    [PreserveSig] int RemovePropertyChangedEventHandler(IntPtr el, IntPtr handler);
-    [PreserveSig] int AddStructureChangedEventHandler(IntPtr el, int scope, IntPtr handler);
-    [PreserveSig] int RemoveStructureChangedEventHandler(IntPtr el, IntPtr handler);
-    [PreserveSig] int AddFocusChangedEventHandler(IntPtr cr, IntPtr handler);
-    [PreserveSig] int RemoveFocusChangedEventHandler(IntPtr handler);
-    [PreserveSig] int RemoveAllEventHandlers();
-    [PreserveSig] int IntNativeArrayToSafeVariant(IntPtr arr, int count, out object safe);
-    [PreserveSig] int IntSafeVariantToNativeArray(object safe, out IntPtr arr, out int count);
-    [PreserveSig] int CreateCacheRequest([MarshalAs(UnmanagedType.Interface)] out object cr);
-    [PreserveSig] int CreateTreeWalkerEx(IntPtr cond, IntPtr cr, [MarshalAs(UnmanagedType.Interface)] out object walker);
-    [PreserveSig] int Unused38();
-    [PreserveSig] int Unused39();
-    [PreserveSig] int Unused40();
-    [PreserveSig] int Unused41();
-    [PreserveSig] int Unused42();
-    [PreserveSig] int Unused43();
-    [PreserveSig] int Unused44();
-    [PreserveSig] int Unused45();
-    [PreserveSig] int Unused46();
-    [PreserveSig] int Unused47();
-    [PreserveSig] int Unused48();
-    [PreserveSig] int Unused49();
-    [PreserveSig] int Unused50();
-    [PreserveSig] int Unused51();
-    [PreserveSig] int Unused52();
-    [PreserveSig] int Unused53();
-    [PreserveSig] int Unused54();
-    [PreserveSig] int Unused55();
-    [PreserveSig] int Unused56();
-    [PreserveSig] int Unused57();
-    [PreserveSig] int Unused58();
-    [PreserveSig] int Unused59();
-    [PreserveSig] int Unused60();
-    [PreserveSig] int Unused61();
-    [PreserveSig] int Unused62();
-    [PreserveSig] int Unused63();
-    [PreserveSig] int Unused64();
-    [PreserveSig] int Unused65();
-    [PreserveSig] int Unused66();
-    [PreserveSig] int Unused67();
-    [PreserveSig] int Unused68();
-    [PreserveSig] int Unused69();
-    [PreserveSig] int Unused70();
-    [PreserveSig] int Unused71();
-    [PreserveSig] int Unused72();
-    [PreserveSig] int Unused73();
-    [PreserveSig] int Unused74();
-    [PreserveSig] int Unused75();
-    [PreserveSig] int Unused76();
 }
 
-[ComImport, Guid("D6EAFED2-8A35-4F76-B8F0-7A10C9C1F4C3"),
+// IUIAutomationElement — method order MUST match the COM vtable exactly (UIAutomationClient.h).
+// We invoke FindFirst and GetCurrentPattern; declarations stop at GetCurrentPattern since no
+// later slot is used. Unused intermediate slots keep placeholder signatures (never called).
+[ComImport, Guid("d22108aa-8ac5-49a5-837b-37bbb3d7591e"),
  InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 internal interface IUIAutomationElement
 {
     [PreserveSig] int SetFocus();
     [PreserveSig] int GetRuntimeId(out object arr);
-    [PreserveSig] int GetProcessId(out int pid);
-    [PreserveSig] int GetControlType(out int ct);
-    [PreserveSig] int GetLocalizedControlType(out string s);
-    [PreserveSig] int GetName(out string name);
-    [PreserveSig] int GetAcceleratorKey(out string s);
-    [PreserveSig] int GetAccessKey(out string s);
-    [PreserveSig] int GetHasKeyboardFocus(out int b);
-    [PreserveSig] int GetIsKeyboardFocusable(out int b);
-    [PreserveSig] int GetIsEnabled(out int b);
-    [PreserveSig] int GetIsPassword(out int b);
-    [PreserveSig] int GetAutomationId(out string id);
-    [PreserveSig] int GetClassName(out string cn);
-    [PreserveSig] int GetHelpText(out string s);
-    [PreserveSig] int GetCulture(out int c);
-    [PreserveSig] int GetIsControlElement(out int b);
-    [PreserveSig] int GetIsContentElement(out int b);
-    [PreserveSig] int GetLabeledBy(out object el);
-    [PreserveSig] int GetNativeWindowHandle(out IntPtr hwnd);
-    [PreserveSig] int GetItemType(out string s);
-    [PreserveSig] int GetIsOffscreen(out int b);
-    [PreserveSig] int GetOrientation(out int o);
-    [PreserveSig] int GetFrameworkId(out string s);
-    [PreserveSig] int GetIsRequiredForForm(out int b);
-    [PreserveSig] int GetItemStatus(out string s);
-    [PreserveSig] int GetBoundingRectangle(out double l, out double t, out double w, out double h);
-    [PreserveSig] int GetControllerFor(out object arr);
-    [PreserveSig] int GetDescribedBy(out object arr);
-    [PreserveSig] int GetFlowsTo(out object arr);
-    [PreserveSig] int GetProviderDescription(out string s);
     [PreserveSig] int FindFirst(int scope, IntPtr cond, [MarshalAs(UnmanagedType.Interface)] out object found);
     [PreserveSig] int FindAll(int scope, IntPtr cond, out object found);
     [PreserveSig] int FindFirstBuildCache(int scope, IntPtr cond, IntPtr cr, [MarshalAs(UnmanagedType.Interface)] out object found);
@@ -131,64 +54,12 @@ internal interface IUIAutomationElement
     [PreserveSig] int GetCurrentPropertyValueEx(int pid, int ignDef, out object val);
     [PreserveSig] int GetCachedPropertyValue(int pid, out object val);
     [PreserveSig] int GetCachedPropertyValueEx(int pid, int ignDef, out object val);
-    [PreserveSig] int GetCurrentPatternAs(int pid, ref Guid riid, out object pat);
-    [PreserveSig] int GetCachedPatternAs(int pid, ref Guid riid, out object pat);
+    [PreserveSig] int GetCurrentPatternAs(int pid, ref Guid riid, out IntPtr pat);
+    [PreserveSig] int GetCachedPatternAs(int pid, ref Guid riid, out IntPtr pat);
     [PreserveSig] int GetCurrentPattern(int pid, [MarshalAs(UnmanagedType.Interface)] out object pat);
-    [PreserveSig] int GetCachedPattern(int pid, [MarshalAs(UnmanagedType.Interface)] out object pat);
-    [PreserveSig] int GetCachedParent([MarshalAs(UnmanagedType.Interface)] out object el);
-    [PreserveSig] int GetCachedChildren(out object arr);
-    [PreserveSig] int GetClickablePoint(out int x, out int y, out int got);
-    [PreserveSig] int GetAriaRole(out string s);
-    [PreserveSig] int GetAriaProperties(out string s);
-    [PreserveSig] int GetIsDataValidForForm(out int b);
-    [PreserveSig] int GetFullDescription(out string s);
-    [PreserveSig] int GetAnnotationTypes(out object arr);
-    [PreserveSig] int GetAnnotations(out object arr);
-    [PreserveSig] int GetOptimizeForVisualContent(out int b);
-    [PreserveSig] int GetLiveSetting(out int s);
-    [PreserveSig] int GetIsPeripheral(out int b);
-    [PreserveSig] int GetPositionInSet(out int p);
-    [PreserveSig] int GetSizeOfSet(out int s);
-    [PreserveSig] int GetLevel(out int l);
-    [PreserveSig] int GetLocalizedLandmarkType(out string s);
-    [PreserveSig] int GetLandmarkType(out int t);
-    [PreserveSig] int GetHeadingLevel(out int l);
-    [PreserveSig] int GetIsDialog(out int b);
-    [PreserveSig] int GetMetadataValue(int tid, int mid, out object val);
-    [PreserveSig] int GetLocalizedControlTypeEx(out string s);
-    [PreserveSig] int GetFullDescriptionEx(out string s);
-    [PreserveSig] int Unused90();
-    [PreserveSig] int Unused91();
-    [PreserveSig] int Unused92();
-    [PreserveSig] int Unused93();
-    [PreserveSig] int Unused94();
-    [PreserveSig] int Unused95();
-    [PreserveSig] int Unused96();
-    [PreserveSig] int Unused97();
-    [PreserveSig] int Unused98();
-    [PreserveSig] int Unused99();
-    [PreserveSig] int Unused100();
-    [PreserveSig] int Unused101();
-    [PreserveSig] int Unused102();
-    [PreserveSig] int Unused103();
-    [PreserveSig] int Unused104();
-    [PreserveSig] int Unused105();
-    [PreserveSig] int Unused106();
-    [PreserveSig] int Unused107();
-    [PreserveSig] int Unused108();
-    [PreserveSig] int Unused109();
-    [PreserveSig] int Unused110();
-    [PreserveSig] int Unused111();
-    [PreserveSig] int Unused112();
-    [PreserveSig] int Unused113();
-    [PreserveSig] int Unused114();
-    [PreserveSig] int Unused115();
-    [PreserveSig] int Unused116();
-    [PreserveSig] int Unused117();
-    [PreserveSig] int Unused118();
 }
 
-[ComImport, Guid("A9A5579E-98C9-48DF-A7A1-B0B3B1E9C8F1"),
+[ComImport, Guid("a94cd8b1-0844-4cd6-9d2d-640537ab39e9"),
  InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 internal interface IUIAutomationValuePattern
 {
