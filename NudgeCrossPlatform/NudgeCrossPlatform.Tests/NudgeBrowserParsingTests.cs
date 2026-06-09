@@ -1,3 +1,4 @@
+using System;
 using Xunit;
 using NudgeCore;
 
@@ -40,6 +41,39 @@ public sealed class NudgeBrowserParsingTests
     {
         // "(Draft)" is not a tab count, so it is left in place and yields no false domain.
         Assert.Null(BrowserDetector.ExtractSite("(Draft) Meeting notes - Firefox"));
+    }
+
+    [Theory]
+    // The UIA URL path must produce the same keys as title parsing — "www.x.com" and
+    // "x.com" would otherwise split a domain's reputation across two entries.
+    [InlineData("https://www.x.com/home", "x.com")]
+    [InlineData("https://news.ycombinator.com/item?id=1", "news.ycombinator.com")]
+    [InlineData("http://localhost:3000/app", null)]          // localhost excluded, like title path
+    public void ExtractSite_UiaUrl_NormalizedLikeTitlePath(string url, string? expected)
+    {
+        BrowserDetector.TryGetBrowserUrl = () => url;
+        try
+        {
+            Assert.Equal(expected, BrowserDetector.ExtractSite("Some Unrelated Title - Google Chrome"));
+        }
+        finally
+        {
+            BrowserDetector.TryGetBrowserUrl = null;
+        }
+    }
+
+    [Fact]
+    public void ExtractSite_UiaReaderThrows_DegradesToTitleParse()
+    {
+        BrowserDetector.TryGetBrowserUrl = () => throw new InvalidOperationException("UIA unavailable");
+        try
+        {
+            Assert.Equal("reddit.com", BrowserDetector.ExtractSite("(2) Reddit - Dive into anything - Google Chrome"));
+        }
+        finally
+        {
+            BrowserDetector.TryGetBrowserUrl = null;
+        }
     }
 
     [Fact]
