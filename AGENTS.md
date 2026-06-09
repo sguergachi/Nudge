@@ -69,12 +69,13 @@ YES/NO responses flow back via UDP `127.0.0.1:45001`.
 
 - Meeting detection runs **first** every ML check (60s) — if in meeting or screen sharing, snapshot is suppressed with `SUPPRESS:{reason}` and ML is never consulted. Meeting trumps AI.
 - ML check runs every 60s (`ML_CHECK_INTERVAL_MS`), only if NOT in a meeting.
-- **Not productive** + confidence ≥ **85%** (`ML_CONFIDENCE_THRESHOLD`) → ML-triggered snapshot.
-- **Not productive** + confidence < 85% → defers to interval (`_mlLowConfidence = true`), interval timer NOT reset.
-- **Productive** + confidence ≥ **85%** → skip snapshot, reset interval timer (`_productivityConfirmed = true`), clear `_mlLowConfidence`.
-- **Productive** + confidence < 85% → skip snapshot, interval NOT reset (`_mlLowConfidence = true`). Uncertain productive predictions must not suppress the safety nudge.
-- Interval fallback: random 5–10 min (or `--interval N`).
-- Log patterns: `ML TRIGGER`, `ML SKIP`, `ML DEFER`, `INTERVAL SNAPSHOT`.
+- **Not productive** + confidence ≥ **85%** (`ML_CONFIDENCE_THRESHOLD`) → ML-triggered snapshot (fires *early*, before the interval matures).
+- **Not productive** + confidence < 85% → defers to interval (`_mlLowConfidence = true`).
+- **Productive** + confidence ≥ **85%** → skip the AI's own early trigger, clear `_mlLowConfidence`.
+- **Productive** + confidence < 85% → skip snapshot (`_mlLowConfidence = true`).
+- **The interval is a guaranteed floor, not a fallback.** It counts down independently of ML and fires whenever it matures (`mlTriggered || intervalReached`), even when ML is active and confidently calling you productive — so a baseline nudge always lands within the window. ML only ever triggers *earlier*; a productive prediction never resets the interval timer. The timer is reset to a fresh window only when a snapshot actually fires (ML or interval) or is suppressed by the gate/meeting.
+- Interval floor: random 5–10 min (or `--interval N`).
+- Log patterns: `ML TRIGGER`, `ML SKIP`, `ML DEFER`, `INTERVAL SNAPSHOT`. The `INTERVAL SNAPSHOT` line states the reason: `ML disabled`, `ML unavailable`, `ML below N% confidence threshold`, or `baseline floor — ML active & productive`.
 
 ### SnapshotGate — suppression rules
 

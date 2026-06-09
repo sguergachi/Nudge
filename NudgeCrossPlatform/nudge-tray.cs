@@ -49,7 +49,7 @@ namespace NudgeTray
     sealed class Program
     {
         const int UDP_PORT = 45001;
-        const string VERSION = "1.9.7";
+        const string VERSION = "2.0.6";
         const string NudgeExeName = "nudge";
         const string NudgeDllName = "nudge.dll";
         const int TRAINER_CHECK_INTERVAL_SEC = 15;
@@ -58,6 +58,7 @@ namespace NudgeTray
         static Process? _mlTrainerProcess;
         static DispatcherTimer? _menuCountdownTimer;
         internal static bool _mlEnabled;
+        internal static bool _experimentalMode;
         internal static bool _notificationsPaused;
         internal static volatile string MlLoadingStep = "";
         internal static volatile string MlSetupError = "";
@@ -68,11 +69,13 @@ namespace NudgeTray
         public static int IntervalMinutes => _intervalMinutes;
         static int _mlCheckIntervalSeconds;
         public static int MlCheckIntervalSeconds => _mlCheckIntervalSeconds;
+        public static bool ExperimentalMode => _experimentalMode;
         static Mutex? _singleInstanceMutex;
         internal const string SingleInstanceMutexName = NudgeCoreLogic.TraySingleInstanceMutexName;
         static readonly string _baseDir = AppContext.BaseDirectory;
         // Model lives in user data dir so it survives binary updates
         static readonly string _modelDirPath = Path.Combine(PlatformConfig.DataDirectory, "model");
+        static readonly string _modelDirPathExp = Path.Combine(PlatformConfig.DataDirectory, "model_exp");
 
         static string FindPython() => PlatformConfig.FindPython(_baseDir);
 
@@ -1502,6 +1505,35 @@ namespace NudgeTray
             }
         }
 
+        internal static void DeployBundledModelExp()
+        {
+            try
+            {
+                string userModelPath = Path.Combine(_modelDirPathExp, "productivity_model.joblib");
+                if (File.Exists(userModelPath)) return; // Already deployed
+
+                string bundledDir = Path.Combine(_baseDir, "model_exp");
+                string bundledModel = Path.Combine(bundledDir, "productivity_model.joblib");
+                if (!File.Exists(bundledModel)) return; // No bundled seed to deploy
+
+                Console.WriteLine("[INFO] Deploying bundled V4 seed model to user data directory…");
+                Directory.CreateDirectory(_modelDirPathExp);
+                File.Copy(bundledModel, userModelPath, overwrite: false);
+                foreach (var auxFile in new[] { "scaler.json", "trainer_state.json" })
+                {
+                    string src = Path.Combine(bundledDir, auxFile);
+                    string dst = Path.Combine(_modelDirPathExp, auxFile);
+                    if (File.Exists(src) && !File.Exists(dst))
+                        File.Copy(src, dst, overwrite: false);
+                }
+                Console.WriteLine("  ✓ Bundled V4 seed model deployed");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[WARN] Could not deploy bundled V4 model: {ex.Message}");
+            }
+        }
+
         static void StartMLServices()
         {
             try
@@ -1519,18 +1551,23 @@ namespace NudgeTray
                 }
 
                 // Deploy bundled V1 model to user data dir so the trainer finds it
-                DeployBundledModel();
+                if (_experimentalMode)
+                    DeployBundledModelExp();
+                else
+                    DeployBundledModel();
 
-                string csvPath = PlatformConfig.CsvPath;
+                string csvPath = _experimentalMode ? PlatformConfig.CsvPathExp : PlatformConfig.CsvPath;
+                string modelDir = _experimentalMode ? _modelDirPathExp : _modelDirPath;
+                int mlPort = _experimentalMode ? 45003 : 45002;
 
-                // Start ML inference service (TCP on port 45002)
+                // Start ML inference service (TCP on port 45002 / 45003)
                 SetMlStatus("🧠 Launching inference server…");
                 _mlInferenceProcess = new Process
                 {
                     StartInfo = new ProcessStartInfo
                     {
                         FileName = FindPython(),
-                        Arguments = $"\"{FindScript("model_inference.py")}\" --host 127.0.0.1 --port 45002 --model-dir \"{_modelDirPath}\"",
+                        Arguments = $"\"{FindScript("model_inference.py")}\" --host 127.0.0.1 --port {mlPort} --model-dir \"{modelDir}\"",
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
                         UseShellExecute = false,
@@ -1567,20 +1604,20 @@ namespace NudgeTray
                     try
                     {
                         using var client = new System.Net.Sockets.TcpClient();
-                        client.Connect("127.0.0.1", 45002);
+                        client.Connect("127.0.0.1", mlPort);
                         serverReady = true;
                     }
                     catch { }
                 }
 
                 if (serverReady)
-                    Console.WriteLine("  ✓ ML inference service started (TCP port 45002)");
+                    Console.WriteLine($"  ✓ ML inference service started (TCP port {mlPort})");
                 else
                     Console.WriteLine("  ⚠ ML inference service may not be ready yet");
 
                 // Start background trainer
                 SetMlStatus("🧠 Starting background trainer…");
-                string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --seed --csv \"{csvPath}\" --model-dir \"{_modelDirPath}\" --check-interval {TRAINER_CHECK_INTERVAL_SEC}";
+                string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --seed --csv \"{csvPath}\" --model-dir \"{modelDir}\" --check-interval {TRAINER_CHECK_INTERVAL_SEC}{(_experimentalMode ? " --schema v4" : "")}";
                 if (_forceTrainedModel)
                 {
                     trainerArgs += " --min-total-samples 1";
@@ -1655,8 +1692,9 @@ namespace NudgeTray
                     catch { }
                 }
 
-                string csvPath = PlatformConfig.CsvPath;
-                string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --seed --csv \"{csvPath}\" --model-dir \"{_modelDirPath}\" --check-interval {TRAINER_CHECK_INTERVAL_SEC} --min-total-samples 1 --force --once";
+                string csvPath = _experimentalMode ? PlatformConfig.CsvPathExp : PlatformConfig.CsvPath;
+                string modelDir = _experimentalMode ? _modelDirPathExp : _modelDirPath;
+                string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --seed --csv \"{csvPath}\" --model-dir \"{modelDir}\" --check-interval {TRAINER_CHECK_INTERVAL_SEC} --min-total-samples 1 --force --once{(_experimentalMode ? " --schema v4" : "")}";
 
                 _mlTrainerProcess = new Process
                 {
@@ -1730,8 +1768,9 @@ namespace NudgeTray
 
         static void StartContinuousTrainer()
         {
-            string csvPath = PlatformConfig.CsvPath;
-            string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --seed --csv \"{csvPath}\" --model-dir \"{_modelDirPath}\" --check-interval {TRAINER_CHECK_INTERVAL_SEC}";
+            string csvPath = _experimentalMode ? PlatformConfig.CsvPathExp : PlatformConfig.CsvPath;
+            string modelDir = _experimentalMode ? _modelDirPathExp : _modelDirPath;
+            string trainerArgs = $"\"{FindScript("background_trainer.py")}\" --seed --csv \"{csvPath}\" --model-dir \"{modelDir}\" --check-interval {TRAINER_CHECK_INTERVAL_SEC}{(_experimentalMode ? " --schema v4" : "")}";
             if (_forceTrainedModel)
                 trainerArgs += " --min-total-samples 1";
 
@@ -1784,7 +1823,18 @@ namespace NudgeTray
             try
             {
                 // Kill any nudge daemon from a previous session so we start fresh
-                if (!PlatformConfig.IsWindows)
+                if (PlatformConfig.IsWindows)
+                {
+                    try
+                    {
+                        foreach (var proc in System.Diagnostics.Process.GetProcessesByName("nudge"))
+                        {
+                            try { proc.Kill(); proc.WaitForExit(3000); } catch { }
+                        }
+                    }
+                    catch { /* no previous process to kill */ }
+                }
+                else
                 {
                     try
                     {
@@ -1834,6 +1884,10 @@ namespace NudgeTray
                 {
                     args += " --force-model";
                 }
+                if (_experimentalMode)
+                {
+                    args += " --experimental";
+                }
                 // Start the Nudge Harvest process
                 _nudgeProcess = new Process
                 {
@@ -1850,27 +1904,34 @@ namespace NudgeTray
 
                 _nudgeProcess.OutputDataReceived += (s, e) =>
                 {
-                    if (!string.IsNullOrEmpty(e.Data))
-                    {
+                    if (string.IsNullOrEmpty(e.Data)) return;
+
+                    // Only log non-routine lines to keep console output useful
+                    bool isHighFrequency =
+                        e.Data.StartsWith("APPFOCUS:", StringComparison.Ordinal) ||
+                        e.Data.StartsWith("HARVEST:", StringComparison.Ordinal) ||
+                        e.Data.StartsWith("MEETING:", StringComparison.Ordinal) ||
+                        e.Data.StartsWith("MLNEXT:", StringComparison.Ordinal);
+
+                    if (!isHighFrequency)
                         Console.WriteLine($"[Nudge Harvest] {e.Data}");
 
-                        if (e.Data.Trim() == "SNAPSHOT")
-                            HandleSnapshot();
-                        else if (e.Data.StartsWith("MLDATA:", StringComparison.Ordinal))
-                            HandleMLData(e.Data.AsSpan(7));
-                        else if (e.Data.StartsWith("MLRESPONSE:", StringComparison.Ordinal))
-                            HandleMLResponse(e.Data.AsSpan(11));
-                        else if (e.Data.StartsWith("MLNEXT:", StringComparison.Ordinal))
-                            HandleMLNext(e.Data.AsSpan(7));
-                        else if (e.Data.StartsWith("APPFOCUS:", StringComparison.Ordinal))
-                            HandleAppFocus(e.Data.AsSpan(9));
-                        else if (e.Data.StartsWith("HARVEST:", StringComparison.Ordinal))
-                            HandleHarvest(e.Data.AsSpan(8));
-                        else if (e.Data.StartsWith("MEETING:", StringComparison.Ordinal))
-                            HandleMeeting(e.Data.AsSpan(8));
-                        else if (e.Data.StartsWith("SUPPRESS:", StringComparison.Ordinal))
-                            HandleSuppress(e.Data.AsSpan(9));
-                    }
+                    if (e.Data.Trim() == "SNAPSHOT")
+                        HandleSnapshot();
+                    else if (e.Data.StartsWith("MLDATA:", StringComparison.Ordinal))
+                        HandleMLData(e.Data.AsSpan(7));
+                    else if (e.Data.StartsWith("MLRESPONSE:", StringComparison.Ordinal))
+                        HandleMLResponse(e.Data.AsSpan(11));
+                    else if (e.Data.StartsWith("MLNEXT:", StringComparison.Ordinal))
+                        HandleMLNext(e.Data.AsSpan(7));
+                    else if (e.Data.StartsWith("APPFOCUS:", StringComparison.Ordinal))
+                        HandleAppFocus(e.Data.AsSpan(9));
+                    else if (e.Data.StartsWith("HARVEST:", StringComparison.Ordinal))
+                        HandleHarvest(e.Data.AsSpan(8));
+                    else if (e.Data.StartsWith("MEETING:", StringComparison.Ordinal))
+                        HandleMeeting(e.Data.AsSpan(8));
+                    else if (e.Data.StartsWith("SUPPRESS:", StringComparison.Ordinal))
+                        HandleSuppress(e.Data.AsSpan(9));
                 };
 
                 _nudgeProcess.ErrorDataReceived += (s, e) =>
@@ -2327,6 +2388,7 @@ namespace NudgeTray
                     MlEnabled              = _mlEnabled,
                     IntervalMinutes        = _intervalMinutes > 0 ? _intervalMinutes : 5,
                     MlCheckIntervalSeconds = _mlCheckIntervalSeconds > 0 ? _mlCheckIntervalSeconds : 60,
+                    ExperimentalSignalMode = _experimentalMode,
                 };
                 File.WriteAllText(
                     SettingsPath,
@@ -2348,7 +2410,12 @@ namespace NudgeTray
                 if (File.Exists(SettingsPath))
                 {
                     string json = File.ReadAllText(SettingsPath);
-                    return JsonSerializer.Deserialize(json, NudgeJsonContext.Default.TraySettings);
+                    var settings = JsonSerializer.Deserialize(json, NudgeJsonContext.Default.TraySettings);
+                    if (settings != null)
+                    {
+                        _experimentalMode = settings.ExperimentalSignalMode;
+                    }
+                    return settings;
                 }
             }
             catch (Exception ex)
@@ -2371,7 +2438,7 @@ namespace NudgeTray
 #endif
         }
 
-        public static void UpdateSettings(int? mlInterval = null, int? interval = null)
+        public static void UpdateSettings(int? mlInterval = null, int? interval = null, bool? experimental = null)
         {
             bool changed = false;
             if (mlInterval.HasValue && mlInterval.Value != _mlCheckIntervalSeconds)
@@ -2382,6 +2449,11 @@ namespace NudgeTray
             if (interval.HasValue && interval.Value != _intervalMinutes)
             {
                 _intervalMinutes = interval.Value;
+                changed = true;
+            }
+            if (experimental.HasValue && experimental.Value != _experimentalMode)
+            {
+                _experimentalMode = experimental.Value;
                 changed = true;
             }
 
@@ -2463,6 +2535,21 @@ namespace NudgeTray
                     _nudgeProcess.WaitForExit(2000);
                 }
                 catch { }
+            }
+
+            // When experimental mode changes, the sidecars must also swap ports/model dirs.
+            if (_mlEnabled)
+            {
+                foreach (var mlProc in new[] { _mlInferenceProcess, _mlTrainerProcess })
+                {
+                    if (mlProc != null && !mlProc.HasExited)
+                    {
+                        try { mlProc.Kill(entireProcessTree: true); mlProc.WaitForExit(2000); } catch { }
+                    }
+                }
+                _mlInferenceProcess = null;
+                _mlTrainerProcess = null;
+                StartMLServices();
             }
 
             StartNudge(_intervalMinutes > 0 ? _intervalMinutes : 5);

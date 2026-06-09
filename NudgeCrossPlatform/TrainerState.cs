@@ -49,6 +49,10 @@ internal static class TrainerState
                 LastTrainedCount = int.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
                 MinSamples       = int.Parse(m.Groups[3].Value, CultureInfo.InvariantCulture);
                 LastChecked      = DateTime.Now;
+                // Healthy heartbeat from a live trainer → clear any stale "Training failed" so a
+                // past transient error doesn't stick as the section's state forever (a recurring
+                // failure re-sets LastError on the next train attempt within the same cycle).
+                LastError        = "";
                 if (LastTrainedCount > 0 && LastTrained == DateTime.MinValue)
                     LastTrained = DateTime.Now;
             }
@@ -122,7 +126,7 @@ internal static class TrainerState
 
     public static void RefreshFromCsv()
     {
-        string csvPath = PlatformConfig.CsvPath;
+        string csvPath = Program.ExperimentalMode ? PlatformConfig.CsvPathExp : PlatformConfig.CsvPath;
         if (!System.IO.File.Exists(csvPath)) return;
         try
         {
@@ -143,7 +147,8 @@ internal static class TrainerState
                 }
             }
 
-            string metaPath = System.IO.Path.Combine(PlatformConfig.DataDirectory, "model", "trainer_meta.json");
+            string modelDir = Program.ExperimentalMode ? "model_exp" : "model";
+            string metaPath = System.IO.Path.Combine(PlatformConfig.DataDirectory, modelDir, "trainer_meta.json");
             DateTime trained = DateTime.MinValue;
             int trainedCount = 0;
             float accuracy = -1f;

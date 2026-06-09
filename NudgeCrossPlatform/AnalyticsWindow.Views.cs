@@ -183,7 +183,7 @@ namespace NudgeTray
 
             border.Child = closeIcon;
 
-            border.PointerPressed += (s, e) => Hide();
+            border.PointerPressed += (s, e) => Close();
 
             ToolTip.SetTip(border, "Close");
 
@@ -225,8 +225,7 @@ namespace NudgeTray
             StopLiveTimers();
             _contentPanel.Children.Clear();
 
-            Console.WriteLine($"[Analytics] Refreshing content - AppUsage: {_data.AppUsage.Count} apps, HourlyProductivity: {_data.HourlyProductivity.Count} hours");
-            Console.WriteLine($"[Analytics] Total activity: {_data.TotalActivityMinutes}min, Productive: {_data.ProductiveMinutes}min");
+            // Content refresh data: _data.AppUsage.Count apps, _data.HourlyProductivity.Count hours
 
             // Summary Section
             _contentPanel.Children.Add(CreateSummarySection());
@@ -241,12 +240,12 @@ namespace NudgeTray
             // App Usage Section
             if (_data.AppUsage.Count > 0)
             {
-                Console.WriteLine($"[Analytics] Adding 'Most Used Apps' section with {_data.AppUsage.Count} apps");
+                // Adding 'Most Used Apps' section
                 _contentPanel.Children.Add(CreateSection("Most Used Apps", CreateAppUsageView()));
             }
             else
             {
-                Console.WriteLine("[Analytics] Skipping 'Most Used Apps' section - no data");
+                // Skipping 'Most Used Apps' section - no data
             }
 
             // Hourly Productivity Section — the bar chart already encodes all the same
@@ -254,7 +253,7 @@ namespace NudgeTray
             // counts, so we only render one section here.
             if (_data.HourlyProductivity.Count > 0)
             {
-                Console.WriteLine($"[Analytics] Adding 'Productivity by Hour' section with {_data.HourlyProductivity.Count} hours");
+                // Adding 'Productivity by Hour' section
                 _contentPanel.Children.Add(CreateSection("Productivity by Hour", CreateHourlyProductivityView()));
             }
             else

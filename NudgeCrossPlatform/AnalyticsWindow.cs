@@ -341,6 +341,8 @@ namespace NudgeTray
             _livePulseDot = null;
             _liveFocusTextStack = null;
             _liveSignalPanel = null;
+            if (Program._analyticsWindow == this)
+                Program._analyticsWindow = null;
             base.OnClosed(e);
         }
 
@@ -738,7 +740,7 @@ namespace NudgeTray
 
             border.Child = textBlock;
 
-            ToolTip.SetTip(border, "Live AI predictions, confidence scores, and ML training status");
+            ToolTip.SetTip(border, "Live AI predictions, productivity scores, and ML training status");
 
             border.PointerPressed += (s, e) =>
             {
@@ -890,8 +892,7 @@ namespace NudgeTray
             }
 
             double elapsedMs = (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency;
-            if (elapsedMs > 10.0)
-                Console.WriteLine($"[AI-REBUILD] RefreshAILiveView took {elapsedMs:F1}ms (hasExisting={hasExisting})");
+            _ = elapsedMs; // timing kept for future profiling
         }
 
         private static void SetOrReplaceChild(Panel panel, int index, Control child)
@@ -910,8 +911,7 @@ namespace NudgeTray
                 panel.Children[index] = child;
             }
             double elapsedMs = (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency;
-            if (elapsedMs > 5.0)
-                Console.WriteLine($"[AI-REBUILD] SetOrReplaceChild idx={index} took {elapsedMs:F1}ms");
+            _ = elapsedMs;
         }
 
         private static void RemoveChild(Panel panel, int index)
@@ -1338,7 +1338,7 @@ namespace NudgeTray
 
             var scoreText = new TextBlock
             {
-                Text = $"{confidence * 100:F0}%",
+                Text = $"{score * 100:F0}%",
                 FontSize = 14,
                 FontWeight = FontWeight.SemiBold,
                 Foreground = new SolidColorBrush(stateColor),
@@ -1581,16 +1581,17 @@ namespace NudgeTray
                 FontWeight = FontWeight.SemiBold,
                 Foreground = new SolidColorBrush(hasApp ? TextPrimary : TextTertiary)
             });
-            if (showDetail)
+            // Subtitle is always present (index 1) so the in-place update can reliably refresh
+            // or clear it — hidden when there's no tab detail. Prevents a previous app's title
+            // from lingering after switching focus (e.g. PowerPoint → an unknown browser tab).
+            textStack.Children.Add(new TextBlock
             {
-                textStack.Children.Add(new TextBlock
-                {
-                    Text          = TruncateAppName(currentDetail, 55),
-                    FontSize      = 10,
-                    Foreground    = new SolidColorBrush(TextSecondary),
-                    TextTrimming  = TextTrimming.CharacterEllipsis
-                });
-            }
+                Text          = showDetail ? TruncateAppName(currentDetail, 55) : "",
+                FontSize      = 10,
+                Foreground    = new SolidColorBrush(TextSecondary),
+                TextTrimming  = TextTrimming.CharacterEllipsis,
+                IsVisible     = showDetail
+            });
             bool away = harvest?.Afk == 1;
             bool inMeeting = LiveAIState.InMeeting;
             bool screenSharing = LiveAIState.ScreenSharing;
@@ -1635,6 +1636,7 @@ namespace NudgeTray
             var signalPanel = new StackPanel { Spacing = 5, IsVisible = _sensorSignalsOpen, Margin = new Thickness(0, 6, 0, 2) };
             _liveSignalPanel = signalPanel;
             PopulateSignalPanel(signalPanel, harvest, effectiveQuality, qualityLabel, fusionColor, currentDetail, showDetail);
+
 
             // Toggle button for the collapse
             var toggleText = new TextBlock
@@ -1777,11 +1779,12 @@ namespace NudgeTray
                 appName.Foreground = new SolidColorBrush(hasApp ? TextPrimary : TextTertiary);
             }
 
-            // Index 1 = app detail (optional)
-            if (showDetail)
+            // Index 1 = app detail (always present; cleared + hidden when there's nothing to
+            // show, so a previous app's title can't linger after switching focus).
+            if (ts.Children.Count > 1 && ts.Children[1] is TextBlock detail)
             {
-                if (ts.Children.Count > 1 && ts.Children[1] is TextBlock detail)
-                    detail.Text = TruncateAppName(currentDetail, 55);
+                detail.Text = showDetail ? TruncateAppName(currentDetail, 55) : "";
+                detail.IsVisible = showDetail;
             }
 
             // Quality row is the last child of textStack
@@ -1853,6 +1856,16 @@ namespace NudgeTray
                     AddFusionRow(panel, "Distinct Apps", $"{harvest.Apps300} apps seen", TextSecondary);
                 if (harvest.Fullscreen == 1)
                     AddFusionRow(panel, "Fullscreen", "Yes", AIStatusLearning);
+                if (harvest.Audio == 1)
+                    AddFusionRow(panel, "Audio playing", "Yes", AIStatusLearning);
+                if (harvest.Media == 1)
+                    AddFusionRow(panel, "Media session", "Playing", AIStatusLearning);
+                if (harvest.Mic == 1)
+                    AddFusionRow(panel, "Mic active", "Yes", AIStatusLearning);
+                if (harvest.DomRate > 0)
+                    AddFusionRow(panel, "Domain reputation", $"{harvest.DomRate:P0}", TextSecondary);
+                if (harvest.AppRate > 0)
+                    AddFusionRow(panel, "App reputation", $"{harvest.AppRate:P0}", TextSecondary);
             }
             else
             {
@@ -2169,7 +2182,7 @@ namespace NudgeTray
                 };
                 scoreStack.Children.Add(new TextBlock
                 {
-                    Text = $"{(latest.Confidence > 0 ? latest.Confidence : latest.Score) * 100:F0}%",
+                    Text = $"{latest.Score * 100:F0}%",
                     FontSize = 15,
                     FontWeight = FontWeight.Bold,
                     Foreground = new SolidColorBrush(mlColor),
@@ -2301,7 +2314,7 @@ namespace NudgeTray
             if (n >= 2)
             {
                 var latestEv = pts[pts.Count - 1].ev;
-                Color fillColor = latestEv.Confidence < 0.5
+                Color fillColor = latestEv.Score < 0.5
                     ? AIStatusLearning
                     : (latestEv.Productive ? ProductiveGreen : UnproductiveRed);
 
@@ -2357,7 +2370,7 @@ namespace NudgeTray
                 bool isLatest = i == pts.Count - 1;
                 double r = isLatest ? dotR + 1.5 : dotR;
 
-                Color dotColor = ev.Confidence < 0.5
+                Color dotColor = ev.Score < 0.5
                     ? AIStatusLearning
                     : (ev.Productive ? ProductiveGreen : UnproductiveRed);
 
@@ -2391,7 +2404,7 @@ namespace NudgeTray
                 {
                     var scoreLabel = new TextBlock
                     {
-                        Text = $"{(ev.Confidence > 0 ? ev.Confidence : ev.Score) * 100:F0}%",
+                        Text = $"{ev.Score * 100:F0}%",
                         FontSize = 9,
                         FontWeight = FontWeight.SemiBold,
                         Foreground = new SolidColorBrush(dotColor)
@@ -2504,10 +2517,10 @@ namespace NudgeTray
 
                     timeTb.Text = DateTimeOffset.FromUnixTimeSeconds(nev.T).LocalDateTime.ToString("t", CultureInfo.CurrentCulture);
                     appTb.Text = nev.App;
-                    Color evColor = nev.Confidence < 0.5
+                    Color evColor = nev.Score < 0.5
                         ? AIStatusLearning
                         : (nev.Productive ? ProductiveGreen : UnproductiveRed);
-                    scoreTb.Text = $"{(nev.Confidence > 0 ? nev.Confidence : nev.Score) * 100:F0}% · {(nev.Productive ? StrProductive : StrNotProductive)}";
+                    scoreTb.Text = $"{nev.Score * 100:F0}% · {(nev.Productive ? StrProductive : StrNotProductive)}";
                     scoreTb.Foreground = new SolidColorBrush(evColor);
 
                     // Position tooltip above the dot, clamped to chart edges
@@ -2593,7 +2606,7 @@ namespace NudgeTray
 
             Color dotColor = isSuppressed
                 ? SuppressedColor
-                : evt.Confidence < 0.5
+                : evt.Score < 0.5
                     ? AIStatusLearning
                     : (evt.Productive ? ProductiveGreen : UnproductiveRed);
 
@@ -2678,7 +2691,7 @@ namespace NudgeTray
                         "PoorSignal"    => "unreliable app/window detection",
                         _               => $"suppressed ({evt.SuppressReason})"
                     }
-                    : $"{(evt.Confidence > 0 ? evt.Confidence : evt.Score) * 100:F0}% · {(evt.Productive ? StrProductive : StrNotProductive)}",
+                    : $"{evt.Confidence * 100:F0}% · {(evt.Productive ? StrProductive : StrNotProductive)}",
                 FontSize = 11,
                 Foreground = new SolidColorBrush(dotColor)
             };
@@ -2778,7 +2791,7 @@ namespace NudgeTray
                 // Score with colored dot (suppressed events show "—" — no ML score)
                 Color dotColor = evt.SuppressReason != null
                     ? SuppressedColor
-                    : evt.Confidence < 0.5
+                    : evt.Score < 0.5
                         ? AIStatusLearning
                         : (evt.Productive ? ProductiveGreen : UnproductiveRed);
                 var scoreRow = new StackPanel
@@ -2802,7 +2815,7 @@ namespace NudgeTray
                 {
                     Text = evt.SuppressReason != null
                         ? "—"
-                        : $"{(evt.Confidence > 0 ? evt.Confidence : evt.Score) * 100:F0}%",
+                        : $"{evt.Confidence * 100:F0}%",
                     FontSize = 10,
                     Foreground = new SolidColorBrush(evt.SuppressReason != null ? SuppressedColor : TextSecondary),
                     VerticalAlignment = VerticalAlignment.Center
@@ -3066,11 +3079,6 @@ namespace NudgeTray
         private int _nextWaveSlot;        // next free slot in circular buffer
         private double _timeSinceSpawnMs; // accumulator for spawn timing
 
-        // Animation jank diagnostics
-        private long _lastTickTs;
-        private long _jankCount;
-        private long _tickCount;
-        private bool _diagnosticsStarted;
         private bool _isRunning;
 
         public PulseDot()
@@ -3105,8 +3113,6 @@ namespace NudgeTray
                 _wavePhases[i] = -1.0;
             _timeSinceSpawnMs = 0;
             InitFromSeed();
-            _lastTickTs = Stopwatch.GetTimestamp();
-            _diagnosticsStarted = true;
             _isRunning = true;
             RequestNextFrame();
         }
@@ -3114,7 +3120,6 @@ namespace NudgeTray
         public void Stop()
         {
             _isRunning = false;
-            _diagnosticsStarted = false;
         }
 
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -3136,27 +3141,8 @@ namespace NudgeTray
             if (!_isRunning) return;
             RequestNextFrame();
 
-            long now = Stopwatch.GetTimestamp();
-            if (_diagnosticsStarted)
-            {
-                _tickCount++;
-                double elapsedMs = (now - _lastTickTs) * 1000.0 / Stopwatch.Frequency;
-                if (elapsedMs > 22.0)
-                {
-                    _jankCount++;
-                    Console.WriteLine($"[PulseDot JANK #{_jankCount}] frame gap={elapsedMs:F1}ms (expected ~16ms). Total ticks={_tickCount}");
-                    if (elapsedMs > 50.0)
-                        Console.WriteLine($"[PulseDot HEAVY JANK] frame gap={elapsedMs:F1}ms — UI thread blocked for {(int)elapsedMs}ms");
-                }
-            }
-            _lastTickTs = now;
-
             // ── Advance & spawn waves ──────────────────────────────────────────
-            double dtMs = _diagnosticsStarted
-                ? (now - _lastTickTs) * 1000.0 / Stopwatch.Frequency  // reuse above calc
-                : 16.67;
-            // Use a fixed dt for consistency when diagnostics aren't measuring yet
-            double frameMs = 16.67;
+            const double frameMs = 16.67;
 
             // Advance existing waves — kill when phase passes 1.0 (alpha already at zero)
             for (int i = 0; i < MaxWaves; i++)

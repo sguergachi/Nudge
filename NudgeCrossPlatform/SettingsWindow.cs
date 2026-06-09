@@ -206,6 +206,7 @@ namespace NudgeTray
 
             stack.Children.Add(BuildVersionChip());
             stack.Children.Add(BuildFrequencyCard());
+            stack.Children.Add(BuildExperimentalCard());
             stack.Children.Add(BuildHarvestCard());
             stack.Children.Add(BuildModelCard());
 
@@ -479,6 +480,49 @@ namespace NudgeTray
             return g;
         }
 
+        // ── Experimental Mode card ────────────────────────────────────────────
+        private static Border BuildExperimentalCard()
+        {
+            var card = MakeCard(AccentModel);
+            var inner = new StackPanel { Spacing = 0 };
+
+            inner.Children.Add(BuildSectionHeader("Experimental", "⚗", AccentModel));
+
+            var body = new StackPanel { Spacing = 8, Margin = new Thickness(14, 10, 14, 14) };
+
+            var toggle = new CheckBox
+            {
+                Content = new TextBlock
+                {
+                    Text = "Signal-based detection (beta)",
+                    FontSize = 13,
+                    FontWeight = FontWeight.SemiBold,
+                    Foreground = new SolidColorBrush(TextPrimary)
+                },
+                IsChecked = Program.ExperimentalMode,
+                Foreground = new SolidColorBrush(TextPrimary)
+            };
+            toggle.Click += (_, _) =>
+            {
+                bool value = toggle.IsChecked == true;
+                Console.WriteLine($"[Settings] Experimental mode toggled: {value}");
+                Program.UpdateSettings(experimental: value);
+            };
+            body.Children.Add(toggle);
+
+            body.Children.Add(new TextBlock
+            {
+                Text = "Switching modes starts a fresh learning history for that mode. Interval fallback nudges apply until the experimental model has enough samples.",
+                FontSize = 11,
+                Foreground = new SolidColorBrush(TextMuted),
+                TextWrapping = TextWrapping.Wrap
+            });
+
+            inner.Children.Add(body);
+            card.Child = inner;
+            return card;
+        }
+
         // ── Harvest Data card ─────────────────────────────────────────────────
         private Border BuildHarvestCard()
         {
@@ -738,12 +782,18 @@ namespace NudgeTray
         {
             try
             {
-                string csvPath = PlatformConfig.CsvPath;
-                string actPath = PlatformConfig.ActivityLogPath;
+                string csvPath = Program.ExperimentalMode ? PlatformConfig.CsvPathExp : PlatformConfig.CsvPath;
+                string actPath = Program.ExperimentalMode ? PlatformConfig.ActivityLogPathExp : PlatformConfig.ActivityLogPath;
 
                 long deletedSize = 0;
                 if (File.Exists(csvPath))  { deletedSize += new FileInfo(csvPath).Length;  File.Delete(csvPath); }
                 if (File.Exists(actPath))  { deletedSize += new FileInfo(actPath).Length;  File.Delete(actPath); }
+
+                if (Program.ExperimentalMode)
+                {
+                    string reputationPath = System.IO.Path.Combine(PlatformConfig.DataDirectory, "exp_reputation.json");
+                    if (File.Exists(reputationPath)) { deletedSize += new FileInfo(reputationPath).Length; File.Delete(reputationPath); }
+                }
 
                 TrainerState.SampleCount = 0;
                 TrainerState.LastChecked = DateTime.Now;
@@ -763,7 +813,9 @@ namespace NudgeTray
         {
             try
             {
-                string modelDir = System.IO.Path.Combine(PlatformConfig.DataDirectory, "model");
+                string modelDir = Program.ExperimentalMode
+                    ? System.IO.Path.Combine(PlatformConfig.DataDirectory, "model_exp")
+                    : System.IO.Path.Combine(PlatformConfig.DataDirectory, "model");
                 long deletedSize = 0;
                 if (Directory.Exists(modelDir))
                     foreach (var f in Directory.GetFiles(modelDir))
@@ -778,14 +830,17 @@ namespace NudgeTray
                 TrainerState.ModelVersion     = 0;
                 TrainerState.Architecture     = "";
 
-                // Deploy bundled V1 model immediately
-                Program.DeployBundledModel();
+                // Deploy bundled model immediately for the active mode
+                if (Program.ExperimentalMode)
+                    Program.DeployBundledModelExp();
+                else
+                    Program.DeployBundledModel();
                 TrainerState.RefreshFromCsv();
 
                 _modelConfirmPanel!.IsVisible = false;
                 _modelDeleteBtn!.IsEnabled = false;
                 RefreshModelCardBody();
-                ShowStatus(_modelStatus!, $"Model reset to V1 ({FormatFileSize(deletedSize)} deleted)", SuccessGreen);
+                ShowStatus(_modelStatus!, $"Model reset ({FormatFileSize(deletedSize)} deleted)", SuccessGreen);
             }
             catch (Exception ex)
             {

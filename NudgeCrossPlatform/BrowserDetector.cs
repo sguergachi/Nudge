@@ -132,10 +132,35 @@ internal static class BrowserDetector
         return false;
     }
 
+    /// <summary>
+    /// Windows-only: injected by the daemon to read the browser URL via UIA (Tier 2).
+    /// Null on Linux or when UIA is unavailable.
+    /// </summary>
+    internal static Func<string?>? TryGetBrowserUrl;
+
     public static string? ExtractSite(string title)
     {
         if (string.IsNullOrWhiteSpace(title))
             return null;
+
+        // Tier 2: Windows UIA omnibox reader — try first if available
+        if (TryGetBrowserUrl is Func<string?> urlReader)
+        {
+            try
+            {
+                string? url = urlReader();
+                if (!string.IsNullOrEmpty(url))
+                {
+                    try
+                    {
+                        var uri = new Uri(url);
+                        return uri.Host.ToLowerInvariant();
+                    }
+                    catch { /* degrade to title parse */ }
+                }
+            }
+            catch { /* injected reader failed — degrade to title parse */ }
+        }
 
         ReadOnlySpan<char> cleanedTitle = TrimKnownBrowserSuffix(TrimTabCountPrefix(title.AsSpan().Trim()));
         if (cleanedTitle.IsEmpty)

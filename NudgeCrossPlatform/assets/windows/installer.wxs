@@ -26,6 +26,13 @@
               <File Id="TrainerMetaJson" Name="trainer_meta.json" Source="..\..\..\dist\win-x64\model\trainer_meta.json" />
             </Component>
           </Directory>
+          <Directory Id="ModelExpFolder" Name="model_exp">
+            <Component Id="ModelExpComponent" Guid="C7D8E9FA-1B2C-3D4E-5F60-718293A4B5C6" Win64="yes">
+              <File Id="ProductivityModelExpJoblib" Name="productivity_model.joblib" Source="..\..\..\dist\win-x64\model_exp\productivity_model.joblib" KeyPath="yes" />
+              <File Id="ScalerExpJson" Name="scaler.json" Source="..\..\..\dist\win-x64\model_exp\scaler.json" />
+              <File Id="TrainerStateExpJson" Name="trainer_state.json" Source="..\..\..\dist\win-x64\model_exp\trainer_state.json" />
+            </Component>
+          </Directory>
           <Component Id="ShortcutComponent" Guid="B2C3D4E5-F6A7-8901-BCDE-F12345678901" Win64="yes">
             <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="Nudge" Target="[INSTALLFOLDER]nudge-tray.exe" WorkingDirectory="INSTALLFOLDER" />
             <Shortcut Id="DesktopShortcut" Directory="DesktopFolder" Name="Nudge" Target="[INSTALLFOLDER]nudge-tray.exe" WorkingDirectory="INSTALLFOLDER" />
@@ -40,6 +47,7 @@
     <Feature Id="ProductFeature" Title="Nudge" Level="1">
       <ComponentRef Id="ProductComponent" />
       <ComponentRef Id="ModelComponent" />
+      <ComponentRef Id="ModelExpComponent" />
       <ComponentRef Id="ShortcutComponent" />
     </Feature>
 
