@@ -91,7 +91,7 @@ sealed class Nudge
     const int CYCLE_MS = 1000;
     const int UDP_PORT = 45001;
     const int RESPONSE_TIMEOUT_MS = 60000;
-    const double ML_CONFIDENCE_THRESHOLD = 0.85;
+    static double ML_CONFIDENCE_THRESHOLD => _experimentalMode ? 0.75 : 0.85;
     static int ML_CHECK_INTERVAL_MS = 60000;
     const int ACTIVITY_LOG_INTERVAL_MS = 60000;
     const string ML_HOST = "127.0.0.1";
@@ -1793,7 +1793,12 @@ sealed class Nudge
         if (_experimentalMode)
         {
             string reputationPath = Path.Combine(PlatformConfig.DataDirectory, "exp_reputation.json");
-            _reputationStore = new DomainReputationStore(reputationPath);
+            var (domainPriors, appPriors) = DomainReputationStore.LoadPriors(
+                Path.Combine(PlatformConfig.DataDirectory, "model_exp", "distraction_priors.tsv"));
+            _reputationStore = new DomainReputationStore(reputationPath, domainPriors, appPriors);
+            Info(domainPriors.Count + appPriors.Count > 0
+                ? $"  Distraction priors: {domainPriors.Count} domains, {appPriors.Count} apps"
+                : "  Distraction priors: none");
         }
         InitializeCSV();
         StartUDPListener();

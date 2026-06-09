@@ -69,7 +69,8 @@ YES/NO responses flow back via UDP `127.0.0.1:45001`.
 
 - Meeting detection runs **first** every ML check (60s) — if in meeting or screen sharing, snapshot is suppressed with `SUPPRESS:{reason}` and ML is never consulted. Meeting trumps AI.
 - ML check runs every 60s (`ML_CHECK_INTERVAL_MS`), only if NOT in a meeting.
-- **Not productive** + confidence ≥ **85%** (`ML_CONFIDENCE_THRESHOLD`) → ML-triggered snapshot (fires *early*, before the interval matures).
+- `ML_CONFIDENCE_THRESHOLD` is mode-aware: **85%** for V3, **75%** in Experimental Signal Mode (the V4 seed acts on shipped distraction priors — see `PRETRAINED_DISTRACTION_MODEL.md`).
+- **Not productive** + confidence ≥ the threshold → ML-triggered snapshot (fires *early*, before the interval matures).
 - **Not productive** + confidence < 85% → defers to interval (`_mlLowConfidence = true`).
 - **Productive** + confidence ≥ **85%** → skip the AI's own early trigger, clear `_mlLowConfidence`.
 - **Productive** + confidence < 85% → skip snapshot (`_mlLowConfidence = true`).

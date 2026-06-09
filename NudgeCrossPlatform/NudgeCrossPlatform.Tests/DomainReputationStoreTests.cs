@@ -1,5 +1,6 @@
 using Xunit;
 using NudgeCore;
+using System.Collections.Generic;
 using System.IO;
 
 namespace NudgeCrossPlatform.Tests;
@@ -89,5 +90,83 @@ public sealed class DomainReputationStoreTests
         Assert.Equal(0.5, store.DomainRate("x.com"), 3);
         Assert.Equal(0, store.DomainCount("x.com"));
         Assert.False(File.Exists(path));
+    }
+
+    // ── Shipped distraction priors (PRETRAINED_DISTRACTION_MODEL.md §2) ──
+
+    private static DomainReputationStore StoreWithPriors() => new(
+        Path.GetTempFileName(),
+        new Dictionary<string, double> { ["x.com"] = 0.10, ["github.com"] = 0.90 },
+        new Dictionary<string, double> { ["steam"] = 0.10 });
+
+    [Fact]
+    public void PriorOnlyKey_NoLabels_ReturnsExactPrior()
+    {
+        var store = StoreWithPriors();
+        Assert.Equal(0.10, store.DomainRate("x.com"), 3);
+        Assert.Equal(0.90, store.DomainRate("github.com"), 3);
+        Assert.Equal(0.10, store.AppRate("steam"), 3);
+    }
+
+    [Fact]
+    public void PriorOnlyKey_LabelCountStaysZero()
+    {
+        var store = StoreWithPriors();
+        Assert.Equal(0, store.DomainCount("x.com"));
+        Assert.Equal(0, store.AppCount("steam"));
+    }
+
+    [Fact]
+    public void AbsentKey_WithPriorsLoaded_StaysNeutral()
+    {
+        var store = StoreWithPriors();
+        Assert.Equal(0.5, store.DomainRate("unlisted.org"), 3);
+        Assert.Equal(0.5, store.AppRate("unlisted"), 3);
+    }
+
+    [Fact]
+    public void Prior_BlendsSmoothlyWithLabels()
+    {
+        var store = StoreWithPriors();
+        // prior 0.10, S=4: one productive label → (1 + 0.4) / (1 + 4) = 0.28 — no cliff
+        store.Update("x.com", "", productive: true);
+        Assert.Equal(1.4 / 5.0, store.DomainRate("x.com"), 3);
+        // after 4 labels user evidence equals the prior mass and then dominates
+        store.Update("x.com", "", productive: true);
+        store.Update("x.com", "", productive: true);
+        store.Update("x.com", "", productive: true);
+        Assert.Equal(4.4 / 8.0, store.DomainRate("x.com"), 3);
+        Assert.Equal(4, store.DomainCount("x.com"));
+    }
+
+    [Fact]
+    public void Clear_PreservesPriors()
+    {
+        var store = StoreWithPriors();
+        store.Update("x.com", "steam", productive: true);
+        store.Clear();
+        Assert.Equal(0.10, store.DomainRate("x.com"), 3);
+        Assert.Equal(0.10, store.AppRate("steam"), 3);
+        Assert.Equal(0, store.DomainCount("x.com"));
+    }
+
+    [Fact]
+    public void ConcurrentUpdateAndRead_DoesNotCorrupt()
+    {
+        // Labels arrive on the UDP thread while rates are read from the harvest loop.
+        var store = new DomainReputationStore(Path.GetTempFileName());
+        var writer = System.Threading.Tasks.Task.Run(() =>
+        {
+            for (int i = 0; i < 5000; i++)
+                store.Update($"site{i % 50}.com", $"app{i % 50}", productive: (i & 1) == 0);
+        });
+        for (int i = 0; i < 5000; i++)
+        {
+            double rate = store.DomainRate($"site{i % 50}.com");
+            Assert.InRange(rate, 0.0, 1.0);
+            _ = store.AppRate($"app{i % 50}");
+        }
+        writer.Wait();
+        Assert.Equal(100, store.DomainCount("site0.com"));
     }
 }

@@ -1,8 +1,14 @@
 # Pre-trained Distraction Prior — Implementation Plan
 
-> **Status:** Design / handoff doc for the implementing agent. Targets **`master`**
-> (now the 2.x mainline; reviewed at v2.0.6 — post-UIA-reader #152/#153/#155, post
-> interval-floor #154). Companion to `EXPERIMENTAL_SIGNAL_MODE.md`.
+> **Status:** **IMPLEMENTED.** Companion to `EXPERIMENTAL_SIGNAL_MODE.md`.
+> The committed DKB (`model_exp/distraction_priors.tsv`) is the curated seed —
+> ~390 domains + ~155 apps, LLM-labeled offline and hand-reviewed. Tranco/UT1
+> enrichment to 20k domains (§3) is wired into `tools/build_distraction_kb.py`
+> but needs a network-enabled dev machine; rerun it and commit the larger TSV
+> when convenient. The V4 seed has been retrained per §5 (acceptance: quiet
+> x.com scrolling triggers at 0.88 ≥ 0.75; deep work, quiet docs reading and
+> quiet unknown sites do not trigger). Originally targeted v2.0.6 master
+> (post-UIA #152/#153/#155, post interval-floor #154).
 
 ## Context & motivation
 
