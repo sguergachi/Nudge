@@ -153,8 +153,12 @@ internal static class BrowserDetector
                 {
                     try
                     {
+                        // Normalize through the same pipeline as title parsing (strips www.,
+                        // validates, lowercases) so the UIA and title paths produce identical
+                        // keys — otherwise "www.x.com" and "x.com" split domain reputation.
                         var uri = new Uri(url);
-                        return uri.Host.ToLowerInvariant();
+                        if (TryNormalizeDomain(uri.Host, out var uiaDomain))
+                            return uiaDomain;
                     }
                     catch { /* degrade to title parse */ }
                 }

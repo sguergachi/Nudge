@@ -89,9 +89,6 @@ internal static class WindowsBrowserUrlReader
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern int GetWindowText(IntPtr hWnd, char[] text, int count);
-
     internal static string? TryReadUrl()
     {
         try
