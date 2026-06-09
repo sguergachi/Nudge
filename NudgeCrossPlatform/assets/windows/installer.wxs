@@ -31,6 +31,7 @@
               <File Id="ProductivityModelExpJoblib" Name="productivity_model.joblib" Source="..\..\..\dist\win-x64\model_exp\productivity_model.joblib" KeyPath="yes" />
               <File Id="ScalerExpJson" Name="scaler.json" Source="..\..\..\dist\win-x64\model_exp\scaler.json" />
               <File Id="TrainerStateExpJson" Name="trainer_state.json" Source="..\..\..\dist\win-x64\model_exp\trainer_state.json" />
+              <File Id="DistractionPriorsTsv" Name="distraction_priors.tsv" Source="..\..\..\dist\win-x64\model_exp\distraction_priors.tsv" />
             </Component>
           </Directory>
           <Component Id="ShortcutComponent" Guid="B2C3D4E5-F6A7-8901-BCDE-F12345678901" Win64="yes">

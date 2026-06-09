@@ -275,10 +275,24 @@ def _pick_domain(category, browser_flag):
             candidates.append((domain, rate, count))
 
     if candidates and random.random() < 0.75:
-        return random.choice(candidates)
+        return _maybe_prior_only(random.choice(candidates))
 
     # Unknown domain — neutral reputation
     return '', 0.5, 0
+
+
+def _maybe_prior_only(picked):
+    """Half the reputation-bearing samples carry shipped-DKB evidence only:
+    label count 0 with a rate drawn from the prior table's distribution
+    (distraction ≈ 0.05-0.2, productive ≈ 0.8-0.95)."""
+    name, rate, count = picked
+    if random.random() < 0.5:
+        if rate < 0.3:
+            rate = round(random.uniform(0.05, 0.2), 3)
+        elif rate > 0.7:
+            rate = round(random.uniform(0.8, 0.95), 3)
+        return name, rate, 0
+    return name, rate, count
 
 
 def _pick_app(category):
@@ -295,7 +309,7 @@ def _pick_app(category):
             candidates.append((app, rate, count))
 
     if candidates and random.random() < 0.75:
-        return random.choice(candidates)
+        return _maybe_prior_only(random.choice(candidates))
 
     # Unknown app — neutral reputation
     return '', 0.5, 0
@@ -393,6 +407,21 @@ def generate_sample_data(num_samples=500, output_file='/tmp/HARVEST.CSV', schema
             browser_flag = 1 if random.random() < feat['browser_prob'] else 0
             ws_switches = _randint(feat['workspace_switches'])
 
+            # Quiet distraction (V4): scrolling one feed is behaviorally identical
+            # to reading docs — stable focus, one domain, no media. Only the DKB
+            # reputation separates it, so the model must learn to act on the prior.
+            quiet_distraction = is_v4 and category == 'entertainment' and random.random() < 0.45
+            if quiet_distraction:
+                idle_ms = random.randint(200, 5000)
+                focused_since_ms = random.randint(60000, 480000)
+                title_stability_ms = random.randint(30000, 240000)
+                switch_60s = random.randint(0, 2)
+                switch_300s = random.randint(0, 6)
+                distinct_apps = random.randint(1, 2)
+                app_share = round(random.uniform(0.6, 0.98), 4)
+                browser_flag = 1
+                ws_switches = 0
+
             # Domain features
             domain_hash = random.randint(0, 100000) if browser_flag else 0
             domain_share = round(app_share * random.uniform(0.5, 1.0), 4) if browser_flag else 0.0
@@ -408,6 +437,8 @@ def generate_sample_data(num_samples=500, output_file='/tmp/HARVEST.CSV', schema
                 app_name, app_rate, app_count = _pick_app(category)
                 audio, media, mic, fullscreen = _v4_signals(
                     category, browser_flag, app_share, focused_since_ms, switch_300s)
+                if quiet_distraction:
+                    audio = media = mic = fullscreen = 0
                 fullscreen_flag = fullscreen
 
                 noise = random.gauss(0, 0.06)
@@ -434,10 +465,10 @@ def generate_sample_data(num_samples=500, output_file='/tmp/HARVEST.CSV', schema
                 if title_stability_ms > 120000:
                     signal_adj += 0.06
 
-                if domain_count >= 10:
-                    signal_adj += (domain_rate - 0.5) * 0.25
-                if app_count >= 10:
-                    signal_adj += (app_rate - 0.5) * 0.20
+                # Reputation coupling — no label-count gate: the shipped DKB prior
+                # arrives with count=0 and the model must act on prior-only evidence.
+                signal_adj += (domain_rate - 0.5) * 0.5
+                signal_adj += (app_rate - 0.5) * 0.4
 
                 effective_bias = max(0.02, min(0.98, base_bias + signal_adj))
                 productive = 1 if random.random() < effective_bias else 0

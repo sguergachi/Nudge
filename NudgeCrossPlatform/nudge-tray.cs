@@ -49,7 +49,7 @@ namespace NudgeTray
     sealed class Program
     {
         const int UDP_PORT = 45001;
-        const string VERSION = "2.0.6";
+        const string VERSION = "2.1.0";
         const string NudgeExeName = "nudge";
         const string NudgeDllName = "nudge.dll";
         const int TRAINER_CHECK_INTERVAL_SEC = 15;
@@ -1509,15 +1509,24 @@ namespace NudgeTray
         {
             try
             {
-                string userModelPath = Path.Combine(_modelDirPathExp, "productivity_model.joblib");
-                if (File.Exists(userModelPath)) return; // Already deployed
-
                 string bundledDir = Path.Combine(_baseDir, "model_exp");
+                if (!Directory.Exists(bundledDir)) return; // Nothing bundled to deploy
+
+                Directory.CreateDirectory(_modelDirPathExp);
+
+                // Shipped data, not user data: always refresh so upgrades deliver new priors,
+                // and "Delete Model" gets them back on the next experimental start.
+                string bundledPriors = Path.Combine(bundledDir, "distraction_priors.tsv");
+                if (File.Exists(bundledPriors))
+                    File.Copy(bundledPriors, Path.Combine(_modelDirPathExp, "distraction_priors.tsv"), overwrite: true);
+
+                string userModelPath = Path.Combine(_modelDirPathExp, "productivity_model.joblib");
+                if (File.Exists(userModelPath)) return; // Seed already deployed
+
                 string bundledModel = Path.Combine(bundledDir, "productivity_model.joblib");
                 if (!File.Exists(bundledModel)) return; // No bundled seed to deploy
 
                 Console.WriteLine("[INFO] Deploying bundled V4 seed model to user data directory…");
-                Directory.CreateDirectory(_modelDirPathExp);
                 File.Copy(bundledModel, userModelPath, overwrite: false);
                 foreach (var auxFile in new[] { "scaler.json", "trainer_state.json" })
                 {
