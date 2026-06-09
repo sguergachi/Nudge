@@ -1706,7 +1706,6 @@ sealed class Nudge
     static int _mlSkippedAlerts;
     static int _mlLowConfidenceSkips;
     static int _intervalTriggeredSnapshots;
-    static bool _productivityConfirmed;
     static bool _mlLowConfidence;  // Set when model confidence < threshold (either direction); enables interval fallback
     static int _mlSampleCount;     // Cached from trainer_meta.json, refreshed in CheckMLAvailability
     static int _mlProductiveSamples;
@@ -1733,6 +1732,11 @@ sealed class Nudge
             int randomMinutes = Random.Shared.Next(5, 11);  // 5-10 inclusive
             SNAPSHOT_INTERVAL_MS = randomMinutes * 60 * 1000;
             Dim($"  Next random interval: {randomMinutes} minutes");
+        }
+        else
+        {
+            // Custom interval is fixed; still log each reset so the floor cadence is visible.
+            Dim($"  Next interval: {SNAPSHOT_INTERVAL_MS/60000} minutes (fixed)");
         }
     }
 
@@ -1811,6 +1815,7 @@ sealed class Nudge
             Info($"  {Color.BGREEN}ML-powered adaptive notifications enabled{Color.RESET}");
             Info($"  Confidence threshold: {ML_CONFIDENCE_THRESHOLD*100:F0}%");
             Info($"  AI check frequency: {ML_CHECK_INTERVAL_MS/1000} seconds");
+            Info($"  Interval is a guaranteed floor: a baseline nudge fires every window even when productive");
             Info($"  Pretrained model: active from first launch, refined as samples accumulate");
         }
         if (_experimentalMode)
@@ -2135,19 +2140,16 @@ sealed class Nudge
                     }
                     else if (ShouldTriggerSnapshot(app, idle, _attentionSpanMs, tick))
                         mlTriggered = true;
-                    else if (_productivityConfirmed)
-                    {
-                        _productivityConfirmed = false;
-                        elapsed = 0;
-                        intervalReached = false;
-                    }
                 }
 
                 // Trigger snapshot if:
-                // 1. ML triggered with high confidence (checked every minute)
-                // 2. Interval reached (fallback when ML is disabled or unavailable)
-                bool useIntervalFallback = !_mlEnabled || !_mlAvailable || _mlLowConfidence;
-                if (mlTriggered || (useIntervalFallback && intervalReached))
+                // 1. ML triggered with high confidence (checked every minute), OR
+                // 2. The interval matured. The interval is a guaranteed floor — it fires
+                //    whenever it reaches the configured window even when ML is active and
+                //    confident you're productive, so a baseline nudge always lands. ML only
+                //    triggers *earlier* when it detects unproductivity; it never cancels the
+                //    floor by resetting the timer.
+                if (mlTriggered || intervalReached)
                 {
                     if (mlTriggered)
                     {
@@ -2157,8 +2159,9 @@ sealed class Nudge
                     {
                         _intervalTriggeredSnapshots++;
                         string intervalReason = !_mlEnabled ? "ML disabled"
+                            : !_mlAvailable ? "ML unavailable"
                             : _mlLowConfidence ? $"ML below {ML_CONFIDENCE_THRESHOLD*100:F0}% confidence threshold"
-                            : "ML unavailable";
+                            : "baseline floor — ML active & productive";
                         Info($"  {Color.BYELLOW}⏰ INTERVAL SNAPSHOT{Color.RESET} ({intervalReason})");
 
                         // Broadcast interval-triggered event for Recent Checks display
@@ -2246,7 +2249,7 @@ sealed class Nudge
         Console.WriteLine($"  {Color.BOLD}ML Triggered Alerts:{Color.RESET}    {_mlTriggeredSnapshots} {Color.DIM}(detected unproductive){Color.RESET}");
         Console.WriteLine($"  {Color.BOLD}ML Skipped Alerts:{Color.RESET}      {_mlSkippedAlerts} {Color.DIM}(detected productive){Color.RESET}");
         Console.WriteLine($"  {Color.BOLD}ML Low-Confidence:{Color.RESET}     {_mlLowConfidenceSkips} {Color.DIM}(deferred to interval){Color.RESET}");
-        Console.WriteLine($"  {Color.BOLD}Interval Fallbacks:{Color.RESET}     {_intervalTriggeredSnapshots} {Color.DIM}(ML disabled/unavailable/low conf){Color.RESET}");
+        Console.WriteLine($"  {Color.BOLD}Interval Nudges:{Color.RESET}        {_intervalTriggeredSnapshots} {Color.DIM}(safety-net floor reached){Color.RESET}");
         Console.WriteLine();
         Console.WriteLine($"  {Color.BOLD}Training Samples:{Color.RESET}       {_mlSampleCount} total ({_mlProductiveSamples} productive, {_mlUnproductiveSamples} unproductive){Color.RESET}");
         Console.WriteLine();
@@ -2942,13 +2945,12 @@ sealed class Nudge
         }
         else
         {
-            // User IS productive — skip snapshot.
-            // Only reset the interval when confident; an uncertain productive prediction
-            // (< threshold) keeps _mlLowConfidence=true so the interval safety net fires.
+            // User IS productive — skip the AI's own early trigger. The interval floor
+            // keeps counting regardless; a confident prediction only clears the
+            // low-confidence flag so the per-minute status reflects an active model.
             _mlSkippedAlerts++;
             if (prediction.Confidence >= ML_CONFIDENCE_THRESHOLD)
             {
-                _productivityConfirmed = true;
                 _mlLowConfidence = false;
                 Info($"  {Color.BGREEN}ML SKIP{Color.RESET}: Productive (confidence: {Color.BYELLOW}{prediction.Confidence*100:F1}%{Color.RESET}, avg: {avgConfidence*100:F1}%)");
             }
