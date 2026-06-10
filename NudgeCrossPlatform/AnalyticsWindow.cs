@@ -1836,9 +1836,14 @@ namespace NudgeTray
                     harvest.FocusSrc == "KWinScript" ? ProductiveGreen : AIStatusLearning);
                 AddFusionRow(panel, "Idle",           FormatMs(harvest.IdleMs),      TextSecondary);
                 AddFusionRow(panel, "In Focus",       FormatMs(harvest.FocusedMs),   TextSecondary);
-                string cat = !string.IsNullOrEmpty(harvest.Category) ? harvest.Category : GetHarvestCategoryFallback(harvest);
-                if (!string.IsNullOrEmpty(cat))
-                    AddCategoryBadgeRow(panel, cat, harvest.CategoryConf);
+                // V4 dropped the category flags — the badge would show a signal the
+                // model never sees, so it's V3-only.
+                if (!Program.ExperimentalMode)
+                {
+                    string cat = !string.IsNullOrEmpty(harvest.Category) ? harvest.Category : GetHarvestCategoryFallback(harvest);
+                    if (!string.IsNullOrEmpty(cat))
+                        AddCategoryBadgeRow(panel, cat, harvest.CategoryConf);
+                }
                 // For a browser, always surface the web app (the site is what matters, not
                 // the browser). Show the resolved domain, or a placeholder when the title
                 // didn't expose one so the user knows it's a browser with an unknown site.
@@ -2310,37 +2315,50 @@ namespace NudgeTray
                 pts.Add((x, y, aiEvents[i]));
             }
 
-            // Filled area under the line (gradient fill)
+            // Filled area between the line and the midline: productive magnitude
+            // bulges green above center, unproductive magnitude dips red below.
             if (n >= 2)
             {
-                var latestEv = pts[pts.Count - 1].ev;
-                Color fillColor = latestEv.Score < 0.5
-                    ? AIStatusLearning
-                    : (latestEv.Productive ? ProductiveGreen : UnproductiveRed);
-
+                double yMid = yTop + yRange * 0.5;
                 var areaGeo = new StreamGeometry();
                 using (var ctx = areaGeo.Open())
                 {
                     ctx.BeginFigure(new Point(pts[0].x, pts[0].y), true);
                     for (int i = 1; i < pts.Count; i++)
                         ctx.LineTo(new Point(pts[i].x, pts[i].y));
-                    ctx.LineTo(new Point(pts[pts.Count - 1].x, yBottom));
-                    ctx.LineTo(new Point(pts[0].x, yBottom));
+                    ctx.LineTo(new Point(pts[pts.Count - 1].x, yMid));
+                    ctx.LineTo(new Point(pts[0].x, yMid));
                 }
-                canvas.Children.Add(new Avalonia.Controls.Shapes.Path
+
+                // The gradient is relative to the geometry's bounds — locate the
+                // midline within them so the green→red crossover sits exactly on it.
+                double minY = yMid, maxY = yMid;
+                foreach (var p in pts)
                 {
-                    Data = areaGeo,
-                    Fill = new LinearGradientBrush
+                    if (p.y < minY) minY = p.y;
+                    if (p.y > maxY) maxY = p.y;
+                }
+                double span = maxY - minY;
+                if (span > 0.5)
+                {
+                    double midFrac = Math.Clamp((yMid - minY) / span, 0.0, 1.0);
+                    canvas.Children.Add(new Avalonia.Controls.Shapes.Path
                     {
-                        StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-                        EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
-                        GradientStops = new GradientStops
+                        Data = areaGeo,
+                        Fill = new LinearGradientBrush
                         {
-                            new GradientStop(Color.FromArgb(60, fillColor.R, fillColor.G, fillColor.B), 0),
-                            new GradientStop(Color.FromArgb(5, fillColor.R, fillColor.G, fillColor.B), 1)
+                            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                            EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+                            GradientStops = new GradientStops
+                            {
+                                new GradientStop(Color.FromArgb(70, ProductiveGreen.R, ProductiveGreen.G, ProductiveGreen.B), 0),
+                                new GradientStop(Color.FromArgb(8, ProductiveGreen.R, ProductiveGreen.G, ProductiveGreen.B), midFrac),
+                                new GradientStop(Color.FromArgb(8, UnproductiveRed.R, UnproductiveRed.G, UnproductiveRed.B), midFrac),
+                                new GradientStop(Color.FromArgb(70, UnproductiveRed.R, UnproductiveRed.G, UnproductiveRed.B), 1)
+                            }
                         }
-                    }
-                });
+                    });
+                }
             }
 
             // Connecting line
@@ -2370,9 +2388,7 @@ namespace NudgeTray
                 bool isLatest = i == pts.Count - 1;
                 double r = isLatest ? dotR + 1.5 : dotR;
 
-                Color dotColor = ev.Score < 0.5
-                    ? AIStatusLearning
-                    : (ev.Productive ? ProductiveGreen : UnproductiveRed);
+                Color dotColor = ev.Productive ? ProductiveGreen : UnproductiveRed;
 
                 if (isLatest)
                 {
@@ -2517,9 +2533,7 @@ namespace NudgeTray
 
                     timeTb.Text = DateTimeOffset.FromUnixTimeSeconds(nev.T).LocalDateTime.ToString("t", CultureInfo.CurrentCulture);
                     appTb.Text = nev.App;
-                    Color evColor = nev.Score < 0.5
-                        ? AIStatusLearning
-                        : (nev.Productive ? ProductiveGreen : UnproductiveRed);
+                    Color evColor = nev.Productive ? ProductiveGreen : UnproductiveRed;
                     scoreTb.Text = $"{nev.Score * 100:F0}% · {(nev.Productive ? StrProductive : StrNotProductive)}";
                     scoreTb.Foreground = new SolidColorBrush(evColor);
 
