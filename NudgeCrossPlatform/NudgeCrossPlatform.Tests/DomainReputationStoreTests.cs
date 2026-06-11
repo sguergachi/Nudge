@@ -151,7 +151,7 @@ public sealed class DomainReputationStoreTests
     }
 
     [Fact]
-    public void ConcurrentUpdateAndRead_DoesNotCorrupt()
+    public async System.Threading.Tasks.Task ConcurrentUpdateAndRead_DoesNotCorrupt()
     {
         // Labels arrive on the UDP thread while rates are read from the harvest loop.
         var store = new DomainReputationStore(Path.GetTempFileName());
@@ -166,7 +166,7 @@ public sealed class DomainReputationStoreTests
             Assert.InRange(rate, 0.0, 1.0);
             _ = store.AppRate($"app{i % 50}");
         }
-        writer.Wait();
+        await writer;
         Assert.Equal(100, store.DomainCount("site0.com"));
     }
 }

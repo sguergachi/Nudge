@@ -271,7 +271,11 @@ def _pick_domain(category, browser_flag):
             candidates.append((domain, rate, count))
         elif category == 'unknown' and 0.3 < rate < 0.7:
             candidates.append((domain, rate, count))
-        elif category in ('office', 'creative', 'utility'):
+        elif category in ('office', 'creative') and rate > 0.5:
+            # Work happens on work-ish domains — pairing an office label with a
+            # distraction domain teaches the model to ignore the prior.
+            candidates.append((domain, rate, count))
+        elif category == 'utility' and 0.3 < rate < 0.8:
             candidates.append((domain, rate, count))
 
     if candidates and random.random() < 0.75:
@@ -305,7 +309,11 @@ def _pick_app(category):
             candidates.append((app, rate, count))
         elif category == 'communication' and rate < 0.4:
             candidates.append((app, rate, count))
-        elif category in ('office', 'creative', 'utility', 'unknown'):
+        elif category in ('office', 'creative') and rate > 0.5:
+            # Productive work in low-reputation apps would teach the model
+            # to ignore the app prior — same rule as _pick_domain.
+            candidates.append((app, rate, count))
+        elif category in ('utility', 'unknown') and 0.3 < rate < 0.8:
             candidates.append((app, rate, count))
 
     if candidates and random.random() < 0.75:
@@ -338,10 +346,13 @@ def _v4_signals(category, browser_flag, app_share, focused_since_ms, switch_300s
         mic = 1 if random.random() < 0.70 else 0
         audio = 1 if mic or random.random() < 0.30 else 0
     elif category in ('development', 'office', 'creative'):
-        # Deep work → usually quiet; occasional background music
+        # Deep work → usually quiet; occasional background music. Fullscreen
+        # editors/canvases are normal — without these rows the model would
+        # learn fullscreen itself as proof of distraction.
         if random.random() < 0.15:
             audio = 1
             media = 1 if random.random() < 0.60 else 0
+        fullscreen = 1 if random.random() < CATEGORY_FEATURES[category]['fullscreen_prob'] else 0
 
     return audio, media, mic, fullscreen
 
@@ -393,6 +404,17 @@ def generate_sample_data(num_samples=500, output_file='/tmp/HARVEST.CSV', schema
             adj_weights = _adjust_weights(categories, weights, hour, is_weekend)
             category = random.choices(categories, weights=adj_weights, k=1)[0]
 
+            # V4: distraction happens at all hours — redraw the timestamp so the
+            # time-of-day weighting above sets only the category frequency, never
+            # an "entertainment ⇒ evening" correlation. The model must fire on a
+            # 2pm Tuesday doomscroll, not just an evening one.
+            if is_v4 and category == 'entertainment':
+                ts = int(random.uniform(window_start, now))
+                dt = time_mod.localtime(ts)
+                hour = dt.tm_hour
+                day_of_week = dt.tm_wday
+                is_weekend = day_of_week >= 5
+
             bias = CATEGORY_BIAS[category]
             feat = CATEGORY_FEATURES[category]
 
@@ -422,6 +444,39 @@ def generate_sample_data(num_samples=500, output_file='/tmp/HARVEST.CSV', schema
                 browser_flag = 1
                 ws_switches = 0
 
+            # Passive video (V4): fullscreen media with long stable focus — looks
+            # like deep work behaviorally, but the media session gives it away.
+            # Browser (youtube) or desktop player (mpv); domain may be unknown.
+            passive_video = (is_v4 and category == 'entertainment'
+                             and not quiet_distraction and random.random() < 0.5)
+            if passive_video:
+                idle_ms = random.randint(2000, 30000)
+                focused_since_ms = random.randint(120000, 900000)
+                title_stability_ms = random.randint(60000, 600000)
+                switch_60s = random.randint(0, 1)
+                switch_300s = random.randint(0, 4)
+                distinct_apps = random.randint(1, 2)
+                app_share = round(random.uniform(0.7, 0.99), 4)
+                browser_flag = 1 if random.random() < 0.7 else 0
+                ws_switches = 0
+
+            # Desktop distraction (V4): fullscreen gaming with stable focus and no
+            # media session — only the shipped app prior (steam, battlenet, …)
+            # separates it from fullscreen deep work.
+            desktop_distraction = (is_v4 and category == 'entertainment'
+                                   and not quiet_distraction and not passive_video
+                                   and random.random() < 0.65)
+            if desktop_distraction:
+                idle_ms = random.randint(100, 3000)
+                focused_since_ms = random.randint(180000, 1200000)
+                title_stability_ms = random.randint(60000, 600000)
+                switch_60s = random.randint(0, 1)
+                switch_300s = random.randint(0, 3)
+                distinct_apps = random.randint(1, 2)
+                app_share = round(random.uniform(0.85, 0.99), 4)
+                browser_flag = 0
+                ws_switches = 0
+
             # Domain features
             domain_hash = random.randint(0, 100000) if browser_flag else 0
             domain_share = round(app_share * random.uniform(0.5, 1.0), 4) if browser_flag else 0.0
@@ -439,6 +494,33 @@ def generate_sample_data(num_samples=500, output_file='/tmp/HARVEST.CSV', schema
                     category, browser_flag, app_share, focused_since_ms, switch_300s)
                 if quiet_distraction:
                     audio = media = mic = fullscreen = 0
+                    # The app is the browser itself — neutral reputation in the
+                    # field (browsers carry no prior; the domain is the evidence).
+                    app_name, app_rate, app_count = '', 0.5, 0
+                elif passive_video:
+                    audio, mic = 1, 0
+                    media = 1 if random.random() < 0.9 else 0
+                    fullscreen = 1 if random.random() < 0.8 else 0
+                    if browser_flag:
+                        app_name, app_rate, app_count = '', 0.5, 0
+                        if random.random() < 0.35:
+                            # Video sites outside the DKB: the media signals alone
+                            # must carry the verdict (domain-independence).
+                            domain, domain_rate, domain_count = '', 0.5, 0
+                elif desktop_distraction:
+                    audio = 1 if random.random() < 0.85 else 0
+                    media = 1 if random.random() < 0.10 else 0   # games rarely register SMTC
+                    mic = 1 if random.random() < 0.15 else 0     # voice chat
+                    fullscreen = 1 if random.random() < 0.90 else 0
+                    if random.random() < 0.6:
+                        # Known only through the shipped DKB app prior
+                        app_name = 'steam'
+                        app_rate = round(random.uniform(0.05, 0.2), 3)
+                        app_count = 0
+                    else:
+                        # Unknown fullscreen app — no evidence, stays a coin flip
+                        # so the model never fires on the behavior shape alone
+                        app_name, app_rate, app_count = '', 0.5, 0
                 fullscreen_flag = fullscreen
 
                 noise = random.gauss(0, 0.06)
@@ -470,7 +552,29 @@ def generate_sample_data(num_samples=500, output_file='/tmp/HARVEST.CSV', schema
                 signal_adj += (domain_rate - 0.5) * 0.5
                 signal_adj += (app_rate - 0.5) * 0.4
 
-                effective_bias = max(0.02, min(0.98, base_bias + signal_adj))
+                if quiet_distraction:
+                    # Behavior is indistinguishable from reading docs, so the label
+                    # must follow the domain prior tightly — otherwise stable-focus
+                    # bonuses drown the prior and the model can never clear the
+                    # trigger threshold on prior-only evidence. Amplified around
+                    # neutral: a 0.1-prior feed is ~98% unproductive, an unknown
+                    # domain (0.5) stays a coin flip, a 0.9-prior site ~98% productive.
+                    tilt = 0.5 + (domain_rate - 0.5) * 1.25
+                    effective_bias = max(0.02, min(0.98, tilt + random.gauss(0, 0.03)))
+                elif passive_video:
+                    # Fullscreen media consumption is unproductive by default even
+                    # on an unknown domain — a video editor's youtube only becomes
+                    # productive through the user's own labels (personalization).
+                    effective_bias = max(0.02, min(0.98,
+                        0.05 + (domain_rate - 0.5) * 0.2 + random.gauss(0, 0.03)))
+                elif desktop_distraction:
+                    # Same amplified tilt as quiet browsing, keyed on the app prior:
+                    # a 0.1-prior game is ~98% unproductive, an unknown fullscreen
+                    # app (0.5) stays a coin flip — no evidence, no nudge.
+                    tilt = 0.5 + (app_rate - 0.5) * 1.25
+                    effective_bias = max(0.02, min(0.98, tilt + random.gauss(0, 0.03)))
+                else:
+                    effective_bias = max(0.02, min(0.98, base_bias + signal_adj))
                 productive = 1 if random.random() < effective_bias else 0
             else:
                 # V3: original category-bias + behavioral noise
@@ -616,5 +720,9 @@ if __name__ == '__main__':
                         help='Output CSV path (default: /tmp/HARVEST.CSV)')
     parser.add_argument('--schema', default='v3', choices=['v3', 'v4'],
                         help='Schema version: v3 (category flags) or v4 (signal-based)')
+    parser.add_argument('--seed', type=int, default=None,
+                        help='Random seed for reproducible datasets (bundled seeds)')
     args = parser.parse_args()
+    if args.seed is not None:
+        random.seed(args.seed)
     generate_sample_data(args.samples, args.output, args.schema)
