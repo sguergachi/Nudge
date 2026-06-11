@@ -19,7 +19,7 @@
     <Compile Include="WindowsBrowserUrlReader.cs" />
   </ItemGroup>
 
-  <PropertyGroup>
+  <PropertyGroup Condition="'$(OS)' == 'Windows_NT'">
     <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
   </PropertyGroup>
 
