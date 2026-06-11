@@ -5,20 +5,19 @@
 > "experimental" and has its own user-facing docs.
 >
 > **Known Limitations (post-implementation):**
-> - **V4 seed model quality:** the bundled synthetic seed correctly classifies deep-work (productive)
->   and YouTube browsing (unproductive), but may misclassify passive fullscreen video watching as
->   productive because the synthetic training data overweights stable-focus signals. This is a
->   seed-model limitation only — real user labels will correct it. Cold-start (no seed) is fully
->   supported and falls back to interval nudges.
-> - **Windows VM runtime testing:** the Windows 11 QEMU VM is inaccessible (no SSH/RDP/Guest Agent,
->   serial console permission-denied, no SPICE client). The Windows P/Invoke and COM interop code
->   compiles cross-platform and is structurally correct, but has not been executed on a live Windows
->   desktop. The Linux path has been exercised via unit tests and the inference server smoke tests.
-> - **Untracked files:** `NudgeCrossPlatform/model_exp/` (bundled V4 seed) is present in the
->   working tree but not yet committed to git. Add and commit before release.
+> - ~~**V4 seed model quality:** may misclassify passive fullscreen video watching as productive~~ —
+>   **fixed** with the v3 seed (trained on `generate_sample_data.py` with passive-video, quiet-distraction
+>   and desktop-gaming scenarios): passive fullscreen video now fires even on unknown domains, and
+>   fullscreen deep work no longer reads as distraction. Validated by `tools/v4_acceptance.py`
+>   (10 scenarios + trigger-rate sweep). Cold-start (no seed) is fully supported and falls back to
+>   interval nudges.
+> - **Windows runtime testing:** the V4 pipeline has been exercised on a live Windows 11 machine —
+>   `build.ps1` (0 warnings, all xunit tests), the bundled-seed inference server on :45003 (including
+>   model hot-reload and the daemon wire protocol), and the §5 acceptance scenarios over TCP. The
+>   mid-write model/scaler reload race found in that testing is fixed in `model_inference.py`.
 >
-> **Build verification:** `./build.sh` passes with 0 errors, 573 xunit tests pass (549 original +
-> 24 stability tests).
+> **Build verification:** `./build.sh` / `build.ps1` pass with 0 errors and 0 warnings; the full
+> xunit suite passes on Linux and Windows.
 
 ## Context & motivation
 

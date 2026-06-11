@@ -86,11 +86,18 @@ class ProductivityPredictor:
     def check_and_reload(self):
         """Reload if the model file on disk is newer than what we loaded."""
         model_path = os.path.join(self.model_dir, MODEL_FILE)
+        scaler_path = os.path.join(self.model_dir, 'scaler.json')
         try:
             if not os.path.exists(model_path):
                 return
             mtime = os.path.getmtime(model_path)
             if mtime > self._model_mtime:
+                # The trainer writes the model first and scaler.json last. A scaler
+                # older than the model means we caught the set mid-write — wait for
+                # the next poll, or we'd standardize with stale parameters and skew
+                # every prediction until the following retrain.
+                if os.path.exists(scaler_path) and os.path.getmtime(scaler_path) < mtime:
+                    return
                 print('Model file updated — reloading', file=sys.stderr)
                 with self._lock:
                     self.load_model()

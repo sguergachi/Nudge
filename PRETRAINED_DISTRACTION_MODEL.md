@@ -5,10 +5,17 @@
 > ~390 domains + ~155 apps, LLM-labeled offline and hand-reviewed. Tranco/UT1
 > enrichment to 20k domains (§3) is wired into `tools/build_distraction_kb.py`
 > but needs a network-enabled dev machine; rerun it and commit the larger TSV
-> when convenient. The V4 seed has been retrained per §5 (acceptance: quiet
-> x.com scrolling triggers at 0.88 ≥ 0.75; deep work, quiet docs reading and
-> quiet unknown sites do not trigger). Originally targeted v2.0.6 master
-> (post-UIA #152/#153/#155, post interval-floor #154).
+> when convenient. The V4 seed has been retrained per §5 and validated on
+> Windows via `tools/v4_acceptance.py` (10 scenarios, in-process + live TCP):
+> quiet x.com scrolling triggers at conf 0.93 ≥ 0.75 (~98% of sampled
+> quiet-distraction rows); passive fullscreen video fires even on unknown
+> domains; steam-like gaming fires on the app prior; deep work (± background
+> music), quiet docs reading, quiet unknown sites and unknown fullscreen apps
+> do not trigger; 12 user YES labels flip x.com productive (personalization
+> overrides the prior). Seed repro: `generate_sample_data.py --schema v4
+> --samples 3000 --seed 42` → `train_model.py --architecture deep`.
+> Originally targeted v2.0.6 master (post-UIA #152/#153/#155, post
+> interval-floor #154).
 
 ## Context & motivation
 
@@ -161,13 +168,18 @@ not productive, *confidently*", or the prior never moves predictions past the tr
   distraction-category samples from the actual DKB distribution (≈0.05–0.2) instead
   of mid-range noise, with `domain_label_count = 0` so the model learns to act on
   prior-only evidence.
-- Retrain per the existing runbook (`EXPERIMENTAL_SIGNAL_MODE.md` §8):
-  `python3 train_model.py <v4 csv> --model-dir model_exp --architecture standard`,
-  validate `feature_order` parity, commit the new seed, bump `model_version`.
-- **Acceptance check (scriptable):** a synthetic "quiet x.com scrolling" row
-  (stable focus, browser=1, `domain_productive_rate=0.1`, count=0, no media) must
-  predict `not productive` with confidence **≥ the trigger threshold**; a
-  "VS Code deep work" row must predict productive.
+- Retrain per the existing runbook (`EXPERIMENTAL_SIGNAL_MODE.md` §8). The
+  committed seed is reproducible:
+  `python3 generate_sample_data.py --schema v4 --samples 3000 --seed 42 --output <csv>`
+  then `python3 train_model.py <csv> --model-dir model_exp --architecture deep`.
+  Validate `feature_order` parity, commit the new seed, bump `model_version`.
+- **Acceptance check (scripted):** `python3 tools/v4_acceptance.py [--sweep N]
+  [--server --port 45003]` — a "quiet x.com scrolling" row (stable focus,
+  browser=1, `domain_productive_rate=0.1`, count=0, no media) must predict
+  `not productive` with confidence **≥ the trigger threshold**; deep work
+  (± background music), quiet docs reading, quiet unknown sites and unknown
+  fullscreen apps must not trigger; passive fullscreen video and steam-like
+  gaming must trigger; user labels must override the prior.
 
 ---
 
