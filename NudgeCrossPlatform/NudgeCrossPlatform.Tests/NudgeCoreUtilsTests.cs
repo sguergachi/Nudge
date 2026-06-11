@@ -314,3 +314,21 @@ public sealed class TryParseCategoryTests
         Assert.Equal(AppCategory.Development, cat);
     }
 }
+
+public sealed class DisplayAppNameTests
+{
+    [Fact]
+    public void DomainPresent_ReturnsDomain()
+    {
+        Assert.Equal("reddit.com", NudgeCoreLogic.DisplayAppName("chrome", "reddit.com"));
+        Assert.Equal("outlook.office.com", NudgeCoreLogic.DisplayAppName("msedge", "outlook.office.com"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void NoDomain_ReturnsApp(string? domain)
+    {
+        Assert.Equal("Code", NudgeCoreLogic.DisplayAppName("Code", domain));
+    }
+}

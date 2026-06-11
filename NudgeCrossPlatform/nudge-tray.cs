@@ -452,6 +452,7 @@ namespace NudgeTray
             // ── TrainerState ─────────────────────────────────────────────────────
             TrainerState.SampleCount = 187;
             TrainerState.MinSamples = 100;
+            TrainerState.ModelDeployed = true;
             TrainerState.LastTrainedCount = 187;
             TrainerState.LastTrained = DateTime.Now.AddDays(-2).AddHours(-3);
             TrainerState.LastAccuracy = 0.87f;
@@ -2093,7 +2094,7 @@ namespace NudgeTray
                 LiveAIState.Add(new MLLiveEvent
                 {
                     T              = now,
-                    App            = LiveAIState.CurrentApp,
+                    App            = NudgeCoreLogic.DisplayAppName(LiveAIState.CurrentApp, LiveAIState.LastHarvest?.Domain),
                     SuppressReason = reason,
                     Score          = 0,
                     Confidence     = 0,
