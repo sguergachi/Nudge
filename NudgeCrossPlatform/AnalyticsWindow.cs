@@ -930,12 +930,17 @@ namespace NudgeTray
             var (sampleCount, minSamples, lastTrainedCount, isTraining,
                  lastAccuracy, prevAccuracy, architecture, lastError,
                  lastChecked, lastTrained, modelVersion, log,
-                 trainingProgress) = TrainerState.Snapshot();
+                 trainingProgress, modelDeployed) = TrainerState.Snapshot();
 
             var panel = new StackPanel { Spacing = 8 };
 
             // ── Status row ──────────────────────────────────────────────────────
-            bool hasModel = lastTrained != DateTime.MinValue;
+            // A model is loaded when local training completed (meta present) OR the
+            // bundled seed model file is deployed — inference serves either (#132).
+            bool hasModel = lastTrained != DateTime.MinValue || modelDeployed;
+            // The seed ships with meta sample_count 0 (or no meta at all): a model
+            // trained on zero real labels is still the seed, not a personal model.
+            bool locallyTrained = lastTrained != DateTime.MinValue && lastTrainedCount > 0;
             int newSinceTrain = hasModel ? Math.Max(0, sampleCount - lastTrainedCount) : sampleCount;
             int retrainDelta = hasModel ? 20 : 0;
 
@@ -956,12 +961,17 @@ namespace NudgeTray
                 statusColor = AIStatusLearning;
                 statusText  = "Ready to retrain";
             }
+            else if (hasModel && !locallyTrained)
+            {
+                statusColor = ProductiveGreen;
+                statusText  = "Seed model active";
+            }
             else if (hasModel && newSinceTrain == 0)
             {
                 statusColor = ProductiveGreen;
                 statusText  = "Up to date";
             }
-            else if (sampleCount >= minSamples && hasModel)
+            else if (hasModel)
             {
                 statusColor = AIStatusLearning;
                 statusText  = $"{retrainDelta - newSinceTrain} more responses until retrain";
@@ -1056,6 +1066,25 @@ namespace NudgeTray
 
                 panel.Children.Add(modelRow);
             }
+            else if (modelDeployed)
+            {
+                // Seed deployed without trainer meta (experimental mode): no accuracy
+                // to report, but the model is loaded and serving — say so (#132).
+                var modelRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+                modelRow.Children.Add(new TextBlock
+                {
+                    Text = "Current Model:",
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(TextTertiary)
+                });
+                modelRow.Children.Add(new TextBlock
+                {
+                    Text = "pre-trained seed",
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(TextSecondary)
+                });
+                panel.Children.Add(modelRow);
+            }
 
             // ── Training / Sample progress bar ────────────────────────────────────
             if (isTraining)
@@ -1105,9 +1134,11 @@ namespace NudgeTray
             }
             else
             {
-                string progressLabel = hasModel
-                    ? $"{newSinceTrain} new samples since last training"
-                    : $"{sampleCount} / {minSamples} samples needed for first model";
+                string progressLabel = !hasModel
+                    ? $"{sampleCount} / {minSamples} samples needed for first model"
+                    : locallyTrained
+                        ? $"{newSinceTrain} new samples since last training"
+                        : $"{newSinceTrain} labeled responses collected";
 
                 panel.Children.Add(new TextBlock
                 {
@@ -1154,9 +1185,11 @@ namespace NudgeTray
                     barBg.Child = fillGrid;
                     panel.Children.Add(barBg);
 
-                    string thresholdLabel = hasModel
-                        ? $"{newSinceTrain} / {retrainDelta} new samples needed for retraining"
-                        : $"{sampleCount} / {minSamples} samples needed for first model";
+                    string thresholdLabel = !hasModel
+                        ? $"{sampleCount} / {minSamples} samples needed for first model"
+                        : locallyTrained
+                            ? $"{newSinceTrain} / {retrainDelta} new samples needed for retraining"
+                            : $"{newSinceTrain} / {retrainDelta} responses needed to personalize the model";
                     panel.Children.Add(new TextBlock
                     {
                         Text = thresholdLabel,

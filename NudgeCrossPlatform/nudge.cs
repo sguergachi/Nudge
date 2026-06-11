@@ -2222,7 +2222,7 @@ sealed class Nudge
                         var intEvt = new MLLiveEvent
                         {
                             T             = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                            App           = app,
+                            App           = NudgeCoreLogic.DisplayAppName(app, tick?.Context.FocusedDomain),
                             Score         = 0.5,
                             Confidence    = 0,
                             Productive    = false,
@@ -2964,7 +2964,7 @@ sealed class Nudge
             var liveEvt = new MLLiveEvent
             {
                 T             = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                App           = app,
+                App           = NudgeCoreLogic.DisplayAppName(app, tick?.Context.FocusedDomain),
                 Score         = productivityScore,
                 Confidence    = prediction.Confidence,
                 Productive    = isProductive,

@@ -17,9 +17,12 @@ internal static class TrainerState
     private static float _cachedAccuracy = -1f;
 
     public static int  SampleCount;
-    public static int  MinSamples   = 20;
+    public static int  MinSamples   = 10; // trainer's DEFAULT_MIN_SAMPLES; heartbeat overrides
     public static int  LastTrainedCount;
     public static int  ModelVersion;
+    /// <summary>True when productivity_model.joblib exists in the active model dir —
+    /// the inference server is serving a model (bundled seed or locally trained).</summary>
+    public static bool ModelDeployed;
     public static bool IsTraining;
     public static float LastAccuracy = -1f;
     public static float PreviousAccuracy = -1f;
@@ -38,16 +41,18 @@ internal static class TrainerState
             _log.Add(raw);
         }
 
-        // [trainer] Labeled samples: 119  last-trained-at: 0  min: 100
+        // [trainer] Labeled samples: 519  real: 19  last-trained-at: 0  min: 10
+        // "Labeled samples" counts the training file (seed mode inflates it with
+        // synthetic rows); "real" is the user's own labels — that's what the UI shows.
         var m = System.Text.RegularExpressions.Regex.Match(raw,
-            @"\[trainer\] Labeled samples:\s*(\d+)\s+last-trained-at:\s*(\d+)\s+min:\s*(\d+)");
+            @"\[trainer\] Labeled samples:\s*(\d+)\s+real:\s*(\d+)\s+last-trained-at:\s*(\d+)\s+min:\s*(\d+)");
         if (m.Success)
         {
             lock (_lock)
             {
-                SampleCount      = int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture);
-                LastTrainedCount = int.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
-                MinSamples       = int.Parse(m.Groups[3].Value, CultureInfo.InvariantCulture);
+                SampleCount      = int.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
+                LastTrainedCount = int.Parse(m.Groups[3].Value, CultureInfo.InvariantCulture);
+                MinSamples       = int.Parse(m.Groups[4].Value, CultureInfo.InvariantCulture);
                 LastChecked      = DateTime.Now;
                 // Healthy heartbeat from a live trainer → clear any stale "Training failed" so a
                 // past transient error doesn't stick as the section's state forever (a recurring
@@ -59,9 +64,9 @@ internal static class TrainerState
             return;
         }
 
-        // [trainer] Training lightweight model on 119 samples...
+        // [trainer] Training (standard) on 19 samples...
         m = System.Text.RegularExpressions.Regex.Match(raw,
-            @"\[trainer\] Training (\w+) model on (\d+) samples");
+            @"\[trainer\] Training \((\w+)\) on (\d+) samples");
         if (m.Success)
         {
             lock (_lock)
@@ -126,85 +131,97 @@ internal static class TrainerState
 
     public static void RefreshFromCsv()
     {
-        string csvPath = Program.ExperimentalMode ? PlatformConfig.CsvPathExp : PlatformConfig.CsvPath;
-        if (!System.IO.File.Exists(csvPath)) return;
+        // Model dir state is checked even when the CSV doesn't exist yet — a fresh
+        // install has the bundled seed model deployed before the first harvest row
+        // is written, and the UI must show it as loaded (#132).
+        string modelDirPath = System.IO.Path.Combine(
+            PlatformConfig.DataDirectory, Program.ExperimentalMode ? "model_exp" : "model");
+        bool deployed = System.IO.File.Exists(
+            System.IO.Path.Combine(modelDirPath, "productivity_model.joblib"));
+
+        int count = -1; // -1 = CSV missing/unreadable: keep the heartbeat-supplied value
         try
         {
-            var lines = System.IO.File.ReadAllLines(csvPath);
-            if (lines.Length < 2) return;
-            var header = lines[0].Split(',');
-            int idx = System.Array.IndexOf(header, "productive");
-            if (idx < 0) return;
-            int count = 0;
-            for (int i = 1; i < lines.Length; i++)
+            string csvPath = Program.ExperimentalMode ? PlatformConfig.CsvPathExp : PlatformConfig.CsvPath;
+            if (System.IO.File.Exists(csvPath))
             {
-                var parts = lines[i].Split(',');
-                if (parts.Length > idx)
+                var lines = System.IO.File.ReadAllLines(csvPath);
+                var header = lines.Length > 0 ? lines[0].Split(',') : [];
+                int idx = System.Array.IndexOf(header, "productive");
+                if (idx >= 0)
                 {
-                    var val = parts[idx].Trim();
-                    if (val != "" && !string.Equals(val, "nan", StringComparison.OrdinalIgnoreCase))
-                        count++;
-                }
-            }
-
-            string modelDir = Program.ExperimentalMode ? "model_exp" : "model";
-            string metaPath = System.IO.Path.Combine(PlatformConfig.DataDirectory, modelDir, "trainer_meta.json");
-            DateTime trained = DateTime.MinValue;
-            int trainedCount = 0;
-            float accuracy = -1f;
-            if (System.IO.File.Exists(metaPath))
-            {
-                var lastWrite = System.IO.File.GetLastWriteTimeUtc(metaPath);
-                lock (_lock)
-                {
-                    if (lastWrite == _lastMetaWrite)
+                    count = 0;
+                    for (int i = 1; i < lines.Length; i++)
                     {
-                        trained = _cachedTrained;
-                        trainedCount = _cachedTrainedCount;
-                        accuracy = _cachedAccuracy;
-                    }
-                }
-                if (trained == DateTime.MinValue)
-                {
-                    try
-                    {
-                        var json = System.IO.File.ReadAllText(metaPath);
-                        var meta = System.Text.Json.JsonSerializer.Deserialize(
-                            json, NudgeJsonContext.Default.TrainerMeta);
-                        if (meta != null)
+                        var parts = lines[i].Split(',');
+                        if (parts.Length > idx)
                         {
-                            if (meta.TrainedAt > 0)
-                                trained = DateTimeOffset.FromUnixTimeMilliseconds(
-                                    (long)(meta.TrainedAt * 1000)).LocalDateTime;
-                            trainedCount = meta.SampleCount;
-                            accuracy = (float)meta.Accuracy;
-                            ModelVersion = meta.ModelVersion;
-                        }
-                        lock (_lock)
-                        {
-                            _lastMetaWrite = lastWrite;
-                            _cachedTrained = trained;
-                            _cachedTrainedCount = trainedCount;
-                            _cachedAccuracy = accuracy;
+                            var val = parts[idx].Trim();
+                            if (val != "" && !string.Equals(val, "nan", StringComparison.OrdinalIgnoreCase))
+                                count++;
                         }
                     }
-                    catch { }
-                }
-            }
-
-            lock (_lock)
-            {
-                SampleCount = count;
-                LastChecked = DateTime.Now;
-                if (trained != DateTime.MinValue)
-                {
-                    LastTrained = trained;
-                    LastTrainedCount = trainedCount;
-                    LastAccuracy = accuracy;
                 }
             }
         }
         catch { }
+
+        string metaPath = System.IO.Path.Combine(modelDirPath, "trainer_meta.json");
+        DateTime trained = DateTime.MinValue;
+        int trainedCount = 0;
+        float accuracy = -1f;
+        if (System.IO.File.Exists(metaPath))
+        {
+            var lastWrite = System.IO.File.GetLastWriteTimeUtc(metaPath);
+            lock (_lock)
+            {
+                if (lastWrite == _lastMetaWrite)
+                {
+                    trained = _cachedTrained;
+                    trainedCount = _cachedTrainedCount;
+                    accuracy = _cachedAccuracy;
+                }
+            }
+            if (trained == DateTime.MinValue)
+            {
+                try
+                {
+                    var json = System.IO.File.ReadAllText(metaPath);
+                    var meta = System.Text.Json.JsonSerializer.Deserialize(
+                        json, NudgeJsonContext.Default.TrainerMeta);
+                    if (meta != null)
+                    {
+                        if (meta.TrainedAt > 0)
+                            trained = DateTimeOffset.FromUnixTimeMilliseconds(
+                                (long)(meta.TrainedAt * 1000)).LocalDateTime;
+                        trainedCount = meta.SampleCount;
+                        accuracy = (float)meta.Accuracy;
+                        ModelVersion = meta.ModelVersion;
+                    }
+                    lock (_lock)
+                    {
+                        _lastMetaWrite = lastWrite;
+                        _cachedTrained = trained;
+                        _cachedTrainedCount = trainedCount;
+                        _cachedAccuracy = accuracy;
+                    }
+                }
+                catch { }
+            }
+        }
+
+        lock (_lock)
+        {
+            ModelDeployed = deployed;
+            if (count >= 0) SampleCount = count;
+            LastChecked = DateTime.Now;
+            if (trained != DateTime.MinValue)
+            {
+                LastTrained = trained;
+                LastTrainedCount = trainedCount;
+                LastAccuracy = accuracy;
+            }
+        }
     }
 
     public static IReadOnlyList<string> GetLog()
@@ -216,14 +233,14 @@ internal static class TrainerState
                     float acc, float prevAcc, string arch, string err,
                     DateTime lastChecked, DateTime lastTrained2,
                     int version, IReadOnlyList<string> log,
-                    float trainingProgress) Snapshot()
+                    float trainingProgress, bool modelDeployed) Snapshot()
     {
         lock (_lock)
         {
             return (SampleCount, MinSamples, LastTrainedCount, IsTraining,
                     LastAccuracy, PreviousAccuracy, Architecture, LastError,
                     LastChecked, LastTrained, ModelVersion, _log.ToArray(),
-                    TrainingProgress);
+                    TrainingProgress, ModelDeployed);
         }
     }
 }
