@@ -34,7 +34,7 @@ sealed class NudgeNotify
     // VERSION & CONSTANTS
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    const string VERSION = "2.0.3";
+    const string VERSION = "2.1.1";
     const string HOST = "127.0.0.1";
     const int PORT = 45001;
     const int TIMEOUT_MS = 5000;
