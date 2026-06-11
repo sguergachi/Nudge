@@ -1520,20 +1520,28 @@ namespace NudgeTray
                 if (File.Exists(bundledPriors))
                     File.Copy(bundledPriors, Path.Combine(_modelDirPathExp, "distraction_priors.tsv"), overwrite: true);
 
-                string userModelPath = Path.Combine(_modelDirPathExp, "productivity_model.joblib");
-                if (File.Exists(userModelPath)) return; // Seed already deployed
-
                 string bundledModel = Path.Combine(bundledDir, "productivity_model.joblib");
                 if (!File.Exists(bundledModel)) return; // No bundled seed to deploy
 
+                // Refresh an existing deployment only when the bundled seed lineage is
+                // ahead of the user's (trainer_state training_count). Any local retrain
+                // bumps the user's count past the shipped seed's, so personalized models
+                // are never clobbered — and the user's labels live in HARVEST_EXP.CSV
+                // and survive regardless.
+                string userModelPath = Path.Combine(_modelDirPathExp, "productivity_model.joblib");
+                if (File.Exists(userModelPath) &&
+                    ReadTrainingCount(_modelDirPathExp) >= ReadTrainingCount(bundledDir))
+                    return;
+
                 Console.WriteLine("[INFO] Deploying bundled V4 seed model to user data directory…");
-                File.Copy(bundledModel, userModelPath, overwrite: false);
+                // Model + scaler + trainer_state move as a set — a stale scaler would
+                // silently mis-standardize every feature the new model sees.
+                File.Copy(bundledModel, userModelPath, overwrite: true);
                 foreach (var auxFile in new[] { "scaler.json", "trainer_state.json" })
                 {
                     string src = Path.Combine(bundledDir, auxFile);
-                    string dst = Path.Combine(_modelDirPathExp, auxFile);
-                    if (File.Exists(src) && !File.Exists(dst))
-                        File.Copy(src, dst, overwrite: false);
+                    if (File.Exists(src))
+                        File.Copy(src, Path.Combine(_modelDirPathExp, auxFile), overwrite: true);
                 }
                 Console.WriteLine("  ✓ Bundled V4 seed model deployed");
             }
@@ -1541,6 +1549,17 @@ namespace NudgeTray
             {
                 Console.WriteLine($"[WARN] Could not deploy bundled V4 model: {ex.Message}");
             }
+        }
+
+        static int ReadTrainingCount(string dir)
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(
+                    File.ReadAllText(Path.Combine(dir, "trainer_state.json")));
+                return doc.RootElement.TryGetProperty("training_count", out var v) ? v.GetInt32() : 0;
+            }
+            catch { return 0; } // missing or corrupt → no evidence of local retraining
         }
 
         static void StartMLServices()

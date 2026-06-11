@@ -24,8 +24,8 @@ public sealed class DistractionPriorsTests
         Assert.Empty(apps);
     }
 
-    private static readonly string[] MixedPriorRows =
-    [
+    private static readonly string[] MixedValidityRows =
+    {
         "# comment line",
         "",
         "x.com\tdomain\t0.10",
@@ -36,13 +36,13 @@ public sealed class DistractionPriorsTests
         "weird.com\tgadget\t0.5",             // unknown kind
         "\tdomain\t0.5",                      // empty key
         "clamped.com\tdomain\t1.7",           // clamped to 1.0
-    ];
+    };
 
     [Fact]
     public void LoadPriors_ParsesValidRows_SkipsMalformed()
     {
         string path = Path.GetTempFileName();
-        File.WriteAllLines(path, MixedPriorRows);
+        File.WriteAllLines(path, MixedValidityRows);
 
         var (domains, apps) = DomainReputationStore.LoadPriors(path);
 

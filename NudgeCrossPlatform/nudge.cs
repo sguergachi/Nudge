@@ -53,6 +53,9 @@ interface IPlatformService
     bool IsFullscreen();
     bool IsAudioPlaying();
     bool IsMediaSessionActive();
+    /// <summary>Capability probe for the §11.5.3 sensor-health line: can each V4
+    /// sensor deliver a signal on this system — independent of its current value.</summary>
+    (bool Fullscreen, bool Audio, bool Media, bool Mic) ProbeSensorHealth();
 }
 
 sealed class Nudge
@@ -1151,6 +1154,17 @@ sealed class Nudge
             return result;
         }
 
+        public (bool Fullscreen, bool Audio, bool Media, bool Mic) ProbeSensorHealth()
+        {
+            bool fullscreen = (_compositor == "kde" && _kwinTracker is { IsReady: true })
+                              || (_compositor == "sway" && CommandExists("swaymsg"))
+                              || CommandExists("xprop");
+            bool audio = CommandExists("pw-dump") || CommandExists("pactl");
+            bool media = CommandExists("dbus-send") || audio;
+            bool mic = GetPresenceState().Source != PresenceSource.None;
+            return (fullscreen, audio, media, mic);
+        }
+
         private static string ExtractQuotedString(string input) =>
             NudgeCoreLogic.ExtractQuotedString(input);
     }
@@ -1575,6 +1589,21 @@ sealed class Nudge
             return result;
         }
 
+        public (bool Fullscreen, bool Audio, bool Media, bool Mic) ProbeSensorHealth()
+        {
+            bool fullscreen = false, audio = false, mic = false;
+#if WINDOWS
+            if (OperatingSystem.IsWindows())
+            {
+                try { fullscreen = GetForegroundWindow() != IntPtr.Zero; } catch { /* degraded */ }
+                try { audio = WindowsAudioMeter.TryGetPeak(out _); } catch { /* degraded */ }
+                mic = GetPresenceState().Source != PresenceSource.None;
+            }
+#endif
+            // Media detection falls back to the audio meter on Windows (no SMTC interop).
+            return (fullscreen, audio, audio, mic);
+        }
+
 #if WINDOWS
         // ── Windows Core Audio render-meter (§5b) ──────────────────────────────
         [SupportedOSPlatform("windows")]
@@ -1607,8 +1636,13 @@ sealed class Nudge
             private static readonly Guid IID_IMMDeviceEnumerator = new("A95664D2-9614-4F35-A746-DE8DB63617E6");
             private static Guid IID_IAudioMeterInformation = new("C02216F6-8C67-4B5B-9D00-D008E73E0064");
 
-            internal static bool IsAudioPlaying()
+            internal static bool IsAudioPlaying() => TryGetPeak(out float peak) && peak > 0.001f;
+
+            /// <summary>Walks the Core Audio meter chain. True means the default render
+            /// endpoint is reachable (sensor live), regardless of current loudness.</summary>
+            internal static bool TryGetPeak(out float peak)
             {
+                peak = 0f;
                 var enumeratorType = Type.GetTypeFromCLSID(CLSID_MMDeviceEnumerator);
                 if (enumeratorType == null) return false;
                 var enumerator = (IMMDeviceEnumerator?)Activator.CreateInstance(enumeratorType);
@@ -1621,8 +1655,7 @@ sealed class Nudge
                 if (hr != 0 || meterObj == null) return false;
                 var meter = (IAudioMeterInformation)meterObj;
 
-                hr = meter.GetPeakValue(out float peak);
-                return hr == 0 && peak > 0.001f;
+                return meter.GetPeakValue(out peak) == 0;
             }
         }
 
@@ -3043,11 +3076,10 @@ sealed class Nudge
 
     static void LogSensorHealth()
     {
+        // Capability probe, not current values — a quiet desktop is not a broken
+        // sensor. "degraded" must mean the backing API is unavailable (§11.5.3).
         bool fs = false, audio = false, media = false, mic = false;
-        try { fs = _platformService?.IsFullscreen() ?? false; } catch { }
-        try { audio = _platformService?.IsAudioPlaying() ?? false; } catch { }
-        try { media = _platformService?.IsMediaSessionActive() ?? false; } catch { }
-        try { mic = _cachedPresenceState.IsMicActive; } catch { }
+        try { (fs, audio, media, mic) = _platformService?.ProbeSensorHealth() ?? default; } catch { }
 
         string Status(bool ok) => ok ? $"{Color.BGREEN}live{Color.RESET}" : $"{Color.DIM}degraded{Color.RESET}";
         Dim($"  Sensor status: fullscreen={Status(fs)} audio={Status(audio)} media={Status(media)} mic={Status(mic)}");
