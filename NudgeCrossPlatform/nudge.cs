@@ -28,6 +28,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -1255,25 +1256,27 @@ sealed class Nudge
             // A background watcher keeps the (relatively expensive) device scan fresh using
             // RegNotifyChangeKeyValue, so this call just re-classifies the cached scan against
             // the current foreground window (mic-in-meeting-app vs. dictation).
-            var watcher = _presenceWatcher ??= WindowsPresenceWatcher.Start();
-            if (!watcher.Available)
-                return PresenceState.Unavailable; // pre-1903 / keys missing → fail open
-
-            var scan = watcher.Current;
-            var (app, title) = GetForegroundAppWithTitle();
-            var result = ConsentStorePresence.Evaluate(scan.MicLeaves, scan.CamLeaves, app, title);
-
-            if (result.InMeeting)
+            if (OperatingSystem.IsWindows())
             {
-                var activeMic = scan.MicLeaves.Where(l => l.IsActive).Select(FormatLeaf);
-                var activeCam = scan.CamLeaves.Where(l => l.IsActive).Select(FormatLeaf);
-                Console.WriteLine($"MEETINGDETAIL: mic=[{string.Join(", ", activeMic)}] cam=[{string.Join(", ", activeCam)}] fg={app} title=\"{title}\"");
-            }
+                var watcher = _presenceWatcher ??= WindowsPresenceWatcher.Start();
+                if (!watcher.Available)
+                    return PresenceState.Unavailable; // pre-1903 / keys missing → fail open
 
-            return result;
-#else
-            return PresenceState.Unavailable;
+                var scan = watcher.Current;
+                var (app, title) = GetForegroundAppWithTitle();
+                var result = ConsentStorePresence.Evaluate(scan.MicLeaves, scan.CamLeaves, app, title);
+
+                if (result.InMeeting)
+                {
+                    var activeMic = scan.MicLeaves.Where(l => l.IsActive).Select(FormatLeaf);
+                    var activeCam = scan.CamLeaves.Where(l => l.IsActive).Select(FormatLeaf);
+                    Console.WriteLine($"MEETINGDETAIL: mic=[{string.Join(", ", activeMic)}] cam=[{string.Join(", ", activeCam)}] fg={app} title=\"{title}\"");
+                }
+
+                return result;
+            }
 #endif
+            return PresenceState.Unavailable;
         }
 
 #if WINDOWS
@@ -1292,6 +1295,7 @@ sealed class Nudge
         // Core Audio COM on every tick. Detection is now near-instant and idle CPU is ~zero
         // (a background thread blocked on a wait handle). A periodic rescan — driven by the
         // existing 5s GetPresenceState cadence — self-heals if a notification is ever missed.
+        [SupportedOSPlatform("windows")]
         internal sealed class WindowsPresenceWatcher : IDisposable
         {
             private const string StorePath =
@@ -1379,7 +1383,9 @@ sealed class Nudge
             {
                 try
                 {
-                    RegNotifyChangeKeyValue(key.Handle, bWatchSubtree: true,
+                    // A failed arm (non-zero) needs no handling: the RescanBackstopMs check
+                    // in Current degrades to a 4s poll until a later re-arm succeeds.
+                    _ = RegNotifyChangeKeyValue(key.Handle, bWatchSubtree: true,
                         REG_NOTIFY_CHANGE_LAST_SET, evt.SafeWaitHandle, fAsynchronous: true);
                 }
                 catch { }
@@ -1541,11 +1547,14 @@ sealed class Nudge
 
             bool result = false;
 #if WINDOWS
-            try
+            if (OperatingSystem.IsWindows())
             {
-                result = WindowsAudioMeter.IsAudioPlaying();
+                try
+                {
+                    result = WindowsAudioMeter.IsAudioPlaying();
+                }
+                catch { /* degrade to false */ }
             }
-            catch { /* degrade to false */ }
 #endif
             _cachedAudioPlaying = result;
             _audioCacheExpiry = DateTime.Now.AddSeconds(2);
@@ -1568,6 +1577,7 @@ sealed class Nudge
 
 #if WINDOWS
         // ── Windows Core Audio render-meter (§5b) ──────────────────────────────
+        [SupportedOSPlatform("windows")]
         internal static class WindowsAudioMeter
         {
             private const int E_DATAFLOW_RENDER = 0;
@@ -1622,7 +1632,8 @@ sealed class Nudge
         public void Dispose()
         {
 #if WINDOWS
-            _presenceWatcher?.Dispose();
+            if (OperatingSystem.IsWindows())
+                _presenceWatcher?.Dispose();
 #endif
         }
 
@@ -1675,7 +1686,12 @@ sealed class Nudge
     // STATE - Application state
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+#if WINDOWS
+    // Concrete per-platform type keeps the 100ms hot-loop calls devirtualized (CA1859).
+    static WindowsPlatformService? _platformService;
+#else
     static IPlatformService? _platformService;
+#endif
     static string _csvPath = PlatformConfig.CsvPath;
     static StreamWriter? _csvFile;
     static StreamWriter? _activityLogFile;
