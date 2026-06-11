@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 
 namespace NudgeCore;
 
@@ -73,6 +74,7 @@ internal interface IUIAutomationValuePattern
 [ComImport, Guid("E22AD333-B25F-460C-83D0-0581107395C9")]
 internal class CUIAutomation { }
 
+[SupportedOSPlatform("windows")]
 internal static class WindowsBrowserUrlReader
 {
     private const int UIA_ControlTypePropertyId = 30003;
