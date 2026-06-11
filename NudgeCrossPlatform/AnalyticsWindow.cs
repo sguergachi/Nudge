@@ -1406,8 +1406,8 @@ namespace NudgeTray
             const double W = 320;
             const double H = 52;
             const double dotR = 3.0;
-            const double yTop    = dotR + 3;          // score 1.0 → top
-            const double yBottom = H - dotR - 3;      // score 0.0 → bottom
+            const double yTop    = dotR + 3;          // score 0.0 → top
+            const double yBottom = H - dotR - 3;      // score 1.0 → bottom
             const double yRange  = yBottom - yTop;
 
             var canvas = new Canvas
@@ -1447,7 +1447,7 @@ namespace NudgeTray
             {
                 double xFrac = n == 1 ? 0.5 : (double)i / (n - 1);
                 double x = dotR + xFrac * (W - dotR * 2);
-                double y = yTop + (1.0 - events[i].Score) * yRange;
+                double y = yTop + events[i].Score * yRange;
                 pts.Add((x, y, events[i]));
             }
 
@@ -2311,7 +2311,7 @@ namespace NudgeTray
             {
                 double xFrac = n == 1 ? 0.5 : (double)i / (n - 1);
                 double x = dotR + xFrac * (W - dotR * 2);
-                double y = yTop + (1.0 - aiEvents[i].Score) * yRange;
+                double y = yTop + aiEvents[i].Score * yRange;
                 pts.Add((x, y, aiEvents[i]));
             }
 
