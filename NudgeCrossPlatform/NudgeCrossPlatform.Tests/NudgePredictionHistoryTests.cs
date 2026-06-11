@@ -271,6 +271,51 @@ public sealed class NudgePredictionHistoryTests
         Assert.Equal(0.9, filtered[0].Score);
         Assert.Equal(0.7, filtered[1].Score);
     }
+
+    // ── PredictionChartHelper.ScoreToY ───────────────────────────────────────
+    // Regression for #165: productive (>50%) predictions must plot ABOVE the
+    // midline (smaller Y = top = productive zone), unproductive below.
+
+    [Theory]
+    [InlineData(1.0)]
+    [InlineData(0.99)]
+    [InlineData(0.51)]
+    public void ScoreToY_ProductiveScore_PlotsAboveMidline(double score)
+    {
+        const double yTop = 7.5, yRange = 65;
+        double yMid = yTop + yRange * 0.5;
+
+        Assert.True(PredictionChartHelper.ScoreToY(score, yTop, yRange) < yMid);
+    }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(0.01)]
+    [InlineData(0.49)]
+    public void ScoreToY_UnproductiveScore_PlotsBelowMidline(double score)
+    {
+        const double yTop = 7.5, yRange = 65;
+        double yMid = yTop + yRange * 0.5;
+
+        Assert.True(PredictionChartHelper.ScoreToY(score, yTop, yRange) > yMid);
+    }
+
+    [Fact]
+    public void ScoreToY_BoundaryScore_SitsOnMidline()
+    {
+        const double yTop = 7.5, yRange = 65;
+
+        Assert.Equal(yTop + yRange * 0.5, PredictionChartHelper.ScoreToY(0.5, yTop, yRange), 10);
+    }
+
+    [Fact]
+    public void ScoreToY_ExtremesMapToChartEdges()
+    {
+        const double yTop = 7.5, yRange = 65;
+
+        Assert.Equal(yTop, PredictionChartHelper.ScoreToY(1.0, yTop, yRange), 10);
+        Assert.Equal(yTop + yRange, PredictionChartHelper.ScoreToY(0.0, yTop, yRange), 10);
+    }
 }
 
 /// <summary>

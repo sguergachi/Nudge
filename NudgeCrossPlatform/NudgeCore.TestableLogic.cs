@@ -2382,5 +2382,13 @@ internal static class PredictionChartHelper
             if (e.TriggerSource == "ai" && e.SuppressReason is null) result.Add(e);
         return result;
     }
+
+    /// <summary>
+    /// Maps a productivity score (1 = productive) to a canvas Y coordinate.
+    /// The productive zone is at the top of the chart, so high scores must
+    /// yield small Y values (#165).
+    /// </summary>
+    internal static double ScoreToY(double score, double yTop, double yRange)
+        => yTop + (1.0 - score) * yRange;
 }
 #endif
