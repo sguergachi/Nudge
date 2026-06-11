@@ -60,7 +60,7 @@ sealed class Nudge
     // VERSION & CONSTANTS
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    const string ProgramVersion = "2.0.3";
+    const string ProgramVersion = "2.1.1";
     const string VersionSuffix = "";
     static readonly string VERSION = $"{ProgramVersion}-{VersionSuffix}";
 
