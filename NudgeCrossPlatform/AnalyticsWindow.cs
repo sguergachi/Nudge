@@ -2344,7 +2344,7 @@ namespace NudgeTray
             {
                 double xFrac = n == 1 ? 0.5 : (double)i / (n - 1);
                 double x = dotR + xFrac * (W - dotR * 2);
-                double y = yTop + aiEvents[i].Score * yRange;
+                double y = PredictionChartHelper.ScoreToY(aiEvents[i].Score, yTop, yRange);
                 pts.Add((x, y, aiEvents[i]));
             }
 
