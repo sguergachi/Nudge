@@ -2382,5 +2382,13 @@ internal static class PredictionChartHelper
             if (e.TriggerSource == "ai" && e.SuppressReason is null) result.Add(e);
         return result;
     }
+
+    /// <summary>
+    /// Maps a productivity score (0..1) to a chart Y coordinate. Canvas Y grows
+    /// downward, so the axis must be inverted: score 1.0 (productive) lands at
+    /// <paramref name="yTop"/>, 0.5 on the midline, 0.0 at the bottom.
+    /// </summary>
+    internal static double ScoreToY(double score, double yTop, double yRange)
+        => yTop + (1.0 - score) * yRange;
 }
 #endif
