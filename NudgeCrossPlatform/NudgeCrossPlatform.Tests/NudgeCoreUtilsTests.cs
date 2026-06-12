@@ -331,4 +331,16 @@ public sealed class DisplayAppNameTests
     {
         Assert.Equal("Code", NudgeCoreLogic.DisplayAppName("Code", domain));
     }
+
+    // #174: a browser with no extractable domain shows its friendly name,
+    // not the raw process name.
+    [Theory]
+    [InlineData("chrome", "Chrome")]
+    [InlineData("msedge", "Edge")]
+    [InlineData("firefox", "Firefox")]
+    public void NoDomain_Browser_ReturnsFriendlyBrowserName(string processName, string expected)
+    {
+        Assert.Equal(expected, NudgeCoreLogic.DisplayAppName(processName, ""));
+        Assert.Equal(expected, NudgeCoreLogic.DisplayAppName(processName, null));
+    }
 }

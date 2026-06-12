@@ -1844,11 +1844,13 @@ internal static class NudgeCoreLogic
     /// <summary>
     /// Display name for an ML check event: the website matters more than the
     /// browser, so prefer the focused domain (non-empty only while a browser is
-    /// foreground) over the process name. Display-only — event correlation uses
-    /// timestamps, never this name.
+    /// foreground) over the process name. When the domain is unknown a browser
+    /// shows its friendly name ("Chrome", not "chrome"). Display-only — event
+    /// correlation uses timestamps, never this name.
     /// </summary>
     internal static string DisplayAppName(string app, string? domain) =>
-        string.IsNullOrEmpty(domain) ? app : domain;
+        !string.IsNullOrEmpty(domain) ? domain
+        : BrowserDetector.GetBrowserDisplayName(app) ?? app;
 
     internal static bool TryParseActivityLogLine(string line, out ActivityLogEntry entry)
     {
