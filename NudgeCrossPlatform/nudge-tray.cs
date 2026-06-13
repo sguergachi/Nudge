@@ -110,6 +110,12 @@ namespace NudgeTray
         internal static extern bool SetForegroundWindow(IntPtr hWnd);
 
         [DllImport("user32.dll")]
+        internal static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll")]
+        internal static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+        [DllImport("user32.dll")]
         internal static extern int GetWindowLong(IntPtr hWnd, int nIndex);
 
         [DllImport("user32.dll")]
@@ -2143,6 +2149,11 @@ namespace NudgeTray
 
                 // Capture the app that was focused before the notification appeared
                 var previousApp = LiveAIState.CurrentApp ?? "";
+#if WINDOWS
+                IntPtr previousWindow = GetForegroundWindow();
+#else
+                IntPtr previousWindow = IntPtr.Zero;
+#endif
 
                 // Create and show custom notification window on Avalonia UI thread (works on all platforms)
                 Dispatcher.UIThread.Post(() =>
@@ -2158,7 +2169,7 @@ namespace NudgeTray
                             : LiveAIState.CurrentApp ?? "";
                         string detail = notifIsBrowser ? "" : LiveAIState.CurrentDetail ?? "";
                         var notificationWindow = new CustomNotificationWindow(appName, detail);
-                        notificationWindow.Closed += (s, e) => RestorePreviousAppFocus(previousApp);
+                        notificationWindow.Closed += (s, e) => RestorePreviousAppFocus(previousApp, previousWindow);
                         notificationWindow.ShowWithAnimation((productive) =>
                         {
                             _waitingForResponse = false;
@@ -2200,8 +2211,22 @@ namespace NudgeTray
         // FOCUS RESTORATION
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-        private static void RestorePreviousAppFocus(string appName)
+        private static void RestorePreviousAppFocus(string appName, IntPtr previousWindow)
         {
+#if WINDOWS
+            // Closing the focused notification hands Win32 activation to the next
+            // window on this thread — which raises the Analytics window whenever it
+            // is open in the background (#171). If activation stayed inside this
+            // process, give it back to the window the user was actually working in.
+            // If the user switched apps while the notification was up, the
+            // foreground is theirs — leave it alone.
+            if (previousWindow != IntPtr.Zero)
+            {
+                _ = GetWindowThreadProcessId(GetForegroundWindow(), out uint foregroundPid);
+                if (foregroundPid == (uint)Environment.ProcessId)
+                    SetForegroundWindow(previousWindow);
+            }
+#endif
             if (string.IsNullOrEmpty(appName))
                 return;
 
