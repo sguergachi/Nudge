@@ -1736,6 +1736,11 @@ sealed class Nudge
     // Activity tracking
     static string _currentApp = "";
     static string _currentTitle = "";
+    // Last domain seen while the focused browser has been in front (#174). Refreshed
+    // every cycle; bridges ticks where extraction transiently fails so ML check
+    // events display the site instead of the bare browser process name.
+    static readonly BrowserDomainMemory _browserDomainMemory = new();
+    static string _displayDomain = "";
     static int _attentionSpanMs;
     static bool _waitingForResponse;
     static int _totalSnapshots;
@@ -2089,6 +2094,7 @@ sealed class Nudge
             }
 
             ActivityTickResult? tick = CaptureActivityTick(now, app, title, idle);
+            _displayDomain = _browserDomainMemory.Observe(app, tick?.Context.FocusedDomain);
 
             // Overlay reputation values into the V4 feature vector when experimental mode is active
             if (_experimentalMode && tick is ActivityTickResult t4 && t4.FeaturesV4 is FeatureVectorV4 fv4)
@@ -2222,7 +2228,7 @@ sealed class Nudge
                         var intEvt = new MLLiveEvent
                         {
                             T             = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                            App           = NudgeCoreLogic.DisplayAppName(app, tick?.Context.FocusedDomain),
+                            App           = NudgeCoreLogic.DisplayAppName(app, _displayDomain),
                             Score         = 0.5,
                             Confidence    = 0,
                             Productive    = false,
@@ -2964,7 +2970,7 @@ sealed class Nudge
             var liveEvt = new MLLiveEvent
             {
                 T             = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                App           = NudgeCoreLogic.DisplayAppName(app, tick?.Context.FocusedDomain),
+                App           = NudgeCoreLogic.DisplayAppName(app, _displayDomain),
                 Score         = productivityScore,
                 Confidence    = prediction.Confidence,
                 Productive    = isProductive,
