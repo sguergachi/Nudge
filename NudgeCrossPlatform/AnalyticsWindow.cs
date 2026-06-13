@@ -1134,11 +1134,14 @@ namespace NudgeTray
             }
             else
             {
+                // Every response retrains the model on the spot (SendResponse →
+                // TriggerTrainingNow), so "new samples since last training" snaps
+                // back to 0 within seconds and a retrain countdown would sit empty
+                // forever (#169). The growing response total is the live signal
+                // that interval and AI responses alike are being learned from.
                 string progressLabel = !hasModel
                     ? $"{sampleCount} / {minSamples} samples needed for first model"
-                    : locallyTrained
-                        ? $"{newSinceTrain} new samples since last training"
-                        : $"{newSinceTrain} labeled responses collected";
+                    : $"{sampleCount} labeled responses collected";
 
                 panel.Children.Add(new TextBlock
                 {
@@ -1147,13 +1150,11 @@ namespace NudgeTray
                     Foreground = new SolidColorBrush(TextSecondary)
                 });
 
-                // ── New-samples progress bar toward retrain threshold ──────────────
-                if (hasModel || sampleCount > 0)
+                // ── First-model progress bar ────────────────────────────────────────
+                if (!hasModel && sampleCount > 0)
                 {
-                    int barNumerator = hasModel ? newSinceTrain : sampleCount;
-                    int barDenominator = hasModel ? retrainDelta : minSamples;
-                    double barFill = barDenominator > 0
-                        ? Math.Min(1.0, (double)barNumerator / barDenominator)
+                    double barFill = minSamples > 0
+                        ? Math.Min(1.0, (double)sampleCount / minSamples)
                         : 0;
 
                     var barBg = new Border
@@ -1184,15 +1185,14 @@ namespace NudgeTray
                     });
                     barBg.Child = fillGrid;
                     panel.Children.Add(barBg);
-
-                    string thresholdLabel = !hasModel
-                        ? $"{sampleCount} / {minSamples} samples needed for first model"
-                        : locallyTrained
-                            ? $"{newSinceTrain} / {retrainDelta} new samples needed for retraining"
-                            : $"{newSinceTrain} / {retrainDelta} responses needed to personalize the model";
+                }
+                else if (hasModel)
+                {
                     panel.Children.Add(new TextBlock
                     {
-                        Text = thresholdLabel,
+                        Text = locallyTrained
+                            ? "Model retrains automatically after every response"
+                            : "Model personalizes automatically as you respond",
                         FontSize = 10,
                         Foreground = new SolidColorBrush(TextTertiary),
                         Margin = new Thickness(0, 2, 0, 0)
