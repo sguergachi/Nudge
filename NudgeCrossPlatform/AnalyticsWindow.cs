@@ -2220,7 +2220,7 @@ namespace NudgeTray
                 };
                 scoreStack.Children.Add(new TextBlock
                 {
-                    Text = $"{latest.Score * 100:F0}%",
+                    Text = $"{latest.Confidence * 100:F0}%",
                     FontSize = 15,
                     FontWeight = FontWeight.Bold,
                     Foreground = new SolidColorBrush(mlColor),
@@ -2453,7 +2453,7 @@ namespace NudgeTray
                 {
                     var scoreLabel = new TextBlock
                     {
-                        Text = $"{ev.Score * 100:F0}%",
+                        Text = $"{ev.Confidence * 100:F0}%",
                         FontSize = 9,
                         FontWeight = FontWeight.SemiBold,
                         Foreground = new SolidColorBrush(dotColor)
@@ -2567,7 +2567,7 @@ namespace NudgeTray
                     timeTb.Text = DateTimeOffset.FromUnixTimeSeconds(nev.T).LocalDateTime.ToString("t", CultureInfo.CurrentCulture);
                     appTb.Text = nev.App;
                     Color evColor = nev.Productive ? ProductiveGreen : UnproductiveRed;
-                    scoreTb.Text = $"{nev.Score * 100:F0}% · {(nev.Productive ? StrProductive : StrNotProductive)}";
+                    scoreTb.Text = $"{nev.Confidence * 100:F0}% · {(nev.Productive ? StrProductive : StrNotProductive)}";
                     scoreTb.Foreground = new SolidColorBrush(evColor);
 
                     // Position tooltip above the dot, clamped to chart edges
