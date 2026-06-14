@@ -1362,8 +1362,13 @@ namespace NudgeTray
         public static AnalyticsData LoadFromCSV(AnalyticsWindow.TimeFilter filter)
         {
             var data = new AnalyticsData();
-            string activityLogPath = PlatformConfig.ActivityLogPath;
-            string harvestPath = PlatformConfig.CsvPath;
+            // In experimental signal mode the daemon writes to the *_EXP.CSV files
+            // (nudge.cs:1833,2351); read those so the Today/Week/Month tabs reflect
+            // the data actually being harvested (#176).
+            string activityLogPath = Program.ExperimentalMode
+                ? PlatformConfig.ActivityLogPathExp : PlatformConfig.ActivityLogPath;
+            string harvestPath = Program.ExperimentalMode
+                ? PlatformConfig.CsvPathExp : PlatformConfig.CsvPath;
             DateTime filterStartDate = AnalyticsWindow.GetFilterStartDate(filter);
 
             Console.WriteLine($"[Analytics] Loading data for {filter} (from {filterStartDate:yyyy-MM-dd HH:mm})");
