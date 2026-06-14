@@ -49,7 +49,7 @@ namespace NudgeTray
     sealed class Program
     {
         const int UDP_PORT = 45001;
-        const string VERSION = "2.1.4";
+        const string VERSION = "2.1.5";
         const string NudgeExeName = "nudge";
         const string NudgeDllName = "nudge.dll";
         const int TRAINER_CHECK_INTERVAL_SEC = 15;
@@ -2319,8 +2319,13 @@ namespace NudgeTray
                 udp.Send(bytes, bytes.Length, endpoint);
                 Console.WriteLine($"✓ Sent response: {message}");
 
-                // Retrain the model immediately so the next prediction reflects this feedback
-                TriggerTrainingNow();
+                // The response is appended to the labeled CSV; the continuous
+                // background trainer retrains once 20 new responses have
+                // accumulated since the last run (background_trainer.py:144).
+                // Force-retraining on every response rewrote the trained-at count
+                // to the live total, so "new samples since last training" snapped
+                // back to 0 and the retrain threshold was never reached (#178).
+                // Manual retraining is still available via the "Train Now" button.
             }
             catch (Exception ex)
             {

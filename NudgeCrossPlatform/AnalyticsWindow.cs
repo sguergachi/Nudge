@@ -1134,14 +1134,19 @@ namespace NudgeTray
             }
             else
             {
-                // Every response retrains the model on the spot (SendResponse →
-                // TriggerTrainingNow), so "new samples since last training" snaps
-                // back to 0 within seconds and a retrain countdown would sit empty
-                // forever (#169). The growing response total is the live signal
-                // that interval and AI responses alike are being learned from.
+                // Each YES/NO response (interval and AI alike) appends a labeled
+                // row; the background trainer retrains once 20 new responses have
+                // accumulated since the last run (background_trainer.py:144). Show
+                // progress toward that threshold so every response is visibly
+                // counted (#178) — before first model, count toward minSamples.
+                bool showThreshold = hasModel && locallyTrained;
+                int progressNow = showThreshold ? newSinceTrain : sampleCount;
+                int progressTarget = showThreshold ? retrainDelta : minSamples;
                 string progressLabel = !hasModel
                     ? $"{sampleCount} / {minSamples} samples needed for first model"
-                    : $"{sampleCount} labeled responses collected";
+                    : showThreshold
+                        ? $"{newSinceTrain} / {retrainDelta} new responses since last training"
+                        : $"{sampleCount} labeled responses collected";
 
                 panel.Children.Add(new TextBlock
                 {
@@ -1150,12 +1155,11 @@ namespace NudgeTray
                     Foreground = new SolidColorBrush(TextSecondary)
                 });
 
-                // ── First-model progress bar ────────────────────────────────────────
-                if (!hasModel && sampleCount > 0)
+                // ── Progress bar toward the next (re)training ───────────────────────
+                bool showBar = progressTarget > 0 && (showThreshold || (!hasModel && sampleCount > 0));
+                if (showBar)
                 {
-                    double barFill = minSamples > 0
-                        ? Math.Min(1.0, (double)sampleCount / minSamples)
-                        : 0;
+                    double barFill = Math.Min(1.0, (double)progressNow / progressTarget);
 
                     var barBg = new Border
                     {
@@ -1190,9 +1194,7 @@ namespace NudgeTray
                 {
                     panel.Children.Add(new TextBlock
                     {
-                        Text = locallyTrained
-                            ? "Model retrains automatically after every response"
-                            : "Model personalizes automatically as you respond",
+                        Text = "Model personalizes automatically as you respond",
                         FontSize = 10,
                         Foreground = new SolidColorBrush(TextTertiary),
                         Margin = new Thickness(0, 2, 0, 0)
