@@ -271,6 +271,45 @@ public sealed class NudgePredictionHistoryTests
         Assert.Equal(0.9, filtered[0].Score);
         Assert.Equal(0.7, filtered[1].Score);
     }
+
+    // ── PredictionChartHelper.ScoreToY ───────────────────────────────────────
+    // Regression tests for issue #165: canvas Y grows downward, so a productive
+    // score (>0.5) must map ABOVE the midline (smaller Y) and an unproductive
+    // score (<0.5) below it. Before the fix the axis was not inverted.
+
+    [Fact]
+    public void ScoreToY_FullyProductive_MapsToTop()
+    {
+        Assert.Equal(10.0, PredictionChartHelper.ScoreToY(1.0, yTop: 10, yRange: 60));
+    }
+
+    [Fact]
+    public void ScoreToY_FullyUnproductive_MapsToBottom()
+    {
+        Assert.Equal(70.0, PredictionChartHelper.ScoreToY(0.0, yTop: 10, yRange: 60));
+    }
+
+    [Fact]
+    public void ScoreToY_HalfScore_MapsToMidline()
+    {
+        Assert.Equal(40.0, PredictionChartHelper.ScoreToY(0.5, yTop: 10, yRange: 60));
+    }
+
+    [Fact]
+    public void ScoreToY_ProductiveScore_SitsAboveMidline()
+    {
+        double yMid = PredictionChartHelper.ScoreToY(0.5, yTop: 10, yRange: 60);
+        double y    = PredictionChartHelper.ScoreToY(0.994, yTop: 10, yRange: 60);
+        Assert.True(y < yMid, $"score 0.994 should plot above the midline (y={y}, mid={yMid})");
+    }
+
+    [Fact]
+    public void ScoreToY_UnproductiveScore_SitsBelowMidline()
+    {
+        double yMid = PredictionChartHelper.ScoreToY(0.5, yTop: 10, yRange: 60);
+        double y    = PredictionChartHelper.ScoreToY(0.2, yTop: 10, yRange: 60);
+        Assert.True(y > yMid, $"score 0.2 should plot below the midline (y={y}, mid={yMid})");
+    }
 }
 
 /// <summary>

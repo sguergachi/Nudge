@@ -359,3 +359,57 @@ public sealed class NudgeDomainPipelineTests
         Assert.False(BrowserDetector.TryExtractShortestMeaningfulToken("a b c", out _));
     }
 }
+
+// #174: ML check events showed the bare browser process name when domain extraction
+// transiently failed (page loading, "New Tab", UIA hiccup). The memory bridges those
+// ticks with the last domain seen while the same browser stayed focused.
+public sealed class BrowserDomainMemoryTests
+{
+    [Fact]
+    public void TransientExtractionFailure_KeepsLastKnownDomain()
+    {
+        var memory = new BrowserDomainMemory();
+
+        Assert.Equal("reddit.com", memory.Observe("chrome", "reddit.com"));
+        Assert.Equal("reddit.com", memory.Observe("chrome", ""));
+        Assert.Equal("reddit.com", memory.Observe("chrome", null));
+    }
+
+    [Fact]
+    public void NewDomainExtracted_ReplacesRememberedDomain()
+    {
+        var memory = new BrowserDomainMemory();
+
+        memory.Observe("chrome", "reddit.com");
+        Assert.Equal("github.com", memory.Observe("chrome", "github.com"));
+        Assert.Equal("github.com", memory.Observe("chrome", ""));
+    }
+
+    [Fact]
+    public void NonBrowserFocused_ClearsMemory()
+    {
+        var memory = new BrowserDomainMemory();
+
+        memory.Observe("chrome", "reddit.com");
+        Assert.Equal("", memory.Observe("Code", null));
+        Assert.Equal("", memory.Observe("chrome", ""));
+    }
+
+    [Fact]
+    public void DifferentBrowserFocused_ClearsMemory()
+    {
+        var memory = new BrowserDomainMemory();
+
+        memory.Observe("chrome", "reddit.com");
+        Assert.Equal("", memory.Observe("msedge", ""));
+    }
+
+    [Fact]
+    public void BrowserWithoutAnyKnownDomain_ReturnsEmpty()
+    {
+        var memory = new BrowserDomainMemory();
+
+        Assert.Equal("", memory.Observe("firefox", ""));
+        Assert.Equal("", memory.Observe("firefox", null));
+    }
+}

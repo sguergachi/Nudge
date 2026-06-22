@@ -5,13 +5,21 @@ using NudgeCore;
 
 namespace NudgeCrossPlatform.Tests;
 
+[CollectionDefinition(nameof(NudgeHarvestBenchmarks), DisableParallelization = true)]
+public sealed class NudgeHarvestBenchmarksCollection { }
+
 /// <summary>
 /// Performance regression guard for the Nudge harvest engine.
 /// Every test here must pass to ship — any regression in time or allocations
 /// is caught immediately.
 ///
 /// Baseline measured 2026-05-30 with V2.1 circular buffer engine.
+///
+/// Runs in a dedicated non-parallel collection: GC.CollectionCount and Stopwatch
+/// are process-wide measurements, so allocations and CPU contention from test
+/// classes running in parallel inflated them past their thresholds on CI.
 /// </summary>
+[Collection(nameof(NudgeHarvestBenchmarks))]
 public sealed class NudgeHarvestBenchmarks
 {
     // ── Thresholds (generous to pass on slow Windows CI VMs) ─────────────────

@@ -503,3 +503,42 @@ internal static class BrowserDetector
 
     private static bool IsTrimCharacter(char c) => c is ' ' or '\t' or '—' or '–' or '|' or '/' or '\\' or '[' or ']' or '(' or ')' or '{' or '}' or '<' or '>' or ',' or ';' or ':' or '!' or '?' or '"' or '\'' or '`';
 }
+
+/// <summary>
+/// Display-only memory of the most recently extracted browser domain. Extraction is
+/// transiently empty (page loading, "New Tab", UIA hiccup), which made ML check events
+/// record the bare process name instead of the site (#174). While the same browser stays
+/// focused, the last known domain is the better display answer; focusing a non-browser
+/// app or a different browser clears the memory.
+/// </summary>
+internal sealed class BrowserDomainMemory
+{
+    private string _browser = "";
+    private string _domain = "";
+
+    /// <summary>
+    /// Records this tick's focus state and returns the effective display domain:
+    /// the current domain when extraction succeeded, otherwise the last domain seen
+    /// while this browser has been focused ("" when none).
+    /// </summary>
+    public string Observe(string appId, string? currentDomain)
+    {
+        if (!BrowserDetector.IsBrowser(appId))
+        {
+            _browser = "";
+            _domain = "";
+            return "";
+        }
+
+        if (!string.Equals(appId, _browser, StringComparison.OrdinalIgnoreCase))
+        {
+            _browser = appId;
+            _domain = "";
+        }
+
+        if (!string.IsNullOrEmpty(currentDomain))
+            _domain = currentDomain;
+
+        return _domain;
+    }
+}

@@ -314,3 +314,33 @@ public sealed class TryParseCategoryTests
         Assert.Equal(AppCategory.Development, cat);
     }
 }
+
+public sealed class DisplayAppNameTests
+{
+    [Fact]
+    public void DomainPresent_ReturnsDomain()
+    {
+        Assert.Equal("reddit.com", NudgeCoreLogic.DisplayAppName("chrome", "reddit.com"));
+        Assert.Equal("outlook.office.com", NudgeCoreLogic.DisplayAppName("msedge", "outlook.office.com"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void NoDomain_ReturnsApp(string? domain)
+    {
+        Assert.Equal("Code", NudgeCoreLogic.DisplayAppName("Code", domain));
+    }
+
+    // #174: a browser with no extractable domain shows its friendly name,
+    // not the raw process name.
+    [Theory]
+    [InlineData("chrome", "Chrome")]
+    [InlineData("msedge", "Edge")]
+    [InlineData("firefox", "Firefox")]
+    public void NoDomain_Browser_ReturnsFriendlyBrowserName(string processName, string expected)
+    {
+        Assert.Equal(expected, NudgeCoreLogic.DisplayAppName(processName, ""));
+        Assert.Equal(expected, NudgeCoreLogic.DisplayAppName(processName, null));
+    }
+}

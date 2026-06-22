@@ -49,7 +49,7 @@ namespace NudgeTray
     sealed class Program
     {
         const int UDP_PORT = 45001;
-        const string VERSION = "2.1.2";
+        const string VERSION = "2.1.5";
         const string NudgeExeName = "nudge";
         const string NudgeDllName = "nudge.dll";
         const int TRAINER_CHECK_INTERVAL_SEC = 15;
@@ -108,6 +108,12 @@ namespace NudgeTray
 
         [DllImport("user32.dll")]
         internal static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        internal static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll")]
+        internal static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
         [DllImport("user32.dll")]
         internal static extern int GetWindowLong(IntPtr hWnd, int nIndex);
@@ -452,6 +458,7 @@ namespace NudgeTray
             // ── TrainerState ─────────────────────────────────────────────────────
             TrainerState.SampleCount = 187;
             TrainerState.MinSamples = 100;
+            TrainerState.ModelDeployed = true;
             TrainerState.LastTrainedCount = 187;
             TrainerState.LastTrained = DateTime.Now.AddDays(-2).AddHours(-3);
             TrainerState.LastAccuracy = 0.87f;
@@ -2093,7 +2100,7 @@ namespace NudgeTray
                 LiveAIState.Add(new MLLiveEvent
                 {
                     T              = now,
-                    App            = LiveAIState.CurrentApp,
+                    App            = NudgeCoreLogic.DisplayAppName(LiveAIState.CurrentApp, LiveAIState.LastHarvest?.Domain),
                     SuppressReason = reason,
                     Score          = 0,
                     Confidence     = 0,
@@ -2142,6 +2149,11 @@ namespace NudgeTray
 
                 // Capture the app that was focused before the notification appeared
                 var previousApp = LiveAIState.CurrentApp ?? "";
+#if WINDOWS
+                IntPtr previousWindow = GetForegroundWindow();
+#else
+                IntPtr previousWindow = IntPtr.Zero;
+#endif
 
                 // Create and show custom notification window on Avalonia UI thread (works on all platforms)
                 Dispatcher.UIThread.Post(() =>
@@ -2157,7 +2169,7 @@ namespace NudgeTray
                             : LiveAIState.CurrentApp ?? "";
                         string detail = notifIsBrowser ? "" : LiveAIState.CurrentDetail ?? "";
                         var notificationWindow = new CustomNotificationWindow(appName, detail);
-                        notificationWindow.Closed += (s, e) => RestorePreviousAppFocus(previousApp);
+                        notificationWindow.Closed += (s, e) => RestorePreviousAppFocus(previousApp, previousWindow);
                         notificationWindow.ShowWithAnimation((productive) =>
                         {
                             _waitingForResponse = false;
@@ -2199,8 +2211,22 @@ namespace NudgeTray
         // FOCUS RESTORATION
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-        private static void RestorePreviousAppFocus(string appName)
+        private static void RestorePreviousAppFocus(string appName, IntPtr previousWindow)
         {
+#if WINDOWS
+            // Closing the focused notification hands Win32 activation to the next
+            // window on this thread — which raises the Analytics window whenever it
+            // is open in the background (#171). If activation stayed inside this
+            // process, give it back to the window the user was actually working in.
+            // If the user switched apps while the notification was up, the
+            // foreground is theirs — leave it alone.
+            if (previousWindow != IntPtr.Zero)
+            {
+                _ = GetWindowThreadProcessId(GetForegroundWindow(), out uint foregroundPid);
+                if (foregroundPid == (uint)Environment.ProcessId)
+                    SetForegroundWindow(previousWindow);
+            }
+#endif
             if (string.IsNullOrEmpty(appName))
                 return;
 
@@ -2293,8 +2319,13 @@ namespace NudgeTray
                 udp.Send(bytes, bytes.Length, endpoint);
                 Console.WriteLine($"✓ Sent response: {message}");
 
-                // Retrain the model immediately so the next prediction reflects this feedback
-                TriggerTrainingNow();
+                // The response is appended to the labeled CSV; the continuous
+                // background trainer retrains once 20 new responses have
+                // accumulated since the last run (background_trainer.py:144).
+                // Force-retraining on every response rewrote the trained-at count
+                // to the live total, so "new samples since last training" snapped
+                // back to 0 and the retrain threshold was never reached (#178).
+                // Manual retraining is still available via the "Train Now" button.
             }
             catch (Exception ex)
             {

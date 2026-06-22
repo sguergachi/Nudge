@@ -30,7 +30,7 @@ internal sealed class MLLiveEvent
 {
     /// <summary>Unix timestamp (seconds UTC)</summary>
     public long T { get; set; }
-    /// <summary>Foreground app name at time of check</summary>
+    /// <summary>Foreground app name at time of check — the website domain when a browser was focused (#130)</summary>
     public string App { get; set; } = "";
     /// <summary>Productivity score 0-1: 1=AI thinks productive, 0=not productive</summary>
     public double Score { get; set; }
