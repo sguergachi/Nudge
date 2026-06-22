@@ -20,8 +20,8 @@ Living log. Update when each step completes.
 | WP3 Scorer + DecisionEngine + regression matrix | 03 | lead | ✅ done — R1–R10 + personalization green |
 | WP5 Daemon integration (`nudge.cs`) | 05 | lead | ✅ done — V4 decides in-process, no Python; build green |
 | WP6 State persistence (`V4State`) | 06 | lead | ✅ done — atomic JSON + tests |
-| WP6 Tray process gating (don't launch model_inference in V4) | 06 | — | ⬜ next |
-| WP7 UI/IPC | 07 | — | ⬜ |
+| WP6 Tray process gating (don't launch model_inference in V4) | 06 | lead | ✅ done — no Python in experimental |
+| WP7 UI/IPC | 07 | lead | ✅ done — rationale line + Personalization panel; build green |
 | WP8 Acceptance build + full test run | 08 | partial | ◐ 682 tests green; live run pending |
 | WP9 Seed priors curation | 09 | — | ⬜ |
 
@@ -69,6 +69,20 @@ is wiring (WP5 daemon, WP6 persistence/process, WP7 UI, WP9 priors) — no decis
     `ExpStatePersistenceTests.cs` (6). Full suite: **682 passed**, 0 new warnings (only the
     pre-existing upstream CA1711 in `NudgeHarvestBenchmarks.cs`).
   - `nudge_build.cs` regenerated from `nudge.cs` by `build.sh` (verified in sync).
-- **Remaining:** WP6 tray gating (stop launching `model_inference.py`/`background_trainer.py` in
-  experimental mode — purely a runtime-waste cleanup; the daemon already ignores them), WP7 UI
-  rationale surface, WP9 priors curation, and a live `--experimental` smoke run.
+- **WP6 tray gating (done, lead):** `StartMLServices()` now short-circuits in experimental mode —
+  deploys the shipped `distraction_priors.tsv` only, marks `_mlEnabled = true`, and returns
+  **before** the Python dependency check / `model_inference.py` / `background_trainer.py` ever
+  spawn. `DeployBundledModelExp()` trimmed to priors-only (V4 needs no joblib seed/scaler).
+  `TriggerTrainingNow()` guarded to no-op in experimental (defense-in-depth; the Train button is
+  also hidden in the UI). V3 launch path unchanged — its now-dead `_experimentalMode` ternaries
+  simplified out. The interactive `--schema v4` trainer plumbing remains only on the V3-reachable
+  `StartContinuousTrainer` (unreachable in experimental, harmless).
+- **WP7 UI/IPC (done, lead):** Additive fields on `MLLiveEvent` — `Rationale`, `Distraction`,
+  `Threshold` (registered via existing source-gen; old parsers ignore them). `EvaluateExperimental`
+  populates them from `DecisionResult`. AI Brain tab: a **"Why this decision"** line under the score
+  card shows the engine rationale + `distraction X vs. threshold Y` (experimental only — null/0 in
+  V3 so it's hidden). The "Model Training" accordion is replaced by a **"Personalization"** panel in
+  experimental mode (`CreatePersonalizationView`) reading `exp_calibration.json` + `exp_baseline.json`
+  via the shared `V4State`: calibrated threshold, target nudges/hr, focus-baseline warm/Count. V3
+  training view untouched. Build green, **682 tests pass**, 0 new warnings.
+- **Remaining:** WP9 priors curation, and a live `--experimental` smoke run on a real session.

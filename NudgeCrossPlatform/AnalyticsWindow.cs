@@ -803,8 +803,10 @@ namespace NudgeTray
                 panel.Children.Add(eventsSection);
             }
 
-            // ── Training status ───────────────────────────────────────────────────
-            var trainingSection = CreateSection("Model Training", CreateTrainingView());
+            // ── Training status / Personalization ──────────────────────────────────
+            var trainingSection = Program.ExperimentalMode
+                ? CreateSection("Personalization", CreatePersonalizationView())
+                : CreateSection("Model Training", CreateTrainingView());
             trainingSection.Tag = "ai_training_section";
             panel.Children.Add(trainingSection);
 
@@ -875,8 +877,10 @@ namespace NudgeTray
                 RemoveChild(panel, 2);
             }
 
-            // Training section (index 3)
-            var trainingSection = CreateSection("Model Training", CreateTrainingView());
+            // Training section (index 3) — Personalization in experimental mode
+            var trainingSection = Program.ExperimentalMode
+                ? CreateSection("Personalization", CreatePersonalizationView())
+                : CreateSection("Model Training", CreateTrainingView());
             trainingSection.Tag = "ai_training_section";
             SetOrReplaceChild(panel, 3, trainingSection);
 
@@ -923,6 +927,62 @@ namespace NudgeTray
         public static void UpdateLivePulseDot()
         {
             UpdateFocusCardInPlace();
+        }
+
+        // V4/experimental has no sklearn model to train — the engine personalizes in-process
+        // via the reputation store (per-app/domain) + a closed-loop calibrated threshold + a
+        // per-user focus baseline. This panel replaces "Model Training" in experimental mode and
+        // reads the engine's persisted state directly (the daemon owns the writes; we only read).
+        private const long V4BaselineWarmupMin = 30; // mirrors FocusScoring.WarmupMin
+
+        private static StackPanel CreatePersonalizationView()
+        {
+            var panel = new StackPanel { Spacing = 8 };
+
+            var cal = NudgeCore.V4State.LoadCalibration(
+                System.IO.Path.Combine(PlatformConfig.DataDirectory, "exp_calibration.json"));
+            var baseline = NudgeCore.V4State.LoadBaseline(
+                System.IO.Path.Combine(PlatformConfig.DataDirectory, "exp_baseline.json"));
+
+            bool warm = baseline.Count >= V4BaselineWarmupMin;
+
+            // Status row: warming up until the focus baseline has enough samples to trust drift.
+            var statusColor = warm ? ProductiveGreen : AIStatusLearning;
+            var statusStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            statusStack.Children.Add(new Border
+            {
+                Width = 8, Height = 8,
+                CornerRadius = new CornerRadius(4),
+                Background = new SolidColorBrush(statusColor),
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            statusStack.Children.Add(new TextBlock
+            {
+                Text = warm ? "Personalized" : "Learning your baseline…",
+                FontSize = 12,
+                FontWeight = FontWeight.Medium,
+                Foreground = new SolidColorBrush(statusColor),
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            panel.Children.Add(statusStack);
+
+            AddFusionRow(panel, "Nudge threshold", $"{cal.Threshold:F2}", PrimaryBlue);
+            AddFusionRow(panel, "Target nudges", $"{cal.TargetNudgesPerHour:F1}/hr", TextSecondary);
+            AddFusionRow(panel, "Focus baseline",
+                warm ? $"{baseline.Count} samples (warm)" : $"{baseline.Count}/{V4BaselineWarmupMin} samples",
+                warm ? ProductiveGreen : AIStatusLearning);
+
+            panel.Children.Add(new TextBlock
+            {
+                Text = "The engine raises the threshold when it nudges too often and lowers it "
+                     + "when it stays quiet — and learns each site/app from your Yes/No answers.",
+                FontSize = 10,
+                Foreground = new SolidColorBrush(TextTertiary),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 2, 0, 0)
+            });
+
+            return panel;
         }
 
         private static StackPanel CreateTrainingView()
@@ -2239,6 +2299,28 @@ namespace NudgeTray
                 Grid.SetColumn(scoreStack, 1);
                 scoreGrid.Children.Add(scoreStack);
                 panel.Children.Add(scoreGrid);
+
+                // ── "Why this decision" — V4 engine rationale ────────────────
+                // The single highest-value legibility cue: surface the engine's reason
+                // (e.g. "low-value domain + focus drift") plus the live distraction vs.
+                // calibrated threshold so the user sees the bar the engine is clearing.
+                if (!string.IsNullOrEmpty(latest.Rationale))
+                {
+                    panel.Children.Add(new TextBlock
+                    {
+                        Text = latest.Rationale,
+                        FontSize = 10,
+                        FontStyle = FontStyle.Italic,
+                        Foreground = new SolidColorBrush(TextSecondary),
+                        TextWrapping = TextWrapping.Wrap
+                    });
+                    panel.Children.Add(new TextBlock
+                    {
+                        Text = $"distraction {latest.Distraction:F2} vs. threshold {latest.Threshold:F2}",
+                        FontSize = 9,
+                        Foreground = new SolidColorBrush(TextTertiary)
+                    });
+                }
             }
 
             // ── Gradient chart ────────────────────────────────────────────────

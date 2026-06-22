@@ -3101,7 +3101,10 @@ sealed class Nudge
             Confidence    = System.Math.Abs(result.DistractionValue - 0.5) * 2.0,
             Productive    = result.DistractionValue < 0.5,
             Triggered     = result.Trigger,
-            TriggerSource = result.Trigger ? "ai" : "int"
+            TriggerSource = result.Trigger ? "ai" : "int",
+            Rationale     = result.Rationale,
+            Distraction   = result.DistractionValue,
+            Threshold     = result.EffectiveThreshold
         };
         Console.WriteLine($"MLDATA:{JsonSerializer.Serialize(liveEvt, NudgeJsonContext.Default.MLLiveEvent)}");
 

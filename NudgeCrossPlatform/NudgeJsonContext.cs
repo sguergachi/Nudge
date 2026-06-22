@@ -51,6 +51,12 @@ internal sealed class MLLiveEvent
     /// One of: InMeeting, ScreenSharing, Afk, PoorSignal.
     /// </summary>
     public string? SuppressReason { get; set; }
+    /// <summary>V4 engine: human-readable reason for the decision (DecisionResult.Rationale). Null in V3.</summary>
+    public string? Rationale { get; set; }
+    /// <summary>V4 engine: distraction value 0..1 (DecisionResult.DistractionValue). 0 in V3.</summary>
+    public double Distraction { get; set; }
+    /// <summary>V4 engine: calibrated trigger threshold at decision time (DecisionResult.EffectiveThreshold). 0 in V3.</summary>
+    public double Threshold { get; set; }
 }
 
 /// <summary>
