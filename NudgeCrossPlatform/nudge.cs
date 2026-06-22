@@ -1767,6 +1767,15 @@ sealed class Nudge
     static List<double> _mlConfidenceScores = new List<double>();
     static long _lastMLTriggerT;  // Unix timestamp of last triggered snapshot (0=none)
 
+    // V4 Experimental Signal Mode decision-engine state (WP5/WP6). Pure in-process engine —
+    // no Python. Reputation lives in _reputationStore; these add the personal drift baseline
+    // and the closed-loop calibration threshold, both persisted to ~/.nudge/exp_*.json.
+    static BaselineState _baselineState;
+    static CalibrationState _calibrationState = Calibrator.Default();
+    static string _baselineStatePath = "";
+    static string _calibrationStatePath = "";
+    static bool _snapshotWasAiTrigger;  // was the pending snapshot an engine ("ai") trigger? (for Calibrator.Observe)
+
     // Log message formats
     private const string LogPredictionFormat = "📊 Request #{0}: {1} (confidence: {2:F1}%, {3:F1}ms)";
     private const string LogIdleFormat = "  {0} min until next snapshot{1}  ({2}{3}{4}, idle: {5}ms)";
@@ -1853,6 +1862,16 @@ sealed class Nudge
             Info(domainPriors.Count + appPriors.Count > 0
                 ? $"  Distraction priors: {domainPriors.Count} domains, {appPriors.Count} apps"
                 : "  Distraction priors: none");
+
+            // V4 engine state: personal drift baseline + closed-loop calibration threshold.
+            _baselineStatePath = Path.Combine(PlatformConfig.DataDirectory, "exp_baseline.json");
+            _calibrationStatePath = Path.Combine(PlatformConfig.DataDirectory, "exp_calibration.json");
+            _baselineState = V4State.LoadBaseline(_baselineStatePath);
+            _calibrationState = V4State.LoadCalibration(_calibrationStatePath);
+            // The V4 engine runs in-process, so "ML" is always available (no TCP server). This
+            // keeps the interval-reason text and per-minute status accurate.
+            _mlAvailable = true;
+            Info($"  V4 engine: baseline {(_baselineState.Count >= 30 ? "warm" : "warming")} ({_baselineState.Count} samples), threshold {_calibrationState.Threshold:F2}");
         }
         InitializeCSV();
         StartUDPListener();
@@ -2258,6 +2277,10 @@ sealed class Nudge
                     }
                     else
                     {
+                        // Record whether the engine (ai) or the interval floor (int) caused this
+                        // snapshot, so Calibrator.Observe can route the YES/NO outcome to its
+                        // precision (3a) vs recall (3b) path when the user responds.
+                        _snapshotWasAiTrigger = mlTriggered;
                         TakeSnapshot(app, title, idle, _attentionSpanMs, tick);
                         _mlLowConfidence = false;
                         elapsed = 0;
@@ -2617,6 +2640,18 @@ sealed class Nudge
                             double newAppRate = _reputationStore?.AppRate(ap) ?? 0.5;
                             Dim($"  [verbose] reputation update: domain={dom} {oldDomRate:F2}->{newDomRate:F2}, app={ap} {oldAppRate:F2}->{newAppRate:F2}");
                         }
+
+                        // Closed-loop calibration: learn from the outcome. An "ai" snapshot drives
+                        // precision (raise the bar on a false positive); an "int" snapshot answered
+                        // NOT-productive drives recall (lower the bar — the engine missed it).
+                        double oldThreshold = _calibrationState.Threshold;
+                        Calibrator.Observe(ref _calibrationState,
+                            triggered: _snapshotWasAiTrigger,
+                            userSaidProductive: productive.Value,
+                            now: DateTime.UtcNow);
+                        V4State.FlushCalibration(_calibrationState, _calibrationStatePath);
+                        if (_verbose && System.Math.Abs(_calibrationState.Threshold - oldThreshold) > 1e-9)
+                            Dim($"  [verbose] calibration: threshold {oldThreshold:F3}->{_calibrationState.Threshold:F3} (src={(_snapshotWasAiTrigger ? "ai" : "int")}, productive={productive.Value})");
                     }
                 }
             }
@@ -2909,6 +2944,28 @@ sealed class Nudge
             return true;  // Will be gated by elapsed time in main loop
         }
 
+        // Poor signal / AFK never produce a decision in either mode. (Also satisfies the V4
+        // FocusScoring caller contract: only clean ticks may update the personal baseline.)
+        if (tick is ActivityTickResult gateTick)
+        {
+            if (gateTick.Context.SignalQuality == SignalQuality.Poor)
+            {
+                Dim("  ML: Skipping prediction because signal quality is poor");
+                return false;
+            }
+
+            if (gateTick.Features.AfkFlag == 1)
+            {
+                Dim("  ML: Skipping prediction because user is AFK");
+                return false;
+            }
+        }
+
+        // V4 Experimental Signal Mode: pure in-process decision engine — no Python, no TCP.
+        if (_experimentalMode)
+            return EvaluateExperimental(app, tick);
+
+        // ── V3 path: query the Python sklearn model over TCP ──
         // Check ML availability every time (this function is called once per minute)
         CheckMLAvailability();
 
@@ -2916,21 +2973,6 @@ sealed class Nudge
         if (!_mlAvailable)
         {
             return false;
-        }
-
-        if (tick is ActivityTickResult fusedTick)
-        {
-            if (fusedTick.Context.SignalQuality == SignalQuality.Poor)
-            {
-                Dim("  ML: Skipping prediction because signal quality is poor");
-                return false;
-            }
-
-            if (fusedTick.Features.AfkFlag == 1)
-            {
-                Dim("  ML: Skipping prediction because user is AFK");
-                return false;
-            }
         }
 
         // Query ML model
@@ -3022,6 +3064,62 @@ sealed class Nudge
             Dim($"  {Color.DIM}Stats: {_mlPredictions} predictions, {_mlTriggeredSnapshots} triggered, {_mlSkippedAlerts} skipped{Color.RESET}");
             return false;
         }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // V4 EXPERIMENTAL SIGNAL MODE — pure in-process decision engine (WP5)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    // Fuses reputation (authoritative) + personal focus-drift + sensors into a distraction
+    // score and applies the closed-loop calibrated threshold. No model_inference.py, no socket.
+    // Reputation values were already overlaid onto FeaturesV4 in the main loop (~the overlay
+    // block above CaptureActivityTick). Caller guarantees this tick is non-AFK, non-poor.
+    static bool EvaluateExperimental(string app, ActivityTickResult? tick)
+    {
+        if (tick is not ActivityTickResult t || t.FeaturesV4 is not FeatureVectorV4 fv4)
+            return false;  // no V4 vector → defer to the interval floor
+
+        var now = DateTime.UtcNow;
+        var rep = ReputationAuthority.From(fv4);
+        var focus = FocusScoring.Assess(fv4, ref _baselineState, now);   // updates the personal baseline
+        var inputs = new DecisionInputs(fv4, rep, focus, now);
+        var result = DecisionEngine.Evaluate(inputs, DecisionEngine.DefaultScorer, ref _calibrationState);
+
+        _mlPredictions++;
+        _mlConfidenceScores.Add(System.Math.Abs(result.DistractionValue - 0.5) * 2.0);
+        if (_mlConfidenceScores.Count > 100)
+            _mlConfidenceScores.RemoveAt(0);
+
+        // Preserve the UI contract: emit the same MLLiveEvent the AI Brain tab parses,
+        // mapped from the engine result (see V4_REDESIGN/00_ARCHITECTURE.md §7).
+        long ts = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var liveEvt = new MLLiveEvent
+        {
+            T             = ts,
+            App           = NudgeCoreLogic.DisplayAppName(app, _displayDomain),
+            Score         = result.ProductivityScore,
+            Confidence    = System.Math.Abs(result.DistractionValue - 0.5) * 2.0,
+            Productive    = result.DistractionValue < 0.5,
+            Triggered     = result.Trigger,
+            TriggerSource = result.Trigger ? "ai" : "int"
+        };
+        Console.WriteLine($"MLDATA:{JsonSerializer.Serialize(liveEvt, NudgeJsonContext.Default.MLLiveEvent)}");
+
+        // Persist the baseline opportunistically (cheap, atomic). It mutated this tick.
+        V4State.FlushBaseline(_baselineState, _baselineStatePath);
+
+        if (result.Trigger)
+        {
+            _lastMLTriggerT = ts;
+            _mlTriggeredSnapshots++;
+            _mlLowConfidence = false;
+            Info($"  {Color.BRED}ML TRIGGER{Color.RESET}: distraction {Color.BYELLOW}{result.DistractionValue:F2}{Color.RESET} ≥ thr {result.EffectiveThreshold:F2} — {result.Rationale}");
+            return true;
+        }
+
+        _mlSkippedAlerts++;
+        Dim($"  {Color.BGREEN}ML SKIP{Color.RESET}: distraction {result.DistractionValue:F2} < thr {result.EffectiveThreshold:F2} — {result.Rationale}");
+        return false;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

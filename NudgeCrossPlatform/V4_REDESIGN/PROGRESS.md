@@ -18,10 +18,11 @@ Living log. Update when each step completes.
 | WP2 ReputationAuthority + tests | 02 | sub-agent | ✅ done — integrated, tests green |
 | WP4 Calibrator + tests | 04 | sub-agent | ✅ done — integrated, tests green |
 | WP3 Scorer + DecisionEngine + regression matrix | 03 | lead | ✅ done — R1–R10 + personalization green |
-| WP5 Daemon integration (`nudge.cs`) | 05 | lead | ⬜ next |
-| WP6 State persistence + tray process gating | 06 | — | ⬜ |
+| WP5 Daemon integration (`nudge.cs`) | 05 | lead | ✅ done — V4 decides in-process, no Python; build green |
+| WP6 State persistence (`V4State`) | 06 | lead | ✅ done — atomic JSON + tests |
+| WP6 Tray process gating (don't launch model_inference in V4) | 06 | — | ⬜ next |
 | WP7 UI/IPC | 07 | — | ⬜ |
-| WP8 Acceptance build + full test run | 08 | partial | ◐ pure-logic green (653 tests); manual run pending WP5 |
+| WP8 Acceptance build + full test run | 08 | partial | ◐ 682 tests green; live run pending |
 | WP9 Seed priors curation | 09 | — | ⬜ |
 
 **Milestone reached: the entire pure-logic decision engine is implemented and tested.**
@@ -50,3 +51,24 @@ is wiring (WP5 daemon, WP6 persistence/process, WP7 UI, WP9 priors) — no decis
   `PersonalizationTest_SlackFlips`, which drives the real `DomainReputationStore` to prove a
   scattered Slack session stops nudging after 3 YES labels). Fixed a `ref readonly`-to-property
   compile error (plain copy; not a hot path). Full suite: **653 passed, 0 warnings**.
+- **Upstream merge:** merged origin/master (16 commits, v2.1.2–2.1.5). One conflict in
+  `AnalyticsWindow.Views.cs` (convergent #176 fix — kept our `GetDataPaths` helper). 676 tests green.
+- **WP5 + WP6 persistence (done, lead):** Wired the engine into `nudge.cs`:
+  - `ShouldTriggerSnapshot` now branches by mode after the poor/AFK gate; experimental calls the
+    new `EvaluateExperimental(app, tick)` which runs `ReputationAuthority.From` +
+    `FocusScoring.Assess(ref _baselineState)` + `DecisionEngine.Evaluate(ref _calibrationState)`,
+    emits the same `MLLiveEvent` (mapped per 00 §7), and **never touches Python/TCP**. V3 path
+    untouched (still `CheckMLAvailability`/`QueryMLModel`).
+  - Startup loads `exp_baseline.json` + `exp_calibration.json`; sets `_mlAvailable = true` in V4
+    (in-process engine, no server).
+  - `SaveSnapshot` now calls `Calibrator.Observe` on each labeled outcome (routing ai vs int via
+    `_snapshotWasAiTrigger`, captured at `TakeSnapshot`) and flushes calibration; baseline flushes
+    each check. Reputation update path unchanged.
+  - New `V4Engine.State.cs` (`V4State` + `BaselineDto`/`CalibrationDto`, registered in
+    `NudgeJsonContext`): atomic temp-file+rename writes, defaults on miss/corrupt. Tests:
+    `ExpStatePersistenceTests.cs` (6). Full suite: **682 passed**, 0 new warnings (only the
+    pre-existing upstream CA1711 in `NudgeHarvestBenchmarks.cs`).
+  - `nudge_build.cs` regenerated from `nudge.cs` by `build.sh` (verified in sync).
+- **Remaining:** WP6 tray gating (stop launching `model_inference.py`/`background_trainer.py` in
+  experimental mode — purely a runtime-waste cleanup; the daemon already ignores them), WP7 UI
+  rationale surface, WP9 priors curation, and a live `--experimental` smoke run.

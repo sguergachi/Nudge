@@ -35,6 +35,7 @@
     <Compile Include="V4Engine.Reputation.cs" />
     <Compile Include="V4Engine.Scorer.cs" />
     <Compile Include="V4Engine.Calibrator.cs" />
+    <Compile Include="V4Engine.State.cs" />
   </ItemGroup>
 
   <ItemGroup>

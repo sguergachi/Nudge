@@ -148,6 +148,8 @@ internal sealed class TrainerMeta
 [JsonSerializable(typeof(NotificationPositionConfig))]
 [JsonSerializable(typeof(TraySettings))]
 [JsonSerializable(typeof(TrainerMeta))]
+[JsonSerializable(typeof(BaselineDto))]
+[JsonSerializable(typeof(CalibrationDto))]
 internal sealed partial class NudgeJsonContext : JsonSerializerContext
 {
 }
