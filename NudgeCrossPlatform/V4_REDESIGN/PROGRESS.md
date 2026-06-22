@@ -22,7 +22,7 @@ Living log. Update when each step completes.
 | WP6 State persistence (`V4State`) | 06 | lead | ✅ done — atomic JSON + tests |
 | WP6 Tray process gating (don't launch model_inference in V4) | 06 | lead | ✅ done — no Python in experimental |
 | WP7 UI/IPC | 07 | lead | ✅ done — rationale line + Personalization panel; build green |
-| WP8 Acceptance build + full test run | 08 | partial | ◐ 683 tests green; live run pending |
+| WP8 Acceptance build + full test run | 08 | partial | ◐ 683 tests green; headless smoke ✅; GUI verify pending |
 | WP9 Seed priors curation | 09 | lead | ✅ done — ambiguous comms omitted, banners added |
 
 **Milestone reached: the entire pure-logic decision engine is implemented and tested.**
@@ -97,4 +97,14 @@ is wiring (WP5 daemon, WP6 persistence/process, WP7 UI, WP9 priors) — no decis
   Decommission banners added to `generate_sample_data.py`, `train_model.py`, `background_trainer.py`
   and a V4 note to `PRETRAINED_DISTRACTION_MODEL.md` (V4 runtime is GBM-free; scripts kept for
   V3/future offline scorer). Full suite: **683 tests pass**.
-- **Remaining:** a live `--experimental` smoke run on a real session.
+- **Headless smoke (done):** ran `nudge.dll --experimental --ml --ml-interval 10 --verbose` for
+  ~45s. Confirmed: curated priors load ("Distraction priors: 361 domains, 135 apps"), experimental
+  mode active, `MLDATA` carries the new `rationale`/`distraction`/`threshold` fields, engine logs
+  `ML SKIP … warmup: insufficient baseline (neutral)` on a cold start, `exp_baseline.json` flushes
+  atomically (count grew per check), and **no `model_inference`/`background_trainer` process or port
+  45003 listener** — the daemon decides fully in-process. Test artifacts cleaned up afterward.
+- **Remaining (user, GUI only):** open the tray in `--experimental` and eyeball the AI Brain tab —
+  the "Why this decision" rationale line under the score card, the "Personalization" panel
+  (threshold / target nudges/hr / focus-baseline warm-Count), and ✓/✗ correlation after answering
+  a V4-triggered nudge YES/NO. The data contract feeding all three is verified above; only the
+  rendering needs a human look on a live session.
