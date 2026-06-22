@@ -1362,8 +1362,7 @@ namespace NudgeTray
         public static AnalyticsData LoadFromCSV(AnalyticsWindow.TimeFilter filter)
         {
             var data = new AnalyticsData();
-            string activityLogPath = PlatformConfig.ActivityLogPath;
-            string harvestPath = PlatformConfig.CsvPath;
+            var (activityLogPath, harvestPath) = GetDataPaths(Program.ExperimentalMode);
             DateTime filterStartDate = AnalyticsWindow.GetFilterStartDate(filter);
 
             Console.WriteLine($"[Analytics] Loading data for {filter} (from {filterStartDate:yyyy-MM-dd HH:mm})");
@@ -1374,7 +1373,7 @@ namespace NudgeTray
             {
                 try
                 {
-                    Console.WriteLine("[Analytics] Streaming ACTIVITY_LOG.CSV...");
+                    Console.WriteLine($"[Analytics] Streaming {Path.GetFileName(activityLogPath)}...");
                     int processedLines = 0;
                     bool skippedHeader = false;
 
@@ -1408,14 +1407,14 @@ namespace NudgeTray
             }
             else
             {
-                Console.WriteLine("[Analytics] ACTIVITY_LOG.CSV not found");
+                Console.WriteLine($"[Analytics] {Path.GetFileName(activityLogPath)} not found");
             }
 
             if (File.Exists(harvestPath))
             {
                 try
                 {
-                    Console.WriteLine("[Analytics] Streaming HARVEST.CSV...");
+                    Console.WriteLine($"[Analytics] Streaming {Path.GetFileName(harvestPath)}...");
                     int processedHarvest = 0;
                     bool skippedHeader = false;
 
@@ -1463,10 +1462,17 @@ namespace NudgeTray
             }
             else
             {
-                Console.WriteLine("[Analytics] HARVEST.CSV not found - respond to notifications to populate productivity data");
+                Console.WriteLine($"[Analytics] {Path.GetFileName(harvestPath)} not found - respond to notifications to populate productivity data");
             }
 
             return data;
+        }
+
+        internal static (string ActivityLogPath, string HarvestPath) GetDataPaths(bool experimentalMode)
+        {
+            return experimentalMode
+                ? (PlatformConfig.ActivityLogPathExp, PlatformConfig.CsvPathExp)
+                : (PlatformConfig.ActivityLogPath, PlatformConfig.CsvPath);
         }
     }
 }

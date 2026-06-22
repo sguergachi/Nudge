@@ -2334,7 +2334,7 @@ sealed class Nudge
             }
 
             bool harvestExists = File.Exists(_csvPath);
-            EnsureCsvSchema(_csvPath, FeatureSchema.HarvestHeaders);
+            EnsureCsvSchema(_csvPath, _experimentalMode ? FeatureSchemaV4.HarvestHeadersV4 : FeatureSchema.HarvestHeaders);
             _csvFile = new StreamWriter(_csvPath, append: true);
             _csvFile.AutoFlush = true; // Ensure data is written immediately
 

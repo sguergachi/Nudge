@@ -17,6 +17,11 @@
     <Compile Include="KWinScripts.cs" />
     <Compile Include="DomainReputationStore.cs" />
     <Compile Include="WindowsBrowserUrlReader.cs" />
+    <Compile Include="V4Engine.Types.cs" />
+    <Compile Include="V4Engine.FocusScoring.cs" />
+    <Compile Include="V4Engine.Reputation.cs" />
+    <Compile Include="V4Engine.Scorer.cs" />
+    <Compile Include="V4Engine.Calibrator.cs" />
   </ItemGroup>
 
   <PropertyGroup Condition="'$(OS)' == 'Windows_NT'">

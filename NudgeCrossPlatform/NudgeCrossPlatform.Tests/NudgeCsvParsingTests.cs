@@ -1,6 +1,7 @@
 using System;
 using Xunit;
 using NudgeCore;
+using NudgeTray;
 
 namespace NudgeCrossPlatform.Tests;
 
@@ -224,6 +225,32 @@ public sealed class NudgeCsvParsingTests
 
         Assert.True(ok);
         Assert.False(entry.Productive);
+    }
+
+    [Fact]
+    public void TryParseHarvestLine_V4ExperimentalLine_ReturnsEntry()
+    {
+        var ok = NudgeCoreLogic.TryParseHarvestLine(
+            "2026-04-26 12:34:56,12,0,Cursor,12345,500,30000,1,4,cursor,Code,github.com,win-1,false,60000,30000,2,1,kwin_script,trusted,0,123,456,500,30000,1,3,2,1,1,0.75,0.25,1,0,0,0,1,0,0.9,42,0.8,12",
+            out var entry);
+
+        Assert.True(ok);
+        Assert.Equal(new DateTime(2026, 4, 26, 12, 34, 56), entry.Timestamp);
+        Assert.Equal(12, entry.HourOfDay);
+        Assert.Equal("Cursor", entry.AppName);
+        Assert.True(entry.Productive);
+    }
+
+    [Fact]
+    public void AnalyticsData_GetDataPaths_UsesExperimentalFilesWhenEnabled()
+    {
+        var normal = AnalyticsData.GetDataPaths(experimentalMode: false);
+        var experimental = AnalyticsData.GetDataPaths(experimentalMode: true);
+
+        Assert.EndsWith("ACTIVITY_LOG.CSV", normal.ActivityLogPath);
+        Assert.EndsWith("HARVEST.CSV", normal.HarvestPath);
+        Assert.EndsWith("ACTIVITY_LOG_EXP.CSV", experimental.ActivityLogPath);
+        Assert.EndsWith("HARVEST_EXP.CSV", experimental.HarvestPath);
     }
 
     [Fact]
