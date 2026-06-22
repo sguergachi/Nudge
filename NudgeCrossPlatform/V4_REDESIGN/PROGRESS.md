@@ -22,8 +22,8 @@ Living log. Update when each step completes.
 | WP6 State persistence (`V4State`) | 06 | lead | ✅ done — atomic JSON + tests |
 | WP6 Tray process gating (don't launch model_inference in V4) | 06 | lead | ✅ done — no Python in experimental |
 | WP7 UI/IPC | 07 | lead | ✅ done — rationale line + Personalization panel; build green |
-| WP8 Acceptance build + full test run | 08 | partial | ◐ 682 tests green; live run pending |
-| WP9 Seed priors curation | 09 | — | ⬜ |
+| WP8 Acceptance build + full test run | 08 | partial | ◐ 683 tests green; live run pending |
+| WP9 Seed priors curation | 09 | lead | ✅ done — ambiguous comms omitted, banners added |
 
 **Milestone reached: the entire pure-logic decision engine is implemented and tested.**
 653/653 tests pass; `nudge.csproj` + `nudge-tray.csproj` build with 0 warnings. What remains
@@ -85,4 +85,16 @@ is wiring (WP5 daemon, WP6 persistence/process, WP7 UI, WP9 priors) — no decis
   experimental mode (`CreatePersonalizationView`) reading `exp_calibration.json` + `exp_baseline.json`
   via the shared `V4State`: calibrated threshold, target nudges/hr, focus-baseline warm/Count. V3
   training view untouched. Build green, **682 tests pass**, 0 new warnings.
-- **Remaining:** WP9 priors curation, and a live `--experimental` smoke run on a real session.
+- **WP9 priors curation (done, lead):** Curated at the source (`tools/build_distraction_kb.py`)
+  and regenerated `model_exp/distraction_priors.tsv`. Removed the entire **ambiguous communication
+  cluster** — webmail (gmail/outlook/proton/…), chat (slack/discord/telegram/whatsapp/signal/…),
+  and meetings (zoom/teams/webex/meet/whereby) as both domains and app ids, plus the email-client
+  apps (thunderbird/outlook/evolution) and `webmail` from `CATEGORY_PRIORS`. They now fall to the
+  neutral 0.5 prior so the user's labels decide — fixing "Slack always flagged" at the source.
+  Strong distractors (games/gambling/adult/social/streaming) and producers (dev/office/cloud/edu)
+  kept. New count 361 domains / 135 apps (still ≥300/≥100, coverage test unchanged). Added
+  `DistractionPriorsTests.ShippedTsv_OmitsAmbiguousCommunicationKeys` to lock the decision in.
+  Decommission banners added to `generate_sample_data.py`, `train_model.py`, `background_trainer.py`
+  and a V4 note to `PRETRAINED_DISTRACTION_MODEL.md` (V4 runtime is GBM-free; scripts kept for
+  V3/future offline scorer). Full suite: **683 tests pass**.
+- **Remaining:** a live `--experimental` smoke run on a real session.

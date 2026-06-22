@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# NOTE (WP9): the V4 (--experimental) runtime no longer trains or queries a GBM —
+# it runs the pure-C# decision engine in the daemon. Retained for V3 and a possible
+# future offline corpus-trained scorer; not on the V4 runtime path.
 """
 Generate synthetic productivity data for model pre-training.
 

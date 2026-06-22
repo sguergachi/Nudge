@@ -61,6 +61,8 @@ CATEGORY_PRIORS = {
     'jobsearch':                0.50,
     'bank':                     0.60,
     'financial':                0.55,
+    # 'webmail' deliberately absent — email is user-dependent (WP9 §2); see the
+    # communication note in CURATED_DOMAINS. UT1 webmail domains fall to neutral.
 }
 
 # ── Curated domains: category blocks share a default prior; per-key overrides inline ──
@@ -154,22 +156,12 @@ CURATED_DOMAINS = [
         'arstechnica.com', 'wired.com', 'engadget.com', 'tomshardware.com',
         'weather.com', 'accuweather.com', 'archive.org',
     ]),
-    # messaging on the web
-    (0.30, [
-        'web.whatsapp.com', 'whatsapp.com', 'web.telegram.org', 'telegram.org',
-        'messenger.com', 'discord.com', 'discordapp.com',
-    ]),
-    # webmail / calendars — usually work
-    (0.75, [
-        'gmail.com', 'mail.google.com', 'calendar.google.com', 'outlook.com',
-        'outlook.live.com', 'outlook.office.com', 'mail.yahoo.com', 'proton.me',
-        'protonmail.com', 'fastmail.com', 'hey.com', 'icloud.com',
-    ]),
-    # meetings / team chat
-    (0.60, [
-        'meet.google.com', 'teams.microsoft.com', 'webex.com', 'whereby.com',
-    ]),
-    (0.55, ['slack.com', 'app.slack.com', 'zoom.us']),
+    # Communication — webmail, chat, and meeting tools are DELIBERATELY OMITTED
+    # (WP9 §2). Whether email / Slack / Zoom / Discord / Teams is "productive" is
+    # entirely user-dependent, so a shipped guess (notably the old slack=0.55) is
+    # exactly what produced the "Slack always flagged" false positive. Left
+    # unlisted, these fall to the neutral 0.5 prior and the user's own Yes/No
+    # labels — not our guess — decide. Do not re-add gmail/slack/zoom/discord etc.
     # development
     (0.90, [
         'github.com', 'gist.github.com', 'gitlab.com', 'bitbucket.org',
@@ -258,18 +250,17 @@ CURATED_APPS = [
         'krita', 'kdenlive', 'shotcut', 'ardour', 'davinci-resolve', 'zathura',
         'audacity', 'handbrake', 'musescore',
     ]),
-    (0.70, ['thunderbird', 'evolution', 'outlook', 'okular', 'evince', 'gedit']),
-    # comms — meetings are work, chat is half-and-half
-    (0.55, ['slack', 'teams', 'ms-teams', 'teams-for-linux', 'zoom', 'webex']),
-    (0.40, ['skype', 'signal-desktop', 'ferdium', 'element', 'gajim']),
-    (0.30, ['whatsapp', 'caprine']),
-    (0.25, ['telegram-desktop', 'telegram']),
+    (0.70, ['okular', 'evince', 'gedit']),
+    # Communication apps (email clients, chat, meetings — thunderbird, outlook,
+    # slack, teams, zoom, discord, signal, telegram, whatsapp, …) are DELIBERATELY
+    # OMITTED (WP9 §2), same reasoning as the comms domains above: user-dependent,
+    # so they fall to neutral and the user's labels decide, not a shipped guess.
     # media / games — distraction
     (0.30, ['vlc', 'rhythmbox', 'clementine', 'strawberry', 'audacious', 'spotify']),
     (0.25, ['mpv', 'celluloid', 'totem', 'smplayer']),
     (0.20, [
-        'discord', 'vesktop', 'webcord', 'qbittorrent', 'transmission',
-        'transmission-gtk', 'transmission-qt', 'deluge',
+        'qbittorrent', 'transmission', 'transmission-gtk', 'transmission-qt',
+        'deluge',
     ]),
     (0.10, [
         'steam', 'lutris', 'heroic', 'retroarch', 'dolphin-emu', 'pcsx2', 'rpcs3',

@@ -75,6 +75,34 @@ public sealed class DistractionPriorsTests
     }
 
     [Fact]
+    public void ShippedTsv_OmitsAmbiguousCommunicationKeys()
+    {
+        // WP9 §2: webmail / chat / meeting tools are deliberately left unlisted so they
+        // fall to the neutral 0.5 prior and the user's own Yes/No labels decide. Shipping
+        // a guess here (the old slack=0.55) is what caused "Slack always flagged". This
+        // test encodes the decision so a future edit can't silently re-add them.
+        var (domains, apps) = DomainReputationStore.LoadPriors(ShippedTsvPath);
+
+        string[] ambiguousApps =
+        {
+            "slack", "zoom", "discord", "teams", "ms-teams", "teams-for-linux", "webex",
+            "skype", "telegram", "telegram-desktop", "whatsapp", "signal-desktop",
+            "thunderbird", "outlook", "evolution", "vesktop", "webcord", "element",
+        };
+        foreach (var app in ambiguousApps)
+            Assert.False(apps.ContainsKey(app), $"ambiguous comms app must be omitted: {app}");
+
+        string[] ambiguousDomains =
+        {
+            "gmail.com", "mail.google.com", "slack.com", "app.slack.com", "zoom.us",
+            "discord.com", "discordapp.com", "teams.microsoft.com", "meet.google.com",
+            "webex.com", "outlook.com", "messenger.com", "whatsapp.com",
+        };
+        foreach (var domain in ambiguousDomains)
+            Assert.False(domains.ContainsKey(domain), $"ambiguous comms domain must be omitted: {domain}");
+    }
+
+    [Fact]
     public void ShippedTsv_DomainKeys_RoundTripTryNormalizeDomain()
     {
         // A key that TryNormalizeDomain would not itself produce is a silent

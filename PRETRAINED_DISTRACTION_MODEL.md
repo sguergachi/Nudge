@@ -1,8 +1,16 @@
 # Pre-trained Distraction Prior — Implementation Plan
 
 > **Status:** **IMPLEMENTED.** Companion to `EXPERIMENTAL_SIGNAL_MODE.md`.
+> **V4 update (WP9):** the V4 (`--experimental`) runtime no longer trains or loads a
+> GBM (`productivity_model.joblib`/`scaler.json`) and never queries `model_inference.py`
+> — it runs the pure-C# decision engine in the daemon. The **only** V4 seed is this DKB
+> (priors) plus the user's `exp_reputation.json`. The GBM-seed repro below is V3/offline
+> only; `generate_sample_data.py`, `train_model.py`, and `background_trainer.py` are kept
+> for V3 and a future corpus-trained scorer, not run on the V4 path.
 > The committed DKB (`model_exp/distraction_priors.tsv`) is the curated seed —
-> ~390 domains + ~155 apps, LLM-labeled offline and hand-reviewed. Tranco/UT1
+> ~360 domains + ~135 apps, LLM-labeled offline and hand-reviewed. Ambiguous
+> communication tools (webmail, Slack/Zoom/Discord/Teams, chat) are deliberately
+> omitted so they stay neutral and the user's labels decide. Tranco/UT1
 > enrichment to 20k domains (§3) is wired into `tools/build_distraction_kb.py`
 > but needs a network-enabled dev machine; rerun it and commit the larger TSV
 > when convenient. The V4 seed has been retrained per §5 and validated on
