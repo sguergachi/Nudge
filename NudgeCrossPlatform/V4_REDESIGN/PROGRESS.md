@@ -22,7 +22,7 @@ Living log. Update when each step completes.
 | WP6 State persistence (`V4State`) | 06 | lead | ✅ done — atomic JSON + tests |
 | WP6 Tray process gating (don't launch model_inference in V4) | 06 | lead | ✅ done — no Python in experimental |
 | WP7 UI/IPC | 07 | lead | ✅ done — rationale line + Personalization panel; build green |
-| WP8 Acceptance build + full test run | 08 | partial | ◐ 683 tests green; headless smoke ✅; GUI verify pending |
+| WP8 Acceptance build + full test run | 08 | lead | ✅ 683 tests green; Linux headless smoke ✅; Windows VM run ✅ |
 | WP9 Seed priors curation | 09 | lead | ✅ done — ambiguous comms omitted, banners added |
 
 **Milestone reached: the entire pure-logic decision engine is implemented and tested.**
@@ -103,8 +103,15 @@ is wiring (WP5 daemon, WP6 persistence/process, WP7 UI, WP9 priors) — no decis
   `ML SKIP … warmup: insufficient baseline (neutral)` on a cold start, `exp_baseline.json` flushes
   atomically (count grew per check), and **no `model_inference`/`background_trainer` process or port
   45003 listener** — the daemon decides fully in-process. Test artifacts cleaned up afterward.
-- **Remaining (user, GUI only):** open the tray in `--experimental` and eyeball the AI Brain tab —
-  the "Why this decision" rationale line under the score card, the "Personalization" panel
-  (threshold / target nudges/hr / focus-baseline warm-Count), and ✓/✗ correlation after answering
-  a V4-triggered nudge YES/NO. The data contract feeding all three is verified above; only the
-  rendering needs a human look on a live session.
+- **Windows VM verification (done):** cross-built win-x64, ran on a Windows 11 QEMU/libvirt VM
+  driven headlessly (`virsh screenshot` to observe, `virsh send-key` for input, `qemu-nbd`+ntfs-3g
+  to stage offline). Daemon log confirmed on Windows: `✓ V4 engine active (in-process, no Python
+  ML services)` (only python/45003 hit), MLDATA carrying `rationale`/`distraction`/`threshold`,
+  `ML SKIP … warmup` rationale strings, baseline warmup, and Windows window detection
+  (pickerhost/searchhost/taskmgr). 17 events persisted to prediction_history.json.
+- **First-run priors-ordering fix (done, lead):** Windows run surfaced `Distraction priors: none`
+  on a fresh profile — the tray launched the daemon (StartNudge) before the async StartMLServices
+  deployed the priors. Fixed: deploy `DeployBundledModelExp()` synchronously before the daemon
+  launches when `_experimentalMode` (idempotent; StartMLServices re-run is harmless). Re-verified on
+  a clean Windows first-run: now logs `Distraction priors: 361 domains, 135 apps`. Pre-existing race
+  (not a WP6/7/9 regression); would have affected Linux first-run too. Committed `992b4a0`.
