@@ -327,6 +327,18 @@ namespace NudgeTray
 
                     if (!_uiAuditMode)
                     {
+                        // Deploy the bundled distraction priors BEFORE the harvest daemon launches.
+                        // In experimental mode the daemon reads ~/.nudge/model_exp/distraction_priors.tsv
+                        // once at startup, but StartMLServices (which normally deploys it) runs async
+                        // below — so a first-ever run would log "priors: none" until the next restart.
+                        // The copy is idempotent, so StartMLServices re-running it is harmless. (V3 has
+                        // no daemon-read file here — its seed model is consumed by the Python server,
+                        // which StartMLServices starts after deploying, in order.)
+                        if (_experimentalMode)
+                        {
+                            try { DeployBundledModelExp(); }
+                            catch { /* best-effort; daemon falls back to neutral priors */ }
+                        }
                         try
                         {
                             StartNudge(interval);
